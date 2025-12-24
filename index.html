@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ragic 房產導航系統 - 座標回填優化版</title>
+    <title>Ragic 房產導航系統 - 寫入診斷版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         #map { height: 100vh; width: 100%; }
@@ -22,25 +22,21 @@
         .diagnostic-card { font-size: 11px; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left-width: 4px; }
         .card-ok { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
         .card-need-sync { background: #fffbeb; border-color: #fef08a; color: #854d0e; }
-        .progress-bar { height: 6px; background: #e5e7eb; border-radius: 3px; width: 250px; margin-top: 15px; overflow: hidden; }
-        .progress-fill { height: 100%; background: #2563eb; transition: width 0.2s; width: 0%; }
-        .sync-log { font-family: monospace; font-size: 10px; background: #f8fafc; padding: 8px; border-radius: 6px; max-height: 150px; overflow-y: auto; border: 1px solid #e2e8f0; }
+        .sync-log { font-family: monospace; font-size: 10px; background: #1a202c; color: #cbd5e1; padding: 10px; border-radius: 8px; max-height: 200px; overflow-y: auto; }
+        .log-success { color: #4ade80; }
+        .log-fail { color: #f87171; }
     </style>
 </head>
 <body class="bg-gray-100 overflow-hidden">
 
-    <!-- 載入中動畫遮罩 -->
     <div id="loading" class="loading-overlay">
         <div class="inline-block animate-spin rounded-full h-14 w-14 border-t-4 border-b-4 border-blue-600"></div>
-        <p id="status-text" class="mt-6 text-gray-700 font-bold text-xl tracking-wide text-center">同步 Ragic 房產資料...</p>
-        <p id="sub-status" class="mt-2 text-gray-500 text-sm italic">檢查座標完整性</p>
-        <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+        <p id="status-text" class="mt-6 text-gray-700 font-bold text-xl tracking-wide text-center">同步 Ragic 資料中...</p>
+        <p id="sub-status" class="mt-2 text-gray-500 text-sm italic">檢查欄位 1000759</p>
     </div>
 
-    <!-- Google Map 容器 -->
     <div id="map"></div>
 
-    <!-- 右上角控制鈕 -->
     <div class="fixed top-4 right-4 flex flex-col gap-3">
         <button onclick="fetchData()" title="重新整理" class="bg-blue-600 p-4 rounded-full shadow-2xl hover:bg-blue-700 transition transform hover:scale-110 active:scale-95">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -54,37 +50,35 @@
         </button>
     </div>
 
-    <!-- 側邊同步與診斷面板 -->
     <div id="settings-panel" class="fixed top-0 right-0 h-full w-96 bg-white shadow-2xl z-50 p-6 overflow-y-auto border-l">
         <div class="flex justify-between items-center mb-6 border-b pb-4">
-            <h2 class="text-xl font-bold text-gray-800">資料同步中心</h2>
+            <h2 class="text-xl font-bold text-gray-800">資料寫入中心</h2>
             <button onclick="toggleSettings()" class="text-gray-400 hover:text-red-500 text-2xl transition">✕</button>
         </div>
         
         <div class="space-y-6">
-            <section class="bg-blue-600 p-5 rounded-2xl shadow-lg text-white">
+            <section class="bg-red-600 p-5 rounded-2xl shadow-lg text-white">
                 <h3 class="font-bold text-lg mb-2 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                    加速地圖載入
+                    🚨 寫入前檢查
                 </h3>
-                <p class="text-xs opacity-90 mb-4 leading-relaxed">
-                    點擊按鈕，系統會將缺失的地址轉為座標並<b>存回 Ragic 欄位 1000759</b>。執行一次後，地圖以後就能秒開！
+                <p class="text-xs opacity-90 leading-relaxed mb-4">
+                    請確認 Ragic 欄位 <b>1000759</b> 已經：<br>
+                    1. <b>刪除公式 =A22</b> (必須空白)<br>
+                    2. 點擊「儲存設計」
                 </p>
-                <button id="btn-sync-to-ragic" onclick="syncAllToRagic()" class="w-full bg-white text-blue-600 font-black py-3 rounded-xl hover:bg-blue-50 transition shadow-md">
-                    ⚡ 立即執行座標回填
+                <button id="btn-sync-to-ragic" onclick="syncAllToRagic()" class="w-full bg-white text-red-600 font-black py-3 rounded-xl hover:bg-gray-100 transition shadow-md">
+                    ⚡ 再次執行座標回填
                 </button>
             </section>
 
             <section id="sync-log-section" class="hidden">
-                <h3 class="text-xs font-black text-gray-400 uppercase mb-2 tracking-widest">同步日誌</h3>
-                <div id="sync-log" class="sync-log"></div>
+                <h3 class="text-xs font-black text-gray-400 uppercase mb-2 tracking-widest">實時回傳報告 (Debug)</h3>
+                <div id="sync-log" class="sync-log">等待指令...</div>
             </section>
 
             <section>
-                <h3 class="text-xs font-black text-gray-400 uppercase mb-3 tracking-widest border-b pb-1">房產資料狀態</h3>
-                <div id="diagnostics-list" class="space-y-2">
-                    <!-- 狀態清單 -->
-                </div>
+                <h3 class="text-xs font-black text-gray-400 uppercase mb-3 tracking-widest border-b pb-1">當前房產清單</h3>
+                <div id="diagnostics-list" class="space-y-2"></div>
             </section>
         </div>
     </div>
@@ -92,13 +86,11 @@
     <script>
         const MAPS_KEY = "AIzaSyALdVJlv7IBxnqeShEbzIIWnV7WSjtRtZw";
         const RAGIC_KEY = "Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==";
-        const API_URL = "https://ap15.ragic.com/wuohome/property-data-kept/10?v=3&api";
-        const UPDATE_URL = "https://ap15.ragic.com/wuohome/property-data-kept/10"; 
+        const API_BASE = "https://ap15.ragic.com/wuohome/property-data-kept/10";
 
         let map, geocoder;
         let markers = [];
         let fetchedRecords = [];
-        let infoWindows = [];
 
         window.onload = () => {
             const script = document.createElement('script');
@@ -113,9 +105,7 @@
 
         function initMap() {
             map = new google.maps.Map(document.getElementById("map"), {
-                zoom: 12,
-                center: { lat: 25.0330, lng: 121.5654 },
-                styles: [{ "featureType": "poi", "stylers": [{ "visibility": "off" }] }]
+                zoom: 12, center: { lat: 25.0330, lng: 121.5654 }
             });
             geocoder = new google.maps.Geocoder();
             fetchData();
@@ -123,79 +113,62 @@
 
         async function fetchData() {
             const loading = document.getElementById('loading');
-            const statusText = document.getElementById('status-text');
             const diagnosticsList = document.getElementById('diagnostics-list');
-            
             loading.style.display = 'flex';
             diagnosticsList.innerHTML = "";
-            
             markers.forEach(m => m.setMap(null));
             markers = [];
 
             try {
-                const response = await fetch(API_URL, {
+                const resp = await fetch(`${API_BASE}?api&v=3`, {
                     headers: { "Authorization": "Basic " + btoa(RAGIC_KEY + ":") }
                 });
-                const data = await response.json();
+                const data = await resp.json();
                 fetchedRecords = Object.entries(data).map(([id, val]) => ({ id, ...val }));
                 
                 let bounds = new google.maps.LatLngBounds();
-                let diagnosticHTML = "";
-                let hasCoordsCount = 0;
+                let hasCoords = 0;
 
-                for (let item of fetchedRecords) {
+                fetchedRecords.forEach(item => {
                     const coord = item['地圖經緯度'];
-                    const name = item['案名'] || "無案名";
+                    const name = item['案名'] || "無名";
                     
                     if (coord && coord.includes(',') && !isNaN(parseFloat(coord.split(',')[0]))) {
                         const [lat, lng] = coord.split(',').map(s => parseFloat(s.trim()));
                         addMarker(lat, lng, item);
                         bounds.extend({ lat, lng });
-                        diagnosticHTML += `<div class="diagnostic-card card-ok"><b>${name}</b><br>座標已就緒 ✅</div>`;
-                        hasCoordsCount++;
+                        hasCoords++;
+                        diagnosticsList.innerHTML += `<div class="diagnostic-card card-ok"><b>${name}</b><br>座標已存在 ✅</div>`;
                     } else {
-                        diagnosticHTML += `<div class="diagnostic-card card-need-sync"><b>${name}</b><br>需同步 ⚠️ (目前無座標)</div>`;
+                        diagnosticsList.innerHTML += `<div class="diagnostic-card card-need-sync"><b>${name}</b><br>等待寫入 ⚠️ (${coord || '空白'})</div>`;
                     }
-                }
+                });
 
-                diagnosticsList.innerHTML = diagnosticHTML;
-
-                if (hasCoordsCount > 0) {
+                if (hasCoords > 0) {
                     map.fitBounds(bounds);
-                    statusText.innerText = `載入成功！${hasCoordsCount} 筆點位`;
+                    document.getElementById('status-text').innerText = `同步成功！顯示 ${hasCoords} 個標記`;
                     setTimeout(() => loading.style.display = 'none', 800);
                 } else {
-                    statusText.innerText = "地圖尚無座標，請點擊右上齒輪進行同步";
+                    document.getElementById('status-text').innerText = "地圖尚無座標，請同步";
                     loading.style.display = 'none';
                     toggleSettings();
                 }
-
             } catch (err) {
-                statusText.innerHTML = `<span class="text-red-500">API 連線失敗</span>`;
+                alert("Ragic 連線失敗，請檢查 API Key 或網路環境。");
             }
         }
 
         async function syncAllToRagic() {
-            if (!confirm("請確認您已刪除 Ragic 欄位 1000759 的公式。確定開始同步嗎？")) return;
+            if (!confirm("確定要執行同步？請再次確認 1000759 欄位已清空公式。")) return;
 
             const btn = document.getElementById('btn-sync-to-ragic');
-            const logSection = document.getElementById('sync-log-section');
             const logDiv = document.getElementById('sync-log');
-            
             btn.disabled = true;
-            btn.innerText = "⏳ 同步中...";
-            logSection.classList.remove('hidden');
-            logDiv.innerHTML = "開始同步流程...<br>";
+            document.getElementById('sync-log-section').classList.remove('hidden');
+            logDiv.innerHTML = ">>> 啟動同步流程...<br>";
 
-            let successCount = 0;
-            const toProcess = fetchedRecords.filter(item => !item['地圖經緯度'] || !item['地圖經緯度'].includes(','));
-
-            if (toProcess.length === 0) {
-                alert("所有資料皆已有座標，無需同步！");
-                btn.disabled = false;
-                btn.innerText = "⚡ 立即執行座標回填";
-                return;
-            }
+            let success = 0;
+            const toProcess = fetchedRecords.filter(i => !i['地圖經緯度'] || !i['地圖經緯度'].includes(','));
 
             for (let i = 0; i < toProcess.length; i++) {
                 const item = toProcess[i];
@@ -204,84 +177,51 @@
                 const name = item['案名'] || recordId;
 
                 try {
-                    logDiv.innerHTML += `[${i+1}/${toProcess.length}] 解析: ${name}... `;
-                    const result = await geocodeAddress(address);
-                    const loc = result.geometry.location;
-                    const coordStr = `${loc.lat()},${loc.lng()}`;
+                    logDiv.innerHTML += `[${i+1}/${toProcess.length}] 解析 ${name}...`;
+                    const geo = await new Promise((res, rej) => {
+                        geocoder.geocode({ address }, (r, s) => s === 'OK' ? res(r[0]) : rej(s));
+                    });
                     
-                    logDiv.innerHTML += `寫入 Ragic... `;
-                    const updateResp = await updateRagicRecord(recordId, coordStr);
-                    
+                    const coordStr = `${geo.geometry.location.lat()},${geo.geometry.location.lng()}`;
+                    logDiv.innerHTML += ` OK! 寫入 Ragic...`;
+
+                    const updateResp = await fetch(`${API_BASE}/${recordId}?api`, {
+                        method: 'POST',
+                        headers: { 
+                            "Authorization": "Basic " + btoa(RAGIC_KEY + ":"),
+                            "Content-Type": "application/x-www-form-urlencoded"
+                        },
+                        body: new URLSearchParams({ '1000759': coordStr })
+                    });
+
                     if (updateResp.ok) {
-                        logDiv.innerHTML += `<span class="text-green-600 font-bold">成功</span><br>`;
-                        successCount++;
+                        logDiv.innerHTML += `<span class="log-success"> [成功]</span><br>`;
+                        success++;
                     } else {
-                        logDiv.innerHTML += `<span class="text-red-600 font-bold">失敗 (HTTP ${updateResp.status})</span><br>`;
+                        const errTxt = await updateResp.text();
+                        logDiv.innerHTML += `<span class="log-fail"> [失敗: ${updateResp.status}]</span><br><small>${errTxt.slice(0,50)}</small><br>`;
                     }
                 } catch (e) {
-                    logDiv.innerHTML += `<span class="text-red-600 font-bold">錯誤: ${e}</span><br>`;
+                    logDiv.innerHTML += `<span class="log-fail"> [錯誤: ${e}]</span><br>`;
                 }
                 logDiv.scrollTop = logDiv.scrollHeight;
                 await new Promise(r => setTimeout(r, 400));
             }
 
-            logDiv.innerHTML += `<br><b>同步完成！共更新 ${successCount} 筆資料。</b>`;
-            alert("同步完成！頁面將重新整理以讀取新座標。");
+            logDiv.innerHTML += `<br><b>同步結束。成功筆數: ${success}</b>`;
+            alert(`完成！成功更新 ${success} 筆。頁面將重新載入。`);
             location.reload();
-        }
-
-        function geocodeAddress(address) {
-            return new Promise((resolve, reject) => {
-                geocoder.geocode({ address }, (res, status) => {
-                    if (status === 'OK') resolve(res[0]);
-                    else reject(status);
-                });
-            });
-        }
-
-        async function updateRagicRecord(recordId, coordValue) {
-            const formData = new URLSearchParams();
-            formData.append('1000759', coordValue);
-
-            return fetch(`${UPDATE_URL}/${recordId}`, {
-                method: 'POST',
-                headers: { 
-                    "Authorization": "Basic " + btoa(RAGIC_KEY + ":"),
-                    "Content-Type": "application/x-www-form-urlencoded"
-                },
-                body: formData
-            });
         }
 
         function addMarker(lat, lng, item) {
             const marker = new google.maps.Marker({
-                position: { lat, lng },
-                map: map,
-                title: item['案名'],
+                position: { lat, lng }, map: map, animation: google.maps.Animation.DROP,
                 icon: { url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png' }
             });
-
-            const infoContent = `
-                <div class="custom-info-window">
-                    <b class="text-blue-700 text-lg">${item['案名'] || '物件'}</b>
-                    <hr class="my-2">
-                    <div class="text-xs text-gray-600 space-y-1">
-                        <p><b>地址:</b> ${item['地址'] || '-'}</p>
-                        <p><b>狀態:</b> ${item['狀態'] || '-'}</p>
-                        <p><b>租金:</b> ${item['月租金'] || '-'}</p>
-                    </div>
-                    <a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank" 
-                       class="mt-3 block text-center bg-blue-600 text-white py-2 rounded font-bold hover:bg-black transition">
-                       開始導航
-                    </a>
-                </div>
-            `;
-            const infoWindow = new google.maps.InfoWindow({ content: infoContent });
-            marker.addListener("click", () => {
-                infoWindows.forEach(iw => iw.close());
-                infoWindow.open(map, marker);
-                infoWindows.push(infoWindow);
+            const info = new google.maps.InfoWindow({
+                content: `<div class="custom-info-window"><b>${item['案名']}</b><hr class="my-2"><p class="text-xs">${item['地址']}</p></div>`
             });
+            marker.addListener("click", () => info.open(map, marker));
             markers.push(marker);
         }
     </script>
