@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ragic 房產導航系統 - JSON 強制寫入版</title>
+    <title>Ragic 房產導航系統 - URL 強制寫入版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         #map { height: 100vh; width: 100%; }
@@ -51,18 +51,18 @@
 
     <div id="settings-panel" class="fixed top-0 right-0 h-full w-96 bg-white shadow-2xl z-50 p-7 overflow-y-auto border-l">
         <div class="flex justify-between items-center mb-8">
-            <h2 class="text-2xl font-black text-gray-800">工程模式 (JSON)</h2>
+            <h2 class="text-2xl font-black text-gray-800">工程模式 (URL)</h2>
             <button onclick="toggleSettings()" class="text-gray-400 hover:text-red-500 transition text-2xl">✕</button>
         </div>
         
         <div class="space-y-8">
-            <section class="bg-indigo-900 p-6 rounded-3xl text-white shadow-xl">
-                <h3 class="text-lg font-bold mb-3 text-indigo-200">強力寫入測試</h3>
-                <p class="text-xs text-indigo-300 mb-6 leading-relaxed">
-                    切換至 JSON 模式傳輸。如果這次日誌顯示 SUCCESS 但還是沒寫入，請截圖日誌給我。
+            <section class="bg-purple-900 p-6 rounded-3xl text-white shadow-xl">
+                <h3 class="text-lg font-bold mb-3 text-purple-200">暴力寫入測試</h3>
+                <p class="text-xs text-purple-300 mb-6 leading-relaxed">
+                    使用 URL 參數直接寫入。如果這次還是出現 error msg，請告訴我 msg 後面的內容是什麼。
                 </p>
-                <button id="btn-sync" onclick="syncAllToRagic()" class="w-full bg-indigo-500 text-white font-black py-4 rounded-2xl hover:bg-indigo-400 transition shadow-lg active:scale-95">
-                    🚀 開始 JSON 同步
+                <button id="btn-sync" onclick="syncAllToRagic()" class="w-full bg-purple-500 text-white font-black py-4 rounded-2xl hover:bg-purple-400 transition shadow-lg active:scale-95">
+                    🚀 開始 URL 強制同步
                 </button>
             </section>
 
@@ -122,7 +122,6 @@
             markers = [];
 
             try {
-                // 強制不快取
                 const ts = new Date().getTime();
                 const resp = await fetch(`${API_URL}?api&v=3&naming=EID&t=${ts}`, {
                     headers: { "Authorization": "Basic " + btoa(RAGIC_KEY + ":") }
@@ -165,7 +164,7 @@
             const logDiv = document.getElementById('sync-log');
             btn.disabled = true;
             document.getElementById('sync-log-section').classList.remove('hidden');
-            logDiv.innerHTML = "=== 開始 JSON 同步 ===\n";
+            logDiv.innerHTML = "=== 開始 URL 強制寫入 ===\n";
 
             const toProcess = fetchedRecords.filter(i => {
                 const c = i[EID_COORD];
@@ -196,25 +195,25 @@
                     const coordStr = `${result.geometry.location.lat()},${result.geometry.location.lng()}`;
                     logDiv.innerHTML += ` -> ${coordStr}\n`;
 
-                    // *** 改用 JSON 格式 POST ***
-                    const updateUrl = `${API_URL}/${recordId}?api&v=3`;
+                    // *** 改用 URL 參數寫入 (最保險的方法) ***
+                    // 格式: /recordId?api&v=3&1000759=數值
+                    const encodedCoord = encodeURIComponent(coordStr);
+                    const updateUrl = `${API_URL}/${recordId}?api&v=3&${EID_COORD}=${encodedCoord}`;
                     
-                    const payload = {};
-                    payload[EID_COORD] = coordStr;
+                    logDiv.innerHTML += `發送請求...\n`;
 
                     const updateResp = await fetch(updateUrl, {
                         method: 'POST',
                         headers: { 
-                            "Authorization": "Basic " + btoa(RAGIC_KEY + ":"),
-                            "Content-Type": "application/json" // 改為 JSON
-                        },
-                        body: JSON.stringify(payload)
+                            "Authorization": "Basic " + btoa(RAGIC_KEY + ":")
+                        }
+                        // body 留空，全部用 URL 傳
                     });
 
                     const respText = await updateResp.text();
                     
                     logDiv.innerHTML += `HTTP ${updateResp.status}\n`;
-                    logDiv.innerHTML += `回應: ${respText}\n`; // 完整印出回應
+                    logDiv.innerHTML += `回應: ${respText}\n`;
                     logDiv.innerHTML += `----------------\n`;
 
                 } catch (e) {
@@ -223,7 +222,7 @@
                 logDiv.scrollTop = logDiv.scrollHeight;
                 await new Promise(r => setTimeout(r, 500));
             }
-            alert("測試完成，請查看黑色日誌區域的詳細回應。");
+            alert("測試完成，請查看黑色日誌區域。");
         }
 
         function addMarker(lat, lng, item) {
