@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ragic 房產導航 - 寫入權限修正版</title>
+    <title>Ragic 房產導航 - APIKey 修正版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         #map { height: 100vh; width: 100%; }
@@ -31,6 +31,7 @@
     <div id="loading" class="loading-overlay">
         <div class="inline-block animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600"></div>
         <p id="status-text" class="mt-4 text-gray-700 font-bold tracking-widest text-lg">系統啟動中...</p>
+        <p class="text-xs text-gray-400 mt-2">Connecting with APIKey parameter</p>
     </div>
 
     <div id="map"></div>
@@ -41,9 +42,9 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
         </button>
-        <button onclick="toggleSettings()" class="bg-red-600 p-4 rounded-full shadow-2xl hover:bg-red-700 transition transform hover:scale-110 active:scale-95 text-white border border-red-400 animate-pulse">
+        <button onclick="toggleSettings()" class="bg-green-600 p-4 rounded-full shadow-2xl hover:bg-green-700 transition transform hover:scale-110 active:scale-95 text-white border border-green-400 animate-pulse">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
             </svg>
         </button>
     </div>
@@ -58,10 +59,10 @@
             <section class="bg-blue-50 p-6 rounded-3xl border-2 border-blue-100 shadow-sm">
                 <h3 class="text-lg font-bold mb-3 text-blue-700 flex items-center gap-2">
                     <span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">!</span>
-                    權限修正模式
+                    APIKey 修正模式
                 </h3>
                 <p class="text-xs text-blue-600 mb-4 leading-relaxed">
-                    已切換為「URL 參數認證」模式，這能解決 Guest 權限錯誤的問題。請再次嘗試診斷或直接同步。
+                    已將驗證方式改為網址參數 <b>APIKey</b> (區分大小寫)。這是解決 Guest 權限錯誤的關鍵。
                 </p>
                 <button id="btn-sync" onclick="testSyncOneRecord()" class="w-full bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 transition shadow-lg active:scale-95">
                     再次診斷寫入
@@ -125,10 +126,9 @@
             markers = [];
 
             try {
-                // 使用 api_key 參數來避免 Header 被丟失的問題
+                // 修改 1: 使用 APIKey (注意大小寫)
                 const ts = new Date().getTime();
-                // 注意：這裡使用 api_key 參數
-                const fetchUrl = `${API_URL}?api&v=3&naming=EID&t=${ts}&api_key=${encodeURIComponent(RAGIC_KEY)}`;
+                const fetchUrl = `${API_URL}?api&v=3&naming=EID&t=${ts}&APIKey=${encodeURIComponent(RAGIC_KEY)}`;
                 
                 const resp = await fetch(fetchUrl);
                 const data = await resp.json();
@@ -169,9 +169,8 @@
             const logDiv = document.getElementById('sync-log');
             btn.disabled = true;
             document.getElementById('sync-log-section').classList.remove('hidden');
-            logDiv.innerHTML = ">>> 啟動診斷 (URL Key Mode)...\n";
+            logDiv.innerHTML = ">>> 啟動診斷 (APIKey Fix)...\n";
 
-            // 找第一筆沒有座標的資料
             const target = fetchedRecords.find(i => {
                 const c = i[EID_COORD];
                 return !c || !c.toString().includes(',') || isNaN(parseFloat(c.split(',')[0]));
@@ -189,32 +188,30 @@
             const name = target[EID_TITLE] || recordId;
 
             if (!address) {
-                logDiv.innerHTML += `錯誤：選中的資料 (${name}) 沒有地址，無法測試。\n`;
+                logDiv.innerHTML += `錯誤：資料 ${name} 無地址\n`;
                 btn.disabled = false;
                 return;
             }
 
             try {
-                logDiv.innerHTML += `目標資料：${name} (ID: ${recordId})\n`;
+                logDiv.innerHTML += `目標：${name} (ID: ${recordId})\n`;
                 logDiv.innerHTML += `解析地址：${address}...\n`;
                 
                 const result = await new Promise((res, rej) => {
                     geocoder.geocode({ address }, (r, s) => s === 'OK' ? res(r[0]) : rej(s));
                 });
                 
-                const lat = result.geometry.location.lat();
-                const lng = result.geometry.location.lng();
-                const coordStr = `${lat},${lng}`;
+                const coordStr = `${result.geometry.location.lat()},${result.geometry.location.lng()}`;
                 logDiv.innerHTML += `取得座標：${coordStr}\n`;
-                logDiv.innerHTML += `--------------------------------\n`;
-                logDiv.innerHTML += `正在發送寫入請求 (API Key in URL)...\n`;
+                logDiv.innerHTML += `正在發送寫入請求...\n`;
 
-                // *** 關鍵修改：將 API Key 放在 URL 參數中 ***
                 const formData = new URLSearchParams();
                 formData.append(EID_COORD, coordStr);
+                
+                // 修改 2: 寫入時也使用 APIKey 參數，並且不帶 Authorization Header
+                const updateUrl = `${API_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_KEY)}`;
 
-                // 移除 Header 中的 Auth，改用 URL 參數
-                const updateUrl = `${API_URL}/${recordId}?api&v=3&api_key=${encodeURIComponent(RAGIC_KEY)}`;
+                logDiv.innerHTML += `Request URL: ...&APIKey=... (hidden)\n`;
 
                 const updateResp = await fetch(updateUrl, {
                     method: 'POST',
@@ -226,21 +223,19 @@
 
                 const respText = await updateResp.text();
                 
-                logDiv.innerHTML += `HTTP 狀態碼: ${updateResp.status}\n`;
-                logDiv.innerHTML += `Ragic 回應內容:\n${respText}\n`;
-                logDiv.innerHTML += `--------------------------------\n`;
+                logDiv.innerHTML += `HTTP ${updateResp.status}\n`;
+                logDiv.innerHTML += `Ragic回應: ${respText}\n`;
 
                 if (respText.includes('"status":"SUCCESS"')) {
-                    logDiv.innerHTML += `✅ 診斷結果：寫入成功！\n`;
-                    logDiv.innerHTML += `本次使用了 URL Parameter 傳遞金鑰，成功繞過 Guest 限制。\n`;
-                    alert("測試成功！權限問題已解決。");
+                    logDiv.innerHTML += `✅ 成功！權限問題已解決。\n`;
+                    alert("寫入成功！請重新整理 Ragic 確認。");
                 } else {
-                    logDiv.innerHTML += `❌ 診斷結果：寫入被拒絕。\n`;
-                    alert("寫入失敗，請查看黑色日誌中的錯誤原因。");
+                    logDiv.innerHTML += `❌ 失敗。請檢查訊息。\n`;
+                    alert("寫入失敗。");
                 }
 
             } catch (e) {
-                logDiv.innerHTML += `發生程式錯誤: ${e}\n`;
+                logDiv.innerHTML += `錯誤: ${e}\n`;
             }
             btn.disabled = false;
         }
