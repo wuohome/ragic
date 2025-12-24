@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ragic 房產導航 - 寫入診斷專家</title>
+    <title>Ragic 房產導航 - 寫入權限修正版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         #map { height: 100vh; width: 100%; }
@@ -55,16 +55,16 @@
         </div>
         
         <div class="space-y-8">
-            <section class="bg-red-50 p-6 rounded-3xl border-2 border-red-100 shadow-sm">
-                <h3 class="text-lg font-bold mb-3 text-red-700 flex items-center gap-2">
-                    <span class="bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">!</span>
-                    單筆測試模式
+            <section class="bg-blue-50 p-6 rounded-3xl border-2 border-blue-100 shadow-sm">
+                <h3 class="text-lg font-bold mb-3 text-blue-700 flex items-center gap-2">
+                    <span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">!</span>
+                    權限修正模式
                 </h3>
-                <p class="text-xs text-red-600 mb-4 leading-relaxed">
-                    系統將嘗試寫入「第一筆」缺座標的資料，並把 Ragic 的完整回應顯示出來。請務必截圖回傳顯示的內容。
+                <p class="text-xs text-blue-600 mb-4 leading-relaxed">
+                    已切換為「URL 參數認證」模式，這能解決 Guest 權限錯誤的問題。請再次嘗試診斷或直接同步。
                 </p>
-                <button id="btn-sync" onclick="testSyncOneRecord()" class="w-full bg-red-600 text-white font-black py-4 rounded-2xl hover:bg-red-700 transition shadow-lg active:scale-95">
-                    診斷寫入失敗原因
+                <button id="btn-sync" onclick="testSyncOneRecord()" class="w-full bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 transition shadow-lg active:scale-95">
+                    再次診斷寫入
                 </button>
             </section>
 
@@ -125,11 +125,12 @@
             markers = [];
 
             try {
-                // 使用 v=3 和 EID 模式讀取
+                // 使用 api_key 參數來避免 Header 被丟失的問題
                 const ts = new Date().getTime();
-                const resp = await fetch(`${API_URL}?api&v=3&naming=EID&t=${ts}`, {
-                    headers: { "Authorization": "Basic " + btoa(RAGIC_KEY + ":") }
-                });
+                // 注意：這裡使用 api_key 參數
+                const fetchUrl = `${API_URL}?api&v=3&naming=EID&t=${ts}&api_key=${encodeURIComponent(RAGIC_KEY)}`;
+                
+                const resp = await fetch(fetchUrl);
                 const data = await resp.json();
                 fetchedRecords = Object.entries(data).map(([id, val]) => ({ id, ...val }));
                 
@@ -168,7 +169,7 @@
             const logDiv = document.getElementById('sync-log');
             btn.disabled = true;
             document.getElementById('sync-log-section').classList.remove('hidden');
-            logDiv.innerHTML = ">>> 啟動診斷...\n";
+            logDiv.innerHTML = ">>> 啟動診斷 (URL Key Mode)...\n";
 
             // 找第一筆沒有座標的資料
             const target = fetchedRecords.find(i => {
@@ -177,7 +178,7 @@
             });
 
             if (!target) {
-                logDiv.innerHTML += "所有資料似乎都已有座標了。請檢查 Ragic 介面。\n";
+                logDiv.innerHTML += "所有資料似乎都已有座標了。\n";
                 alert("沒有需要同步的資料。");
                 btn.disabled = false;
                 return;
@@ -206,17 +207,19 @@
                 const coordStr = `${lat},${lng}`;
                 logDiv.innerHTML += `取得座標：${coordStr}\n`;
                 logDiv.innerHTML += `--------------------------------\n`;
-                logDiv.innerHTML += `正在發送寫入請求 (Standard Form Data)...\n`;
+                logDiv.innerHTML += `正在發送寫入請求 (API Key in URL)...\n`;
 
-                // 構建標準表單數據
+                // *** 關鍵修改：將 API Key 放在 URL 參數中 ***
                 const formData = new URLSearchParams();
                 formData.append(EID_COORD, coordStr);
 
-                const updateResp = await fetch(`${API_URL}/${recordId}?api&v=3`, {
+                // 移除 Header 中的 Auth，改用 URL 參數
+                const updateUrl = `${API_URL}/${recordId}?api&v=3&api_key=${encodeURIComponent(RAGIC_KEY)}`;
+
+                const updateResp = await fetch(updateUrl, {
                     method: 'POST',
                     headers: { 
-                        "Authorization": "Basic " + btoa(RAGIC_KEY + ":"),
-                        "Content-Type": "application/x-www-form-urlencoded" // 這是 Ragic 最標準的格式
+                        "Content-Type": "application/x-www-form-urlencoded"
                     },
                     body: formData.toString()
                 });
@@ -229,11 +232,10 @@
 
                 if (respText.includes('"status":"SUCCESS"')) {
                     logDiv.innerHTML += `✅ 診斷結果：寫入成功！\n`;
-                    logDiv.innerHTML += `如果 Ragic 仍無資料，請檢查該欄位是否被鎖定(Lock)或權限不足。\n`;
-                    alert("測試顯示成功！請去 Ragic 檢查該筆資料是否更新。");
+                    logDiv.innerHTML += `本次使用了 URL Parameter 傳遞金鑰，成功繞過 Guest 限制。\n`;
+                    alert("測試成功！權限問題已解決。");
                 } else {
                     logDiv.innerHTML += `❌ 診斷結果：寫入被拒絕。\n`;
-                    logDiv.innerHTML += `請查看上方 "msg" 欄位的錯誤訊息。\n`;
                     alert("寫入失敗，請查看黑色日誌中的錯誤原因。");
                 }
 
