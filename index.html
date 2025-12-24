@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ragic 房產導航系統 - 編號精準對接版</title>
+    <title>Ragic 房產導航系統 - JSON 強制寫入版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         #map { height: 100vh; width: 100%; }
         .custom-info-window { padding: 10px; max-width: 250px; font-family: 'PingFang TC', sans-serif; }
         .loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255,255,255,0.9); display: flex;
+            background: rgba(255,255,255,0.95); display: flex;
             justify-content: center; align-items: center; z-index: 9999;
             flex-direction: column;
         }
@@ -19,83 +19,71 @@
             transform: translateX(100%);
         }
         #settings-panel.open { transform: translateX(0); }
-        .sync-log { font-family: monospace; font-size: 11px; background: #1a202c; color: #4ade80; padding: 12px; border-radius: 10px; max-height: 250px; overflow-y: auto; line-height: 1.6; }
+        .sync-log { font-family: monospace; font-size: 11px; background: #000; color: #0f0; padding: 12px; border-radius: 10px; max-height: 300px; overflow-y: auto; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
         .diagnostic-card { font-size: 11px; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left-width: 4px; }
         .card-ok { background: #f0fdf4; border-color: #22c55e; color: #166534; }
         .card-need { background: #fffbeb; border-color: #eab308; color: #854d0e; }
+        .log-err { color: #f87171; font-weight: bold; }
+        .log-warn { color: #facc15; }
     </style>
 </head>
 <body class="bg-gray-50 overflow-hidden">
 
-    <!-- 全螢幕載入遮罩 -->
     <div id="loading" class="loading-overlay">
         <div class="inline-block animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600"></div>
-        <p id="status-text" class="mt-4 text-gray-700 font-bold tracking-widest text-lg">讀取 Ragic 物件資料庫...</p>
+        <p id="status-text" class="mt-4 text-gray-700 font-bold tracking-widest text-lg">連接 Ragic 資料庫...</p>
     </div>
 
-    <!-- 地圖容器 -->
     <div id="map"></div>
 
-    <!-- 右上角懸浮選單 -->
     <div class="fixed top-5 right-5 flex flex-col gap-4">
-        <button onclick="fetchData()" title="重新同步" class="bg-blue-600 p-4 rounded-full shadow-2xl hover:bg-blue-700 transition transform hover:scale-110 active:scale-95 text-white">
+        <button onclick="fetchData()" class="bg-blue-600 p-4 rounded-full shadow-2xl hover:bg-blue-700 transition transform hover:scale-110 active:scale-95 text-white">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
         </button>
-        <button onclick="toggleSettings()" title="同步中心" class="bg-white p-4 rounded-full shadow-2xl hover:bg-gray-100 transition transform hover:scale-110 active:scale-95 text-gray-700 border border-gray-100">
+        <button onclick="toggleSettings()" class="bg-white p-4 rounded-full shadow-2xl hover:bg-gray-100 transition transform hover:scale-110 active:scale-95 text-gray-700 border border-gray-100">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
             </svg>
         </button>
     </div>
 
-    <!-- 同步設定側邊欄 -->
     <div id="settings-panel" class="fixed top-0 right-0 h-full w-96 bg-white shadow-2xl z-50 p-7 overflow-y-auto border-l">
         <div class="flex justify-between items-center mb-8">
-            <h2 class="text-2xl font-black text-gray-800">資料管理中心</h2>
+            <h2 class="text-2xl font-black text-gray-800">工程模式 (JSON)</h2>
             <button onclick="toggleSettings()" class="text-gray-400 hover:text-red-500 transition text-2xl">✕</button>
         </div>
         
         <div class="space-y-8">
-            <!-- 一鍵同步區域 -->
-            <section class="bg-gray-900 p-6 rounded-3xl text-white shadow-xl">
-                <div class="flex items-center gap-3 mb-3 text-blue-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                    <span class="font-bold text-sm tracking-widest uppercase">效能加速器</span>
-                </div>
-                <h3 class="text-lg font-bold mb-3">同步座標至 Ragic</h3>
-                <p class="text-xs text-gray-400 mb-6 leading-relaxed">
-                    解析尚未具備經緯度的房產地址，並自動回填至 Ragic (欄位 1000759)。完成後地圖將實現秒速載入。
+            <section class="bg-indigo-900 p-6 rounded-3xl text-white shadow-xl">
+                <h3 class="text-lg font-bold mb-3 text-indigo-200">強力寫入測試</h3>
+                <p class="text-xs text-indigo-300 mb-6 leading-relaxed">
+                    切換至 JSON 模式傳輸。如果這次日誌顯示 SUCCESS 但還是沒寫入，請截圖日誌給我。
                 </p>
-                <button id="btn-sync" onclick="syncAllToRagic()" class="w-full bg-blue-500 text-white font-black py-4 rounded-2xl hover:bg-blue-400 transition shadow-lg active:scale-95">
-                    立即執行座標同步
+                <button id="btn-sync" onclick="syncAllToRagic()" class="w-full bg-indigo-500 text-white font-black py-4 rounded-2xl hover:bg-indigo-400 transition shadow-lg active:scale-95">
+                    🚀 開始 JSON 同步
                 </button>
             </section>
 
-            <!-- 寫入進度日誌 -->
             <section id="sync-log-section" class="hidden">
-                <h3 class="text-xs font-black text-gray-400 uppercase mb-3 tracking-widest">同步執行日誌</h3>
-                <div id="sync-log" class="sync-log">系統就緒...</div>
+                <h3 class="text-xs font-black text-gray-400 uppercase mb-3 tracking-widest">伺服器通訊紀錄</h3>
+                <div id="sync-log" class="sync-log">等待執行...</div>
             </section>
 
-            <!-- 房產狀態診斷 -->
             <section>
-                <h3 class="text-xs font-black text-gray-400 uppercase mb-4 tracking-widest border-b pb-2">房產資料探測</h3>
-                <div id="diagnostics-list" class="space-y-2">
-                    <!-- 自動填入診斷卡片 -->
-                </div>
+                <h3 class="text-xs font-black text-gray-400 uppercase mb-4 tracking-widest border-b pb-2">房產資料</h3>
+                <div id="diagnostics-list" class="space-y-2"></div>
             </section>
         </div>
     </div>
 
     <script>
-        // --- 設定參數 (EID 編號對應) ---
-        const EID_TITLE  = "1000050"; // 案名
-        const EID_ADDR   = "1000055"; // 地址
-        const EID_COORD  = "1000759"; // 地圖經緯度
-        const EID_PRICE  = "1000076"; // 月租金
-        const EID_STATUS = "1000707"; // 狀態
+        const EID_TITLE  = "1000050"; 
+        const EID_ADDR   = "1000055"; 
+        const EID_COORD  = "1000759"; 
+        const EID_PRICE  = "1000076"; 
+        const EID_STATUS = "1000707"; 
 
         const MAPS_KEY = "AIzaSyALdVJlv7IBxnqeShEbzIIWnV7WSjtRtZw";
         const RAGIC_KEY = "Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==";
@@ -134,7 +122,9 @@
             markers = [];
 
             try {
-                const resp = await fetch(`${API_URL}?api&v=3&naming=EID&t=${new Date().getTime()}`, {
+                // 強制不快取
+                const ts = new Date().getTime();
+                const resp = await fetch(`${API_URL}?api&v=3&naming=EID&t=${ts}`, {
                     headers: { "Authorization": "Basic " + btoa(RAGIC_KEY + ":") }
                 });
                 const data = await resp.json();
@@ -145,16 +135,16 @@
 
                 fetchedRecords.forEach(item => {
                     const coord = item[EID_COORD];
-                    const name = item[EID_TITLE] || "未具名房產";
+                    const name = item[EID_TITLE] || "無名";
                     
                     if (coord && coord.toString().includes(',') && !isNaN(parseFloat(coord.split(',')[0]))) {
                         const [lat, lng] = coord.split(',').map(s => parseFloat(s.trim()));
                         addMarker(lat, lng, item);
                         bounds.extend({ lat, lng });
                         readyCount++;
-                        diagnosticsList.innerHTML += `<div class="diagnostic-card card-ok"><b>${name}</b><br>座標正常 ✅</div>`;
+                        diagnosticsList.innerHTML += `<div class="diagnostic-card card-ok"><b>${name}</b><br>OK: ${coord}</div>`;
                     } else {
-                        diagnosticsList.innerHTML += `<div class="diagnostic-card card-need"><b>${name}</b><br>等待同步 ⚠️ (地址: ${item[EID_ADDR] || '無'})</div>`;
+                        diagnosticsList.innerHTML += `<div class="diagnostic-card card-need"><b>${name}</b><br>缺座標</div>`;
                     }
                 });
 
@@ -166,71 +156,74 @@
                     toggleSettings();
                 }
             } catch (err) {
-                alert("Ragic 資料讀取異常，請檢查網路。");
+                alert("讀取失敗");
             }
         }
 
         async function syncAllToRagic() {
-            if (!confirm("準備解析地址並將座標寫入 Ragic，這可能需要幾分鐘，確定開始嗎？")) return;
-
             const btn = document.getElementById('btn-sync');
             const logDiv = document.getElementById('sync-log');
             btn.disabled = true;
-            btn.innerText = "⏳ 執行中...";
             document.getElementById('sync-log-section').classList.remove('hidden');
-            logDiv.innerHTML = ">>> 啟動地址解析排程...<br>";
+            logDiv.innerHTML = "=== 開始 JSON 同步 ===\n";
 
-            let success = 0;
             const toProcess = fetchedRecords.filter(i => {
                 const c = i[EID_COORD];
                 return !c || !c.toString().includes(',') || isNaN(parseFloat(c.split(',')[0]));
             });
 
             if (toProcess.length === 0) {
-                logDiv.innerHTML += "所有房產皆已有座標。完成！";
-                btn.disabled = false;
-                btn.innerText = "立即執行座標同步";
+                logDiv.innerHTML += "無須同步，資料已完整。";
                 return;
             }
 
             for (let i = 0; i < toProcess.length; i++) {
                 const item = toProcess[i];
                 const address = item[EID_ADDR];
-                const name = item[EID_TITLE] || item.id;
+                const recordId = item.id;
+                
+                if (!address) {
+                    logDiv.innerHTML += `跳過無地址資料 ID: ${recordId}\n`;
+                    continue;
+                }
 
                 try {
-                    logDiv.innerHTML += `[${i+1}/${toProcess.length}] 解析: ${name}...`;
+                    logDiv.innerHTML += `解析 ${item[EID_TITLE] || recordId}...`;
                     const result = await new Promise((res, rej) => {
                         geocoder.geocode({ address }, (r, s) => s === 'OK' ? res(r[0]) : rej(s));
                     });
                     
                     const coordStr = `${result.geometry.location.lat()},${result.geometry.location.lng()}`;
-                    logDiv.innerHTML += ` OK! 寫入 Ragic...`;
+                    logDiv.innerHTML += ` -> ${coordStr}\n`;
 
-                    const updateResp = await fetch(`${API_URL}/${item.id}?api`, {
+                    // *** 改用 JSON 格式 POST ***
+                    const updateUrl = `${API_URL}/${recordId}?api&v=3`;
+                    
+                    const payload = {};
+                    payload[EID_COORD] = coordStr;
+
+                    const updateResp = await fetch(updateUrl, {
                         method: 'POST',
                         headers: { 
                             "Authorization": "Basic " + btoa(RAGIC_KEY + ":"),
-                            "Content-Type": "application/x-www-form-urlencoded"
+                            "Content-Type": "application/json" // 改為 JSON
                         },
-                        body: new URLSearchParams({ [EID_COORD]: coordStr })
+                        body: JSON.stringify(payload)
                     });
 
-                    if (updateResp.ok) {
-                        logDiv.innerHTML += `<span class="text-blue-400 font-bold"> [完成]</span><br>`;
-                        success++;
-                    } else {
-                        logDiv.innerHTML += `<span class="text-red-400"> [失敗: ${updateResp.status}]</span><br>`;
-                    }
+                    const respText = await updateResp.text();
+                    
+                    logDiv.innerHTML += `HTTP ${updateResp.status}\n`;
+                    logDiv.innerHTML += `回應: ${respText}\n`; // 完整印出回應
+                    logDiv.innerHTML += `----------------\n`;
+
                 } catch (e) {
-                    logDiv.innerHTML += `<span class="text-red-400"> [解析錯誤]</span><br>`;
+                    logDiv.innerHTML += `<span class="log-err">錯誤: ${e}</span>\n`;
                 }
                 logDiv.scrollTop = logDiv.scrollHeight;
-                await new Promise(r => setTimeout(r, 400));
+                await new Promise(r => setTimeout(r, 500));
             }
-
-            alert(`同步結束！成功寫回 ${success} 筆座標。`);
-            location.reload();
+            alert("測試完成，請查看黑色日誌區域的詳細回應。");
         }
 
         function addMarker(lat, lng, item) {
@@ -239,20 +232,7 @@
                 icon: { url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png' }
             });
             const info = new google.maps.InfoWindow({
-                content: `
-                <div class="custom-info-window">
-                    <b class="text-blue-700 text-lg font-bold">${item[EID_TITLE]}</b>
-                    <hr class="my-2 border-gray-100">
-                    <div class="text-xs space-y-2 text-gray-600">
-                        <p>📍 <b>地址:</b> ${item[EID_ADDR]}</p>
-                        <p>💰 <b>租金:</b> ${item[EID_PRICE]}</p>
-                        <p>🏷️ <b>狀態:</b> ${item[EID_STATUS]}</p>
-                    </div>
-                    <a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank" 
-                       class="mt-3 block text-center bg-gray-900 text-white py-2.5 rounded-xl font-bold hover:bg-black transition">
-                       開始導航
-                    </a>
-                </div>`
+                content: `<div class="custom-info-window"><b>${item[EID_TITLE]}</b></div>`
             });
             marker.addListener("click", () => info.open(map, marker));
             markers.push(marker);
