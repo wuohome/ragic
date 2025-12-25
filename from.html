@@ -261,12 +261,16 @@
         <p style="margin-top: 20px; color: #007894; font-weight: bold;">資料傳送中...</p>
     </div>
 
-    <!-- 實際的表單 -->
-    <!-- 改為 onsubmit return false，由 JS 接手處理 API -->
-    <form id="ragicForm" onsubmit="return false;">
+    <!-- ★★★ 關鍵修改 1：加入一個隱藏的 iframe ★★★ -->
+    <!-- 這是用來欺騙瀏覽器，讓資料可以透過 iframe 傳送出去，而不會被 CORS 擋住 -->
+    <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+
+    <!-- ★★★ 關鍵修改 2：表單設定調整 ★★★ -->
+    <!-- target 設定為上面的 hidden_iframe，action 設定為你的 Ragic API 網址 -->
+    <!-- 這樣送出時，瀏覽器會把資料丟給 iframe，而不會換頁 -->
+    <form id="ragicForm" target="hidden_iframe" method="POST" action="https://ap15.ragic.com/wuohome/property-data-kept/8?api&APIKey=Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==">
         
-        <!-- ★★★ 新增：業務與電話的隱藏欄位 (資料會跟著表單送出) ★★★ -->
-        <!-- 這些欄位是根據你的 Ragic 定義文件設定的 -->
+        <!-- 新增：業務與電話的隱藏欄位 (資料會跟著表單送出) -->
         <input type="hidden" name="1000640" id="input_agent_name">
         <input type="hidden" name="1000641" id="input_agent_phone">
         
@@ -275,7 +279,7 @@
             <h2>👋 您好！</h2>
             <p class="desc">歡迎來到窩的家。<br>請問我們要怎麼稱呼您？</p>
             <!-- 1000581: 你貴姓/line名稱 -->
-            <input type="text" id="field_name" name="1000581" placeholder="請輸入您的稱呼" required>
+            <input type="text" id="field_name" name="1000581" placeholder="請輸入您的稱呼 (必填)" required onkeydown="if(event.key === 'Enter') { nextStep(); return false; }">
         </div>
 
         <!-- STEP 2: 電話 -->
@@ -283,7 +287,7 @@
             <h2>📞 聯絡電話</h2>
             <p class="desc">方便我們聯絡到您的手機號碼</p>
             <!-- 1000583: 連絡電話 -->
-            <input type="tel" id="field_phone" name="1000583" placeholder="09xx-xxx-xxx" required>
+            <input type="tel" id="field_phone" name="1000583" placeholder="09xx-xxx-xxx (必填)" required onkeydown="if(event.key === 'Enter') { nextStep(); return false; }">
         </div>
 
         <!-- STEP 3: 房屋類別 (按鈕選擇) -->
@@ -360,28 +364,19 @@
 </div>
 
 <script>
-    // --- ★★★ 核心邏輯：讀取 GitHub 網址上的參數 ★★★ ---
-    
-    // 預設值 (如果網址沒有帶參數，就顯示公司代表號)
+    // --- 核心邏輯：讀取 GitHub 網址上的參數 ---
     let defaultAgentName = "窩的家服務團隊"; 
-    let defaultAgentPhone = "02-1234-5678"; // 請修改為公司代表號
+    let defaultAgentPhone = "02-1234-5678"; 
 
-    // 自動讀取網址參數
-    // window.location.search 會抓取網址 "?" 後面的東西
     const urlParams = new URLSearchParams(window.location.search);
-    
-    // 如果網址有 agent=xxx，就用 xxx；否則用預設值
     const agentName = urlParams.get('agent') || defaultAgentName;
     const agentPhone = urlParams.get('phone') || defaultAgentPhone;
 
     function initAgentInfo() {
-        // 1. 設定 Step 6 (最後感謝頁) 的顯示內容
         document.getElementById('display_agent_name').innerText = agentName;
         document.getElementById('display_agent_call').href = 'tel:' + agentPhone;
         document.getElementById('display_agent_call').innerHTML = '📞 通話 ' + agentPhone;
         
-        // 2. 設定要偷偷寫入 Ragic 的「隱藏欄位」
-        // 這樣表單送出時，資料庫就會紀錄這筆單是誰的
         document.getElementById('input_agent_name').value = agentName;
         document.getElementById('input_agent_phone').value = agentPhone;
     }
@@ -443,10 +438,22 @@
     }
 
     function submitForm() {
+        // ★★★ 關鍵修改 3：嚴格的必填檢查 ★★★
         const name = document.getElementById('field_name').value;
+        const phone = document.getElementById('field_phone').value;
+        
+        // 檢查姓名
         if(!name) {
             alert('請填寫姓名喔！');
-            currentStep = 1;
+            currentStep = 1; // 跳回第一步
+            updateUI();
+            return;
+        }
+        
+        // 檢查電話 (新增)
+        if(!phone) {
+            alert('請填寫電話喔！');
+            currentStep = 2; // 跳回第二步
             updateUI();
             return;
         }
@@ -454,39 +461,20 @@
         // 顯示載入動畫
         document.getElementById('loadingOverlay').style.display = 'flex';
 
-        // 準備資料
+        // ★★★ 關鍵修改 4：改用傳統 Form Submit 方式 (解決 Ragic 沒收到資料的問題) ★★★
+        // 這裡會將資料送到 hidden_iframe，瀏覽器不會因為跨域而阻擋
         const form = document.getElementById('ragicForm');
-        const formData = new FormData(form);
+        form.submit();
 
-        // Ragic API URL (含 Key)
-        // 這是您提供的 API Key，直接使用於此
-        const apiUrl = "https://ap15.ragic.com/wuohome/property-data-kept/8?api&APIKey=Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==";
-
-        fetch(apiUrl, {
-            method: 'POST',
-            body: formData,
-        })
-        .then(response => {
-            // 無論成功與否，只要伺服器有回應，就視為傳送完成
-            // (因為 Ragic API 有時回傳格式瀏覽器會擋，但不影響寫入)
-            setTimeout(() => {
-                document.getElementById('loadingOverlay').style.display = 'none';
-                currentStep = totalSteps; // 跳到 Step 6
-                updateUI();
-            }, 1000);
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            // 即使報錯也跳轉，避免卡住客戶
-            setTimeout(() => {
-                document.getElementById('loadingOverlay').style.display = 'none';
-                currentStep = totalSteps; 
-                updateUI();
-            }, 1000);
-        });
+        // 假裝延遲 1.5 秒後顯示成功畫面
+        // 因為是送到 iframe，我們無法精準知道 Ragic 什麼時候處理完，但通常 1-2 秒內會完成
+        setTimeout(() => {
+            document.getElementById('loadingOverlay').style.display = 'none';
+            currentStep = totalSteps; // 跳到 Step 6
+            updateUI();
+        }, 1500);
     }
 
-    // ★★★ 初始化：一打開網頁就執行這段，把網址上的業務資料抓下來
     initAgentInfo(); 
     updateUI();
 </script>
