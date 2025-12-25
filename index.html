@@ -74,7 +74,7 @@
             </section>
 
             <section>
-                <h3 class="text-xs font-black text-gray-400 uppercase mb-4 tracking-widest border-b pb-2">房產資料清單</h3>
+                <h3 class="text-xs font-black text-gray-400 uppercase mb-4 tracking-widest border-b pb-2">房產資料清單 (Filter: 103)</h3>
                 <div id="diagnostics-list" class="space-y-2"></div>
             </section>
         </div>
@@ -125,9 +125,9 @@
             markers = [];
 
             try {
-                // 使用 APIKey 參數 (修正權限問題)
+                // 使用 APIKey 參數 (修正權限問題) 並加入 filterId=103
                 const ts = new Date().getTime();
-                const fetchUrl = `${API_URL}?api&v=3&naming=EID&t=${ts}&APIKey=${encodeURIComponent(RAGIC_KEY)}`;
+                const fetchUrl = `${API_URL}?api&v=3&naming=EID&t=${ts}&filterId=103&APIKey=${encodeURIComponent(RAGIC_KEY)}`;
                 
                 const resp = await fetch(fetchUrl);
                 const data = await resp.json();
