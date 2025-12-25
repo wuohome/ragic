@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ragic 房產導航 - APIKey 修正版</title>
+    <title>Ragic 房產導航 - 節省 Token 版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         #map { height: 100vh; width: 100%; }
@@ -19,7 +19,7 @@
             transform: translateX(100%);
         }
         #settings-panel.open { transform: translateX(0); }
-        .sync-log { font-family: monospace; font-size: 12px; background: #2d3748; color: #fff; padding: 15px; border-radius: 8px; max-height: 300px; overflow-y: auto; line-height: 1.5; white-space: pre-wrap; word-break: break-all; border: 1px solid #4a5568; }
+        .sync-log { font-family: monospace; font-size: 11px; background: #1a202c; color: #4ade80; padding: 12px; border-radius: 10px; max-height: 250px; overflow-y: auto; line-height: 1.6; white-space: pre-wrap; }
         .diagnostic-card { font-size: 11px; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left-width: 4px; }
         .card-ok { background: #f0fdf4; border-color: #22c55e; color: #166534; }
         .card-need { background: #fffbeb; border-color: #eab308; color: #854d0e; }
@@ -31,7 +31,6 @@
     <div id="loading" class="loading-overlay">
         <div class="inline-block animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600"></div>
         <p id="status-text" class="mt-4 text-gray-700 font-bold tracking-widest text-lg">系統啟動中...</p>
-        <p class="text-xs text-gray-400 mt-2">Connecting with APIKey parameter</p>
     </div>
 
     <div id="map"></div>
@@ -51,7 +50,7 @@
 
     <div id="settings-panel" class="fixed top-0 right-0 h-full w-96 bg-white shadow-2xl z-50 p-7 overflow-y-auto border-l">
         <div class="flex justify-between items-center mb-8">
-            <h2 class="text-2xl font-black text-gray-800">寫入診斷室</h2>
+            <h2 class="text-2xl font-black text-gray-800">資料管理中心</h2>
             <button onclick="toggleSettings()" class="text-gray-400 hover:text-red-500 transition text-2xl">✕</button>
         </div>
         
@@ -59,19 +58,19 @@
             <section class="bg-blue-50 p-6 rounded-3xl border-2 border-blue-100 shadow-sm">
                 <h3 class="text-lg font-bold mb-3 text-blue-700 flex items-center gap-2">
                     <span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">!</span>
-                    APIKey 修正模式
+                    節省 Token 模式
                 </h3>
                 <p class="text-xs text-blue-600 mb-4 leading-relaxed">
-                    已將驗證方式改為網址參數 <b>APIKey</b> (區分大小寫)。這是解決 Guest 權限錯誤的關鍵。
+                    系統會自動檢查，<b>只對「沒有座標」的資料</b>進行解析與寫入。已存在的資料將直接跳過，不消耗任何額度。
                 </p>
-                <button id="btn-sync" onclick="testSyncOneRecord()" class="w-full bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 transition shadow-lg active:scale-95">
-                    再次診斷寫入
+                <button id="btn-sync" onclick="syncAllToRagic()" class="w-full bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 transition shadow-lg active:scale-95">
+                    開始同步 (跳過已完成)
                 </button>
             </section>
 
             <section id="sync-log-section" class="hidden">
-                <h3 class="text-xs font-black text-gray-400 uppercase mb-3 tracking-widest">診斷日誌 (Raw Response)</h3>
-                <div id="sync-log" class="sync-log">等待測試...</div>
+                <h3 class="text-xs font-black text-gray-400 uppercase mb-3 tracking-widest">同步日誌</h3>
+                <div id="sync-log" class="sync-log">等待執行...</div>
             </section>
 
             <section>
@@ -126,7 +125,7 @@
             markers = [];
 
             try {
-                // 修改 1: 使用 APIKey (注意大小寫)
+                // 使用 APIKey 參數 (修正權限問題)
                 const ts = new Date().getTime();
                 const fetchUrl = `${API_URL}?api&v=3&naming=EID&t=${ts}&APIKey=${encodeURIComponent(RAGIC_KEY)}`;
                 
@@ -146,9 +145,9 @@
                         addMarker(lat, lng, item);
                         bounds.extend({ lat, lng });
                         readyCount++;
-                        diagnosticsList.innerHTML += `<div class="diagnostic-card card-ok"><b>${name}</b><br>座標: ${coord}</div>`;
+                        diagnosticsList.innerHTML += `<div class="diagnostic-card card-ok"><b>${name}</b><br>座標已存在: ${coord}</div>`;
                     } else {
-                        diagnosticsList.innerHTML += `<div class="diagnostic-card card-need"><b>${name}</b><br>狀態: 等待寫入</div>`;
+                        diagnosticsList.innerHTML += `<div class="diagnostic-card card-need"><b>${name}</b><br>狀態: 等待同步</div>`;
                     }
                 });
 
@@ -164,80 +163,94 @@
             }
         }
 
-        async function testSyncOneRecord() {
+        async function syncAllToRagic() {
             const btn = document.getElementById('btn-sync');
             const logDiv = document.getElementById('sync-log');
             btn.disabled = true;
             document.getElementById('sync-log-section').classList.remove('hidden');
-            logDiv.innerHTML = ">>> 啟動診斷 (APIKey Fix)...\n";
+            logDiv.innerHTML = ">>> 啟動智慧同步 (跳過已存在座標)...\n";
 
-            const target = fetchedRecords.find(i => {
+            // 過濾邏輯：只抓沒有座標的
+            const toProcess = fetchedRecords.filter(i => {
                 const c = i[EID_COORD];
-                return !c || !c.toString().includes(',') || isNaN(parseFloat(c.split(',')[0]));
+                // 如果座標存在且看起來合法 (有逗號且第一部分是數字)，就跳過
+                if (c && c.toString().includes(',') && !isNaN(parseFloat(c.split(',')[0]))) {
+                    return false;
+                }
+                return true;
             });
 
-            if (!target) {
-                logDiv.innerHTML += "所有資料似乎都已有座標了。\n";
-                alert("沒有需要同步的資料。");
+            const skippedCount = fetchedRecords.length - toProcess.length;
+            logDiv.innerHTML += `總筆數: ${fetchedRecords.length}\n`;
+            logDiv.innerHTML += `✅ 已有座標 (跳過): ${skippedCount} 筆\n`;
+            logDiv.innerHTML += `⚠️ 需同步 (執行): ${toProcess.length} 筆\n`;
+            logDiv.innerHTML += `------------------------\n`;
+
+            if (toProcess.length === 0) {
+                logDiv.innerHTML += "所有資料皆完整，無須消耗 Token。\n";
+                alert("所有資料都已有座標，不需要同步！");
                 btn.disabled = false;
                 return;
             }
 
-            const address = target[EID_ADDR];
-            const recordId = target.id;
-            const name = target[EID_TITLE] || recordId;
+            let successCount = 0;
 
-            if (!address) {
-                logDiv.innerHTML += `錯誤：資料 ${name} 無地址\n`;
-                btn.disabled = false;
-                return;
-            }
+            for (let i = 0; i < toProcess.length; i++) {
+                const item = toProcess[i];
+                const address = item[EID_ADDR];
+                const recordId = item.id;
+                const name = item[EID_TITLE] || recordId;
 
-            try {
-                logDiv.innerHTML += `目標：${name} (ID: ${recordId})\n`;
-                logDiv.innerHTML += `解析地址：${address}...\n`;
-                
-                const result = await new Promise((res, rej) => {
-                    geocoder.geocode({ address }, (r, s) => s === 'OK' ? res(r[0]) : rej(s));
-                });
-                
-                const coordStr = `${result.geometry.location.lat()},${result.geometry.location.lng()}`;
-                logDiv.innerHTML += `取得座標：${coordStr}\n`;
-                logDiv.innerHTML += `正在發送寫入請求...\n`;
-
-                const formData = new URLSearchParams();
-                formData.append(EID_COORD, coordStr);
-                
-                // 修改 2: 寫入時也使用 APIKey 參數，並且不帶 Authorization Header
-                const updateUrl = `${API_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_KEY)}`;
-
-                logDiv.innerHTML += `Request URL: ...&APIKey=... (hidden)\n`;
-
-                const updateResp = await fetch(updateUrl, {
-                    method: 'POST',
-                    headers: { 
-                        "Content-Type": "application/x-www-form-urlencoded"
-                    },
-                    body: formData.toString()
-                });
-
-                const respText = await updateResp.text();
-                
-                logDiv.innerHTML += `HTTP ${updateResp.status}\n`;
-                logDiv.innerHTML += `Ragic回應: ${respText}\n`;
-
-                if (respText.includes('"status":"SUCCESS"')) {
-                    logDiv.innerHTML += `✅ 成功！權限問題已解決。\n`;
-                    alert("寫入成功！請重新整理 Ragic 確認。");
-                } else {
-                    logDiv.innerHTML += `❌ 失敗。請檢查訊息。\n`;
-                    alert("寫入失敗。");
+                if (!address) {
+                    logDiv.innerHTML += `跳過: ${name} (無地址)\n`;
+                    continue;
                 }
 
-            } catch (e) {
-                logDiv.innerHTML += `錯誤: ${e}\n`;
+                try {
+                    logDiv.innerHTML += `[${i+1}/${toProcess.length}] 解析 ${name}...\n`;
+                    
+                    const result = await new Promise((res, rej) => {
+                        geocoder.geocode({ address }, (r, s) => s === 'OK' ? res(r[0]) : rej(s));
+                    });
+                    
+                    const coordStr = `${result.geometry.location.lat()},${result.geometry.location.lng()}`;
+                    logDiv.innerHTML += `   -> 取得座標: ${coordStr}\n   -> 寫入 Ragic...`;
+
+                    // 使用 FormData + APIKey 參數寫入
+                    const formData = new URLSearchParams();
+                    formData.append(EID_COORD, coordStr);
+                    
+                    const updateUrl = `${API_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_KEY)}`;
+
+                    const updateResp = await fetch(updateUrl, {
+                        method: 'POST',
+                        headers: { 
+                            "Content-Type": "application/x-www-form-urlencoded"
+                        },
+                        body: formData.toString()
+                    });
+
+                    const json = await updateResp.json();
+                    
+                    if (json.status === 'SUCCESS') {
+                        logDiv.innerHTML += ` OK ✅\n`;
+                        successCount++;
+                    } else {
+                        logDiv.innerHTML += ` 失敗 ❌ (${json.msg})\n`;
+                    }
+
+                } catch (e) {
+                    logDiv.innerHTML += ` 錯誤 ❌ (${e})\n`;
+                }
+                
+                logDiv.scrollTop = logDiv.scrollHeight;
+                // 避免 Google API Rate Limit
+                await new Promise(r => setTimeout(r, 400));
             }
-            btn.disabled = false;
+
+            logDiv.innerHTML += `\n=== 同步結束 ===\n成功更新: ${successCount} 筆`;
+            alert(`同步完成！共更新 ${successCount} 筆資料。頁面將重新載入。`);
+            location.reload();
         }
 
         function addMarker(lat, lng, item) {
