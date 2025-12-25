@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>窩的家 - 找房地圖 (幾何運算修正版)</title>
+    <title>窩的家 - 智慧找房地圖</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -35,6 +35,12 @@
         .filter-row { display: flex; gap: 8px; margin-top: 8px; }
         .filter-select { flex: 1; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background-color: white; outline: none; cursor: pointer; }
 
+        /* 數據統計儀表板 */
+        .stats-dashboard {
+            display: flex; justify-content: space-between; background: #f0f9ff; padding: 10px 16px; border-bottom: 1px solid #bfdbfe; font-size: 12px; color: #1e3a8a;
+        }
+        .stat-item b { font-size: 14px; margin-left: 4px; }
+
         @media (max-width: 768px) {
             body { flex-direction: column; }
             #sidebar { width: 100%; height: 0; overflow: hidden; order: 2; display: none; }
@@ -56,11 +62,12 @@
     </div>
 
     <div id="sidebar">
+        <!-- 標題區 -->
         <div class="px-4 py-3 border-b flex justify-between items-center bg-white">
             <div class="flex items-center gap-2">
                 <div class="bg-blue-600 text-white w-7 h-7 rounded flex items-center justify-center font-bold text-sm">窩</div>
                 <div>
-                    <h2 class="text-base font-bold text-gray-800">物件列表 <span id="count-badge" class="ml-1 text-blue-600">0</span></h2>
+                    <h2 class="text-base font-bold text-gray-800">物件列表</h2>
                     <div id="last-update-time" class="text-[10px] text-gray-400 font-normal">最後更新: --</div>
                 </div>
             </div>
@@ -69,6 +76,17 @@
             </button>
         </div>
 
+        <!-- 數據儀表板 (新增) -->
+        <div class="stats-dashboard">
+            <div class="stat-item text-blue-700">
+                <i class="fas fa-map-marker-alt"></i> 此區域: <b id="visible-count">0</b> 筆
+            </div>
+            <div class="stat-item text-gray-600">
+                <i class="fas fa-home"></i> 總可租: <b id="total-count">0</b> 筆
+            </div>
+        </div>
+
+        <!-- 篩選區 -->
         <div class="filter-section">
             <div class="relative">
                 <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
@@ -130,14 +148,15 @@
         window.onload = () => {
             updateTimeDisplay();
             const script = document.createElement('script');
-            // *** 修正重點：加入 &libraries=geometry ***
+            // 載入 geometry 庫以計算距離
             script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&callback=initMap&libraries=geometry`;
             script.async = true;
             document.head.appendChild(script);
 
-            document.getElementById('search-input').addEventListener('input', applyFilters);
-            document.getElementById('filter-room').addEventListener('change', applyFilters);
-            document.getElementById('filter-type').addEventListener('change', applyFilters);
+            // 綁定篩選事件 - 搜尋時觸發自動定位
+            document.getElementById('search-input').addEventListener('input', () => applyFilters(true));
+            document.getElementById('filter-room').addEventListener('change', () => applyFilters(true));
+            document.getElementById('filter-type').addEventListener('change', () => applyFilters(true));
         };
 
         function initMap() {
@@ -162,18 +181,20 @@
             
             try {
                 const ts = new Date().getTime();
-                // 讀取：確保 APIKey 在 URL 上，並包含 filterId
                 const fetchUrl = `${API_URL}?api&v=3&naming=EID&t=${ts}&filterId=103&APIKey=${encodeURIComponent(RAGIC_KEY)}`;
                 
-                const resp = await fetch(fetchUrl); // 不使用 Headers，避免 CORS 問題
+                const resp = await fetch(fetchUrl); 
                 
                 if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
                 
                 const data = await resp.json();
                 fetchedRecords = Object.entries(data).map(([id, val]) => ({ id, ...val }));
                 
+                // 更新總數
+                document.getElementById('total-count').innerText = fetchedRecords.length;
+                
                 saveCurrentTime();
-                applyFilters(); 
+                applyFilters(true); // 初次載入自動定位
 
                 setTimeout(() => loading.style.display = 'none', 500);
             } catch (err) {
@@ -183,7 +204,7 @@
             }
         }
 
-        function applyFilters() {
+        function applyFilters(autoZoom = false) {
             const keyword = document.getElementById('search-input').value.toLowerCase();
             const roomFilter = document.getElementById('filter-room').value;
             const typeFilter = document.getElementById('filter-type').value;
@@ -212,11 +233,12 @@
                 return true;
             });
 
-            renderMarkers();
-            renderListByMapBounds();
+            renderMarkers(autoZoom);
+            // 這裡不直接呼叫 renderListByMapBounds，因為 fitBounds 會觸發 idle 事件，進而更新列表
+            if (!autoZoom) renderListByMapBounds();
         }
 
-        function renderMarkers() {
+        function renderMarkers(autoZoom) {
             markers.forEach(m => m.setMap(null));
             markers = [];
             
@@ -242,7 +264,17 @@
                 }
             });
 
-            if (hasCoords && !map.getBounds()) map.fitBounds(bounds);
+            // 關鍵修改：如果是搜尋觸發的，或者還沒有邊界，就自動縮放地圖去包含搜尋結果
+            if (hasCoords && (autoZoom || !map.getBounds())) {
+                map.fitBounds(bounds);
+                // 如果只有一個點，縮放不要太近
+                if (markers.length === 1) {
+                    const listener = google.maps.event.addListener(map, "idle", () => { 
+                        if (map.getZoom() > 16) map.setZoom(16); 
+                        google.maps.event.removeListener(listener); 
+                    });
+                }
+            }
         }
 
         function renderListByMapBounds() {
@@ -259,6 +291,7 @@
                 return bounds.contains({ lat, lng });
             });
 
+            // 距離排序
             visibleItems.sort((a, b) => {
                 const [latA, lngA] = a[EID.COORD].split(',').map(Number);
                 const [latB, lngB] = b[EID.COORD].split(',').map(Number);
@@ -267,7 +300,9 @@
                 return distA - distB;
             });
 
-            document.getElementById('count-badge').innerText = visibleItems.length;
+            // 更新 "此區域" 數量
+            document.getElementById('visible-count').innerText = visibleItems.length;
+            
             list.innerHTML = '';
 
             if (visibleItems.length === 0) {
