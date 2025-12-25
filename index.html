@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>窩的家 - 找房地圖 (進度可視化版)</title>
+    <title>窩的家 - 智慧找房地圖</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -11,7 +11,7 @@
         
         /* 左側列表區 */
         #sidebar { 
-            width: 380px; 
+            width: 400px; 
             background: #fff; 
             box-shadow: 2px 0 10px rgba(0,0,0,0.05); 
             z-index: 20; 
@@ -39,8 +39,9 @@
         .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
         .card-title { font-weight: bold; font-size: 16px; color: #1f2937; line-height: 1.4; flex: 1; }
         
-        .card-details { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #4b5563; margin-bottom: 8px; flex-wrap: wrap; }
+        .card-details { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #4b5563; margin-bottom: 8px; flex-wrap: wrap; }
         .tag { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+        .tag-shop { background: #fee2e2; color: #991b1b; } /* 店面標籤顏色 */
         
         .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
         .card-price { color: #dc2626; font-weight: bold; font-size: 18px; }
@@ -65,20 +66,25 @@
             flex-direction: column;
         }
 
-        /* 同步進度條 (新增) */
+        /* 同步進度條 */
         #sync-progress-bar {
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
             background: rgba(31, 41, 55, 0.95); color: white;
             padding: 12px 24px; rounded: 9999px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             z-index: 10000;
-            display: none; /* 預設隱藏 */
+            display: none;
             align-items: center; gap: 12px;
             border-radius: 50px;
-            font-size: 14px;
-            font-weight: 500;
-            white-space: nowrap;
+            font-size: 14px; font-weight: 500; white-space: nowrap;
         }
+
+        /* 搜尋篩選區塊樣式 */
+        .filter-section { padding: 12px 16px; background: white; border-bottom: 1px solid #e5e7eb; }
+        .search-input { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background-color: #f9fafb; outline: none; transition: border-color 0.2s; }
+        .search-input:focus { border-color: #2563eb; background-color: white; }
+        .filter-row { display: flex; gap: 8px; margin-top: 8px; }
+        .filter-select { flex: 1; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background-color: white; outline: none; cursor: pointer; }
 
         /* 響應式 */
         @media (max-width: 768px) {
@@ -87,7 +93,7 @@
             #map-container { height: 100%; order: 1; }
             
             #sidebar.mobile-active {
-                display: flex; height: 50vh;
+                display: flex; height: 60vh;
                 position: fixed; bottom: 0; left: 0; width: 100%;
                 border-radius: 16px 16px 0 0;
                 box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
@@ -97,13 +103,13 @@
 </head>
 <body>
 
-    <!-- 初始載入動畫 -->
+    <!-- 載入動畫 -->
     <div id="loading" class="loading-overlay">
         <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
         <p class="mt-4 text-gray-600 font-bold tracking-widest text-sm">搜尋最新房源...</p>
     </div>
 
-    <!-- 同步進度懸浮條 (新增) -->
+    <!-- 同步進度條 -->
     <div id="sync-progress-bar">
         <i class="fas fa-sync-alt fa-spin text-blue-400"></i>
         <span id="sync-text">正在同步...</span>
@@ -111,27 +117,46 @@
 
     <!-- 左側列表 -->
     <div id="sidebar">
-        <div class="p-4 border-b bg-white sticky top-0 z-10 shadow-sm">
-            <div class="flex justify-between items-center">
-                <div class="flex items-center gap-2">
-                    <div class="bg-blue-600 text-white w-8 h-8 rounded flex items-center justify-center font-bold">窩</div>
-                    <div>
-                        <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
-                            物件列表 
-                            <span id="count-badge" class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-xs font-bold">0</span>
-                        </h2>
-                    </div>
+        <!-- 標題與更新時間 -->
+        <div class="px-4 py-3 border-b flex justify-between items-center bg-white">
+            <div class="flex items-center gap-2">
+                <div class="bg-blue-600 text-white w-7 h-7 rounded flex items-center justify-center font-bold text-sm">窩</div>
+                <div>
+                    <h2 class="text-base font-bold text-gray-800">物件列表 <span id="count-badge" class="ml-1 text-blue-600">0</span></h2>
+                    <div id="last-update-time" class="text-[10px] text-gray-400 font-normal">最後更新: --</div>
                 </div>
-                <button onclick="fetchData()" class="text-gray-400 hover:text-blue-600 p-2 rounded-full hover:bg-gray-50 transition" title="重新整理">
-                    <i class="fas fa-sync-alt"></i>
-                </button>
             </div>
-            <!-- 新增：最後更新時間 -->
-            <div id="last-update-time" class="text-xs text-gray-400 mt-2 pl-1 font-normal">
-                最後更新: --
+            <button onclick="fetchData()" class="text-gray-400 hover:text-blue-600 p-2 rounded-full hover:bg-gray-50 transition" title="重新整理">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+        </div>
+
+        <!-- 搜尋與篩選區 -->
+        <div class="filter-section">
+            <div class="relative">
+                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
+                <input type="text" id="search-input" class="search-input pl-9" placeholder="搜尋案名、地址...">
+            </div>
+            <div class="filter-row">
+                <select id="filter-room" class="filter-select">
+                    <option value="">格局不限</option>
+                    <option value="1">1房</option>
+                    <option value="2">2房</option>
+                    <option value="3">3房</option>
+                    <option value="4">4房以上</option>
+                </select>
+                <select id="filter-type" class="filter-select">
+                    <option value="">用途不限</option>
+                    <option value="住宅">住宅</option>
+                    <option value="店面">店面/商業</option>
+                    <option value="辦公">辦公室</option>
+                    <option value="車位">車位</option>
+                </select>
             </div>
         </div>
-        <div id="property-list" class="flex-1 overflow-y-auto bg-gray-50">
+
+        <!-- 列表內容 -->
+        <div id="property-list" class="flex-1 overflow-y-auto bg-gray-50 pb-20 md:pb-0">
             <!-- 卡片 -->
         </div>
     </div>
@@ -144,11 +169,10 @@
             <i class="fas fa-list-ul"></i> 列表模式
         </button>
 
-        <!-- 同步按鈕 (右上角) -->
+        <!-- 同步按鈕 -->
         <div class="absolute top-4 right-4 z-10 flex flex-col gap-2">
              <button onclick="syncAllToRagic()" class="bg-white p-3 rounded-lg shadow-md hover:bg-gray-50 text-gray-600 transition group relative" title="執行座標同步">
                 <i class="fas fa-cloud-upload-alt text-lg group-hover:text-blue-600"></i>
-                <!-- Tooltip -->
                 <span class="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none shadow-lg">
                     同步缺座標資料
                 </span>
@@ -163,7 +187,8 @@
             ADDR: "1000055",  // 地址
             COORD: "1000759", // 地圖經緯度
             PRICE: "1000076", // 月租金
-            LAYOUT: "1000063", // 格局
+            LAYOUT: "1000063", // 格局 (e.g. 2房1廳)
+            USAGE: "1000060", // 物件用途 (e.g. 住宅, 店面)
             LINK_591: "1000113" // 591連結
         };
 
@@ -173,17 +198,22 @@
 
         let map, geocoder;
         let markers = [];
-        let fetchedRecords = [];
+        let fetchedRecords = []; // 原始資料 (所有)
+        let filteredRecords = []; // 篩選後的資料 (符合搜尋條件)
         let activeInfoWindow = null;
+        let mapMoveTimeout;
 
         window.onload = () => {
-            // 讀取上次更新時間
             updateTimeDisplay();
-            
             const script = document.createElement('script');
             script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&callback=initMap`;
             script.async = true;
             document.head.appendChild(script);
+
+            // 綁定篩選事件
+            document.getElementById('search-input').addEventListener('input', applyFilters);
+            document.getElementById('filter-room').addEventListener('change', applyFilters);
+            document.getElementById('filter-type').addEventListener('change', applyFilters);
         };
 
         function initMap() {
@@ -195,6 +225,13 @@
                 styles: [{ "featureType": "poi", "stylers": [{ "visibility": "off" }] }]
             });
             geocoder = new google.maps.Geocoder();
+            
+            // 地圖移動監聽 (防抖動：停止移動後 0.3 秒才更新列表)
+            map.addListener('idle', () => {
+                clearTimeout(mapMoveTimeout);
+                mapMoveTimeout = setTimeout(renderListByMapBounds, 300);
+            });
+
             fetchData();
         }
 
@@ -202,10 +239,6 @@
             const loading = document.getElementById('loading');
             loading.style.display = 'flex';
             
-            markers.forEach(m => m.setMap(null));
-            markers = [];
-            document.getElementById('property-list').innerHTML = '';
-
             try {
                 const ts = new Date().getTime();
                 const fetchUrl = `${API_URL}?api&v=3&naming=EID&t=${ts}&filterId=103&APIKey=${encodeURIComponent(RAGIC_KEY)}`;
@@ -214,60 +247,145 @@
                 const data = await resp.json();
                 fetchedRecords = Object.entries(data).map(([id, val]) => ({ id, ...val }));
                 
-                document.getElementById('count-badge').innerText = fetchedRecords.length;
-                
-                // 更新時間
                 saveCurrentTime();
+                applyFilters(); // 初次篩選與渲染
 
-                let bounds = new google.maps.LatLngBounds();
-                let hasCoords = false;
-
-                fetchedRecords.forEach(item => {
-                    const coord = item[EID.COORD];
-                    createListItem(item);
-
-                    if (coord && coord.toString().includes(',') && !isNaN(parseFloat(coord.split(',')[0]))) {
-                        const [lat, lng] = coord.split(',').map(s => parseFloat(s.trim()));
-                        addMarker(lat, lng, item);
-                        bounds.extend({ lat, lng });
-                        hasCoords = true;
-                    }
-                });
-
-                if (hasCoords) map.fitBounds(bounds);
                 setTimeout(() => loading.style.display = 'none', 500);
-
             } catch (err) {
                 alert("讀取失敗，請確認 API Key");
                 loading.style.display = 'none';
             }
         }
 
-        // --- 時間顯示功能 ---
-        function saveCurrentTime() {
-            const now = new Date();
-            const timeStr = `${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
-            localStorage.setItem('ragic_last_update', timeStr);
-            updateTimeDisplay();
+        // --- 核心邏輯：篩選資料 ---
+        function applyFilters() {
+            const keyword = document.getElementById('search-input').value.toLowerCase();
+            const roomFilter = document.getElementById('filter-room').value;
+            const typeFilter = document.getElementById('filter-type').value;
+
+            filteredRecords = fetchedRecords.filter(item => {
+                // 1. 搜尋關鍵字 (案名 or 地址)
+                const title = (item[EID.TITLE] || '').toLowerCase();
+                const addr = (item[EID.ADDR] || '').toLowerCase();
+                if (keyword && !title.includes(keyword) && !addr.includes(keyword)) return false;
+
+                // 2. 房間數篩選 (解析 "2房" 中的 2)
+                if (roomFilter) {
+                    const layout = item[EID.LAYOUT] || '';
+                    const roomMatch = layout.match(/(\d+)房/);
+                    const roomNum = roomMatch ? parseInt(roomMatch[1]) : 0;
+                    if (roomFilter === '4') {
+                        if (roomNum < 4) return false;
+                    } else {
+                        if (roomNum !== parseInt(roomFilter)) return false;
+                    }
+                }
+
+                // 3. 用途篩選 (住宅 vs 店面)
+                if (typeFilter) {
+                    const usage = (item[EID.USAGE] || '').toLowerCase();
+                    const layout = (item[EID.LAYOUT] || '').toLowerCase(); // 備用：有些用途寫在格局
+                    if (typeFilter === '店面' && !usage.includes('店') && !layout.includes('店')) return false;
+                    if (typeFilter === '住宅' && (usage.includes('店') || usage.includes('辦') || usage.includes('商'))) return false;
+                    if (typeFilter === '辦公' && !usage.includes('辦') && !usage.includes('商')) return false;
+                    if (typeFilter === '車位' && !usage.includes('車')) return false;
+                }
+
+                return true;
+            });
+
+            // 更新地圖上的標記
+            renderMarkers();
+            // 更新左側列表 (根據目前地圖視野)
+            renderListByMapBounds();
         }
 
-        function updateTimeDisplay() {
-            const lastTime = localStorage.getItem('ragic_last_update');
-            const el = document.getElementById('last-update-time');
-            if(lastTime) {
-                el.innerText = `最後更新: ${lastTime}`;
-            } else {
-                el.innerText = `最後更新: --`;
+        // --- 渲染地圖標記 ---
+        function renderMarkers() {
+            // 清除舊標記
+            markers.forEach(m => m.setMap(null));
+            markers = [];
+            
+            let bounds = new google.maps.LatLngBounds();
+            let hasCoords = false;
+
+            filteredRecords.forEach(item => {
+                const coord = item[EID.COORD];
+                if (coord && coord.includes(',') && !isNaN(parseFloat(coord.split(',')[0]))) {
+                    const [lat, lng] = coord.split(',').map(Number);
+                    
+                    const marker = new google.maps.Marker({
+                        position: { lat, lng },
+                        map: map,
+                        title: item[EID.TITLE],
+                        icon: { url: "https://maps.google.com/mapfiles/ms/icons/red-dot.png" }
+                    });
+                    marker.recordId = item.id;
+
+                    // 點擊標記事件
+                    marker.addListener("click", () => {
+                        showInfoWindow(marker, item);
+                        scrollToCard(item.id);
+                    });
+
+                    markers.push(marker);
+                    bounds.extend({ lat, lng });
+                    hasCoords = true;
+                }
+            });
+
+            // 如果是初次載入或篩選改變，自動調整地圖視野
+            if (hasCoords && !map.getBounds()) {
+                map.fitBounds(bounds);
             }
         }
 
-        function createListItem(item) {
+        // --- 渲染左側列表 (根據地圖視野) ---
+        function renderListByMapBounds() {
             const list = document.getElementById('property-list');
+            const bounds = map.getBounds();
+            const center = map.getCenter();
+
+            if (!bounds) return; // 地圖尚未準備好
+
+            // 1. 過濾出「在地圖視野內」的物件
+            // 注意：我們是對 filteredRecords (已搜尋過) 再做一次過濾
+            let visibleItems = filteredRecords.filter(item => {
+                const coord = item[EID.COORD];
+                if (!coord || !coord.includes(',')) return false; // 沒座標的不顯示在列表 (因為無法在地圖定位)
+                const [lat, lng] = coord.split(',').map(Number);
+                return bounds.contains({ lat, lng });
+            });
+
+            // 2. 排序：離地圖中心最近的排前面
+            visibleItems.sort((a, b) => {
+                const [latA, lngA] = a[EID.COORD].split(',').map(Number);
+                const [latB, lngB] = b[EID.COORD].split(',').map(Number);
+                const distA = google.maps.geometry.spherical.computeDistanceBetween(center, new google.maps.LatLng(latA, lngA));
+                const distB = google.maps.geometry.spherical.computeDistanceBetween(center, new google.maps.LatLng(latB, lngB));
+                return distA - distB;
+            });
+
+            // 3. 更新 UI
+            document.getElementById('count-badge').innerText = visibleItems.length;
+            list.innerHTML = '';
+
+            if (visibleItems.length === 0) {
+                list.innerHTML = '<div class="p-8 text-center text-gray-400">此範圍無符合條件的物件</div>';
+                return;
+            }
+
+            visibleItems.forEach(item => createListItem(item, list));
+        }
+
+        function createListItem(item, container) {
             const div = document.createElement('div');
             
             const price = item[EID.PRICE] ? parseInt(item[EID.PRICE]).toLocaleString() : "面議";
             const link591 = item[EID.LINK_591];
             const hasLink = link591 && link591.startsWith('http');
+            const usage = item[EID.USAGE] || '';
+            const isShop = usage.includes('店');
             
             div.className = "property-card";
             div.id = `card-${item.id}`;
@@ -281,32 +399,25 @@
                     <div class="card-title">${item[EID.TITLE] || '(未命名)'}</div>
                 </div>
                 <div class="card-details">
-                    <span class="tag"><i class="fas fa-vector-square mr-1"></i>${item[EID.LAYOUT] || '格局未填'}</span>
+                    <span class="tag ${isShop ? 'tag-shop' : ''}"><i class="fas ${isShop ? 'fa-store' : 'fa-home'} mr-1"></i>${item[EID.LAYOUT] || usage || '未分類'}</span>
                     <span class="text-gray-400">|</span>
-                    <span class="truncate w-40">${item[EID.ADDR] || ''}</span>
+                    <span class="truncate w-32 md:w-40" title="${item[EID.ADDR]}">${item[EID.ADDR] || ''}</span>
                 </div>
                 <div class="card-footer">
                     <div class="card-price">$${price} <span class="price-unit">/月</span></div>
-                    <a href="${link591}" target="_blank" class="btn-591 ${hasLink ? '' : 'btn-hidden'}" title="前往 591 頁面">
-                        <i class="fas fa-external-link-alt"></i> 591 連結
+                    <a href="${link591}" target="_blank" class="btn-591 ${hasLink ? '' : 'btn-hidden'}" title="前往 591">
+                        <i class="fas fa-external-link-alt"></i> 591
                     </a>
                 </div>
             `;
-            list.appendChild(div);
+            container.appendChild(div);
         }
 
-        function addMarker(lat, lng, item) {
-            const marker = new google.maps.Marker({
-                position: { lat, lng },
-                map: map,
-                title: item[EID.TITLE],
-                icon: { url: "https://maps.google.com/mapfiles/ms/icons/red-dot.png" }
-            });
-            marker.recordId = item.id;
-
+        function showInfoWindow(marker, item) {
             const price = item[EID.PRICE] ? parseInt(item[EID.PRICE]).toLocaleString() : "面議";
             const link591 = item[EID.LINK_591];
             const hasLink = link591 && link591.startsWith('http');
+            const [lat, lng] = item[EID.COORD].split(',');
 
             const infoContent = `
                 <div style="padding: 5px; min-width: 200px;">
@@ -314,34 +425,28 @@
                     <p class="text-gray-500 text-xs mb-2">${item[EID.LAYOUT]} | ${item[EID.ADDR]}</p>
                     <div class="flex justify-between items-center mt-2 border-t pt-2">
                         <span class="text-red-600 font-bold text-lg">$${price}</span>
-                        ${hasLink ? `<a href="${link591}" target="_blank" class="text-xs bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600" style="text-decoration:none;">591</a>` : ''}
+                        <div class="flex gap-2">
+                            ${hasLink ? `<a href="${link591}" target="_blank" class="text-xs bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600" style="text-decoration:none;">591</a>` : ''}
+                            <a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank" class="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700" style="text-decoration:none;">導航</a>
+                        </div>
                     </div>
                 </div>
             `;
 
+            if (activeInfoWindow) activeInfoWindow.close();
             const infoWindow = new google.maps.InfoWindow({ content: infoContent });
-
-            marker.addListener("click", () => {
-                if (activeInfoWindow) activeInfoWindow.close();
-                infoWindow.open(map, marker);
-                activeInfoWindow = infoWindow;
-                scrollToCard(item.id);
-            });
-
-            markers.push(marker);
+            infoWindow.open(map, marker);
+            activeInfoWindow = infoWindow;
         }
 
         function focusOnMap(id, coord) {
-            if (!coord || !coord.includes(',')) {
-                alert("此物件尚無座標 (請點擊右上角雲端圖示進行同步)");
-                return;
-            }
+            if (!coord || !coord.includes(',')) return;
             const [lat, lng] = coord.split(',').map(Number);
             map.setCenter({ lat, lng });
             map.setZoom(16);
             
             const targetMarker = markers.find(m => m.recordId === id);
-            if (targetMarker) google.maps.event.trigger(targetMarker, 'click');
+            if (targetMarker) showInfoWindow(targetMarker, filteredRecords.find(i => i.id === id));
             
             if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('mobile-active');
         }
@@ -361,73 +466,71 @@
             sidebar.style.display = sidebar.classList.contains('mobile-active') ? 'flex' : 'none';
         }
 
-        // --- 同步功能 (顯示進度條版) ---
+        function saveCurrentTime() {
+            const now = new Date();
+            const timeStr = `${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+            localStorage.setItem('ragic_last_update', timeStr);
+            updateTimeDisplay();
+        }
+
+        function updateTimeDisplay() {
+            const lastTime = localStorage.getItem('ragic_last_update');
+            const el = document.getElementById('last-update-time');
+            if(lastTime) el.innerText = `最後更新: ${lastTime}`;
+        }
+
+        // --- 同步功能 (維持不變) ---
         async function syncAllToRagic() {
-            if(!confirm("確定要執行同步？\n\n系統將會檢查沒有座標的物件，解析地址後寫回 Ragic。")) return;
+            if(!confirm("確定要執行同步？\n系統將自動解析缺座標的物件並寫回 Ragic。")) return;
             
             const btn = document.querySelector('button[onclick="syncAllToRagic()"]');
             btn.disabled = true;
-            
-            // 顯示進度條
             const progressBar = document.getElementById('sync-progress-bar');
             const progressText = document.getElementById('sync-text');
             progressBar.style.display = 'flex';
-            progressText.innerText = '正在檢查資料...';
+            progressText.innerText = '檢查資料中...';
             
             let success = 0;
-            // 找出沒有座標的資料
             const toProcess = fetchedRecords.filter(i => {
                 const c = i[EID.COORD];
                 return !c || !c.toString().includes(',') || isNaN(parseFloat(c.split(',')[0]));
             });
 
             if (toProcess.length === 0) {
-                alert("資料已完整，所有物件皆已有座標！");
+                alert("資料已完整，無需同步！");
                 btn.disabled = false;
                 progressBar.style.display = 'none';
                 return;
             }
 
-            // 開始批次處理
             for (let i = 0; i < toProcess.length; i++) {
                 const item = toProcess[i];
                 const address = item[EID.ADDR];
                 const recordId = item.id;
                 
-                // 更新進度顯示
-                progressText.innerText = `正在同步: ${i+1} / ${toProcess.length} (${item[EID.TITLE] || '未命名'})`;
+                progressText.innerText = `同步中: ${i+1} / ${toProcess.length}`;
 
                 if (address) {
                     try {
                         const result = await new Promise((res, rej) => {
                             geocoder.geocode({ address }, (r, s) => s === 'OK' ? res(r[0]) : rej(s));
                         });
-                        
                         const coordStr = `${result.geometry.location.lat()},${result.geometry.location.lng()}`;
-                        
-                        // 寫入 Ragic
                         const formData = new URLSearchParams();
                         formData.append(EID.COORD, coordStr);
-                        
                         const updateResp = await fetch(`${API_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_KEY)}`, {
                             method: 'POST',
                             headers: { "Content-Type": "application/x-www-form-urlencoded" },
                             body: formData.toString()
                         });
-
                         const json = await updateResp.json();
                         if (json.status === 'SUCCESS') success++;
-
-                    } catch (e) {
-                        console.error(`Error processing ${recordId}:`, e);
-                    }
-                    // 避免 Rate Limit
+                    } catch (e) {}
                     await new Promise(r => setTimeout(r, 400));
                 }
             }
-
             progressBar.style.display = 'none';
-            alert(`同步完成！成功更新 ${success} 筆資料。\n頁面將重新載入。`);
+            alert(`同步完成！更新 ${success} 筆。頁面將重新載入。`);
             btn.disabled = false;
             location.reload();
         }
