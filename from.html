@@ -177,10 +177,17 @@
             box-shadow: 0 0 0 4px rgba(0, 120, 148, 0.2);
         }
 
-        /* 選項按鈕化 */
+        /* 選項按鈕化 (兩欄) */
         .option-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 1fr; /* 兩欄 */
+            gap: 10px;
+        }
+
+        /* 選項按鈕化 (單欄 - 預算專用) */
+        .option-grid-single {
+            display: grid;
+            grid-template-columns: 1fr; /* 單欄 */
             gap: 10px;
         }
 
@@ -214,9 +221,12 @@
             font-size: 16px;
             cursor: pointer;
             text-align: center;
-            margin-bottom: 8px;
+            /* margin-bottom: 8px;  <-- 移除，改用 grid gap 控制 */
             transition: all 0.2s;
             color: #555;
+            display: flex; /* 確保內容置中 */
+            align-items: center;
+            justify-content: center;
         }
         .multi-select-btn.active {
             background-color: #007894;
@@ -530,17 +540,17 @@
             <h2>🏢 房屋類型與格局</h2>
             <p class="desc">請選擇您需要的房子</p>
             
-            <p class="question-label">1. 房屋類別</p>
+            <p class="question-label">1. 房屋類別 (可複選)</p>
             <input type="hidden" id="field_type" name="1000584">
-            <div class="option-grid" style="margin-bottom: 25px;">
-                <div class="option-btn" onclick="selectOption('field_type', '電梯', this)">電梯大樓</div>
-                <div class="option-btn" onclick="selectOption('field_type', '公寓(無電梯)', this)">公寓 (無電梯)</div>
+            <div id="type_container" class="option-grid" style="margin-bottom: 25px;">
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'type')">電梯大樓</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'type')">公寓 (無電梯)</div>
             </div>
 
-            <!-- ★★★ 修改：格局完全依照資料庫文件 (1000585) ★★★ -->
+            <!-- 格局 (複選, 兩欄) -->
             <p class="question-label">2. 需要格局 (可複選)</p>
             <input type="hidden" id="field_layout" name="1000585">
-            <div id="layout_container">
+            <div id="layout_container" class="option-grid">
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'layout')">雅房</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'layout')">套房</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'layout')">2房</div>
@@ -609,10 +619,11 @@
             <p class="question-label">2. 主要找房區域 (例如: 三重、新莊)</p>
             <input type="text" name="1000639" id="field_area" placeholder="請輸入區域 (選填)">
 
-            <!-- ★★★ 修改：預算完全依照資料庫文件 (1000588) ★★★ -->
-            <p class="question-label">3. 租金預算 (可複選)</p>
+            <!-- ★★★ 修改：標題加註 (含管理費/車位，可複選) ★★★ -->
+            <p class="question-label">3. 租金預算 (含管理費/車位，可複選)</p>
             <input type="hidden" name="1000588" id="field_budget">
-            <div id="budget_container">
+            <!-- ★★★ 修改：預算單欄排版 (option-grid-single) ★★★ -->
+            <div id="budget_container" class="option-grid-single">
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'budget')">10,000以下</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'budget')">10,000~15,000</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'budget')">15,000~20,000</div>
@@ -633,7 +644,7 @@
 
             <p class="question-label">1. 租屋習慣</p>
             <input type="hidden" name="1000591" id="field_habits">
-            <div id="habits_container">
+            <div id="habits_container" class="option-grid">
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'habits')">有抽菸</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'habits')">養貓</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'habits')">養狗</div>
@@ -642,7 +653,7 @@
 
             <p class="question-label" style="margin-top:20px;">2. 必要需求</p>
             <input type="hidden" name="1000592" id="field_needs">
-            <div id="needs_container">
+            <div id="needs_container" class="option-grid">
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">公司營登</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">公司報稅</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">租屋補助</div>
@@ -711,6 +722,7 @@
     let selectedNeeds = [];
     let selectedBudget = []; 
     let selectedLayout = [];
+    let selectedType = []; // 新增房屋類別複選
 
     function addOccupant() {
         const name = document.getElementById('add_name').value.trim();
@@ -801,23 +813,27 @@
         else if (type === 'needs') list = selectedNeeds;
         else if (type === 'budget') list = selectedBudget;
         else if (type === 'layout') list = selectedLayout;
+        else if (type === 'type') list = selectedType;
         
         if (list.includes(value)) {
             if (type === 'habits') selectedHabits = selectedHabits.filter(item => item !== value);
             else if (type === 'needs') selectedNeeds = selectedNeeds.filter(item => item !== value);
             else if (type === 'budget') selectedBudget = selectedBudget.filter(item => item !== value);
             else if (type === 'layout') selectedLayout = selectedLayout.filter(item => item !== value);
+            else if (type === 'type') selectedType = selectedType.filter(item => item !== value);
         } else {
             if (type === 'habits') selectedHabits.push(value);
             else if (type === 'needs') selectedNeeds.push(value);
             else if (type === 'budget') selectedBudget.push(value);
             else if (type === 'layout') selectedLayout.push(value);
+            else if (type === 'type') selectedType.push(value);
         }
 
         if (type === 'habits') document.getElementById('field_habits').value = selectedHabits.join(',');
         else if (type === 'needs') document.getElementById('field_needs').value = selectedNeeds.join(',');
         else if (type === 'budget') document.getElementById('field_budget').value = selectedBudget.join(',');
         else if (type === 'layout') document.getElementById('field_layout').value = selectedLayout.join(',');
+        else if (type === 'type') document.getElementById('field_type').value = selectedType.join(',');
     }
 
     function initAgentInfo() {
@@ -876,8 +892,8 @@
             if (!phone) { alert('請填寫手機號碼喔！'); return; }
         }
         else if (currentStep === 2) { 
-            const type = document.getElementById('field_type').value;
-            if (!type) { alert('請選擇房屋類型！'); return; }
+            // 房屋類別複選檢查
+            if (selectedType.length === 0) { alert('請選擇房屋類型！'); return; }
             if (selectedLayout.length === 0) { alert('請選擇您需要的格局！'); return; }
         }
         else if (currentStep === 3) { 
@@ -926,13 +942,7 @@
     }
 
     function selectOption(inputId, value, element) {
-        document.getElementById(inputId).value = value;
-        let parent = element.parentElement;
-        let siblings = parent.getElementsByClassName('option-btn');
-        for(let btn of siblings) {
-            btn.classList.remove('selected');
-        }
-        element.classList.add('selected');
+        // 舊版單選功能已停用，改由 toggleSelection 處理
     }
 
     function submitForm() {
