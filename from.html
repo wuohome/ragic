@@ -12,10 +12,10 @@
             font-family: 'Noto Sans TC', sans-serif;
             background-color: #f0f8fa;
             margin: 0;
-            padding: 0;
+            padding: 20px 0; /* 上下留點白 */
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start; /* 改為靠上對齊，適應長頁面 */
             min-height: 100vh;
         }
 
@@ -23,14 +23,16 @@
             background: white;
             width: 100%;
             max-width: 600px;
-            height: 90vh;
-            max-height: 800px;
+            /* 移除固定高度，改為自動長高 */
+            min-height: 80vh;
+            height: auto; 
             border-radius: 20px;
             box-shadow: 0 10px 30px rgba(0, 120, 148, 0.15);
             display: flex;
             flex-direction: column;
             overflow: hidden;
             position: relative;
+            margin-bottom: 20px;
         }
 
         .progress-bar {
@@ -48,11 +50,9 @@
 
         #ragicForm {
             flex: 1;
-            overflow-y: auto;
             width: 100%;
             display: flex;
             flex-direction: column;
-            -webkit-overflow-scrolling: touch; 
         }
 
         .step-content {
@@ -60,10 +60,9 @@
             padding: 20px 30px;
             display: none;
             flex-direction: column;
-            justify-content: center;
+            /* 內容少時置中，內容多時靠上 */
+            justify-content: flex-start; 
             animation: fadeIn 0.5s;
-            min-height: min-content;
-            /* 底部留白 */
             padding-bottom: 40px; 
         }
 
@@ -90,13 +89,11 @@
             margin-bottom: 20px;
         }
 
-        /* --- 業務名片卡 --- */
+        /* --- 業務名片卡 (嵌入式設計) --- */
         .agent-card-wrapper {
-            padding: 10px 20px 0 20px;
+            padding: 20px 20px 0 20px;
             background: #fff;
-            flex-shrink: 0;
             border-top: 1px solid #f0f0f0;
-            /* 預設顯示，手機版透過 JS 控制 */
         }
 
         .agent-card {
@@ -229,12 +226,11 @@
 
         /* 底部按鈕區 */
         .footer-btns {
-            padding: 10px 30px 15px 30px;
+            padding: 10px 30px 20px 30px;
             background: #fff;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            flex-shrink: 0;
         }
 
         button {
@@ -301,25 +297,23 @@
             letter-spacing: 1px;
         }
         
-        /* --- Footer (頁尾資訊) --- */
+        /* --- Footer (置底不懸浮) --- */
         .app-footer {
             background-color: #ffffff;
             border-top: 1px solid #eee;
-            padding: 15px 20px;
+            padding: 30px 20px; /* 增加 padding */
             text-align: center;
-            flex-shrink: 0;
-            /* 預設隱藏，只在 Step 1 和 最後一頁 顯示 */
-            display: none; 
+            display: flex; /* 預設顯示 */
             flex-direction: column;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
         }
         
         .footer-content {
             display: flex;
             align-items: center;
             justify-content: center;
-            flex-wrap: wrap; /* 手機版自動換行 */
+            flex-wrap: wrap; 
             gap: 5px;
             font-size: 13px;
             color: #555;
@@ -343,11 +337,11 @@
             background-color: #007894;
             color: #fff;
             border: 1px solid #007894;
-            padding: 6px 15px;
+            padding: 8px 20px;
             border-radius: 50px;
             text-decoration: none;
             font-weight: bold;
-            font-size: 12px;
+            font-size: 13px;
             transition: all 0.2s;
             box-shadow: 0 4px 10px rgba(0, 120, 148, 0.2);
             margin-top: 5px;
@@ -364,7 +358,9 @@
                 padding: 0;
             }
             .wizard-container {
-                height: 100vh;
+                /* 取消固定高度，改為自動，讓頁尾自然流動到最下方 */
+                height: auto; 
+                min-height: 100vh;
                 max-height: none;
                 border-radius: 0;
                 box-shadow: none;
@@ -382,7 +378,7 @@
                 padding: 15px 20px; 
                 justify-content: flex-start; 
                 padding-top: 20px;
-                padding-bottom: 60px;
+                padding-bottom: 20px;
             }
             h2 {
                 font-size: 22px;
@@ -402,37 +398,61 @@
                 display: none; /* 手機版不需要分隔線 */
             }
             .footer-btns {
-                padding: 10px 20px;
+                padding: 10px 20px 30px 20px;
             }
         }
 
-        /* 成員列表樣式 */
+        /* 成員列表樣式 (優化版) */
         .occupant-entry {
             background: #fff;
-            border: 1px dashed #ccc;
-            padding: 10px;
-            margin-bottom: 8px;
-            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             font-size: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+        .occupant-info-text {
+            color: #333;
+            font-weight: 500;
+        }
+        .occupant-tag {
+            background: #eefbfb;
+            color: #007894;
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-right: 5px;
+            font-weight: bold;
         }
         .delete-btn {
             color: #e74c3c;
             cursor: pointer;
             font-weight: bold;
-            padding: 5px 10px;
+            padding: 6px 12px;
             background: #fff0f0;
-            border-radius: 5px;
-            font-size: 14px;
+            border-radius: 20px;
+            font-size: 13px;
         }
+        
+        /* 居住成員編輯區塊 */
         .add-occupant-box {
-            background: #f4fbfc;
+            background: #f8fcfd;
             border: 2px solid #e0eef2;
-            padding: 15px;
-            border-radius: 12px;
+            padding: 20px;
+            border-radius: 15px;
             margin-bottom: 15px;
+            text-align: left;
+        }
+        .section-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: #007894;
+            margin-bottom: 10px;
+            display: block;
         }
         .add-row {
             display: flex;
@@ -449,6 +469,8 @@
             font-weight: bold;
             cursor: pointer;
             font-size: 16px;
+            margin-top: 5px;
+            box-shadow: 0 4px 6px rgba(0, 120, 148, 0.2);
         }
         .add-btn:hover {
             background-color: #00657d;
@@ -467,7 +489,7 @@
 <body>
 
 <div class="wizard-container">
-    <!-- Header: 只保留最簡單的標題 -->
+    <!-- Header -->
     <div class="logo-header">
         <h1 class="logo-title">租屋需求小幫手</h1>
     </div>
@@ -499,7 +521,6 @@
             
             <input type="text" id="field_name" name="1000581" placeholder="您的姓名 / Line 暱稱 (必填)" required>
             <input type="tel" id="field_phone" name="1000583" placeholder="手機號碼 (必填)" required>
-            <!-- 1000647: line ID -->
             <input type="text" id="field_line" name="1000647" placeholder="LINE ID (選填)">
         </div>
 
@@ -525,7 +546,7 @@
             </div>
         </div>
 
-        <!-- STEP 3: 入住資訊 -->
+        <!-- STEP 3: 入住資訊 (更新：名單設計優化) -->
         <div class="step-content" id="step3">
             <h2>📅 入住與成員</h2>
             <p class="desc">請告訴我們您的入住計畫 (必填)</p>
@@ -539,8 +560,8 @@
                 <option value="三個月以上">三個月以上</option>
             </select>
 
-            <p class="question-label">2. 居住成員資料</p>
-            <select id="occupant_relation" style="margin-bottom: 15px; text-align-last:center;">
+            <p class="question-label">2. 居住關係</p>
+            <select id="occupant_relation" style="margin-bottom: 20px; text-align-last:center;">
                 <option value="">請選擇關係...</option>
                 <option value="個人獨居">個人獨居</option>
                 <option value="夫妻/情侶">夫妻/情侶</option>
@@ -548,22 +569,26 @@
                 <option value="朋友/同事合租">朋友/同事合租</option>
             </select>
 
-            <div class="add-occupant-box">
+            <!-- 居住成員列表 (自動帶入自己) -->
+            <p class="question-label">3. 居住成員名單</p>
+            <div id="occupant_list_display" style="text-align:left; margin-bottom:10px;"></div>
+
+            <!-- 新增按鈕區塊 -->
+            <div class="add-occupant-box" id="add_occupant_ui">
+                <span class="section-title">新增其他同住人 (選填)</span>
                 <div class="add-row">
                     <input type="text" id="add_name" placeholder="姓名" style="flex:2; margin-bottom:0; font-size:16px;">
                     <input type="text" id="add_age" placeholder="年齡" style="flex:1; margin-bottom:0; font-size:16px;">
                 </div>
                 <input type="text" id="add_job" placeholder="職業 (例如: 工程師)" style="width:100%; margin-bottom:10px; font-size:16px;" onkeydown="if(event.key === 'Enter') { addOccupant(); return false; }">
-                <button type="button" class="add-btn" onclick="addOccupant()">+ 新增入住者</button>
+                <button type="button" class="add-btn" onclick="addOccupant()">+ 加入名單</button>
             </div>
-
-            <div id="occupant_list_display" style="text-align:left; margin-bottom:20px;"></div>
 
             <input type="hidden" name="1000587" id="field_occupants_final">
             <input type="hidden" name="1000586" id="field_occupant_count">
         </div>
 
-        <!-- STEP 4: 區域與預算 -->
+        <!-- STEP 4: 區域與預算 (更新：租金複選) -->
         <div class="step-content" id="step4">
             <h2>📍 地點與預算</h2>
             <p class="desc">告訴我們您想找的範圍</p>
@@ -579,14 +604,21 @@
             <p class="question-label">2. 主要找房區域 (例如: 三重、新莊)</p>
             <input type="text" name="1000639" id="field_area" placeholder="請輸入區域 (選填)">
 
-            <p class="question-label">3. 租金預算？</p>
-            <select name="1000588" id="field_budget">
-                <option value="">請選擇預算...</option>
-                <option value="15,000~20,000">1.5萬 - 2萬</option>
-                <option value="20,000~25,000">2萬 - 2.5萬</option>
-                <option value="25,000~30,000">2.5萬 - 3萬</option>
-                <option value="30,000以上">3萬以上</option>
-            </select>
+            <p class="question-label">3. 租金預算 (可複選)</p>
+            <!-- 隱藏欄位存放複選結果 -->
+            <input type="hidden" name="1000588" id="field_budget">
+            <div id="budget_container">
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'budget')">10,000以下</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'budget')">10,000 ~ 15,000</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'budget')">15,000 ~ 20,000</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'budget')">20,000 ~ 25,000</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'budget')">25,000 ~ 30,000</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'budget')">30,000 ~ 35,000</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'budget')">35,000 ~ 40,000</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'budget')">40,000 ~ 45,000</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'budget')">45,000 ~ 50,000</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'budget')">50,000以上</div>
+            </div>
         </div>
 
         <!-- STEP 5: 習慣與需求 -->
@@ -674,6 +706,7 @@
     // 多選資料暫存
     let selectedHabits = [];
     let selectedNeeds = [];
+    let selectedBudget = []; // 新增預算複選
 
     function addOccupant() {
         const name = document.getElementById('add_name').value.trim();
@@ -703,10 +736,25 @@
         occupantList.forEach((person, index) => {
             const row = document.createElement('div');
             row.className = 'occupant-entry';
-            let text = `${index + 1}. ${person.name}`;
-            if (person.age) text += ` / ${person.age}歲`;
-            if (person.job) text += ` / ${person.job}`;
-            row.innerHTML = `<span>${text}</span><span class="delete-btn" onclick="removeOccupant(${index})">刪除</span>`;
+            
+            let nameDisplay = person.name;
+            let tagHtml = '';
+            
+            // 如果是第一位且名字跟填表人一樣，標記為本人
+            if (index === 0) {
+                tagHtml = '<span class="occupant-tag">本人</span>';
+            }
+
+            let details = '';
+            if (person.age) details += ` / ${person.age}歲`;
+            if (person.job) details += ` / ${person.job}`;
+
+            row.innerHTML = `
+                <div class="occupant-info-text">
+                    ${tagHtml}${nameDisplay}${details}
+                </div>
+                <span class="delete-btn" onclick="removeOccupant(${index})">刪除</span>
+            `;
             displayDiv.appendChild(row);
         });
         updateOccupantHiddenField();
@@ -744,21 +792,28 @@
     function toggleSelection(btn, type) {
         btn.classList.toggle('active');
         const value = btn.innerText;
-        let list = (type === 'habits') ? selectedHabits : selectedNeeds;
+        
+        let list;
+        if (type === 'habits') list = selectedHabits;
+        else if (type === 'needs') list = selectedNeeds;
+        else if (type === 'budget') list = selectedBudget;
         
         if (list.includes(value)) {
-            list = list.filter(item => item !== value);
+            // 移除
+            if (type === 'habits') selectedHabits = selectedHabits.filter(item => item !== value);
+            else if (type === 'needs') selectedNeeds = selectedNeeds.filter(item => item !== value);
+            else if (type === 'budget') selectedBudget = selectedBudget.filter(item => item !== value);
         } else {
-            list.push(value);
+            // 加入
+            if (type === 'habits') selectedHabits.push(value);
+            else if (type === 'needs') selectedNeeds.push(value);
+            else if (type === 'budget') selectedBudget.push(value);
         }
 
-        if (type === 'habits') {
-            selectedHabits = list;
-            document.getElementById('field_habits').value = selectedHabits.join(','); 
-        } else {
-            selectedNeeds = list;
-            document.getElementById('field_needs').value = selectedNeeds.join(',');
-        }
+        // 更新隱藏欄位
+        if (type === 'habits') document.getElementById('field_habits').value = selectedHabits.join(',');
+        else if (type === 'needs') document.getElementById('field_needs').value = selectedNeeds.join(',');
+        else if (type === 'budget') document.getElementById('field_budget').value = selectedBudget.join(',');
     }
 
     function initAgentInfo() {
@@ -791,10 +846,10 @@
         
         if (currentStep === 1 || currentStep === totalSteps) {
             footer.style.display = 'flex';
-            agentCard.style.display = 'block'; // 顯示業務名片
+            agentCard.style.display = 'block'; 
         } else {
             footer.style.display = 'none';
-            agentCard.style.display = 'none';  // 隱藏業務名片，避免遮擋
+            agentCard.style.display = 'none'; 
         }
 
         if(currentStep === totalSteps) {
@@ -830,29 +885,30 @@
             if (!moveIn) { alert('請選擇預計入住時間喔！'); return; }
             if (!relation) { alert('請選擇「居住關係」喔！'); return; }
 
-            const tempName = document.getElementById('add_name').value.trim();
-            if (occupantList.length === 0 && tempName !== "") {
-                addOccupant(); 
+            // ★★★ 自動加入自己：如果列表是空的，自動把填表人加入 ★★★
+            if (occupantList.length === 0) {
+                const userName = document.getElementById('field_name').value;
+                // 自動加入第一筆：本人
+                occupantList.push({ name: userName, age: '', job: '' });
+                renderOccupantList();
+                // 提示使用者補職業
+                // alert('已為您建立「本人」資料，請記得補充年齡與職業，或新增其他同住人。');
+                // 不跳 alert 干擾，直接讓他看到
             }
-
-            if (occupantList.length === 0) { 
-                alert('請至少新增一位居住成員！\n(請填寫姓名、年齡、職業後，點擊「新增入住者」)'); 
-                return; 
+            
+            // 如果只有一筆且年齡職業是空的，是否要擋？
+            // 為了不卡關，這裡建議不強制擋年齡職業，只確保有人在名單內
+            if (occupantList.length === 0) {
+                alert('請至少有一位居住成員！');
+                return;
             }
             updateOccupantHiddenField();
         }
         else if (currentStep === 4) { 
             const city = document.getElementById('field_city').value;
-            const budget = document.getElementById('field_budget').value;
+            // 預算改成複選，檢查 array length
             if (!city) { alert('請選擇縣市！'); return; }
-            if (!budget) { alert('請選擇您的預算範圍！'); return; }
-        }
-
-        if (currentStep === 2 && occupantList.length === 0) {
-             const userName = document.getElementById('field_name').value;
-             if(document.getElementById('add_name').value === "") {
-                 document.getElementById('add_name').value = userName;
-             }
+            if (selectedBudget.length === 0) { alert('請至少選擇一個預算範圍！'); return; }
         }
 
         if(currentStep < totalSteps - 1) { 
