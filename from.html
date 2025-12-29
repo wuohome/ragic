@@ -457,13 +457,16 @@
 
             <!-- 實際送給 Ragic 的隱藏欄位 (居住人關係/年齡/職業) -->
             <input type="hidden" name="1000587" id="field_occupants_final">
+            
+            <!-- ★★★ 新增：自動計算人數隱藏欄位 (1000586) ★★★ -->
+            <input type="hidden" name="1000586" id="field_occupant_count">
         </div>
 
         <!-- STEP 6: 區域與預算 -->
         <div class="step-content" id="step6">
             <h2>📍 地點與預算</h2>
             <p class="desc">您想住在哪個縣市？</p>
-            <select name="1000638" style="margin-bottom: 20px;">
+            <select name="1000638" id="field_city" style="margin-bottom: 20px;">
                 <option value="">選擇縣市...</option>
                 <option value="臺北市">臺北市</option>
                 <option value="新北市">新北市</option>
@@ -471,7 +474,7 @@
             </select>
 
             <p class="desc" style="margin-top:20px;">大約的租金預算？</p>
-            <select name="1000588">
+            <select name="1000588" id="field_budget">
                 <option value="">請選擇預算...</option>
                 <option value="15,000~20,000">1.5萬 - 2萬</option>
                 <option value="20,000~25,000">2萬 - 2.5萬</option>
@@ -585,9 +588,10 @@
         const relation = document.getElementById('occupant_relation').value;
         let finalString = "";
         
+        const count = occupantList.length;
+
         if (relation) {
             // ★★★ 自動計算人數並顯示在括號內 ★★★
-            const count = occupantList.length;
             finalString += `居住關係：${relation}`;
             if (count > 0) {
                 finalString += `（共${count}人）`;
@@ -603,6 +607,18 @@
         });
 
         document.getElementById('field_occupants_final').value = finalString;
+
+        // ★★★ 自動填入 1000586 (入住人數) 欄位 ★★★
+        // Ragic 選項: 1位, 2位, 3位, 4位, 5位以上
+        let countText = "";
+        if (count == 1) countText = "1位";
+        else if (count == 2) countText = "2位";
+        else if (count == 3) countText = "3位";
+        else if (count == 4) countText = "4位";
+        else if (count >= 5) countText = "5位以上";
+        else countText = "1位"; // 預設值，避免空值被擋 (理論上會被必填檢查擋住，不會送出空值)
+
+        document.getElementById('field_occupant_count').value = countText;
     }
     
     // 當「居住關係」改變時也要更新隱藏欄位
@@ -649,20 +665,64 @@
     }
 
     function nextStep() {
-        // Step 5 特殊檢查
-        if (currentStep === 5) {
+        // ★★★ 每一頁的必填檢查 ★★★
+        if (currentStep === 1) {
+            const name = document.getElementById('field_name').value;
+            if (!name) {
+                alert('請填寫姓名喔！');
+                return;
+            }
+        }
+        else if (currentStep === 2) {
+            const phone = document.getElementById('field_phone').value;
+            if (!phone) {
+                alert('請填寫電話喔！');
+                return;
+            }
+        }
+        else if (currentStep === 3) {
+            const type = document.getElementById('field_type').value;
+            if (!type) {
+                alert('請選擇房屋類型！');
+                return;
+            }
+        }
+        else if (currentStep === 4) {
+            const layout = document.getElementById('field_layout').value;
+            if (!layout) {
+                alert('請選擇您需要的格局！');
+                return;
+            }
+        }
+        else if (currentStep === 5) {
+            const moveIn = document.getElementById('field_movein').value;
             const relation = document.getElementById('occupant_relation').value;
-            // 檢查是否選了關係
+            
+            if (!moveIn) {
+                alert('請選擇預計入住時間喔！');
+                return;
+            }
             if (!relation) {
                 alert('請選擇「居住關係」喔！');
                 return;
             }
-            // 檢查是否至少新增了一位成員
             if (occupantList.length === 0) {
                 alert('請至少新增一位居住成員！\n(填寫完姓名後，請按下「+ 新增入住者」按鈕)');
                 return;
             }
-            updateHiddenField(); // 確保隱藏欄位是最新的
+            updateHiddenField(); // 確保計算正確
+        }
+        else if (currentStep === 6) {
+            const city = document.getElementById('field_city').value;
+            const budget = document.getElementById('field_budget').value;
+            if (!city) {
+                alert('請選擇您想找的縣市！');
+                return;
+            }
+            if (!budget) {
+                alert('請選擇您的預算範圍！');
+                return;
+            }
         }
 
         if(currentStep < totalSteps - 1) { 
@@ -702,8 +762,9 @@
         testData.append('1000584', '電梯'); 
         testData.append('1000585', '套房'); 
         testData.append('1000590', '一個月'); 
-        // 測試資料也要符合新格式
-        testData.append('1000587', '居住關係：測試中\n1. 測試員 / 99歲 / 機器人'); 
+        testData.append('1000587', '居住關係：測試中\n1. 測試員 / 99歲 / 機器人');
+        // ★★★ 測試時也要補上 1000586 ★★★
+        testData.append('1000586', '1位'); 
         
         alert('正在嘗試發送測試資料到 Ragic...');
 
@@ -725,34 +786,19 @@
     }
 
     function submitForm() {
-        const name = document.getElementById('field_name').value;
-        const phone = document.getElementById('field_phone').value;
-        const moveIn = document.getElementById('field_movein').value;
+        // 重複檢查最後一步 (Step 6) 的欄位
+        const city = document.getElementById('field_city').value;
+        const budget = document.getElementById('field_budget').value;
         
-        if(!name) {
-            alert('請填寫姓名喔！');
-            currentStep = 1;
+        if (!city) {
+            alert('請選擇您想找的縣市！');
+            currentStep = 6;
             updateUI();
             return;
         }
-        
-        if(!phone) {
-            alert('請填寫電話喔！');
-            currentStep = 2;
-            updateUI();
-            return;
-        }
-
-        if(!moveIn) {
-            alert('請選擇預計入住時間喔！');
-            currentStep = 5;
-            updateUI();
-            return;
-        }
-        // 成員檢查在 nextStep() 已經做過了，但為了保險起見（例如直接按送出），這裡可以再檢查一次
-        if (occupantList.length === 0) {
-            alert('請確認居住成員資料是否已新增！');
-            currentStep = 5;
+        if (!budget) {
+            alert('請選擇您的預算範圍！');
+            currentStep = 6;
             updateUI();
             return;
         }
