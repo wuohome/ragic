@@ -161,7 +161,7 @@
         }
 
         /* 超大輸入框 */
-        input[type="text"], input[type="tel"], select {
+        input[type="text"], input[type="tel"], input[type="number"], select {
             width: 100%;
             padding: 15px;
             font-size: 20px;
@@ -291,6 +291,57 @@
             font-size: 20px;
         }
 
+        /* --- 新增：成員列表樣式 --- */
+        .occupant-entry {
+            background: #fff;
+            border: 1px dashed #ccc;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+        }
+        .occupant-entry span {
+            color: #333;
+        }
+        .delete-btn {
+            color: #e74c3c;
+            cursor: pointer;
+            font-weight: bold;
+            padding: 5px 10px;
+            background: #fff0f0;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .add-occupant-box {
+            background: #f4fbfc;
+            border: 2px solid #e0eef2;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+        .add-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .add-btn {
+            width: 100%;
+            background-color: #007894;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .add-btn:hover {
+            background-color: #00657d;
+        }
+
     </style>
 </head>
 <body>
@@ -321,7 +372,7 @@
         <input type="hidden" name="1000640" id="input_agent_name">
         <input type="hidden" name="1000641" id="input_agent_phone">
         
-        <!-- ★★★ 新增：來源標記 (1000908) ★★★ -->
+        <!-- 來源標記 -->
         <input type="hidden" name="1000908" id="input_source_mark">
         
         <!-- STEP 1: 歡迎與姓名 -->
@@ -362,8 +413,54 @@
             </div>
         </div>
 
-        <!-- STEP 5: 區域與預算 -->
+        <!-- ★★★ STEP 5: 入住資訊 (更新為動態清單) ★★★ -->
         <div class="step-content" id="step5">
+            <h2>📅 入住與成員</h2>
+            <p class="desc">請告訴我們您的入住計畫 (必填)</p>
+            
+            <p style="margin-bottom:10px; font-weight:bold; color:#007894;">1. 預計什麼時候入住？</p>
+            <!-- 1000590: 預計什麼時後入住 -->
+            <select name="1000590" id="field_movein" style="margin-bottom: 20px;">
+                <option value="">請選擇...</option>
+                <option value="七天內">七天內</option>
+                <option value="一個月">一個月</option>
+                <option value="兩個月">兩個月</option>
+                <option value="三個月以上">三個月以上</option>
+            </select>
+
+            <p style="margin-bottom:10px; margin-top:10px; font-weight:bold; color:#007894;">2. 居住成員資料</p>
+            
+            <!-- 居住關係選擇 -->
+            <label style="display:block; margin-bottom:5px; font-size:14px; color:#666; text-align:left;">居住關係</label>
+            <select id="occupant_relation" style="margin-bottom: 15px; text-align-last:center;">
+                <option value="">請選擇關係...</option>
+                <option value="個人獨居">個人獨居</option>
+                <option value="夫妻/情侶">夫妻/情侶</option>
+                <option value="家庭(有小孩/長輩)">家庭 (有小孩/長輩)</option>
+                <option value="朋友/同事合租">朋友/同事合租</option>
+            </select>
+
+            <!-- 新增成員區塊 -->
+            <div class="add-occupant-box">
+                <div class="add-row">
+                    <input type="text" id="add_name" placeholder="姓名" style="flex:2; margin-bottom:0; font-size:16px;">
+                    <input type="text" id="add_age" placeholder="年齡" style="flex:1; margin-bottom:0; font-size:16px;">
+                </div>
+                <input type="text" id="add_job" placeholder="職業 (例如: 工程師)" style="width:100%; margin-bottom:10px; font-size:16px;" onkeydown="if(event.key === 'Enter') { addOccupant(); return false; }">
+                <button type="button" class="add-btn" onclick="addOccupant()">+ 新增入住者</button>
+            </div>
+
+            <!-- 成員列表顯示區 -->
+            <div id="occupant_list_display" style="text-align:left; margin-bottom:20px;">
+                <!-- 這裡會動態插入成員 -->
+            </div>
+
+            <!-- 實際送給 Ragic 的隱藏欄位 (居住人關係/年齡/職業) -->
+            <input type="hidden" name="1000587" id="field_occupants_final">
+        </div>
+
+        <!-- STEP 6: 區域與預算 -->
+        <div class="step-content" id="step6">
             <h2>📍 地點與預算</h2>
             <p class="desc">您想住在哪個縣市？</p>
             <select name="1000638" style="margin-bottom: 20px;">
@@ -383,8 +480,8 @@
             </select>
         </div>
 
-         <!-- STEP 6: 完成 -->
-         <div class="step-content" id="step6">
+         <!-- STEP 7: 完成 -->
+         <div class="step-content" id="step7">
             <h2 style="font-size: 32px; margin-bottom: 5px;">🎉 感謝您！</h2>
             <p class="desc">您的需求已送出，我們將盡快為您服務。</p>
             <p class="desc" style="font-size: 14px; margin-top: 20px;">您也可以直接撥打下方電話聯繫我們</p>
@@ -428,21 +525,101 @@
     // Ragic API URL
     const ragicApiUrl = "https://ap15.ragic.com/wuohome/property-data-kept/8?api=true&APIKey=Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==";
 
+    // ★★★ 居住成員資料處理邏輯 ★★★
+    let occupantList = [];
+
+    function addOccupant() {
+        const name = document.getElementById('add_name').value.trim();
+        const age = document.getElementById('add_age').value.trim();
+        const job = document.getElementById('add_job').value.trim();
+
+        if (!name) {
+            alert("請至少填寫姓名喔！");
+            return;
+        }
+
+        // 加入陣列
+        occupantList.push({ name, age, job });
+
+        // 清空輸入框
+        document.getElementById('add_name').value = '';
+        document.getElementById('add_age').value = '';
+        document.getElementById('add_job').value = '';
+        
+        // 聚焦回姓名，方便連續輸入
+        document.getElementById('add_name').focus();
+
+        renderOccupantList();
+    }
+
+    function removeOccupant(index) {
+        occupantList.splice(index, 1);
+        renderOccupantList();
+    }
+
+    function renderOccupantList() {
+        const displayDiv = document.getElementById('occupant_list_display');
+        displayDiv.innerHTML = '';
+
+        occupantList.forEach((person, index) => {
+            const row = document.createElement('div');
+            row.className = 'occupant-entry';
+            
+            // 組合顯示文字： 1. 張瓊安 / 32歲 / 房地產特助
+            let text = `${index + 1}. ${person.name}`;
+            if (person.age) text += ` / ${person.age}歲`;
+            if (person.job) text += ` / ${person.job}`;
+
+            row.innerHTML = `
+                <span>${text}</span>
+                <span class="delete-btn" onclick="removeOccupant(${index})">刪除</span>
+            `;
+            displayDiv.appendChild(row);
+        });
+
+        updateHiddenField();
+    }
+
+    function updateHiddenField() {
+        // 將資料組合成 Ragic 需要的字串格式
+        const relation = document.getElementById('occupant_relation').value;
+        let finalString = "";
+        
+        if (relation) {
+            // ★★★ 自動計算人數並顯示在括號內 ★★★
+            const count = occupantList.length;
+            finalString += `居住關係：${relation}`;
+            if (count > 0) {
+                finalString += `（共${count}人）`;
+            }
+            finalString += `\n\n`;
+        }
+
+        occupantList.forEach((person, index) => {
+            let text = `${index + 1}. ${person.name}`;
+            if (person.age) text += ` / ${person.age}歲`;
+            if (person.job) text += ` / ${person.job}`;
+            finalString += text + "\n";
+        });
+
+        document.getElementById('field_occupants_final').value = finalString;
+    }
+    
+    // 當「居住關係」改變時也要更新隱藏欄位
+    document.getElementById('occupant_relation').addEventListener('change', updateHiddenField);
+
+
     function initAgentInfo() {
-        // 更新顯示名稱
         document.getElementById('display_agent_name').innerText = agentName;
-        // 更新撥號連結
         document.getElementById('display_agent_call').href = 'tel:' + agentPhone;
-        // 按鈕顯示文字
         document.getElementById('display_agent_phone_text').innerText = '撥打電話'; 
         
-        // 更新表單隱藏欄位
         document.getElementById('input_agent_name').value = agentName;
         document.getElementById('input_agent_phone').value = agentPhone;
     }
 
     let currentStep = 1;
-    const totalSteps = 6;
+    const totalSteps = 7;
 
     function updateUI() {
         for(let i=1; i<=totalSteps; i++) {
@@ -459,20 +636,35 @@
         }
 
         if(currentStep === totalSteps) {
-             // 第六頁(完成頁)隱藏按鈕區，但保留名片
              document.querySelector('.footer-btns').style.display = 'none';
         } else if (currentStep === totalSteps - 1) { 
             document.getElementById('nextBtn').innerText = '確認送出';
             document.getElementById('nextBtn').style.backgroundColor = '#e74c3c'; 
-            document.querySelector('.footer-btns').style.display = 'flex'; // 確保按鈕顯示
+            document.querySelector('.footer-btns').style.display = 'flex'; 
         } else {
             document.getElementById('nextBtn').innerText = '下一步';
             document.getElementById('nextBtn').style.backgroundColor = '#007894';
-            document.querySelector('.footer-btns').style.display = 'flex'; // 確保按鈕顯示
+            document.querySelector('.footer-btns').style.display = 'flex'; 
         }
     }
 
     function nextStep() {
+        // Step 5 特殊檢查
+        if (currentStep === 5) {
+            const relation = document.getElementById('occupant_relation').value;
+            // 檢查是否選了關係
+            if (!relation) {
+                alert('請選擇「居住關係」喔！');
+                return;
+            }
+            // 檢查是否至少新增了一位成員
+            if (occupantList.length === 0) {
+                alert('請至少新增一位居住成員！\n(填寫完姓名後，請按下「+ 新增入住者」按鈕)');
+                return;
+            }
+            updateHiddenField(); // 確保隱藏欄位是最新的
+        }
+
         if(currentStep < totalSteps - 1) { 
             currentStep++;
             updateUI();
@@ -507,6 +699,12 @@
         testData.append('1000583', '0900-000-000');
         testData.append('1000640', agentName);
         
+        testData.append('1000584', '電梯'); 
+        testData.append('1000585', '套房'); 
+        testData.append('1000590', '一個月'); 
+        // 測試資料也要符合新格式
+        testData.append('1000587', '居住關係：測試中\n1. 測試員 / 99歲 / 機器人'); 
+        
         alert('正在嘗試發送測試資料到 Ragic...');
 
         fetch(ragicApiUrl, {
@@ -529,6 +727,7 @@
     function submitForm() {
         const name = document.getElementById('field_name').value;
         const phone = document.getElementById('field_phone').value;
+        const moveIn = document.getElementById('field_movein').value;
         
         if(!name) {
             alert('請填寫姓名喔！');
@@ -544,20 +743,31 @@
             return;
         }
 
+        if(!moveIn) {
+            alert('請選擇預計入住時間喔！');
+            currentStep = 5;
+            updateUI();
+            return;
+        }
+        // 成員檢查在 nextStep() 已經做過了，但為了保險起見（例如直接按送出），這裡可以再檢查一次
+        if (occupantList.length === 0) {
+            alert('請確認居住成員資料是否已新增！');
+            currentStep = 5;
+            updateUI();
+            return;
+        }
+
         document.getElementById('loadingOverlay').style.display = 'flex';
 
-        // ★★★ 關鍵修改：填入來源標記，方便追蹤與除錯 ★★★
-        // 格式：wizard_v1_時間戳記
         const timestamp = new Date().getTime();
         document.getElementById('input_source_mark').value = 'wizard_v1_' + timestamp;
 
-        // 1. 使用 iframe 提交 (最穩定的方法)
+        // 確保送出前隱藏欄位有值
+        updateHiddenField();
+
         const form = document.getElementById('ragicForm');
         form.submit();
 
-        // 2. 移除 fetch 備用方案，避免重複提交
-
-        // 3. 顯示成功畫面
         setTimeout(() => {
             document.getElementById('loadingOverlay').style.display = 'none';
             currentStep = totalSteps; 
