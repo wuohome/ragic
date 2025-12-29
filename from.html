@@ -3,13 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>窩的家 - 租屋需求小幫手</title>
+    <title>優式租售管理．窩的家 Wuo Home - 租屋需求小幫手</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <!-- 加入 Font Awesome 圖標庫 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* --- 視覺設計核心：大、清楚、友善 --- */
+        /* --- 視覺設計核心 --- */
         body {
             font-family: 'Noto Sans TC', sans-serif;
-            background-color: #f0f8fa; /* 淺藍色背景 */
+            background-color: #f0f8fa;
             margin: 0;
             padding: 0;
             display: flex;
@@ -22,7 +24,7 @@
             background: white;
             width: 100%;
             max-width: 600px;
-            height: 90vh; /* 手機上幾乎滿版 */
+            height: 90vh;
             max-height: 800px;
             border-radius: 20px;
             box-shadow: 0 10px 30px rgba(0, 120, 148, 0.15);
@@ -32,38 +34,35 @@
             position: relative;
         }
 
-        /* 頂部進度條 */
         .progress-bar {
             height: 8px;
             background: #e0e0e0;
             width: 100%;
-            flex-shrink: 0; /* 不壓縮 */
+            flex-shrink: 0;
         }
         .progress-fill {
             height: 100%;
             background: #007894;
-            width: 10%; /* 初始進度 */
+            width: 10%;
             transition: width 0.3s ease;
         }
 
-        /* 表單區域 (設為可捲動，避免內容被名片擋住) */
         #ragicForm {
-            flex: 1; /* 佔據剩餘空間 */
-            overflow-y: auto; /* 內容過長時可捲動 */
+            flex: 1;
+            overflow-y: auto;
             width: 100%;
             display: flex;
             flex-direction: column;
         }
 
-        /* 內容區域 */
         .step-content {
             flex: 1;
-            padding: 20px 30px; /* 上下 padding 稍微縮小，留空間給名片 */
-            display: none; /* 預設隱藏，透過 JS 切換 */
+            padding: 20px 30px;
+            display: none;
             flex-direction: column;
             justify-content: center;
             animation: fadeIn 0.5s;
-            min-height: min-content; /* 確保內容不會被過度壓縮 */
+            min-height: min-content;
         }
 
         .step-content.active {
@@ -75,10 +74,9 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* 大標題 */
         h2 {
             color: #007894;
-            font-size: 26px; /* 稍微縮小一點點適配手機 */
+            font-size: 26px;
             margin-bottom: 10px;
             text-align: center;
         }
@@ -90,11 +88,11 @@
             margin-bottom: 20px;
         }
 
-        /* --- 業務名片卡 (全域版) - 優化排版 --- */
+        /* --- 業務名片卡 --- */
         .agent-card-wrapper {
             padding: 0 20px;
             background: #fff;
-            flex-shrink: 0; /* 不壓縮 */
+            flex-shrink: 0;
             z-index: 10;
         }
 
@@ -113,25 +111,25 @@
         .agent-info {
             text-align: left;
             display: flex;
-            flex-direction: column; /* 垂直排列 */
+            flex-direction: column;
         }
 
         .agent-label {
-            font-size: 11px; /* 縮小 */
-            color: #888; /* 淺灰色 */
+            font-size: 11px;
+            color: #888;
             margin-bottom: 2px;
             letter-spacing: 0.5px;
         }
 
         .agent-company {
-            font-size: 13px; /* 中小字 */
-            color: #005f75; /* 深一點的品牌色 */
+            font-size: 13px;
+            color: #005f75;
             font-weight: 500;
             margin-bottom: 2px;
         }
 
         .agent-name {
-            font-size: 20px; /* 加大名字 */
+            font-size: 20px;
             font-weight: 900;
             color: #007894;
             line-height: 1.2;
@@ -143,7 +141,7 @@
             justify-content: center;
             background-color: #007894;
             color: white;
-            padding: 10px 18px; /* 加大一點按鈕 */
+            padding: 10px 18px;
             border-radius: 50px;
             text-decoration: none;
             font-size: 15px;
@@ -160,8 +158,8 @@
             margin-left: 5px;
         }
 
-        /* 超大輸入框 */
-        input[type="text"], input[type="tel"], input[type="number"], select {
+        /* 輸入框樣式 */
+        input[type="text"], input[type="tel"], input[type="number"], select, textarea {
             width: 100%;
             padding: 15px;
             font-size: 20px;
@@ -170,15 +168,16 @@
             margin-bottom: 15px;
             box-sizing: border-box;
             text-align: center;
+            font-family: inherit;
         }
 
-        input:focus {
+        input:focus, textarea:focus, select:focus {
             border-color: #007894;
             outline: none;
             box-shadow: 0 0 0 4px rgba(0, 120, 148, 0.2);
         }
 
-        /* 選項按鈕化 (取代下拉選單，更好點) */
+        /* 選項按鈕化 */
         .option-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -194,6 +193,9 @@
             cursor: pointer;
             text-align: center;
             transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .option-btn:hover, .option-btn.selected {
@@ -201,6 +203,25 @@
             border-color: #007894;
             color: #007894;
             font-weight: bold;
+        }
+
+        /* 多選按鈕樣式 */
+        .multi-select-btn {
+            background: #fff;
+            border: 2px solid #ddd;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            text-align: center;
+            margin-bottom: 8px;
+            transition: all 0.2s;
+            color: #555;
+        }
+        .multi-select-btn.active {
+            background-color: #007894;
+            color: white;
+            border-color: #007894;
         }
 
         /* 底部按鈕區 */
@@ -211,8 +232,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            flex-shrink: 0; /* 不壓縮 */
-            padding-bottom: 20px; /* 手機底部留白 */
+            flex-shrink: 0;
+            /* 移除 padding-bottom，交給 footer 處理 */
         }
 
         button {
@@ -237,7 +258,6 @@
             box-shadow: 0 4px 10px rgba(0, 120, 148, 0.2);
         }
 
-        /* 測試按鈕樣式 */
         .btn-test {
             background: transparent;
             color: #999;
@@ -246,12 +266,7 @@
             font-size: 12px;
             margin: 0 5px;
         }
-        .btn-test:hover {
-            color: #555;
-            border-color: #888;
-        }
         
-        /* 載入中遮罩 */
         #loadingOverlay {
             position: absolute;
             top: 0;
@@ -278,20 +293,69 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* LOGO */
+        /* --- Logo & Header --- */
         .logo-header {
             text-align: center;
-            padding-top: 15px;
-            padding-bottom: 10px;
+            padding-top: 25px;
+            padding-bottom: 15px;
+            flex-shrink: 0;
+            background: #fff;
+        }
+        .logo-title {
+            color: #007894;
+            font-weight: 900;
+            font-size: 24px;
+            margin: 0;
+            letter-spacing: 1px;
+        }
+        
+        /* --- Footer (頁尾資訊) --- */
+        .app-footer {
+            background-color: #f8f9fa; /* 極淺灰底 */
+            border-top: 1px solid #eee;
+            padding: 20px;
+            text-align: center;
             flex-shrink: 0;
         }
-        .logo-text {
-            color: #007894;
+        .footer-brand {
+            color: #005f75;
             font-weight: bold;
-            font-size: 20px;
+            font-size: 15px;
+            margin-bottom: 10px;
+            display: block;
+        }
+        .footer-address {
+            color: #555;
+            font-size: 14px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+        .footer-map-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background-color: #fff;
+            color: #007894;
+            border: 1px solid #007894;
+            padding: 8px 20px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .footer-map-btn:hover {
+            background-color: #007894;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 120, 148, 0.2);
         }
 
-        /* --- 新增：成員列表樣式 --- */
+        /* 成員列表樣式 */
         .occupant-entry {
             background: #fff;
             border: 1px dashed #ccc;
@@ -302,9 +366,6 @@
             justify-content: space-between;
             align-items: center;
             font-size: 16px;
-        }
-        .occupant-entry span {
-            color: #333;
         }
         .delete-btn {
             color: #e74c3c;
@@ -341,14 +402,23 @@
         .add-btn:hover {
             background-color: #00657d;
         }
+        
+        .question-label {
+            font-weight: bold;
+            color: #007894;
+            margin-bottom: 10px;
+            text-align: left;
+            display: block;
+        }
 
     </style>
 </head>
 <body>
 
 <div class="wizard-container">
+    <!-- Header: 只保留最簡單的標題 -->
     <div class="logo-header">
-        <div class="logo-text">🏠 WuoHome 窩的家</div>
+        <h1 class="logo-title">租屋需求小幫手</h1>
     </div>
     
     <div class="progress-bar">
@@ -361,49 +431,40 @@
         <p style="margin-top: 20px; color: #007894; font-weight: bold;">資料傳送中...</p>
     </div>
 
-    <!-- 隱藏的 iframe，作為表單提交的備案 -->
     <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
 
-    <!-- 表單 -->
-    <!-- target 設定為 hidden_iframe，action 設定為 API 網址 -->
     <form id="ragicForm" target="hidden_iframe" method="POST" action="https://ap15.ragic.com/wuohome/property-data-kept/8?api=true&APIKey=Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==">
         
-        <!-- 隱藏欄位：業務資料 -->
+        <!-- 隱藏欄位 -->
         <input type="hidden" name="1000640" id="input_agent_name">
         <input type="hidden" name="1000641" id="input_agent_phone">
-        
-        <!-- 來源標記 -->
         <input type="hidden" name="1000908" id="input_source_mark">
+        <input type="hidden" name="1000580" id="field_time">
         
-        <!-- STEP 1: 歡迎與姓名 -->
+        <!-- STEP 1: 基本資料 -->
         <div class="step-content active" id="step1">
             <h2>👋 您好！</h2>
-            <p class="desc">歡迎來到窩的家。<br>請問我們要怎麼稱呼您？</p>
-            <input type="text" id="field_name" name="1000581" placeholder="請輸入您的稱呼 (必填)" required onkeydown="if(event.key === 'Enter') { nextStep(); return false; }">
+            <p class="desc">歡迎來到窩的家。<br>請先留下您的聯絡方式</p>
+            
+            <input type="text" id="field_name" name="1000581" placeholder="怎麼稱呼您？(必填)" required>
+            <input type="tel" id="field_phone" name="1000583" placeholder="手機號碼 (必填)" required>
+            <!-- 1000647: line ID -->
+            <input type="text" id="field_line" name="1000647" placeholder="LINE ID (選填)">
         </div>
 
-        <!-- STEP 2: 電話 -->
+        <!-- STEP 2: 房屋需求 -->
         <div class="step-content" id="step2">
-            <h2>📞 聯絡電話</h2>
-            <p class="desc">方便我們聯絡到您的手機號碼</p>
-            <input type="tel" id="field_phone" name="1000583" placeholder="09xx-xxx-xxx (必填)" required onkeydown="if(event.key === 'Enter') { nextStep(); return false; }">
-        </div>
-
-        <!-- STEP 3: 房屋類別 -->
-        <div class="step-content" id="step3">
-            <h2>🏢 想找什麼樣的房子？</h2>
-            <p class="desc">請選擇您喜歡的類型</p>
+            <h2>🏢 房屋類型與格局</h2>
+            <p class="desc">請選擇您需要的房子</p>
+            
+            <p class="question-label">1. 房屋類別</p>
             <input type="hidden" id="field_type" name="1000584">
-            <div class="option-grid">
+            <div class="option-grid" style="margin-bottom: 25px;">
                 <div class="option-btn" onclick="selectOption('field_type', '電梯', this)">電梯大樓</div>
                 <div class="option-btn" onclick="selectOption('field_type', '公寓(無電梯)', this)">公寓 (無電梯)</div>
             </div>
-        </div>
 
-        <!-- STEP 4: 格局 -->
-        <div class="step-content" id="step4">
-            <h2>🛏️ 需要什麼格局？</h2>
-            <p class="desc">幾房幾廳呢？</p>
+            <p class="question-label">2. 需要格局</p>
             <input type="hidden" id="field_layout" name="1000585">
             <div class="option-grid">
                 <div class="option-btn" onclick="selectOption('field_layout', '獨立套房', this)">獨立套房</div>
@@ -413,13 +474,12 @@
             </div>
         </div>
 
-        <!-- ★★★ STEP 5: 入住資訊 (更新為動態清單) ★★★ -->
-        <div class="step-content" id="step5">
+        <!-- STEP 3: 入住資訊 -->
+        <div class="step-content" id="step3">
             <h2>📅 入住與成員</h2>
             <p class="desc">請告訴我們您的入住計畫 (必填)</p>
             
-            <p style="margin-bottom:10px; font-weight:bold; color:#007894;">1. 預計什麼時候入住？</p>
-            <!-- 1000590: 預計什麼時後入住 -->
+            <p class="question-label">1. 預計什麼時候入住？</p>
             <select name="1000590" id="field_movein" style="margin-bottom: 20px;">
                 <option value="">請選擇...</option>
                 <option value="七天內">七天內</option>
@@ -428,10 +488,7 @@
                 <option value="三個月以上">三個月以上</option>
             </select>
 
-            <p style="margin-bottom:10px; margin-top:10px; font-weight:bold; color:#007894;">2. 居住成員資料</p>
-            
-            <!-- 居住關係選擇 -->
-            <label style="display:block; margin-bottom:5px; font-size:14px; color:#666; text-align:left;">居住關係</label>
+            <p class="question-label">2. 居住成員資料</p>
             <select id="occupant_relation" style="margin-bottom: 15px; text-align-last:center;">
                 <option value="">請選擇關係...</option>
                 <option value="個人獨居">個人獨居</option>
@@ -440,7 +497,6 @@
                 <option value="朋友/同事合租">朋友/同事合租</option>
             </select>
 
-            <!-- 新增成員區塊 -->
             <div class="add-occupant-box">
                 <div class="add-row">
                     <input type="text" id="add_name" placeholder="姓名" style="flex:2; margin-bottom:0; font-size:16px;">
@@ -450,30 +506,29 @@
                 <button type="button" class="add-btn" onclick="addOccupant()">+ 新增入住者</button>
             </div>
 
-            <!-- 成員列表顯示區 -->
-            <div id="occupant_list_display" style="text-align:left; margin-bottom:20px;">
-                <!-- 這裡會動態插入成員 -->
-            </div>
+            <div id="occupant_list_display" style="text-align:left; margin-bottom:20px;"></div>
 
-            <!-- 實際送給 Ragic 的隱藏欄位 (居住人關係/年齡/職業) -->
             <input type="hidden" name="1000587" id="field_occupants_final">
-            
-            <!-- ★★★ 新增：自動計算人數隱藏欄位 (1000586) ★★★ -->
             <input type="hidden" name="1000586" id="field_occupant_count">
         </div>
 
-        <!-- STEP 6: 區域與預算 -->
-        <div class="step-content" id="step6">
+        <!-- STEP 4: 區域與預算 -->
+        <div class="step-content" id="step4">
             <h2>📍 地點與預算</h2>
-            <p class="desc">您想住在哪個縣市？</p>
+            <p class="desc">告訴我們您想找的範圍</p>
+            
+            <p class="question-label">1. 想住在哪個縣市？</p>
             <select name="1000638" id="field_city" style="margin-bottom: 20px;">
                 <option value="">選擇縣市...</option>
-                <option value="臺北市">臺北市</option>
                 <option value="新北市">新北市</option>
+                <option value="臺北市">臺北市</option>
                 <option value="桃園市">桃園市</option>
             </select>
 
-            <p class="desc" style="margin-top:20px;">大約的租金預算？</p>
+            <p class="question-label">2. 主要找房區域 (例如: 三重、新莊)</p>
+            <input type="text" name="1000639" id="field_area" placeholder="請輸入區域 (選填)">
+
+            <p class="question-label">3. 租金預算？</p>
             <select name="1000588" id="field_budget">
                 <option value="">請選擇預算...</option>
                 <option value="15,000~20,000">1.5萬 - 2萬</option>
@@ -483,8 +538,36 @@
             </select>
         </div>
 
-         <!-- STEP 7: 完成 -->
-         <div class="step-content" id="step7">
+        <!-- STEP 5: 習慣與需求 -->
+        <div class="step-content" id="step5">
+            <h2>📝 習慣與需求</h2>
+            <p class="desc">勾選符合的情況 (可複選，無則免填)</p>
+
+            <p class="question-label">1. 租屋習慣</p>
+            <input type="hidden" name="1000591" id="field_habits">
+            <div id="habits_container">
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'habits')">有抽菸</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'habits')">養貓</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'habits')">養狗</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'habits')">需要設神明廳</div>
+            </div>
+
+            <p class="question-label" style="margin-top:20px;">2. 必要需求</p>
+            <input type="hidden" name="1000592" id="field_needs">
+            <div id="needs_container">
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">公司營登</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">公司報稅</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">租屋補助</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">入戶籍</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">汽車位</div>
+            </div>
+
+            <p class="question-label" style="margin-top:20px;">3. 想對我們說的話</p>
+            <textarea name="1000648" rows="4" placeholder="還有什麼想告訴我們的嗎？(選填)" style="width:100%; padding:15px; border-radius:12px; border:2px solid #ddd;"></textarea>
+        </div>
+
+         <!-- STEP 6: 完成 -->
+         <div class="step-content" id="step6">
             <h2 style="font-size: 32px; margin-bottom: 5px;">🎉 感謝您！</h2>
             <p class="desc">您的需求已送出，我們將盡快為您服務。</p>
             <p class="desc" style="font-size: 14px; margin-top: 20px;">您也可以直接撥打下方電話聯繫我們</p>
@@ -492,11 +575,9 @@
 
     </form>
 
-    <!-- ★★★ 這裡就是「全域」的業務名片，每一頁都看得到 ★★★ -->
     <div class="agent-card-wrapper">
         <div class="agent-card">
             <div class="agent-info">
-                <!-- ★★★ 修改：位置交換，並更新公司名稱 ★★★ -->
                 <div class="agent-company">優式租售管理 - 窩的家三重加盟店</div>
                 <div class="agent-label">您的專屬租屋顧問</div>
                 <div class="agent-name" id="display_agent_name">張瓊安</div>
@@ -507,17 +588,27 @@
         </div>
     </div>
 
-    <!-- 底部按鈕區 -->
     <div class="footer-btns">
         <button class="btn-prev" id="prevBtn" onclick="prevStep()">上一步</button>
-        <!-- 系統測試按鈕 -->
         <button class="btn-test" onclick="testConnection()">🛠️ 測試</button>
         <button class="btn-next" id="nextBtn" onclick="nextStep()">下一步</button>
+    </div>
+
+    <!-- ★★★ 新增：頁尾區塊 (整合品牌與地圖) ★★★ -->
+    <div class="app-footer">
+        <span class="footer-brand">優式租售管理．窩的家 Wuo Home</span>
+        <div class="footer-address">
+            <i class="fas fa-map-marker-alt" style="color:#666;"></i>
+            <span>新北市三重區大榮街20號1樓</span>
+        </div>
+        <a href="https://share.google/ZcjTXzNXkE1N7RjfV" target="_blank" class="footer-map-btn">
+            <i class="fas fa-location-dot"></i>
+            開啟 Google Maps 導航
+        </a>
     </div>
 </div>
 
 <script>
-    // --- 核心邏輯：預設業務資料 (已更新為張瓊安) ---
     let defaultAgentName = "張瓊安"; 
     let defaultAgentPhone = "0981-615-303"; 
 
@@ -525,11 +616,14 @@
     const agentName = urlParams.get('agent') || defaultAgentName;
     const agentPhone = urlParams.get('phone') || defaultAgentPhone;
 
-    // Ragic API URL
     const ragicApiUrl = "https://ap15.ragic.com/wuohome/property-data-kept/8?api=true&APIKey=Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==";
 
-    // ★★★ 居住成員資料處理邏輯 ★★★
+    // 居住成員資料
     let occupantList = [];
+
+    // 多選資料暫存
+    let selectedHabits = [];
+    let selectedNeeds = [];
 
     function addOccupant() {
         const name = document.getElementById('add_name').value.trim();
@@ -540,18 +634,11 @@
             alert("請至少填寫姓名喔！");
             return;
         }
-
-        // 加入陣列
         occupantList.push({ name, age, job });
-
-        // 清空輸入框
         document.getElementById('add_name').value = '';
         document.getElementById('add_age').value = '';
         document.getElementById('add_job').value = '';
-        
-        // 聚焦回姓名，方便連續輸入
         document.getElementById('add_name').focus();
-
         renderOccupantList();
     }
 
@@ -563,79 +650,77 @@
     function renderOccupantList() {
         const displayDiv = document.getElementById('occupant_list_display');
         displayDiv.innerHTML = '';
-
         occupantList.forEach((person, index) => {
             const row = document.createElement('div');
             row.className = 'occupant-entry';
-            
-            // 組合顯示文字： 1. 張瓊安 / 32歲 / 房地產特助
             let text = `${index + 1}. ${person.name}`;
             if (person.age) text += ` / ${person.age}歲`;
             if (person.job) text += ` / ${person.job}`;
-
-            row.innerHTML = `
-                <span>${text}</span>
-                <span class="delete-btn" onclick="removeOccupant(${index})">刪除</span>
-            `;
+            row.innerHTML = `<span>${text}</span><span class="delete-btn" onclick="removeOccupant(${index})">刪除</span>`;
             displayDiv.appendChild(row);
         });
-
-        updateHiddenField();
+        updateOccupantHiddenField();
     }
 
-    function updateHiddenField() {
-        // 將資料組合成 Ragic 需要的字串格式
+    function updateOccupantHiddenField() {
         const relation = document.getElementById('occupant_relation').value;
         let finalString = "";
-        
         const count = occupantList.length;
-
         if (relation) {
-            // ★★★ 自動計算人數並顯示在括號內 ★★★
             finalString += `居住關係：${relation}`;
-            if (count > 0) {
-                finalString += `（共${count}人）`;
-            }
+            if (count > 0) finalString += `（共${count}人）`;
             finalString += `\n\n`;
         }
-
         occupantList.forEach((person, index) => {
             let text = `${index + 1}. ${person.name}`;
             if (person.age) text += ` / ${person.age}歲`;
             if (person.job) text += ` / ${person.job}`;
             finalString += text + "\n";
         });
-
         document.getElementById('field_occupants_final').value = finalString;
-
-        // ★★★ 自動填入 1000586 (入住人數) 欄位 ★★★
-        // Ragic 選項: 1位, 2位, 3位, 4位, 5位以上
+        
         let countText = "";
         if (count == 1) countText = "1位";
         else if (count == 2) countText = "2位";
         else if (count == 3) countText = "3位";
         else if (count == 4) countText = "4位";
         else if (count >= 5) countText = "5位以上";
-        else countText = "1位"; // 預設值，避免空值被擋 (理論上會被必填檢查擋住，不會送出空值)
-
+        else countText = "1位"; 
         document.getElementById('field_occupant_count').value = countText;
     }
-    
-    // 當「居住關係」改變時也要更新隱藏欄位
-    document.getElementById('occupant_relation').addEventListener('change', updateHiddenField);
+    document.getElementById('occupant_relation').addEventListener('change', updateOccupantHiddenField);
 
+    // 處理多選按鈕
+    function toggleSelection(btn, type) {
+        btn.classList.toggle('active');
+        const value = btn.innerText;
+        let list = (type === 'habits') ? selectedHabits : selectedNeeds;
+        
+        if (list.includes(value)) {
+            list = list.filter(item => item !== value);
+        } else {
+            list.push(value);
+        }
+
+        if (type === 'habits') {
+            selectedHabits = list;
+            document.getElementById('field_habits').value = selectedHabits.join(','); 
+        } else {
+            selectedNeeds = list;
+            document.getElementById('field_needs').value = selectedNeeds.join(',');
+        }
+    }
 
     function initAgentInfo() {
         document.getElementById('display_agent_name').innerText = agentName;
         document.getElementById('display_agent_call').href = 'tel:' + agentPhone;
         document.getElementById('display_agent_phone_text').innerText = '撥打電話'; 
-        
         document.getElementById('input_agent_name').value = agentName;
         document.getElementById('input_agent_phone').value = agentPhone;
     }
 
     let currentStep = 1;
-    const totalSteps = 7;
+    const totalSteps = 6;
 
     function updateUI() {
         for(let i=1; i<=totalSteps; i++) {
@@ -644,7 +729,6 @@
         document.getElementById('step'+currentStep).classList.add('active');
         document.getElementById('progress').style.width = ((currentStep / totalSteps) * 100) + '%';
 
-        // 按鈕邏輯
         if(currentStep === 1) {
             document.getElementById('prevBtn').style.visibility = 'hidden';
         } else {
@@ -665,64 +749,54 @@
     }
 
     function nextStep() {
-        // ★★★ 每一頁的必填檢查 ★★★
+        // --- 必填檢查 ---
         if (currentStep === 1) {
             const name = document.getElementById('field_name').value;
-            if (!name) {
-                alert('請填寫姓名喔！');
-                return;
-            }
-        }
-        else if (currentStep === 2) {
             const phone = document.getElementById('field_phone').value;
-            if (!phone) {
-                alert('請填寫電話喔！');
-                return;
-            }
+            if (!name) { alert('請填寫姓名喔！'); return; }
+            if (!phone) { alert('請填寫手機號碼喔！'); return; }
         }
-        else if (currentStep === 3) {
+        else if (currentStep === 2) { // 房屋類別 + 格局
             const type = document.getElementById('field_type').value;
-            if (!type) {
-                alert('請選擇房屋類型！');
-                return;
-            }
-        }
-        else if (currentStep === 4) {
             const layout = document.getElementById('field_layout').value;
-            if (!layout) {
-                alert('請選擇您需要的格局！');
-                return;
-            }
+            if (!type) { alert('請選擇房屋類型！'); return; }
+            if (!layout) { alert('請選擇您需要的格局！'); return; }
         }
-        else if (currentStep === 5) {
+        else if (currentStep === 3) { // 入住資訊
             const moveIn = document.getElementById('field_movein').value;
             const relation = document.getElementById('occupant_relation').value;
+            if (!moveIn) { alert('請選擇預計入住時間喔！'); return; }
+            if (!relation) { alert('請選擇「居住關係」喔！'); return; }
+
+            // ★★★ 優化：如果使用者填了資料但忘了按新增，幫他按 ★★★
+            const tempName = document.getElementById('add_name').value.trim();
+            const tempAge = document.getElementById('add_age').value.trim();
+            const tempJob = document.getElementById('add_job').value.trim();
             
-            if (!moveIn) {
-                alert('請選擇預計入住時間喔！');
-                return;
+            if (occupantList.length === 0 && tempName !== "") {
+                addOccupant(); 
             }
-            if (!relation) {
-                alert('請選擇「居住關係」喔！');
-                return;
+
+            if (occupantList.length === 0) { 
+                alert('請至少新增一位居住成員！\n(請填寫姓名、年齡、職業後，點擊「新增入住者」)'); 
+                return; 
             }
-            if (occupantList.length === 0) {
-                alert('請至少新增一位居住成員！\n(填寫完姓名後，請按下「+ 新增入住者」按鈕)');
-                return;
-            }
-            updateHiddenField(); // 確保計算正確
+            updateOccupantHiddenField();
         }
-        else if (currentStep === 6) {
+        else if (currentStep === 4) { // 區域與預算
             const city = document.getElementById('field_city').value;
             const budget = document.getElementById('field_budget').value;
-            if (!city) {
-                alert('請選擇您想找的縣市！');
-                return;
-            }
-            if (!budget) {
-                alert('請選擇您的預算範圍！');
-                return;
-            }
+            if (!city) { alert('請選擇縣市！'); return; }
+            if (!budget) { alert('請選擇您的預算範圍！'); return; }
+        }
+        // Step 5 (習慣) 選填不檢查
+
+        // ★★★ 自動帶入姓名邏輯 ★★★
+        if (currentStep === 2 && occupantList.length === 0) {
+             const userName = document.getElementById('field_name').value;
+             if(document.getElementById('add_name').value === "") {
+                 document.getElementById('add_name').value = userName;
+             }
         }
 
         if(currentStep < totalSteps - 1) { 
@@ -748,9 +822,7 @@
             btn.classList.remove('selected');
         }
         element.classList.add('selected');
-        setTimeout(() => {
-            nextStep();
-        }, 300);
+        // 合併頁面不能自動跳下一頁，因為有兩題要答
     }
 
     function testConnection() {
@@ -758,12 +830,10 @@
         testData.append('1000581', '系統測試(請忽略)');
         testData.append('1000583', '0900-000-000');
         testData.append('1000640', agentName);
-        
         testData.append('1000584', '電梯'); 
         testData.append('1000585', '套房'); 
         testData.append('1000590', '一個月'); 
         testData.append('1000587', '居住關係：測試中\n1. 測試員 / 99歲 / 機器人');
-        // ★★★ 測試時也要補上 1000586 ★★★
         testData.append('1000586', '1位'); 
         
         alert('正在嘗試發送測試資料到 Ragic...');
@@ -786,30 +856,22 @@
     }
 
     function submitForm() {
-        // 重複檢查最後一步 (Step 6) 的欄位
-        const city = document.getElementById('field_city').value;
-        const budget = document.getElementById('field_budget').value;
-        
-        if (!city) {
-            alert('請選擇您想找的縣市！');
-            currentStep = 6;
-            updateUI();
-            return;
-        }
-        if (!budget) {
-            alert('請選擇您的預算範圍！');
-            currentStep = 6;
-            updateUI();
-            return;
-        }
-
         document.getElementById('loadingOverlay').style.display = 'flex';
-
+        
         const timestamp = new Date().getTime();
         document.getElementById('input_source_mark').value = 'wizard_v1_' + timestamp;
+        
+        // 自動帶入時間戳記
+        const now = new Date();
+        const timeString = now.getFullYear() + "/" + 
+                          ("0" + (now.getMonth()+1)).slice(-2) + "/" + 
+                          ("0" + now.getDate()).slice(-2) + " " + 
+                          ("0" + now.getHours()).slice(-2) + ":" + 
+                          ("0" + now.getMinutes()).slice(-2) + ":" + 
+                          ("0" + now.getSeconds()).slice(-2);
+        document.getElementById('field_time').value = timeString;
 
-        // 確保送出前隱藏欄位有值
-        updateHiddenField();
+        updateOccupantHiddenField();
 
         const form = document.getElementById('ragicForm');
         form.submit();
