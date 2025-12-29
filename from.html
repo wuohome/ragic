@@ -53,6 +53,8 @@
             width: 100%;
             display: flex;
             flex-direction: column;
+            /* 增加滾動流暢度 */
+            -webkit-overflow-scrolling: touch; 
         }
 
         .step-content {
@@ -100,7 +102,7 @@
             background: #eefbfb;
             border: 2px solid #007894;
             border-radius: 12px;
-            padding: 12px 15px;
+            padding: 10px 15px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -141,10 +143,10 @@
             justify-content: center;
             background-color: #007894;
             color: white;
-            padding: 10px 18px;
+            padding: 8px 16px;
             border-radius: 50px;
             text-decoration: none;
-            font-size: 15px;
+            font-size: 14px;
             font-weight: bold;
             box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
             transition: transform 0.2s;
@@ -226,14 +228,13 @@
 
         /* 底部按鈕區 */
         .footer-btns {
-            padding: 15px 30px;
+            padding: 10px 30px 15px 30px;
             background: #fff;
             border-top: 1px solid #eee;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-shrink: 0;
-            /* 移除 padding-bottom，交給 footer 處理 */
         }
 
         button {
@@ -258,14 +259,6 @@
             box-shadow: 0 4px 10px rgba(0, 120, 148, 0.2);
         }
 
-        .btn-test {
-            background: transparent;
-            color: #999;
-            border: 1px dashed #ccc;
-            padding: 8px 10px;
-            font-size: 12px;
-            margin: 0 5px;
-        }
         
         #loadingOverlay {
             position: absolute;
@@ -300,6 +293,7 @@
             padding-bottom: 15px;
             flex-shrink: 0;
             background: #fff;
+            /* 移除底線，讓視覺更乾淨 */
         }
         .logo-title {
             color: #007894;
@@ -311,48 +305,96 @@
         
         /* --- Footer (頁尾資訊) --- */
         .app-footer {
-            background-color: #f8f9fa; /* 極淺灰底 */
+            background-color: #ffffff;
             border-top: 1px solid #eee;
-            padding: 20px;
+            padding: 15px 20px;
             text-align: center;
             flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px; /* 元素之間的間距 */
         }
         .footer-brand {
             color: #005f75;
-            font-weight: bold;
-            font-size: 15px;
-            margin-bottom: 10px;
-            display: block;
-        }
-        .footer-address {
-            color: #555;
+            font-weight: 900;
             font-size: 14px;
-            margin-bottom: 15px;
+            letter-spacing: 0.5px;
+        }
+        .footer-info-row {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 5px;
+            gap: 10px;
+            flex-wrap: wrap; /* 如果太寬自動換行 */
+            color: #555;
+            font-size: 13px;
+            font-weight: 500;
         }
-        .footer-map-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background-color: #fff;
+        .map-link {
             color: #007894;
-            border: 1px solid #007894;
-            padding: 8px 20px;
-            border-radius: 50px;
             text-decoration: none;
             font-weight: bold;
-            font-size: 14px;
-            transition: all 0.2s;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
         }
-        .footer-map-btn:hover {
-            background-color: #007894;
-            color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 120, 148, 0.2);
+        .map-link:hover {
+            text-decoration: underline;
+        }
+
+        /* --- ★★★ 手機版專屬優化 (Max Width 600px) ★★★ --- */
+        @media screen and (max-width: 600px) {
+            body {
+                background-color: #fff; 
+                padding: 0;
+            }
+            .wizard-container {
+                height: 100vh;
+                max-height: none;
+                border-radius: 0;
+                box-shadow: none;
+                width: 100%;
+            }
+            .logo-header {
+                padding-top: 15px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid #eee;
+            }
+            .logo-title {
+                font-size: 20px; 
+            }
+            .step-content {
+                padding: 15px 20px; 
+                justify-content: flex-start; 
+                padding-top: 20px;
+            }
+            h2 {
+                font-size: 22px;
+            }
+            input[type="text"], input[type="tel"], select {
+                padding: 12px;
+                font-size: 18px;
+                margin-bottom: 12px;
+            }
+            
+            /* 手機版頁尾再縮緊一點 */
+            .app-footer {
+                padding: 12px;
+                gap: 3px;
+            }
+            .footer-info-row {
+                font-size: 12px;
+                flex-direction: column; /* 手機版換行顯示，避免擠在一起 */
+                gap: 5px;
+            }
+            .agent-card {
+                padding: 8px 12px;
+                margin-bottom: 5px;
+            }
+            .footer-btns {
+                padding: 10px 20px;
+            }
         }
 
         /* 成員列表樣式 */
@@ -590,21 +632,18 @@
 
     <div class="footer-btns">
         <button class="btn-prev" id="prevBtn" onclick="prevStep()">上一步</button>
-        <button class="btn-test" onclick="testConnection()">🛠️ 測試</button>
         <button class="btn-next" id="nextBtn" onclick="nextStep()">下一步</button>
     </div>
 
-    <!-- ★★★ 新增：頁尾區塊 (整合品牌與地圖) ★★★ -->
+    <!-- ★★★ 新增：整合式頁尾區塊 ★★★ -->
     <div class="app-footer">
         <span class="footer-brand">優式租售管理．窩的家 Wuo Home</span>
-        <div class="footer-address">
-            <i class="fas fa-map-marker-alt" style="color:#666;"></i>
-            <span>新北市三重區大榮街20號1樓</span>
+        <div class="footer-info-row">
+            <span>店面地址：新北市三重區大榮街20號1樓</span>
+            <a href="https://share.google/ZcjTXzNXkE1N7RjfV" target="_blank" class="map-link">
+                <i class="fas fa-location-dot"></i> 開啟 Google Maps 導航
+            </a>
         </div>
-        <a href="https://share.google/ZcjTXzNXkE1N7RjfV" target="_blank" class="footer-map-btn">
-            <i class="fas fa-location-dot"></i>
-            開啟 Google Maps 導航
-        </a>
     </div>
 </div>
 
@@ -823,36 +862,6 @@
         }
         element.classList.add('selected');
         // 合併頁面不能自動跳下一頁，因為有兩題要答
-    }
-
-    function testConnection() {
-        const testData = new FormData();
-        testData.append('1000581', '系統測試(請忽略)');
-        testData.append('1000583', '0900-000-000');
-        testData.append('1000640', agentName);
-        testData.append('1000584', '電梯'); 
-        testData.append('1000585', '套房'); 
-        testData.append('1000590', '一個月'); 
-        testData.append('1000587', '居住關係：測試中\n1. 測試員 / 99歲 / 機器人');
-        testData.append('1000586', '1位'); 
-        
-        alert('正在嘗試發送測試資料到 Ragic...');
-
-        fetch(ragicApiUrl, {
-            method: 'POST',
-            body: testData
-        })
-        .then(response => {
-            if (response.ok) {
-                alert('✅ 測試成功！Ragic 伺服器回傳 OK (200)。');
-            } else {
-                alert('❌ 發送失敗！錯誤代碼: ' + response.status);
-            }
-        })
-        .catch(error => {
-            console.error('Fetch error:', error);
-            alert('⚠️ 連線錯誤 (CORS) - 不過別擔心，正式送出會用另一種方式繞過。');
-        });
     }
 
     function submitForm() {
