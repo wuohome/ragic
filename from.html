@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>優式租售管理．窩的家 Wuo Home - 租屋需求小幫手</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
-    <!-- 加入 Font Awesome 圖標庫 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         /* --- 視覺設計核心 --- */
@@ -53,7 +52,6 @@
             width: 100%;
             display: flex;
             flex-direction: column;
-            /* 增加滾動流暢度 */
             -webkit-overflow-scrolling: touch; 
         }
 
@@ -65,7 +63,7 @@
             justify-content: center;
             animation: fadeIn 0.5s;
             min-height: min-content;
-            /* 底部留白，確保內容不被切掉 */
+            /* 底部留白 */
             padding-bottom: 40px; 
         }
 
@@ -92,13 +90,13 @@
             margin-bottom: 20px;
         }
 
-        /* --- 業務名片卡 (嵌入式設計，不遮擋) --- */
+        /* --- 業務名片卡 --- */
         .agent-card-wrapper {
-            padding: 10px 20px 0 20px; /* 上方留點空間 */
+            padding: 10px 20px 0 20px;
             background: #fff;
             flex-shrink: 0;
-            /* 移除 z-index，因為不再懸浮 */
-            border-top: 1px solid #f0f0f0; /* 加一條淡淡的分隔線 */
+            border-top: 1px solid #f0f0f0;
+            /* 預設顯示，手機版透過 JS 控制 */
         }
 
         .agent-card {
@@ -109,7 +107,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            box-shadow: 0 2px 5px rgba(0, 120, 148, 0.05); /* 陰影變淡 */
+            box-shadow: 0 2px 5px rgba(0, 120, 148, 0.05);
             margin-bottom: 5px;
         }
         
@@ -233,7 +231,6 @@
         .footer-btns {
             padding: 10px 30px 15px 30px;
             background: #fff;
-            /* 移除 border-top，因為上面有名片卡了 */
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -262,7 +259,6 @@
             box-shadow: 0 4px 10px rgba(0, 120, 148, 0.2);
         }
 
-        
         #loadingOverlay {
             position: absolute;
             top: 0;
@@ -296,7 +292,6 @@
             padding-bottom: 15px;
             flex-shrink: 0;
             background: #fff;
-            /* 移除底線，讓視覺更乾淨 */
         }
         .logo-title {
             color: #007894;
@@ -313,37 +308,53 @@
             padding: 15px 20px;
             text-align: center;
             flex-shrink: 0;
-            display: flex;
+            /* 預設隱藏，只在 Step 1 和 最後一頁 顯示 */
+            display: none; 
             flex-direction: column;
             align-items: center;
-            gap: 5px; /* 元素之間的間距 */
+            gap: 8px;
         }
-        .footer-brand {
-            color: #005f75;
-            font-weight: 900;
-            font-size: 14px;
-            letter-spacing: 0.5px;
-        }
-        .footer-info-row {
+        
+        .footer-content {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
-            flex-wrap: wrap; /* 如果太寬自動換行 */
-            color: #555;
+            flex-wrap: wrap; /* 手機版自動換行 */
+            gap: 5px;
             font-size: 13px;
-            font-weight: 500;
+            color: #555;
+            line-height: 1.5;
         }
-        .map-link {
-            color: #007894;
-            text-decoration: none;
-            font-weight: bold;
+        
+        .brand-name {
+            color: #005f75;
+            font-weight: 900;
+        }
+        
+        .divider {
+            color: #ccc;
+            margin: 0 2px;
+        }
+
+        .footer-map-btn {
             display: inline-flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
+            background-color: #007894;
+            color: #fff;
+            border: 1px solid #007894;
+            padding: 6px 15px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 12px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 10px rgba(0, 120, 148, 0.2);
+            margin-top: 5px;
         }
-        .map-link:hover {
-            text-decoration: underline;
+        .footer-map-btn:hover {
+            background-color: #00657d;
+            transform: translateY(-2px);
         }
 
         /* --- ★★★ 手機版專屬優化 (Max Width 600px) ★★★ --- */
@@ -371,7 +382,6 @@
                 padding: 15px 20px; 
                 justify-content: flex-start; 
                 padding-top: 20px;
-                /* 確保底部有足夠空間，避免被鍵盤彈起時完全遮擋 */
                 padding-bottom: 60px;
             }
             h2 {
@@ -383,19 +393,13 @@
                 margin-bottom: 12px;
             }
             
-            /* 手機版頁尾再縮緊一點 */
-            .app-footer {
-                padding: 12px;
-                gap: 3px;
+            /* 手機版：Footer 內容垂直排列 */
+            .footer-content {
+                flex-direction: column;
+                gap: 2px;
             }
-            .footer-info-row {
-                font-size: 12px;
-                flex-direction: column; /* 手機版換行顯示，避免擠在一起 */
-                gap: 5px;
-            }
-            .agent-card {
-                padding: 8px 12px;
-                margin-bottom: 5px;
+            .divider {
+                display: none; /* 手機版不需要分隔線 */
             }
             .footer-btns {
                 padding: 10px 20px;
@@ -493,7 +497,7 @@
             <h2>👋 您好！</h2>
             <p class="desc">歡迎來到窩的家。<br>請先留下您的聯絡方式</p>
             
-            <input type="text" id="field_name" name="1000581" placeholder="怎麼稱呼您？(必填)" required>
+            <input type="text" id="field_name" name="1000581" placeholder="您的姓名 / Line 暱稱 (必填)" required>
             <input type="tel" id="field_phone" name="1000583" placeholder="手機號碼 (必填)" required>
             <!-- 1000647: line ID -->
             <input type="text" id="field_line" name="1000647" placeholder="LINE ID (選填)">
@@ -622,8 +626,8 @@
 
     </form>
 
-    <!-- ★★★ 修改：嵌入式業務名片 (放在按鈕區上方，不遮擋) ★★★ -->
-    <div class="agent-card-wrapper">
+    <!-- 業務名片卡 (透過JS控制顯示/隱藏) -->
+    <div class="agent-card-wrapper" id="agentCardWrapper">
         <div class="agent-card">
             <div class="agent-info">
                 <div class="agent-company">優式租售管理 - 窩的家三重加盟店</div>
@@ -641,15 +645,16 @@
         <button class="btn-next" id="nextBtn" onclick="nextStep()">下一步</button>
     </div>
 
-    <!-- ★★★ 新增：整合式頁尾區塊 ★★★ -->
-    <div class="app-footer">
-        <span class="footer-brand">優式租售管理．窩的家 Wuo Home</span>
-        <div class="footer-info-row">
-            <span>店面地址：新北市三重區大榮街20號1樓</span>
-            <a href="https://share.google/ZcjTXzNXkE1N7RjfV" target="_blank" class="map-link">
-                <i class="fas fa-location-dot"></i> 開啟 Google Maps 導航
-            </a>
+    <!-- ★★★ 整合式頁尾 (透過JS控制顯示/隱藏) ★★★ -->
+    <div class="app-footer" id="appFooter">
+        <div class="footer-content">
+            <span class="brand-name">優式租售管理．窩的家 Wuo Home</span>
+            <span class="divider">|</span>
+            <span class="address-text">店面地址：新北市三重區大榮街20號1樓</span>
         </div>
+        <a href="https://share.google/ZcjTXzNXkE1N7RjfV" target="_blank" class="footer-map-btn">
+            <i class="fas fa-location-dot"></i> 開啟 Google Maps 導航
+        </a>
     </div>
 </div>
 
@@ -780,6 +785,18 @@
             document.getElementById('prevBtn').style.visibility = 'visible';
         }
 
+        // ★★★ 頁尾與名片卡顯示邏輯 (只在第一頁和最後一頁顯示) ★★★
+        const footer = document.getElementById('appFooter');
+        const agentCard = document.getElementById('agentCardWrapper');
+        
+        if (currentStep === 1 || currentStep === totalSteps) {
+            footer.style.display = 'flex';
+            agentCard.style.display = 'block'; // 顯示業務名片
+        } else {
+            footer.style.display = 'none';
+            agentCard.style.display = 'none';  // 隱藏業務名片，避免遮擋
+        }
+
         if(currentStep === totalSteps) {
              document.querySelector('.footer-btns').style.display = 'none';
         } else if (currentStep === totalSteps - 1) { 
@@ -801,23 +818,19 @@
             if (!name) { alert('請填寫姓名喔！'); return; }
             if (!phone) { alert('請填寫手機號碼喔！'); return; }
         }
-        else if (currentStep === 2) { // 房屋類別 + 格局
+        else if (currentStep === 2) { 
             const type = document.getElementById('field_type').value;
             const layout = document.getElementById('field_layout').value;
             if (!type) { alert('請選擇房屋類型！'); return; }
             if (!layout) { alert('請選擇您需要的格局！'); return; }
         }
-        else if (currentStep === 3) { // 入住資訊
+        else if (currentStep === 3) { 
             const moveIn = document.getElementById('field_movein').value;
             const relation = document.getElementById('occupant_relation').value;
             if (!moveIn) { alert('請選擇預計入住時間喔！'); return; }
             if (!relation) { alert('請選擇「居住關係」喔！'); return; }
 
-            // ★★★ 優化：如果使用者填了資料但忘了按新增，幫他按 ★★★
             const tempName = document.getElementById('add_name').value.trim();
-            const tempAge = document.getElementById('add_age').value.trim();
-            const tempJob = document.getElementById('add_job').value.trim();
-            
             if (occupantList.length === 0 && tempName !== "") {
                 addOccupant(); 
             }
@@ -828,15 +841,13 @@
             }
             updateOccupantHiddenField();
         }
-        else if (currentStep === 4) { // 區域與預算
+        else if (currentStep === 4) { 
             const city = document.getElementById('field_city').value;
             const budget = document.getElementById('field_budget').value;
             if (!city) { alert('請選擇縣市！'); return; }
             if (!budget) { alert('請選擇您的預算範圍！'); return; }
         }
-        // Step 5 (習慣) 選填不檢查
 
-        // ★★★ 自動帶入姓名邏輯 ★★★
         if (currentStep === 2 && occupantList.length === 0) {
              const userName = document.getElementById('field_name').value;
              if(document.getElementById('add_name').value === "") {
@@ -867,7 +878,6 @@
             btn.classList.remove('selected');
         }
         element.classList.add('selected');
-        // 合併頁面不能自動跳下一頁，因為有兩題要答
     }
 
     function submitForm() {
@@ -876,7 +886,6 @@
         const timestamp = new Date().getTime();
         document.getElementById('input_source_mark').value = 'wizard_v1_' + timestamp;
         
-        // 自動帶入時間戳記
         const now = new Date();
         const timeString = now.getFullYear() + "/" + 
                           ("0" + (now.getMonth()+1)).slice(-2) + "/" + 
@@ -900,6 +909,7 @@
 
     initAgentInfo(); 
     updateUI();
+    window.addEventListener('resize', updateUI);
 </script>
 
 </body>
