@@ -37,6 +37,7 @@
             height: 8px;
             background: #e0e0e0;
             width: 100%;
+            flex-shrink: 0; /* 不壓縮 */
         }
         .progress-fill {
             height: 100%;
@@ -45,14 +46,24 @@
             transition: width 0.3s ease;
         }
 
+        /* 表單區域 (設為可捲動，避免內容被名片擋住) */
+        #ragicForm {
+            flex: 1; /* 佔據剩餘空間 */
+            overflow-y: auto; /* 內容過長時可捲動 */
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
         /* 內容區域 */
         .step-content {
             flex: 1;
-            padding: 30px;
+            padding: 20px 30px; /* 上下 padding 稍微縮小，留空間給名片 */
             display: none; /* 預設隱藏，透過 JS 切換 */
             flex-direction: column;
             justify-content: center;
             animation: fadeIn 0.5s;
+            min-height: min-content; /* 確保內容不會被過度壓縮 */
         }
 
         .step-content.active {
@@ -67,7 +78,7 @@
         /* 大標題 */
         h2 {
             color: #007894;
-            font-size: 28px;
+            font-size: 26px; /* 稍微縮小一點點適配手機 */
             margin-bottom: 10px;
             text-align: center;
         }
@@ -75,38 +86,43 @@
         p.desc {
             color: #666;
             text-align: center;
-            font-size: 18px;
-            margin-bottom: 30px;
+            font-size: 16px;
+            margin-bottom: 20px;
         }
 
-        /* --- 業務名片卡 (移至 Step 6) --- */
+        /* --- 業務名片卡 (全域版) --- */
+        .agent-card-wrapper {
+            padding: 0 20px;
+            background: #fff;
+            flex-shrink: 0; /* 不壓縮 */
+            z-index: 10;
+        }
+
         .agent-card {
             background: #eefbfb;
             border: 2px solid #007894;
-            border-radius: 15px;
-            padding: 20px;
-            text-align: center;
-            margin-top: 20px; /* 調整間距 */
+            border-radius: 12px;
+            padding: 10px 15px; /* 縮小 padding 讓畫面更緊湊 */
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 8px rgba(0, 120, 148, 0.1);
             margin-bottom: 10px;
-            box-shadow: 0 4px 10px rgba(0, 120, 148, 0.1);
-            animation: popIn 0.6s ease-out; /* 彈出動畫 */
         }
         
-        @keyframes popIn {
-            0% { transform: scale(0.8); opacity: 0; }
-            100% { transform: scale(1); opacity: 1; }
+        .agent-info {
+            text-align: left;
         }
 
         .agent-label {
-            font-size: 14px;
+            font-size: 12px;
             color: #555;
-            margin-bottom: 5px;
+            margin-bottom: 2px;
         }
         .agent-name {
-            font-size: 24px;
+            font-size: 18px;
             font-weight: 900;
             color: #007894;
-            margin-bottom: 15px;
         }
         .agent-call-btn {
             display: inline-flex;
@@ -114,30 +130,31 @@
             justify-content: center;
             background-color: #007894;
             color: white;
-            padding: 10px 25px;
+            padding: 8px 15px;
             border-radius: 50px;
             text-decoration: none;
-            font-size: 18px;
+            font-size: 14px;
             font-weight: bold;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             transition: transform 0.2s;
+            white-space: nowrap;
         }
         .agent-call-btn:hover {
             transform: scale(1.05);
             background-color: #00657d;
         }
         .agent-call-btn span {
-            margin-left: 8px;
+            margin-left: 5px;
         }
 
         /* 超大輸入框 */
         input[type="text"], input[type="tel"], select {
             width: 100%;
-            padding: 20px;
-            font-size: 24px; /* 字體超大 */
+            padding: 15px;
+            font-size: 20px;
             border: 2px solid #ddd;
             border-radius: 12px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             box-sizing: border-box;
             text-align: center;
         }
@@ -152,15 +169,15 @@
         .option-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 15px;
+            gap: 10px;
         }
 
         .option-btn {
             background: #f4f7f6;
             border: 2px solid #ddd;
-            padding: 20px;
+            padding: 15px;
             border-radius: 12px;
-            font-size: 20px;
+            font-size: 18px;
             cursor: pointer;
             text-align: center;
             transition: all 0.2s;
@@ -175,17 +192,20 @@
 
         /* 底部按鈕區 */
         .footer-btns {
-            padding: 20px 30px;
+            padding: 15px 30px;
             background: #fff;
             border-top: 1px solid #eee;
             display: flex;
             justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0; /* 不壓縮 */
+            padding-bottom: 20px; /* 手機底部留白 */
         }
 
         button {
-            padding: 15px 30px;
+            padding: 12px 25px;
             border-radius: 50px;
-            font-size: 18px;
+            font-size: 16px;
             cursor: pointer;
             border: none;
         }
@@ -201,7 +221,21 @@
             flex: 1;
             margin-left: 20px;
             font-weight: bold;
-            box-shadow: 0 5px 15px rgba(0, 120, 148, 0.3);
+            box-shadow: 0 4px 10px rgba(0, 120, 148, 0.2);
+        }
+
+        /* 測試按鈕樣式 */
+        .btn-test {
+            background: transparent;
+            color: #999;
+            border: 1px dashed #ccc;
+            padding: 8px 10px;
+            font-size: 12px;
+            margin: 0 5px;
+        }
+        .btn-test:hover {
+            color: #555;
+            border-color: #888;
         }
         
         /* 載入中遮罩 */
@@ -234,7 +268,9 @@
         /* LOGO */
         .logo-header {
             text-align: center;
-            padding-top: 20px;
+            padding-top: 15px;
+            padding-bottom: 10px;
+            flex-shrink: 0;
         }
         .logo-text {
             color: #007894;
@@ -261,16 +297,14 @@
         <p style="margin-top: 20px; color: #007894; font-weight: bold;">資料傳送中...</p>
     </div>
 
-    <!-- ★★★ 關鍵修改 1：加入一個隱藏的 iframe ★★★ -->
-    <!-- 這是用來欺騙瀏覽器，讓資料可以透過 iframe 傳送出去，而不會被 CORS 擋住 -->
+    <!-- 隱藏的 iframe，作為表單提交的備案 -->
     <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
 
-    <!-- ★★★ 關鍵修改 2：表單設定調整 ★★★ -->
-    <!-- target 設定為上面的 hidden_iframe，action 設定為你的 Ragic API 網址 -->
-    <!-- 這樣送出時，瀏覽器會把資料丟給 iframe，而不會換頁 -->
-    <form id="ragicForm" target="hidden_iframe" method="POST" action="https://ap15.ragic.com/wuohome/property-data-kept/8?api&APIKey=Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==">
+    <!-- 表單 -->
+    <!-- target 設定為 hidden_iframe，action 設定為 API 網址 -->
+    <form id="ragicForm" target="hidden_iframe" method="POST" action="https://ap15.ragic.com/wuohome/property-data-kept/8?api=true&APIKey=Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==">
         
-        <!-- 新增：業務與電話的隱藏欄位 (資料會跟著表單送出) -->
+        <!-- 隱藏欄位：業務資料 -->
         <input type="hidden" name="1000640" id="input_agent_name">
         <input type="hidden" name="1000641" id="input_agent_phone">
         
@@ -278,7 +312,6 @@
         <div class="step-content active" id="step1">
             <h2>👋 您好！</h2>
             <p class="desc">歡迎來到窩的家。<br>請問我們要怎麼稱呼您？</p>
-            <!-- 1000581: 你貴姓/line名稱 -->
             <input type="text" id="field_name" name="1000581" placeholder="請輸入您的稱呼 (必填)" required onkeydown="if(event.key === 'Enter') { nextStep(); return false; }">
         </div>
 
@@ -286,15 +319,13 @@
         <div class="step-content" id="step2">
             <h2>📞 聯絡電話</h2>
             <p class="desc">方便我們聯絡到您的手機號碼</p>
-            <!-- 1000583: 連絡電話 -->
             <input type="tel" id="field_phone" name="1000583" placeholder="09xx-xxx-xxx (必填)" required onkeydown="if(event.key === 'Enter') { nextStep(); return false; }">
         </div>
 
-        <!-- STEP 3: 房屋類別 (按鈕選擇) -->
+        <!-- STEP 3: 房屋類別 -->
         <div class="step-content" id="step3">
             <h2>🏢 想找什麼樣的房子？</h2>
             <p class="desc">請選擇您喜歡的類型</p>
-            <!-- 1000584: 房屋類別 -->
             <input type="hidden" id="field_type" name="1000584">
             <div class="option-grid">
                 <div class="option-btn" onclick="selectOption('field_type', '電梯', this)">電梯大樓</div>
@@ -302,11 +333,10 @@
             </div>
         </div>
 
-        <!-- STEP 4: 格局 (按鈕選擇) -->
+        <!-- STEP 4: 格局 -->
         <div class="step-content" id="step4">
             <h2>🛏️ 需要什麼格局？</h2>
             <p class="desc">幾房幾廳呢？</p>
-            <!-- 1000585: 找屋格局 -->
             <input type="hidden" id="field_layout" name="1000585">
             <div class="option-grid">
                 <div class="option-btn" onclick="selectOption('field_layout', '獨立套房', this)">獨立套房</div>
@@ -320,8 +350,6 @@
         <div class="step-content" id="step5">
             <h2>📍 地點與預算</h2>
             <p class="desc">您想住在哪個縣市？</p>
-            
-            <!-- 1000638: 找房縣市 -->
             <select name="1000638" style="margin-bottom: 20px;">
                 <option value="">選擇縣市...</option>
                 <option value="臺北市">臺北市</option>
@@ -330,7 +358,6 @@
             </select>
 
             <p class="desc" style="margin-top:20px;">大約的租金預算？</p>
-            <!-- 1000588: 預算大約多少 -->
             <select name="1000588">
                 <option value="">請選擇預算...</option>
                 <option value="15,000~20,000">1.5萬 - 2萬</option>
@@ -340,31 +367,38 @@
             </select>
         </div>
 
-         <!-- STEP 6: 完成 + 業務名片 -->
+         <!-- STEP 6: 完成 -->
          <div class="step-content" id="step6">
-            <h2 style="font-size: 36px; margin-bottom: 5px;">🎉 感謝您！</h2>
+            <h2 style="font-size: 32px; margin-bottom: 5px;">🎉 感謝您！</h2>
             <p class="desc">您的需求已送出，我們將盡快為您服務。</p>
-
-            <!-- ★★★ 業務名片卡 (只有這一頁才出現) ★★★ -->
-            <div class="agent-card">
-                <div class="agent-label">您專屬的租賃服務顧問</div>
-                <div class="agent-name" id="display_agent_name">窩的家服務團隊</div>
-                <a href="#" id="display_agent_call" class="agent-call-btn">
-                    📞 立刻通話
-                </a>
-            </div>
+            <p class="desc" style="font-size: 14px; margin-top: 20px;">您也可以直接撥打下方電話聯繫我們</p>
         </div>
 
     </form>
 
+    <!-- ★★★ 這裡就是「全域」的業務名片，每一頁都看得到 ★★★ -->
+    <div class="agent-card-wrapper">
+        <div class="agent-card">
+            <div class="agent-info">
+                <div class="agent-label">您的專屬顧問</div>
+                <div class="agent-name" id="display_agent_name">窩的家</div>
+            </div>
+            <a href="#" id="display_agent_call" class="agent-call-btn">
+                📞 <span id="display_agent_phone_text">通話</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- 底部按鈕區 -->
     <div class="footer-btns">
         <button class="btn-prev" id="prevBtn" onclick="prevStep()">上一步</button>
+        <!-- 系統測試按鈕 -->
+        <button class="btn-test" onclick="testConnection()">🛠️ 測試</button>
         <button class="btn-next" id="nextBtn" onclick="nextStep()">下一步</button>
     </div>
 </div>
 
 <script>
-    // --- 核心邏輯：讀取 GitHub 網址上的參數 ---
     let defaultAgentName = "窩的家服務團隊"; 
     let defaultAgentPhone = "02-1234-5678"; 
 
@@ -372,11 +406,19 @@
     const agentName = urlParams.get('agent') || defaultAgentName;
     const agentPhone = urlParams.get('phone') || defaultAgentPhone;
 
+    // Ragic API URL
+    const ragicApiUrl = "https://ap15.ragic.com/wuohome/property-data-kept/8?api=true&APIKey=Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==";
+
     function initAgentInfo() {
+        // 更新顯示名稱
         document.getElementById('display_agent_name').innerText = agentName;
+        // 更新撥號連結
         document.getElementById('display_agent_call').href = 'tel:' + agentPhone;
-        document.getElementById('display_agent_call').innerHTML = '📞 通話 ' + agentPhone;
+        // 按鈕只顯示「撥號」比較簡潔，或者可以顯示電話
+        // document.getElementById('display_agent_phone_text').innerText = agentPhone; // 如果想顯示號碼就打開這行
+        document.getElementById('display_agent_phone_text').innerText = '撥打電話'; 
         
+        // 更新表單隱藏欄位
         document.getElementById('input_agent_name').value = agentName;
         document.getElementById('input_agent_phone').value = agentPhone;
     }
@@ -391,6 +433,7 @@
         document.getElementById('step'+currentStep).classList.add('active');
         document.getElementById('progress').style.width = ((currentStep / totalSteps) * 100) + '%';
 
+        // 按鈕邏輯
         if(currentStep === 1) {
             document.getElementById('prevBtn').style.visibility = 'hidden';
         } else {
@@ -398,13 +441,16 @@
         }
 
         if(currentStep === totalSteps) {
+             // 第六頁(完成頁)隱藏按鈕區，但保留名片
              document.querySelector('.footer-btns').style.display = 'none';
         } else if (currentStep === totalSteps - 1) { 
             document.getElementById('nextBtn').innerText = '確認送出';
             document.getElementById('nextBtn').style.backgroundColor = '#e74c3c'; 
+            document.querySelector('.footer-btns').style.display = 'flex'; // 確保按鈕顯示
         } else {
             document.getElementById('nextBtn').innerText = '下一步';
             document.getElementById('nextBtn').style.backgroundColor = '#007894';
+            document.querySelector('.footer-btns').style.display = 'flex'; // 確保按鈕顯示
         }
     }
 
@@ -437,40 +483,67 @@
         }, 300);
     }
 
+    function testConnection() {
+        const testData = new FormData();
+        testData.append('1000581', '系統測試(請忽略)');
+        testData.append('1000583', '0900-000-000');
+        testData.append('1000640', agentName);
+        
+        alert('正在嘗試發送測試資料到 Ragic...');
+
+        fetch(ragicApiUrl, {
+            method: 'POST',
+            body: testData
+        })
+        .then(response => {
+            if (response.ok) {
+                alert('✅ 測試成功！Ragic 伺服器回傳 OK (200)。');
+            } else {
+                alert('❌ 發送失敗！錯誤代碼: ' + response.status);
+            }
+        })
+        .catch(error => {
+            console.error('Fetch error:', error);
+            alert('⚠️ 連線錯誤 (CORS) - 不過別擔心，正式送出會用另一種方式繞過。');
+        });
+    }
+
     function submitForm() {
-        // ★★★ 關鍵修改 3：嚴格的必填檢查 ★★★
         const name = document.getElementById('field_name').value;
         const phone = document.getElementById('field_phone').value;
         
-        // 檢查姓名
         if(!name) {
             alert('請填寫姓名喔！');
-            currentStep = 1; // 跳回第一步
+            currentStep = 1;
             updateUI();
             return;
         }
         
-        // 檢查電話 (新增)
         if(!phone) {
             alert('請填寫電話喔！');
-            currentStep = 2; // 跳回第二步
+            currentStep = 2;
             updateUI();
             return;
         }
 
-        // 顯示載入動畫
         document.getElementById('loadingOverlay').style.display = 'flex';
 
-        // ★★★ 關鍵修改 4：改用傳統 Form Submit 方式 (解決 Ragic 沒收到資料的問題) ★★★
-        // 這裡會將資料送到 hidden_iframe，瀏覽器不會因為跨域而阻擋
+        // 1. 使用 iframe 提交 (最穩定的方法)
         const form = document.getElementById('ragicForm');
         form.submit();
 
-        // 假裝延遲 1.5 秒後顯示成功畫面
-        // 因為是送到 iframe，我們無法精準知道 Ragic 什麼時候處理完，但通常 1-2 秒內會完成
+        // 2. 備用：嘗試 Fetch 提交 (不等待結果)
+        const formData = new FormData(form);
+        fetch(ragicApiUrl, {
+            method: 'POST',
+            body: formData,
+            mode: 'no-cors' 
+        }).catch(e => console.log(e));
+
+        // 3. 顯示成功畫面
         setTimeout(() => {
             document.getElementById('loadingOverlay').style.display = 'none';
-            currentStep = totalSteps; // 跳到 Step 6
+            currentStep = totalSteps; 
             updateUI();
         }, 1500);
     }
