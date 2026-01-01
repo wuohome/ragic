@@ -400,6 +400,9 @@
                         setLeaves(prev => [...prev, { ragicId: newId, ...payload, EMP_ID: emp.NAME }]);
                         
                         showToast("排休已登記", "success");
+                        
+                        // ★★★ 新增：延遲重新讀取，確保寫入後資料同步 ★★★
+                        setTimeout(() => fetchData(), 800);
                     }
                 } catch (err) {
                     console.error(err);
@@ -457,6 +460,9 @@
                         const newDuties = await apiService.getDuties(year, month);
                         setDuties(newDuties);
                         showToast("值日生已更新", "success");
+                        
+                        // ★★★ 新增：延遲重新讀取，確保寫入後資料同步 ★★★
+                        setTimeout(() => fetchData(), 800);
                     }
                 } catch (err) {
                     showToast("變更失敗: " + err.message, "error");
@@ -532,6 +538,9 @@
                     const refreshedDuties = await apiService.getDuties(year, month);
                     setDuties(refreshedDuties);
                     showToast("自動排班完成！", "success");
+                    
+                    // ★★★ 新增：延遲重新讀取，確保寫入後資料同步 ★★★
+                    setTimeout(() => fetchData(), 800);
 
                 } catch (err) {
                     showToast("排班過程發生錯誤: " + err.message, "error");
