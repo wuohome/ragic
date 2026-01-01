@@ -79,14 +79,14 @@
                     HIRE_TYPE:    "3000955"  // 聘雇類別 (永久, 約聘, 兼職...)
                 },
                 LEAVE: {
-                    EMP_ID: "1000961", // 員工
+                    EMP_ID: "1000961", // 員工 (連結欄位)
                     DATE:   "1000963", // 日期
                     YEAR:   "1000964", // 年
                     MONTH:  "1000965"  // 月
                 },
                 DUTY: {
                     DATE:      "1000971", // 日期
-                    EMP_ID:    "1000972", // 值日生
+                    EMP_ID:    "1000972", // 值日生 (連結欄位)
                     YEAR:      "1000973", // 年
                     MONTH:     "1000974", // 月
                     IS_AUTO:   "1000975", // 是否為系統預排
@@ -107,6 +107,7 @@
             const apiKey = (RAGIC_CONFIG.API_KEY || "").trim();
             
             const queryChar = url.includes('?') ? '&' : '?';
+            // naming=EID 很重要，確保回傳欄位 ID 而非名稱
             const fullUrl = `${url}${queryChar}api=true&v=3&naming=EID&APIKey=${encodeURIComponent(apiKey)}`;
             
             console.log(`%c[API Request] %c${path}`, "color: blue; font-weight: bold;", "color: black;");
@@ -182,6 +183,7 @@
                 return duties.filter(d => parseInt(d.YEAR) == prevYear && parseInt(d.MONTH) == prevMonth);
             },
 
+            // 寫入改用 URLSearchParams
             createLeave: async (leaveData) => {
                 const params = new URLSearchParams();
                 params.append(RAGIC_CONFIG.FIELDS.LEAVE.EMP_ID, leaveData.EMP_ID);
@@ -235,6 +237,7 @@
             return `${y}-${m}-${d}`;
         };
 
+        // 修改：週一開始的月曆邏輯
         const getDaysInMonth = (year, month) => {
             const date = new Date(year, month - 1, 1);
             const days = [];
@@ -273,16 +276,16 @@
 
         // 部門顏色對照表
         const getDeptColor = (dept) => {
-            if (!dept) return { bg: 'bg-gray-400', tag: 'bg-gray-100 text-gray-700' };
+            if (!dept) return { bg: 'bg-gray-400', tag: 'bg-gray-100 text-gray-700', border: 'border-gray-300' };
             
             if (dept.includes('租賃')) {
-                return { bg: 'bg-orange-400', tag: 'bg-orange-100 text-orange-700' };
+                return { bg: 'bg-orange-400', tag: 'bg-orange-100 text-orange-700', border: 'border-orange-200' };
             } else if (dept.includes('設計')) {
-                return { bg: 'bg-emerald-400', tag: 'bg-emerald-100 text-emerald-700' };
+                return { bg: 'bg-emerald-400', tag: 'bg-emerald-100 text-emerald-700', border: 'border-emerald-200' };
             } else if (dept.includes('管理')) {
-                return { bg: 'bg-purple-400', tag: 'bg-purple-100 text-purple-700' };
+                return { bg: 'bg-purple-400', tag: 'bg-purple-100 text-purple-700', border: 'border-purple-200' };
             }
-            return { bg: 'bg-gray-400', tag: 'bg-gray-100 text-gray-700' };
+            return { bg: 'bg-gray-400', tag: 'bg-gray-100 text-gray-700', border: 'border-gray-300' };
         };
 
         /**
@@ -366,7 +369,7 @@
                 const hireType = emp.HIRE_TYPE || "";
                 if (hireType.includes("兼職")) {
                     alert(`【提示】${emp.DISPLAY_NAME || emp.NAME} 為「兼職」人員。\n\n兼職夥伴只需安排值日生，無需排休。`);
-                    return; // 阻止執行後續排休邏輯
+                    return; 
                 }
 
                 const existingLeave = leaves.find(l => 
@@ -383,15 +386,18 @@
                         setLeaves(prev => prev.filter(l => l.ragicId !== existingLeave.ragicId));
                         showToast("已取消排休", "success");
                     } else {
+                        // === 修正：寫入時改送姓名 ===
                         const payload = {
-                            EMP_ID: selectedEmpId,
+                            EMP_ID: emp.NAME, 
                             DATE: dateStr,
                             YEAR: year,
                             MONTH: month
                         };
                         const res = await apiService.createLeave(payload);
+                        
+                        // 樂觀更新
                         const newId = (res && res.ragicId) ? res.ragicId : ('temp_' + Date.now());
-                        setLeaves(prev => [...prev, { ragicId: newId, ...payload }]);
+                        setLeaves(prev => [...prev, { ragicId: newId, ...payload, EMP_ID: emp.NAME }]);
                         
                         showToast("排休已登記", "success");
                     }
@@ -417,7 +423,7 @@
                     const month = parseInt(dateStr.split('-')[1]);
                     
                     if (result.trim() === "") {
-                        showToast("若需清空值日生，請直接輸入系統中不存在的名字(不做任何動作)", "warning");
+                        showToast("若需清空值日生，請直接輸入系統中不存在的名字", "warning");
                     } else {
                         const targetEmp = employees.find(e => e.NAME === result.trim());
                         if (!targetEmp) {
@@ -435,9 +441,10 @@
                             alert("警告：該員工前一天已值日！(仍會執行變更)");
                         }
 
+                        // === 修正：寫入時改送姓名 ===
                         const payload = {
                             DATE: dateStr,
-                            EMP_ID: targetEmp.ID, 
+                            EMP_ID: targetEmp.NAME, 
                             YEAR: year,
                             MONTH: month,
                             IS_AUTO: 'No', 
@@ -446,6 +453,7 @@
                         
                         await apiService.upsertDuty(payload, existingDuty ? existingDuty.ragicId : null);
                         
+                        // 重新拉取以確保同步
                         const newDuties = await apiService.getDuties(year, month);
                         setDuties(newDuties);
                         showToast("值日生已更新", "success");
@@ -507,7 +515,7 @@
                         newScheduleRequests.push({
                             payload: {
                                 DATE: dateStr,
-                                EMP_ID: pick.ID,
+                                EMP_ID: pick.NAME, // === 修正：改送姓名 ===
                                 YEAR: year,
                                 MONTH: month,
                                 IS_AUTO: 'Yes',
@@ -541,8 +549,16 @@
             };
 
             const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth() + 1);
-            const startDay = daysInMonth[0].getDay();
-            const blanks = Array(startDay).fill(null);
+            
+            // 計算第一天是星期幾 (0=Sun, 1=Mon, ..., 6=Sat)
+            const firstDayOfMonth = daysInMonth[0].getDay();
+            
+            // 調整為週一開始 (Mon=0, Tue=1, ..., Sun=6)
+            // 目標: Mon=0, Tue=1 ... Sun=6
+            // 公式: (day + 6) % 7
+            const startDayIndex = (firstDayOfMonth + 6) % 7;
+            
+            const blanks = Array(startDayIndex).fill(null);
 
             // 取得所有不重複的部門列表 (已排除經營階層)
             const departments = ['All', ...new Set(employees.map(e => e.DEPT || '未分類'))].filter(d => d);
@@ -568,19 +584,13 @@
                 const isFullA = statsA.leaveCount >= 8;
                 const isFullB = statsB.leaveCount >= 8;
 
-                // 權重計算 (越小越優先)
-                // 兼職: 3
-                // 滿8天: 2
-                // 未滿8天: 1
                 let scoreA = isPartTimeA ? 3 : (isFullA ? 2 : 1);
                 let scoreB = isPartTimeB ? 3 : (isFullB ? 2 : 1);
 
                 if (scoreA !== scoreB) return scoreA - scoreB;
                 
-                // 同分則依部門排序
                 if (a.DEPT !== b.DEPT) return (a.DEPT || "").localeCompare(b.DEPT || "");
                 
-                // 再同分依名字排序
                 return (a.DISPLAY_NAME || a.NAME).localeCompare(b.DISPLAY_NAME || b.NAME);
             });
 
@@ -664,11 +674,11 @@
                                     
                                     // 優先使用顯示名稱
                                     const displayName = emp.DISPLAY_NAME || emp.NAME || `Emp ${uid}`;
-                                    // 只顯示兼職的聘雇類別
-                                    const hireType = (emp.HIRE_TYPE || "").includes("兼職") ? '(兼職)' : '';
+                                    // 只顯示兼職
+                                    const isPartTime = (emp.HIRE_TYPE || "").includes("兼職");
                                     
                                     // 判斷是否為兼職或已滿8天，調整透明度以示區別
-                                    const isDimmed = (emp.HIRE_TYPE || "").includes("兼職") || stats.leaveCount >= 8;
+                                    const isDimmed = isPartTime || stats.leaveCount >= 8;
 
                                     return (
                                         <div 
@@ -694,8 +704,13 @@
                                                 </div>
                                                 <div className="flex-1">
                                                     <div className="flex justify-between items-center">
-                                                        <span className="font-bold text-gray-800">
-                                                            {displayName} <span className="text-xs font-normal text-gray-500">{hireType}</span>
+                                                        <span className="font-bold text-gray-800 flex items-center gap-2">
+                                                            {displayName}
+                                                            {isPartTime && (
+                                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600 font-normal">
+                                                                    兼職
+                                                                </span>
+                                                            )}
                                                         </span>
                                                         <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${colors.tag}`}>
                                                             {deptName}
@@ -724,13 +739,14 @@
                     {/* Calendar */}
                     <div className="flex-1 bg-white rounded-xl shadow-sm p-4 overflow-hidden flex flex-col border border-gray-100">
                         <div className="grid grid-cols-7 mb-2 text-center text-gray-500 font-medium py-2 border-b">
-                            <div className="text-red-500">週日</div>
+                            {/* 修改：週一開始 */}
                             <div>週一</div>
                             <div>週二</div>
                             <div>週三</div>
                             <div>週四</div>
                             <div>週五</div>
                             <div className="text-red-500">週六</div>
+                            <div className="text-red-500">週日</div>
                         </div>
 
                         <div className="grid grid-cols-7 auto-rows-fr flex-1 gap-px bg-gray-200 border border-gray-200">
@@ -748,6 +764,8 @@
                                 const dutyPerson = dayDuty ? employees.find(e => e.ragicId == dayDuty.EMP_ID || e.NAME === dayDuty.EMP_ID) : null;
                                 // 優先顯示 Duty 的顯示名稱
                                 const dutyName = dutyPerson ? (dutyPerson.DISPLAY_NAME || dutyPerson.NAME) : (dayDuty ? "未知員工" : "未排");
+                                const dutyDept = dutyPerson ? dutyPerson.DEPT : "";
+                                const dutyColors = getDeptColor(dutyDept);
 
                                 let conflictMsg = null;
                                 if (dutyPerson) {
@@ -786,7 +804,7 @@
                                                     text-[11px] px-1.5 py-0.5 rounded border flex items-center gap-1 max-w-[80px] cursor-pointer hover:opacity-80
                                                     ${conflictMsg 
                                                         ? 'bg-red-100 border-red-300 text-red-700 animate-pulse font-bold' 
-                                                        : 'bg-yellow-50 border-yellow-200 text-yellow-800'}
+                                                        : `${dutyColors.tag} ${dutyColors.border}`}
                                                 `}
                                             >
                                                 <Icon name={conflictMsg ? "AlertTriangle" : "Trash2"} size={10} />
@@ -800,13 +818,15 @@
                                             {dayLeaves.map(l => {
                                                 const p = employees.find(e => e.ragicId == l.EMP_ID || e.NAME === l.EMP_ID);
                                                 const name = p ? (p.DISPLAY_NAME || p.NAME) : `Emp ${l.EMP_ID}`;
+                                                const leaveDept = p ? p.DEPT : "";
+                                                const leaveColors = getDeptColor(leaveDept);
                                                 const isMyLeave = selectedEmpId && (l.EMP_ID == selectedEmpId);
 
                                                 return (
-                                                    <div key={l.ragicId} className="text-[11px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded flex items-center justify-between">
+                                                    <div key={l.ragicId} className={`text-[11px] px-1.5 py-0.5 rounded flex items-center justify-between ${leaveColors.tag} bg-opacity-50`}>
                                                         <span className="truncate">{name}</span>
                                                         {isMyLeave && (
-                                                            <Icon name="X" size={10} className="text-gray-400" />
+                                                            <Icon name="X" size={10} className="text-gray-600" />
                                                         )}
                                                     </div>
                                                 );
