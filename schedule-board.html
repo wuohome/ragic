@@ -59,7 +59,7 @@
             BASE_URL: "https://ap15.ragic.com",
             
             // 2. 您的 API Key (請至 Ragic 個人設定 -> API Key 產生)
-            API_KEY: "Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==", 
+            API_KEY: "", 
 
             // 3. 表單路徑 (依據 PDF 文件更新)
             PATHS: {
@@ -106,10 +106,24 @@
             
             console.log(`%c[API Start] %c${path}`, "color: blue; font-weight: bold;", "color: black;");
             console.log("Full URL:", fullUrl);
-            console.log("API Key Present:", !!RAGIC_CONFIG.API_KEY);
+
+            // Auth Logic Fix
+            let authHeader;
+            const apiKey = (RAGIC_CONFIG.API_KEY || "").trim();
+            const isBase64Pattern = /^[A-Za-z0-9+/]+={0,2}$/.test(apiKey);
+            
+            if (apiKey.length >= 40 && isBase64Pattern) {
+                // Case A: 已經是 Base64 Token
+                authHeader = `Basic ${apiKey}`;
+                console.log("Auth Mode: Direct Base64 Key");
+            } else {
+                // Case B: 普通 API Key，需轉 Base64
+                authHeader = `Basic ${btoa(apiKey + ":")}`;
+                console.log("Auth Mode: Standard API Key (Converted to Base64)");
+            }
 
             const headers = {
-                "Authorization": `Basic ${btoa(RAGIC_CONFIG.API_KEY + ":")}`,
+                "Authorization": authHeader,
                 ...options.headers
             };
 
@@ -124,9 +138,12 @@
                 }
 
                 const json = await response.json();
-                console.log("[Raw JSON Data]:", json);
                 
-                // Ragic 如果沒有資料，有時會回傳空物件或類似結構，這邊先回傳原始 JSON
+                // Debug Log for JSON Structure
+                const keys = json ? Object.keys(json) : [];
+                const hasDataProp = json && typeof json === 'object' && 'data' in json;
+                console.log(`[Raw JSON] Keys: [${keys.join(', ')}], hasDataProp: ${hasDataProp}`);
+                
                 return json;
 
             } catch (error) {
@@ -136,23 +153,29 @@
         };
 
         // 解析 Ragic 回傳的物件 { "recordId": { data... } } 轉為 Array
-        const parseRagicData = (data, fieldMapping) => {
-            if (!data || Object.keys(data).length === 0) {
-                console.log("[Parse] Data is empty or null");
+        const parseRagicData = (dataMap, fieldMapping) => {
+            if (!dataMap || typeof dataMap !== 'object') {
+                console.log("[Parse] DataMap is invalid:", dataMap);
                 return [];
             }
             
             // Ragic 列表通常是 { "17": { ... }, "18": { ... } }
-            const result = Object.entries(data).map(([ragicId, fields]) => {
+            // 過濾掉非數字 Key (例如 status, msg 等，如果沒有正確取到 data 層)
+            const result = Object.entries(dataMap).map(([ragicId, fields]) => {
+                // 簡單檢查 fields 是否為物件，避免 map 到 status: "SUCCESS" 字串
+                if (typeof fields !== 'object' || fields === null) return null;
+
                 const item = { ragicId };
                 for (const [key, fieldId] of Object.entries(fieldMapping)) {
-                    // 安全取值：確保 fields[fieldId] 存在
+                    // 安全取值
                     item[key] = fields[fieldId] !== undefined ? fields[fieldId] : ""; 
                 }
                 return item;
-            });
+            }).filter(item => item !== null);
 
-            console.log("[Parsed Result Sample]:", result.slice(0, 2)); // 印出前兩筆
+            console.log(`[Parsed Result] Count: ${result.length}`);
+            if(result.length > 0) console.log("[Sample Data]:", result[0]);
+            
             return result;
         };
 
@@ -160,46 +183,43 @@
         const apiService = {
             getEmployees: async () => {
                 console.log(">>> calling getEmployees...");
-                const data = await ragicFetch(RAGIC_CONFIG.PATHS.EMPLOYEE);
+                const json = await ragicFetch(RAGIC_CONFIG.PATHS.EMPLOYEE);
                 
-                const employees = parseRagicData(data, RAGIC_CONFIG.FIELDS.EMPLOYEE);
+                // Fix: Handle { status, data: {} } vs { id: {} }
+                const records = (json && json.data) ? json.data : json;
+                
+                const employees = parseRagicData(records, RAGIC_CONFIG.FIELDS.EMPLOYEE);
                 
                 // 檢查過濾邏輯
-                console.log(`Total Employees fetched: ${employees.length}`);
+                console.log(`Total Employees parsed: ${employees.length}`);
                 
                 const activeEmployees = employees.filter(e => {
-                    // 寬鬆比對：包含 "在職" 或是 true 或是 "Yes"
-                    const status = String(e.STATUS);
+                    // 寬鬆比對
+                    const status = String(e.STATUS || "");
                     return status.includes("在職") || status === "true" || status === "Yes";
                 });
                 
                 console.log(`Active Employees (Filtered): ${activeEmployees.length}`);
-                if(activeEmployees.length === 0 && employees.length > 0) {
-                    console.warn("警告：有讀到員工資料，但過濾後為 0。請檢查 'STATUS' 欄位值內容:", employees.map(e => e.STATUS));
-                }
-                
                 return activeEmployees;
             },
 
             getLeaves: async (year, month) => {
                 console.log(`>>> calling getLeaves for ${year}-${month}...`);
-                // 這裡暫不使用 server-side filter，先抓全部 (Ragic REST API full scan)
-                // 若資料量大，建議未來改用查詢參數
-                const data = await ragicFetch(RAGIC_CONFIG.PATHS.LEAVE); 
-                const leaves = parseRagicData(data, RAGIC_CONFIG.FIELDS.LEAVE);
+                const json = await ragicFetch(RAGIC_CONFIG.PATHS.LEAVE);
+                const records = (json && json.data) ? json.data : json;
                 
+                const leaves = parseRagicData(records, RAGIC_CONFIG.FIELDS.LEAVE);
                 const filtered = leaves.filter(l => parseInt(l.YEAR) === year && parseInt(l.MONTH) === month);
-                console.log(`Leaves found for this month: ${filtered.length}`);
                 return filtered;
             },
 
             getDuties: async (year, month) => {
                 console.log(`>>> calling getDuties for ${year}-${month}...`);
-                const data = await ragicFetch(RAGIC_CONFIG.PATHS.DUTY);
-                const duties = parseRagicData(data, RAGIC_CONFIG.FIELDS.DUTY);
+                const json = await ragicFetch(RAGIC_CONFIG.PATHS.DUTY);
+                const records = (json && json.data) ? json.data : json;
                 
+                const duties = parseRagicData(records, RAGIC_CONFIG.FIELDS.DUTY);
                 const filtered = duties.filter(d => parseInt(d.YEAR) === year && parseInt(d.MONTH) === month);
-                console.log(`Duties found for this month: ${filtered.length}`);
                 return filtered;
             },
             
@@ -209,8 +229,10 @@
                 if(prevMonth === 0) { prevMonth = 12; prevYear -= 1; }
                 
                 console.log(`>>> calling getPrevMonthDuties for ${prevYear}-${prevMonth}...`);
-                const data = await ragicFetch(RAGIC_CONFIG.PATHS.DUTY);
-                const duties = parseRagicData(data, RAGIC_CONFIG.FIELDS.DUTY);
+                const json = await ragicFetch(RAGIC_CONFIG.PATHS.DUTY);
+                const records = (json && json.data) ? json.data : json;
+                
+                const duties = parseRagicData(records, RAGIC_CONFIG.FIELDS.DUTY);
                 return duties.filter(d => parseInt(d.YEAR) === prevYear && parseInt(d.MONTH) === prevMonth);
             },
 
@@ -221,11 +243,12 @@
                 formData.append(RAGIC_CONFIG.FIELDS.LEAVE.YEAR, leaveData.YEAR);
                 formData.append(RAGIC_CONFIG.FIELDS.LEAVE.MONTH, leaveData.MONTH);
 
-                const res = await ragicFetch(RAGIC_CONFIG.PATHS.LEAVE, {
+                const json = await ragicFetch(RAGIC_CONFIG.PATHS.LEAVE, {
                     method: 'POST',
                     body: formData
                 });
-                return res && res.ragicId;
+                // Create usually returns { status: "SUCCESS", ... }
+                return json && json.ragicId; 
             },
 
             deleteLeave: async (ragicId) => {
@@ -333,7 +356,7 @@
 
                     console.log("Fetching data for:", year, month);
 
-                    // Sequential fetch to see logs clearly (Parallel is faster but logs mix up)
+                    // Sequential fetch to see logs clearly
                     const empData = await apiService.getEmployees();
                     const leaveData = await apiService.getLeaves(year, month);
                     const dutyData = await apiService.getDuties(year, month);
