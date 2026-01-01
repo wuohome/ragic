@@ -102,7 +102,8 @@
         // 通用 Fetch 函數
         const ragicFetch = async (path, options = {}) => {
             const url = `${RAGIC_CONFIG.BASE_URL}${path}`;
-            const fullUrl = url.includes('?') ? `${url}&api` : `${url}?api`;
+            // 修正為 ?api=true 或 &api=true
+            const fullUrl = url.includes('?') ? `${url}&api=true` : `${url}?api=true`;
             
             console.log(`%c[API Start] %c${path}`, "color: blue; font-weight: bold;", "color: black;");
             console.log("Full URL:", fullUrl);
