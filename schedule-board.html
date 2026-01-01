@@ -71,10 +71,12 @@
             // 欄位對照 (Field ID)
             FIELDS: {
                 EMPLOYEE: {
-                    ID:        "3000934", // 員工編號
-                    NAME:      "3000933", // 姓名
-                    DEPT:      "3000937", // 部門
-                    STATUS:    "3000945"  // 在職狀態
+                    ID:           "3000934", // 員工編號
+                    NAME:         "3000933", // 姓名
+                    DISPLAY_NAME: "1000848", // 顯示名稱 (Kelly, Jerry...)
+                    DEPT:         "3000937", // 部門
+                    STATUS:       "3000945", // 在職狀態
+                    HIRE_TYPE:    "3000955"  // 聘雇類別 (永久, 約聘, 兼職...)
                 },
                 LEAVE: {
                     EMP_ID: "1000961", // 員工
@@ -95,7 +97,7 @@
 
         /**
          * ==========================================================================================
-         * API 處理邏輯 (參考「智慧找房地圖」的寫法 - 直連模式)
+         * API 處理邏輯 (直連模式)
          * ==========================================================================================
          */
         
@@ -104,47 +106,33 @@
             const url = `${RAGIC_CONFIG.BASE_URL}${path}`;
             const apiKey = (RAGIC_CONFIG.API_KEY || "").trim();
             
-            // === 參考您的地圖網站寫法 ===
-            // 1. 不使用 Proxy
-            // 2. API Key 直接帶在 URL 參數 (APIKey=...)
-            // 3. 加上 v=3 (雖然這通常是版本號，但為了保持一致也加上)
             const queryChar = url.includes('?') ? '&' : '?';
-            const fullUrl = `${url}${queryChar}api=true&v=3&APIKey=${encodeURIComponent(apiKey)}`;
+            const fullUrl = `${url}${queryChar}api=true&v=3&naming=EID&APIKey=${encodeURIComponent(apiKey)}`;
             
             console.log(`%c[API Request] %c${path}`, "color: blue; font-weight: bold;", "color: black;");
 
-            // 移除 Authorization Header，避免觸發 CORS Preflight
-            const headers = {
-                ...options.headers
-            };
+            const headers = { ...options.headers };
 
             try {
                 const response = await fetch(fullUrl, { ...options, headers });
-                
                 if (!response.ok) {
                     console.error("API Response NOT OK:", response.statusText);
                     throw new Error(`API Error: ${response.status} ${response.statusText}`);
                 }
-
                 const json = await response.json();
                 return json;
-
             } catch (error) {
                 console.error("%c[Fetch Error]", "color: red; font-weight: bold;", error);
                 throw error;
             }
         };
 
-        // 解析 Ragic 回傳的物件 { "recordId": { data... } } 轉為 Array
+        // 解析 Ragic 回傳的物件
         const parseRagicData = (dataMap, fieldMapping) => {
-            if (!dataMap || typeof dataMap !== 'object') {
-                return [];
-            }
+            if (!dataMap || typeof dataMap !== 'object') return [];
             
-            // Ragic 列表通常是 { "17": { ... }, "18": { ... } }
             const result = Object.entries(dataMap).map(([ragicId, fields]) => {
                 if (typeof fields !== 'object' || fields === null) return null;
-
                 const item = { ragicId };
                 for (const [key, fieldId] of Object.entries(fieldMapping)) {
                     item[key] = fields[fieldId] !== undefined ? fields[fieldId] : ""; 
@@ -161,8 +149,12 @@
                 const records = (json && json.data) ? json.data : json;
                 const employees = parseRagicData(records, RAGIC_CONFIG.FIELDS.EMPLOYEE);
                 
-                // 暫時不過濾，確保資料顯示
-                return employees; 
+                // 1. 排除「經營階層」
+                return employees.filter(e => {
+                    const dept = (e.DEPT || "").trim();
+                    if (dept === "經營階層") return false;
+                    return true;
+                }); 
             },
 
             getLeaves: async (year, month) => {
@@ -190,7 +182,6 @@
                 return duties.filter(d => parseInt(d.YEAR) == prevYear && parseInt(d.MONTH) == prevMonth);
             },
 
-            // 寫入改用 URLSearchParams (x-www-form-urlencoded)，參考您的地圖網站寫法
             createLeave: async (leaveData) => {
                 const params = new URLSearchParams();
                 params.append(RAGIC_CONFIG.FIELDS.LEAVE.EMP_ID, leaveData.EMP_ID);
@@ -280,6 +271,20 @@
             );
         };
 
+        // 部門顏色對照表
+        const getDeptColor = (dept) => {
+            if (!dept) return { bg: 'bg-gray-400', tag: 'bg-gray-100 text-gray-700' };
+            
+            if (dept.includes('租賃')) {
+                return { bg: 'bg-orange-400', tag: 'bg-orange-100 text-orange-700' };
+            } else if (dept.includes('設計')) {
+                return { bg: 'bg-emerald-400', tag: 'bg-emerald-100 text-emerald-700' };
+            } else if (dept.includes('管理')) {
+                return { bg: 'bg-purple-400', tag: 'bg-purple-100 text-purple-700' };
+            }
+            return { bg: 'bg-gray-400', tag: 'bg-gray-100 text-gray-700' };
+        };
+
         /**
          * ==========================================================================================
          * React Components
@@ -292,6 +297,8 @@
             const [duties, setDuties] = React.useState([]);
             
             const [selectedEmpId, setSelectedEmpId] = React.useState(null);
+            const [selectedDeptFilter, setSelectedDeptFilter] = React.useState('All'); // 部門篩選狀態
+
             const [loading, setLoading] = React.useState(false);
             const [processing, setProcessing] = React.useState(false);
             const [toast, setToast] = React.useState(null);
@@ -343,22 +350,25 @@
             // --------------------------------------------------------------------------------------
 
             const handleToggleLeave = async (dateStr) => {
-                // selectedEmpId 現在存的是 ragicId
                 if (!selectedEmpId) {
                     showToast("請先點選左側員工", "error");
                     return;
                 }
                 if (processing) return;
 
-                // 根據 ragicId 找人
                 const emp = employees.find(e => e.ragicId === selectedEmpId);
                 if (!emp) {
                     console.error("找不到員工資料, ID:", selectedEmpId);
                     return;
                 }
 
-                // 比對現有排休 (Ragic Link 欄位通常存 ID)
-                // 這裡做寬鬆比對：比對 EMP_ID 是否等於 ragicId (寫入值) 或 NAME (顯示值)
+                // 【兼職邏輯】兼職人員不排休
+                const hireType = emp.HIRE_TYPE || "";
+                if (hireType.includes("兼職")) {
+                    alert(`【提示】${emp.DISPLAY_NAME || emp.NAME} 為「兼職」人員。\n\n兼職夥伴只需安排值日生，無需排休。`);
+                    return; // 阻止執行後續排休邏輯
+                }
+
                 const existingLeave = leaves.find(l => 
                     l.DATE === dateStr && (l.EMP_ID == selectedEmpId || l.EMP_ID === emp.NAME)
                 );
@@ -374,16 +384,12 @@
                         showToast("已取消排休", "success");
                     } else {
                         const payload = {
-                            EMP_ID: selectedEmpId, // 關鍵：寫入 Ragic Record ID
+                            EMP_ID: selectedEmpId,
                             DATE: dateStr,
                             YEAR: year,
                             MONTH: month
                         };
-                        // 呼叫 API
                         const res = await apiService.createLeave(payload);
-                        
-                        // 樂觀更新 (加上 ragicId 避免 key error)
-                        // 若是簡單請求，可能回傳格式與預期不同，這裡做保護
                         const newId = (res && res.ragicId) ? res.ragicId : ('temp_' + Date.now());
                         setLeaves(prev => [...prev, { ragicId: newId, ...payload }]);
                         
@@ -440,7 +446,6 @@
                         
                         await apiService.upsertDuty(payload, existingDuty ? existingDuty.ragicId : null);
                         
-                        // 重新拉取以確保同步
                         const newDuties = await apiService.getDuties(year, month);
                         setDuties(newDuties);
                         showToast("值日生已更新", "success");
@@ -486,9 +491,10 @@
                     for (let date of days) {
                         const dateStr = formatDate(date);
                         
+                        // 包含兼職人員在內的所有員工一起輪值
                         const sortedCandidates = [...employees].sort((a, b) => {
                             if (counts[a.ID] !== counts[b.ID]) return counts[a.ID] - counts[b.ID];
-                            return a.NAME.localeCompare(b.NAME);
+                            return (a.DISPLAY_NAME || a.NAME).localeCompare(b.DISPLAY_NAME || b.NAME);
                         });
 
                         let pick = sortedCandidates.find(c => c.ID !== lastDutyEmpId);
@@ -537,6 +543,46 @@
             const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth() + 1);
             const startDay = daysInMonth[0].getDay();
             const blanks = Array(startDay).fill(null);
+
+            // 取得所有不重複的部門列表 (已排除經營階層)
+            const departments = ['All', ...new Set(employees.map(e => e.DEPT || '未分類'))].filter(d => d);
+
+            // 根據篩選過濾員工
+            const filteredEmployees = employees.filter(emp => {
+                if (selectedDeptFilter === 'All') return true;
+                return emp.DEPT === selectedDeptFilter;
+            });
+
+            // === 排序邏輯優化 ===
+            // 權重：
+            // 1. 未滿8天且需排班者 (優先)
+            // 2. 已滿8天者 (次之)
+            // 3. 兼職/無須排班者 (最後)
+            filteredEmployees.sort((a, b) => {
+                const statsA = getEmpStats(a.ragicId);
+                const statsB = getEmpStats(b.ragicId);
+                
+                const isPartTimeA = (a.HIRE_TYPE || "").includes("兼職");
+                const isPartTimeB = (b.HIRE_TYPE || "").includes("兼職");
+                
+                const isFullA = statsA.leaveCount >= 8;
+                const isFullB = statsB.leaveCount >= 8;
+
+                // 權重計算 (越小越優先)
+                // 兼職: 3
+                // 滿8天: 2
+                // 未滿8天: 1
+                let scoreA = isPartTimeA ? 3 : (isFullA ? 2 : 1);
+                let scoreB = isPartTimeB ? 3 : (isFullB ? 2 : 1);
+
+                if (scoreA !== scoreB) return scoreA - scoreB;
+                
+                // 同分則依部門排序
+                if (a.DEPT !== b.DEPT) return (a.DEPT || "").localeCompare(b.DEPT || "");
+                
+                // 再同分依名字排序
+                return (a.DISPLAY_NAME || a.NAME).localeCompare(b.DISPLAY_NAME || b.NAME);
+            });
 
             return (
                 <div className="min-h-screen flex flex-col md:flex-row max-w-[1400px] mx-auto p-4 gap-4 relative">
@@ -589,21 +635,40 @@
 
                         <div className="flex flex-col gap-2 flex-1 min-h-0">
                             <div className="flex justify-between items-end mb-1">
-                                <span className="font-bold text-gray-700">員工列表 ({employees.length})</span>
+                                <span className="font-bold text-gray-700">員工列表 ({filteredEmployees.length})</span>
+                                {/* 部門篩選 Dropdown */}
+                                <select 
+                                    className="text-xs border border-gray-300 rounded px-2 py-1 bg-white outline-none focus:border-blue-500"
+                                    value={selectedDeptFilter}
+                                    onChange={(e) => setSelectedDeptFilter(e.target.value)}
+                                >
+                                    <option value="All">全部部門</option>
+                                    {departments.filter(d => d !== 'All').map(dept => (
+                                        <option key={dept} value={dept}>{dept}</option>
+                                    ))}
+                                </select>
                             </div>
                             
                             <div className="space-y-2 overflow-y-auto pr-1 scrollbar-hide max-h-[500px]">
-                                {employees.length === 0 && !loading && (
+                                {filteredEmployees.length === 0 && !loading && (
                                     <div className="text-center text-gray-400 py-4 text-sm">
-                                        無員工資料
+                                        無符合條件員工
                                     </div>
                                 )}
-                                {employees.map(emp => {
+                                {filteredEmployees.map(emp => {
                                     const uid = emp.ragicId;
                                     const stats = getEmpStats(uid);
-                                    const isRental = (emp.DEPT || "").includes('租賃');
+                                    const deptName = emp.DEPT || '未分類';
+                                    const colors = getDeptColor(deptName);
                                     const isSelected = selectedEmpId === uid;
-                                    const displayName = emp.NAME || `Emp ${uid}`;
+                                    
+                                    // 優先使用顯示名稱
+                                    const displayName = emp.DISPLAY_NAME || emp.NAME || `Emp ${uid}`;
+                                    // 只顯示兼職的聘雇類別
+                                    const hireType = (emp.HIRE_TYPE || "").includes("兼職") ? '(兼職)' : '';
+                                    
+                                    // 判斷是否為兼職或已滿8天，調整透明度以示區別
+                                    const isDimmed = (emp.HIRE_TYPE || "").includes("兼職") || stats.leaveCount >= 8;
 
                                     return (
                                         <div 
@@ -617,20 +682,23 @@
                                                 ${isSelected 
                                                     ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
                                                     : 'border-transparent bg-gray-50 hover:bg-gray-100'}
+                                                ${isDimmed ? 'opacity-60 grayscale-[0.3]' : ''}
                                             `}
                                         >
                                             <div className="flex items-center gap-3">
                                                 <div className={`
                                                     w-10 h-10 rounded-full flex items-center justify-center text-white font-bold
-                                                    ${isRental ? 'bg-orange-400' : 'bg-emerald-400'}
+                                                    ${colors.bg}
                                                 `}>
                                                     {displayName[0]}
                                                 </div>
                                                 <div className="flex-1">
                                                     <div className="flex justify-between items-center">
-                                                        <span className="font-bold text-gray-800">{displayName}</span>
-                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isRental ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                                            {emp.DEPT || '未分類'}
+                                                        <span className="font-bold text-gray-800">
+                                                            {displayName} <span className="text-xs font-normal text-gray-500">{hireType}</span>
+                                                        </span>
+                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${colors.tag}`}>
+                                                            {deptName}
                                                         </span>
                                                     </div>
                                                     <div className="flex gap-3 text-xs text-gray-500 mt-1">
@@ -678,7 +746,8 @@
                                 const dayLeaves = leaves.filter(l => l.DATE === dateStr);
                                 
                                 const dutyPerson = dayDuty ? employees.find(e => e.ragicId == dayDuty.EMP_ID || e.NAME === dayDuty.EMP_ID) : null;
-                                const dutyName = dutyPerson ? dutyPerson.NAME : (dayDuty ? "未知員工" : "未排");
+                                // 優先顯示 Duty 的顯示名稱
+                                const dutyName = dutyPerson ? (dutyPerson.DISPLAY_NAME || dutyPerson.NAME) : (dayDuty ? "未知員工" : "未排");
 
                                 let conflictMsg = null;
                                 if (dutyPerson) {
@@ -730,7 +799,7 @@
                                         <div className="flex-1 mt-1 overflow-y-auto scrollbar-hide space-y-1">
                                             {dayLeaves.map(l => {
                                                 const p = employees.find(e => e.ragicId == l.EMP_ID || e.NAME === l.EMP_ID);
-                                                const name = p ? p.NAME : `Emp ${l.EMP_ID}`;
+                                                const name = p ? (p.DISPLAY_NAME || p.NAME) : `Emp ${l.EMP_ID}`;
                                                 const isMyLeave = selectedEmpId && (l.EMP_ID == selectedEmpId);
 
                                                 return (
