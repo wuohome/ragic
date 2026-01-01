@@ -162,6 +162,10 @@
                 const json = await ragicFetch(RAGIC_CONFIG.PATHS.LEAVE);
                 const records = (json && json.data) ? json.data : json;
                 const leaves = parseRagicData(records, RAGIC_CONFIG.FIELDS.LEAVE);
+                
+                console.log("[Debug] Loaded Leaves:", leaves.length);
+                
+                // 寬鬆比對：Ragic 可能回傳字串或數字
                 return leaves.filter(l => parseInt(l.YEAR) == year && parseInt(l.MONTH) == month);
             },
 
@@ -169,6 +173,9 @@
                 const json = await ragicFetch(RAGIC_CONFIG.PATHS.DUTY);
                 const records = (json && json.data) ? json.data : json;
                 const duties = parseRagicData(records, RAGIC_CONFIG.FIELDS.DUTY);
+                
+                console.log("[Debug] Loaded Duties:", duties.length);
+
                 return duties.filter(d => parseInt(d.YEAR) == year && parseInt(d.MONTH) == month);
             },
             
@@ -319,6 +326,7 @@
 
                     console.log("Fetching data for:", year, month);
 
+                    // 同時拉取員工、排休、值日生資料
                     const [empData, leaveData, dutyData] = await Promise.all([
                         apiService.getEmployees(),
                         apiService.getLeaves(year, month),
@@ -372,6 +380,7 @@
                     return; 
                 }
 
+                // 修正比對邏輯：比對 EMP_ID 是否等於 ragicId 或 姓名
                 const existingLeave = leaves.find(l => 
                     l.DATE === dateStr && (l.EMP_ID == selectedEmpId || l.EMP_ID === emp.NAME)
                 );
@@ -383,6 +392,7 @@
                 try {
                     if (existingLeave) {
                         await apiService.deleteLeave(existingLeave.ragicId);
+                        // 更新本地 state
                         setLeaves(prev => prev.filter(l => l.ragicId !== existingLeave.ragicId));
                         showToast("已取消排休", "success");
                     } else {
@@ -395,14 +405,15 @@
                         };
                         const res = await apiService.createLeave(payload);
                         
-                        // 樂觀更新
+                        // 樂觀更新 (確保本地 state 的 ID 也是姓名，以便畫面正確顯示)
+                        // 注意：雖然 Ragic 回傳的可能包含更多資訊，但我們只取需要的
                         const newId = (res && res.ragicId) ? res.ragicId : ('temp_' + Date.now());
                         setLeaves(prev => [...prev, { ragicId: newId, ...payload, EMP_ID: emp.NAME }]);
                         
                         showToast("排休已登記", "success");
                         
-                        // ★★★ 新增：延遲重新讀取，確保寫入後資料同步 ★★★
-                        setTimeout(() => fetchData(), 800);
+                        // ★★★ 延遲重新讀取，確保寫入後資料同步 (1秒) ★★★
+                        setTimeout(() => fetchData(), 1000);
                     }
                 } catch (err) {
                     console.error(err);
@@ -461,8 +472,8 @@
                         setDuties(newDuties);
                         showToast("值日生已更新", "success");
                         
-                        // ★★★ 新增：延遲重新讀取，確保寫入後資料同步 ★★★
-                        setTimeout(() => fetchData(), 800);
+                        // ★★★ 延遲重新讀取 ★★★
+                        setTimeout(() => fetchData(), 1000);
                     }
                 } catch (err) {
                     showToast("變更失敗: " + err.message, "error");
@@ -539,8 +550,8 @@
                     setDuties(refreshedDuties);
                     showToast("自動排班完成！", "success");
                     
-                    // ★★★ 新增：延遲重新讀取，確保寫入後資料同步 ★★★
-                    setTimeout(() => fetchData(), 800);
+                    // ★★★ 延遲重新讀取 ★★★
+                    setTimeout(() => fetchData(), 1000);
 
                 } catch (err) {
                     showToast("排班過程發生錯誤: " + err.message, "error");
@@ -551,7 +562,10 @@
 
             const getEmpStats = (rId) => {
                 const emp = employees.find(e => e.ragicId === rId);
+                // 這裡要很小心，統計時也要考慮 EMP_ID 可能是名字也可能是 ID
                 const name = emp ? emp.NAME : "";
+                
+                // 比對邏輯：Leave.EMP_ID 等於 員工ragicId 或 員工姓名
                 const leaveCount = leaves.filter(l => l.EMP_ID == rId || l.EMP_ID === name).length;
                 const dutyCount = duties.filter(d => d.EMP_ID == rId || d.EMP_ID === name).length;
                 return { leaveCount, dutyCount };
