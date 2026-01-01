@@ -160,6 +160,12 @@
                 return [];
             }
             
+            // [Debug] 檢查第一筆資料的欄位 Key，確認 STATUS 欄位 ID 是否正確
+            const firstId = Object.keys(dataMap).find(k => !isNaN(parseInt(k)));
+            if (firstId) {
+                console.log("[Debug] First Record Keys (Field IDs):", Object.keys(dataMap[firstId]));
+            }
+
             // Ragic 列表通常是 { "17": { ... }, "18": { ... } }
             // 過濾掉非數字 Key (例如 status, msg 等，如果沒有正確取到 data 層)
             const result = Object.entries(dataMap).map(([ragicId, fields]) => {
@@ -194,14 +200,11 @@
                 // 檢查過濾邏輯
                 console.log(`Total Employees parsed: ${employees.length}`);
                 
-                const activeEmployees = employees.filter(e => {
-                    // 寬鬆比對
-                    const status = String(e.STATUS || "");
-                    return status.includes("在職") || status === "true" || status === "Yes";
-                });
-                
-                console.log(`Active Employees (Filtered): ${activeEmployees.length}`);
-                return activeEmployees;
+                // [Debug] 印出所有員工的 STATUS 原始值，檢查實際內容
+                console.log("[Debug] Raw STATUS values:", employees.map(e => `${e.NAME}: ${e.STATUS}`));
+
+                // [Debug] 暫時移除過濾，回傳全部員工，確保畫面有資料
+                return employees;
             },
 
             getLeaves: async (year, month) => {
