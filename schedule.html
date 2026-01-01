@@ -144,6 +144,20 @@
             return result;
         };
 
+        // 輔助函數：解析日期字串中的年份與月份
+        const parseDateString = (dateStr) => {
+            if (!dateStr) return { year: null, month: null };
+            // 處理 "2023-10-27" 或 "2023/10/27" 格式
+            const parts = dateStr.replace(/\//g, '-').split('-');
+            if (parts.length >= 2) {
+                return {
+                    year: parseInt(parts[0], 10),
+                    month: parseInt(parts[1], 10)
+                };
+            }
+            return { year: null, month: null };
+        };
+
         const apiService = {
             getEmployees: async () => {
                 const json = await ragicFetch(RAGIC_CONFIG.PATHS.EMPLOYEE);
@@ -163,10 +177,13 @@
                 const records = (json && json.data) ? json.data : json;
                 const leaves = parseRagicData(records, RAGIC_CONFIG.FIELDS.LEAVE);
                 
-                console.log("[Debug] Loaded Leaves:", leaves.length);
-                
-                // 寬鬆比對：Ragic 可能回傳字串或數字
-                return leaves.filter(l => parseInt(l.YEAR) == year && parseInt(l.MONTH) == month);
+                console.log("[Debug] Raw Leaves Count:", leaves.length);
+
+                // === FIX: 改用 DATE 欄位直接解析過濾，不依賴 YEAR/MONTH 欄位 ===
+                return leaves.filter(l => {
+                    const { year: lYear, month: lMonth } = parseDateString(l.DATE);
+                    return lYear === year && lMonth === month;
+                });
             },
 
             getDuties: async (year, month) => {
@@ -174,9 +191,13 @@
                 const records = (json && json.data) ? json.data : json;
                 const duties = parseRagicData(records, RAGIC_CONFIG.FIELDS.DUTY);
                 
-                console.log("[Debug] Loaded Duties:", duties.length);
+                console.log("[Debug] Raw Duties Count:", duties.length);
 
-                return duties.filter(d => parseInt(d.YEAR) == year && parseInt(d.MONTH) == month);
+                // === FIX: 改用 DATE 欄位直接解析過濾 ===
+                return duties.filter(d => {
+                    const { year: dYear, month: dMonth } = parseDateString(d.DATE);
+                    return dYear === year && dMonth === month;
+                });
             },
             
             getPrevMonthDuties: async (currYear, currMonth) => {
@@ -187,7 +208,12 @@
                 const json = await ragicFetch(RAGIC_CONFIG.PATHS.DUTY);
                 const records = (json && json.data) ? json.data : json;
                 const duties = parseRagicData(records, RAGIC_CONFIG.FIELDS.DUTY);
-                return duties.filter(d => parseInt(d.YEAR) == prevYear && parseInt(d.MONTH) == prevMonth);
+                
+                // === FIX: 改用 DATE 欄位直接解析過濾 ===
+                return duties.filter(d => {
+                    const { year: dYear, month: dMonth } = parseDateString(d.DATE);
+                    return dYear === prevYear && dMonth === prevMonth;
+                });
             },
 
             // 寫入改用 URLSearchParams
