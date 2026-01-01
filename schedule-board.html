@@ -160,10 +160,14 @@
                 return [];
             }
             
-            // [Debug] 檢查第一筆資料的欄位 Key，確認 STATUS 欄位 ID 是否正確
+            // [Debug] 印出第一筆資料的詳細結構以供欄位對照
             const firstId = Object.keys(dataMap).find(k => !isNaN(parseInt(k)));
             if (firstId) {
-                console.log("[Debug] First Record Keys (Field IDs):", Object.keys(dataMap[firstId]));
+                console.log("========== [Debug Data Structure] ==========");
+                console.log("First Record ID:", firstId);
+                console.log("Record Keys (Field IDs):", Object.keys(dataMap[firstId]));
+                console.log("Full Raw Object:", dataMap[firstId]);
+                console.log("============================================");
             }
 
             // Ragic 列表通常是 { "17": { ... }, "18": { ... } }
