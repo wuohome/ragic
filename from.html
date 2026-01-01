@@ -523,6 +523,9 @@
         <input type="hidden" name="1000641" id="input_agent_phone">
         <input type="hidden" name="1000908" id="input_source_mark">
         <input type="hidden" name="1000580" id="field_time">
+
+        <!-- ★★★ 新增：複製到LINE轉傳文字 (1000970) ★★★ -->
+        <input type="hidden" name="1000970" id="field_line_copy_text">
         
         <!-- STEP 1: 基本資料 -->
         <div class="step-content active" id="step1">
@@ -678,7 +681,7 @@
         <div class="agent-card">
             <div class="agent-info">
                 <div class="agent-company">優式租售管理 - 窩的家三重加盟店</div>
-                <div class="agent-label">您的專屬租屋顧問</div>
+                <div class="agent-label" id="display_agent_label">您的專屬租屋顧問</div>
                 <div class="agent-name" id="display_agent_name">張瓊安</div>
             </div>
             <a href="#" id="display_agent_call" class="agent-call-btn">
@@ -705,12 +708,17 @@
 </div>
 
 <script>
-    let defaultAgentName = "張瓊安"; 
-    let defaultAgentPhone = "0981-615-303"; 
+    // ★★★ 修改：沒帶參數時，預設不顯示業務；電話改為 02 2286 5755 ★★★
+    let defaultAgentName = ""; 
+    let defaultAgentPhone = "02 2286 5755"; 
 
     const urlParams = new URLSearchParams(window.location.search);
-    const agentName = urlParams.get('agent') || defaultAgentName;
-    const agentPhone = urlParams.get('phone') || defaultAgentPhone;
+    const agentNameParam = (urlParams.get('agent') || "").trim();
+    const agentPhoneParam = (urlParams.get('phone') || "").trim();
+
+    // 有帶參數才顯示業務，沒帶則不顯示業務名字，但仍可按電話（預設門市電話）
+    const agentName = agentNameParam ? agentNameParam : defaultAgentName;
+    const agentPhone = agentPhoneParam ? agentPhoneParam : defaultAgentPhone;
 
     const ragicApiUrl = "https://ap15.ragic.com/wuohome/property-data-kept/8?api=true&APIKey=Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==";
 
@@ -837,11 +845,131 @@
     }
 
     function initAgentInfo() {
-        document.getElementById('display_agent_name').innerText = agentName;
-        document.getElementById('display_agent_call').href = 'tel:' + agentPhone;
-        document.getElementById('display_agent_phone_text').innerText = '撥打電話'; 
-        document.getElementById('input_agent_name').value = agentName;
+        const nameEl = document.getElementById('display_agent_name');
+        const labelEl = document.getElementById('display_agent_label');
+
+        // 電話：永遠保留可按（沒帶 phone 參數就用門市電話）
+        const telLink = 'tel:' + String(agentPhone).replace(/[^\d+]/g, '');
+        document.getElementById('display_agent_call').href = telLink;
+        document.getElementById('display_agent_phone_text').innerText = '撥打電話';
+
+        // 沒帶 agent 參數：不顯示業務名稱（也不顯示「您的專屬租屋顧問」那行）
+        if (!agentNameParam) {
+            nameEl.style.display = 'none';
+            labelEl.style.display = 'none';
+            document.getElementById('input_agent_name').value = "";
+        } else {
+            nameEl.style.display = 'block';
+            labelEl.style.display = 'block';
+            nameEl.innerText = agentName;
+            document.getElementById('input_agent_name').value = agentName;
+        }
+
+        // phone 欄位照樣送（如果沒帶參數就是門市電話）
         document.getElementById('input_agent_phone').value = agentPhone;
+    }
+
+    // ★★★ 新增：產生「複製到LINE轉傳文字」並寫入 1000970 ★★★
+    function generateLineCopyText() {
+        // 入住人數：用 occupantList 長度
+        const count = occupantList.length;
+        const countText = String(count);
+
+        // 關係：依你要的字樣
+        const relation = document.getElementById('occupant_relation').value || "";
+        let relationText = "";
+        if (relation === "夫妻/情侶") relationText = "男女朋友";
+        else if (relation === "個人獨居") relationText = "個人獨居";
+        else if (relation === "家庭(有小孩/長輩)") relationText = "家庭(有小孩/長輩)";
+        else if (relation === "朋友/同事合租") relationText = "朋友/同事合租";
+        else relationText = relation;
+
+        // 年齡/職業串：不顯示姓名，只顯示「年齡/職業」，用 、 串起來
+        // 例如：32/房地產執行長特助、29/科技業總經理特助
+        const ageJobArr = occupantList.map(p => {
+            const a = (p.age || "").trim();
+            const j = (p.job || "").trim();
+            if (a && j) return `${a}/${j}`;
+            if (a && !j) return `${a}/`;
+            if (!a && j) return `/${j}`;
+            return "";
+        }).filter(x => x !== "");
+        const ageJobText = ageJobArr.join('、');
+
+        // 需求項目：固定輸出這 6 行（你說機車位先不管，所以不出現）
+        const hasSmoking = selectedHabits.includes("有抽菸");
+        const hasGod = selectedHabits.includes("需要設神明廳");
+        const hasPet = (selectedHabits.includes("養貓") || selectedHabits.includes("養狗"));
+        const hasSubsidy = selectedNeeds.includes("租屋補助");
+        const hasRegister = selectedNeeds.includes("入戶籍");
+        const hasCar = selectedNeeds.includes("汽車位");
+
+        const needLines = [
+            `${hasPet ? "⭕️" : "❌"}養寵物`,
+            `${hasSubsidy ? "⭕️" : "❌"}租屋補助`,
+            `${hasRegister ? "⭕️" : "❌"}入籍`,
+            `${hasSmoking ? "⭕️" : "❌"}抽菸`,
+            `${hasGod ? "⭕️" : "❌"}設神明廳`,
+            `${hasCar ? "⭕️" : "❌"}汽車位`
+        ];
+
+        // 家具需求：你指定格式固定
+        const furnitureText = "❌空屋即可";
+
+        // 預算：把 ~ 改成 –，並補上「元」
+        // 例：25,000–30,000 元
+        const budgetTextArr = selectedBudget.map(b => {
+            const s = String(b).trim();
+            if (!s) return "";
+            if (s.includes("以上")) return s.replace("以上", " 元以上");
+            if (s.includes("以下")) return s.replace("以下", "以下");
+            if (s.includes("~")) return s.replace("~", "–") + " 元";
+            return s;
+        }).filter(x => x !== "");
+        const budgetText = budgetTextArr.join(', ');
+
+        // 房型：把「店面/倉庫/商辦/廠辦」合併成一個項目；廠房 => 廠辦
+        const layoutSet = new Set(selectedLayout.map(x => x === "廠房" ? "廠辦" : x));
+
+        const hasBizGroup = (layoutSet.has("店面") || layoutSet.has("倉庫") || layoutSet.has("商辦") || layoutSet.has("廠辦"));
+        if (hasBizGroup) {
+            layoutSet.delete("店面");
+            layoutSet.delete("倉庫");
+            layoutSet.delete("商辦");
+            layoutSet.delete("廠辦");
+        }
+
+        // 依你示例的排列感覺：2房, 3房, 4房以上, 店面/倉庫/商辦/廠辦，其它照選到的再補
+        const ordered = [];
+        ["2房","3房","4房以上"].forEach(x => { if (layoutSet.has(x)) { ordered.push(x); layoutSet.delete(x); } });
+        if (hasBizGroup) ordered.push("店面/倉庫/商辦/廠辦");
+        // 剩下的（雅房/套房/其他...）維持原先選到的內容順序感（用 selectedLayout 走一次）
+        selectedLayout.forEach(x => {
+            const v = (x === "廠房") ? "廠辦" : x;
+            if (layoutSet.has(v)) {
+                ordered.push(v);
+                layoutSet.delete(v);
+            }
+        });
+
+        const layoutText = ordered.join(', ');
+
+        // ★★★ 注意：以下格式「完全照你的範本」 ★★★
+        const finalText =
+`入住人數：${countText} 位
+
+關係：${relationText}
+${ageJobText}
+
+需求：
+${needLines.join('\n')}
+
+家具需求：${furnitureText}
+預算：${budgetText}
+
+房型：${layoutText}`;
+
+        return finalText;
     }
 
     let currentStep = 1;
@@ -961,6 +1089,9 @@
         document.getElementById('field_time').value = timeString;
 
         updateOccupantHiddenField();
+
+        // ★★★ 新增：送出前產生 LINE 轉傳文字，寫入 1000970 ★★★
+        document.getElementById('field_line_copy_text').value = generateLineCopyText();
 
         const form = document.getElementById('ragicForm');
         form.submit();
