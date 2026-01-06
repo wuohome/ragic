@@ -12,10 +12,10 @@
             font-family: 'Noto Sans TC', sans-serif;
             background-color: #f0f8fa;
             margin: 0;
-            padding: 20px 0; /* 上下留點白 */
+            padding: 20px 0;
             display: flex;
             justify-content: center;
-            align-items: flex-start; /* 改為靠上對齊，適應長頁面 */
+            align-items: flex-start;
             min-height: 100vh;
         }
 
@@ -23,7 +23,6 @@
             background: white;
             width: 100%;
             max-width: 600px;
-            /* 移除固定高度，改為自動長高 */
             min-height: 80vh;
             height: auto; 
             border-radius: 20px;
@@ -60,7 +59,6 @@
             padding: 20px 30px;
             display: none;
             flex-direction: column;
-            /* 內容少時置中，內容多時靠上 */
             justify-content: flex-start; 
             animation: fadeIn 0.5s;
             padding-bottom: 40px; 
@@ -89,7 +87,7 @@
             margin-bottom: 20px;
         }
 
-        /* --- 業務名片卡 (嵌入式設計) --- */
+        /* --- 業務名片卡 --- */
         .agent-card-wrapper {
             padding: 20px 20px 0 20px;
             background: #fff;
@@ -180,39 +178,17 @@
         /* 選項按鈕化 (兩欄) */
         .option-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr; /* 兩欄 */
+            grid-template-columns: 1fr 1fr;
             gap: 10px;
         }
 
         /* 選項按鈕化 (單欄 - 預算專用) */
         .option-grid-single {
             display: grid;
-            grid-template-columns: 1fr; /* 單欄 */
+            grid-template-columns: 1fr;
             gap: 10px;
         }
 
-        .option-btn {
-            background: #f4f7f6;
-            border: 2px solid #ddd;
-            padding: 15px;
-            border-radius: 12px;
-            font-size: 18px;
-            cursor: pointer;
-            text-align: center;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .option-btn:hover, .option-btn.selected {
-            background: #e6f7fa;
-            border-color: #007894;
-            color: #007894;
-            font-weight: bold;
-        }
-
-        /* 多選按鈕樣式 */
         .multi-select-btn {
             background: #fff;
             border: 2px solid #ddd;
@@ -221,10 +197,9 @@
             font-size: 16px;
             cursor: pointer;
             text-align: center;
-            /* margin-bottom: 8px;  <-- 移除，改用 grid gap 控制 */
             transition: all 0.2s;
             color: #555;
-            display: flex; /* 確保內容置中 */
+            display: flex;
             align-items: center;
             justify-content: center;
         }
@@ -307,13 +282,13 @@
             letter-spacing: 1px;
         }
         
-        /* --- Footer (置底不懸浮) --- */
+        /* --- Footer --- */
         .app-footer {
             background-color: #ffffff;
             border-top: 1px solid #eee;
-            padding: 30px 20px; /* 增加 padding */
+            padding: 30px 20px;
             text-align: center;
-            display: flex; /* 預設顯示 */
+            display: flex;
             flex-direction: column;
             align-items: center;
             gap: 10px;
@@ -361,14 +336,13 @@
             transform: translateY(-2px);
         }
 
-        /* --- ★★★ 手機版專屬優化 (Max Width 600px) ★★★ --- */
+        /* 手機版優化 */
         @media screen and (max-width: 600px) {
             body {
                 background-color: #fff; 
                 padding: 0;
             }
             .wizard-container {
-                /* 取消固定高度，改為自動，讓頁尾自然流動到最下方 */
                 height: auto; 
                 min-height: 100vh;
                 max-height: none;
@@ -381,109 +355,44 @@
                 padding-bottom: 10px;
                 border-bottom: 1px solid #eee;
             }
-            .logo-title {
-                font-size: 20px; 
-            }
             .step-content {
                 padding: 15px 20px; 
                 justify-content: flex-start; 
                 padding-top: 20px;
                 padding-bottom: 20px;
             }
-            h2 {
-                font-size: 22px;
-            }
-            input[type="text"], input[type="tel"], select {
-                padding: 12px;
-                font-size: 18px;
-                margin-bottom: 12px;
-            }
-            
-            /* 手機版：Footer 內容垂直排列 */
             .footer-content {
                 flex-direction: column;
                 gap: 2px;
             }
             .divider {
-                display: none; /* 手機版不需要分隔線 */
+                display: none;
             }
             .footer-btns {
                 padding: 10px 20px 30px 20px;
             }
         }
 
-        /* 成員列表樣式 (優化版) */
-        .occupant-entry {
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            padding: 12px;
-            margin-bottom: 10px;
-            border-radius: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 16px;
+        /* 成員列表新樣式 (卡片式) */
+        .member-card {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 12px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            transition: all 0.3s ease;
         }
-        .occupant-info-text {
-            color: #333;
-            font-weight: 500;
-        }
-        .occupant-tag {
-            background: #eefbfb;
+        .member-title {
+            font-weight: bold;
             color: #007894;
-            font-size: 12px;
-            padding: 2px 6px;
-            border-radius: 4px;
-            margin-right: 5px;
-            font-weight: bold;
-        }
-        .delete-btn {
-            color: #e74c3c;
-            cursor: pointer;
-            font-weight: bold;
-            padding: 6px 12px;
-            background: #fff0f0;
-            border-radius: 20px;
-            font-size: 13px;
-        }
-        
-        /* 居住成員編輯區塊 */
-        .add-occupant-box {
-            background: #f8fcfd;
-            border: 2px solid #e0eef2;
-            padding: 20px;
-            border-radius: 15px;
-            margin-bottom: 15px;
-            text-align: left;
-        }
-        .section-title {
+            margin-bottom: 8px;
             font-size: 15px;
-            font-weight: bold;
-            color: #007894;
-            margin-bottom: 10px;
-            display: block;
         }
-        .add-row {
+        .input-row {
             display: flex;
             gap: 10px;
             margin-bottom: 10px;
-        }
-        .add-btn {
-            width: 100%;
-            background-color: #007894;
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 16px;
-            margin-top: 5px;
-            box-shadow: 0 4px 6px rgba(0, 120, 148, 0.2);
-        }
-        .add-btn:hover {
-            background-color: #00657d;
         }
         
         .question-label {
@@ -524,7 +433,7 @@
         <input type="hidden" name="1000908" id="input_source_mark">
         <input type="hidden" name="1000580" id="field_time">
 
-        <!-- ★★★ 新增：複製到LINE轉傳文字 (1000970) ★★★ -->
+        <!-- ★★★ 複製到LINE轉傳文字 (1000970) ★★★ -->
         <input type="hidden" name="1000970" id="field_line_copy_text">
         
         <!-- STEP 1: 基本資料 -->
@@ -567,7 +476,7 @@
             </div>
         </div>
 
-        <!-- STEP 3: 入住資訊 -->
+        <!-- STEP 3: 入住資訊 (整合新版下拉選單功能) -->
         <div class="step-content" id="step3">
             <h2>📅 入住與成員</h2>
             <p class="desc">請告訴我們您的入住計畫 (必填)</p>
@@ -581,29 +490,36 @@
                 <option value="三個月以上">三個月以上</option>
             </select>
 
-            <p class="question-label">2. 居住成員資料</p>
-            <select id="occupant_relation" style="margin-bottom: 20px; text-align-last:center;">
+            <p class="question-label">2. 居住關係與人數</p>
+            <!-- 居住關係 -->
+            <select id="occupant_relation" style="margin-bottom: 10px; text-align-last:center;">
                 <option value="">請選擇關係...</option>
                 <option value="個人獨居">個人獨居</option>
-                <option value="夫妻/情侶">夫妻/情侶</option>
+                <option value="夫妻">夫妻</option>
+                <option value="情侶">情侶</option>
                 <option value="家庭(有小孩/長輩)">家庭 (有小孩/長輩)</option>
                 <option value="朋友/同事合租">朋友/同事合租</option>
             </select>
 
-            <div id="occupant_list_display" style="text-align:left; margin-bottom:10px;"></div>
+            <!-- 入住總人數 (自動生成欄位) 1000586 -->
+            <select id="occupant_count_select" onchange="renderOccupantInputs()" style="margin-bottom: 20px; text-align-last:center;">
+                <option value="">請選擇入住總人數...</option>
+                <option value="1">1位</option>
+                <option value="2">2位</option>
+                <option value="3">3位</option>
+                <option value="4">4位</option>
+                <option value="5">5位</option>
+                <option value="6">6位</option>
+                <option value="7">7位</option>
+                <option value="8">8位</option>
+            </select>
 
-            <div class="add-occupant-box" id="add_occupant_ui">
-                <span class="section-title">新增其他同住人 (選填)</span>
-                <div class="add-row">
-                    <input type="text" id="add_name" placeholder="姓名" style="flex:2; margin-bottom:0; font-size:16px;">
-                    <input type="text" id="add_age" placeholder="年齡" style="flex:1; margin-bottom:0; font-size:16px;">
-                </div>
-                <input type="text" id="add_job" placeholder="職業 (例如: 工程師)" style="width:100%; margin-bottom:10px; font-size:16px;" onkeydown="if(event.key === 'Enter') { addOccupant(); return false; }">
-                <button type="button" class="add-btn" onclick="addOccupant()">+ 加入名單</button>
-            </div>
+            <!-- 動態生成成員填寫區 -->
+            <div id="occupant_dynamic_rows"></div>
 
             <input type="hidden" name="1000587" id="field_occupants_final">
-            <input type="hidden" name="1000586" id="field_occupant_count">
+            <!-- 實際儲存人數的欄位 -->
+            <input type="hidden" name="1000586" id="field_occupant_count_final">
         </div>
 
         <!-- STEP 4: 區域與預算 -->
@@ -622,10 +538,8 @@
             <p class="question-label">2. 主要找房區域 (例如: 三重、新莊)</p>
             <input type="text" name="1000639" id="field_area" placeholder="請輸入區域 (選填)">
 
-            <!-- ★★★ 修改：標題加註 (含管理費/車位，可複選) ★★★ -->
             <p class="question-label">3. 租金預算 (含管理費/車位，可複選)</p>
             <input type="hidden" name="1000588" id="field_budget">
-            <!-- ★★★ 修改：預算單欄排版 (option-grid-single) ★★★ -->
             <div id="budget_container" class="option-grid-single">
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'budget')">10,000以下</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'budget')">10,000~15,000</div>
@@ -662,6 +576,8 @@
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">租屋補助</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">入戶籍</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">汽車位</div>
+                <!-- 新增：以上皆無需求 (互斥邏輯) -->
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">以上皆無需求</div>
             </div>
 
             <p class="question-label" style="margin-top:20px;">3. 想對我們說的話</p>
@@ -708,7 +624,6 @@
 </div>
 
 <script>
-    // ★★★ 修改：沒帶參數時，預設不顯示業務；電話改為 02 2286 5755 ★★★
     let defaultAgentName = ""; 
     let defaultAgentPhone = "02 2286 5755"; 
 
@@ -716,7 +631,6 @@
     const agentNameParam = (urlParams.get('agent') || "").trim();
     const agentPhoneParam = (urlParams.get('phone') || "").trim();
 
-    // 有帶參數才顯示業務，沒帶則不顯示業務名字，但仍可按電話（預設門市電話）
     const agentName = agentNameParam ? agentNameParam : defaultAgentName;
     const agentPhone = agentPhoneParam ? agentPhoneParam : defaultAgentPhone;
 
@@ -730,63 +644,104 @@
     let selectedNeeds = [];
     let selectedBudget = []; 
     let selectedLayout = [];
-    let selectedType = []; // 新增房屋類別複選
+    let selectedType = []; 
 
-    function addOccupant() {
-        const name = document.getElementById('add_name').value.trim();
-        const age = document.getElementById('add_age').value.trim();
-        const job = document.getElementById('add_job').value.trim();
+    // ★★★ Step 3: 居住成員邏輯 (整合新版) ★★★
 
-        if (!name) {
-            alert("請至少填寫姓名喔！");
-            return;
+    // 監聽居住關係改變 -> 個人獨居 自動設定為1人
+    document.getElementById('occupant_relation').addEventListener('change', function() {
+        if (this.value === '個人獨居') {
+            const cnt = document.getElementById('occupant_count_select');
+            cnt.value = "1";
+            renderOccupantInputs();
         }
-        occupantList.push({ name, age, job });
-        document.getElementById('add_name').value = '';
-        document.getElementById('add_age').value = '';
-        document.getElementById('add_job').value = '';
-        document.getElementById('add_name').focus();
-        renderOccupantList();
-    }
+    });
 
-    function removeOccupant(index) {
-        occupantList.splice(index, 1);
-        renderOccupantList();
-    }
+    // 監聽第一步姓名輸入 -> 同步更新第一位成員姓名
+    document.getElementById('field_name').addEventListener('input', function() {
+        // 如果目前格子已經產生，同步更新第一格
+        const firstNameInput = document.querySelector('#occupant_dynamic_rows .member-card:first-child .occ-name');
+        if (firstNameInput) {
+            firstNameInput.value = this.value;
+        }
+    });
 
-    function renderOccupantList() {
-        const displayDiv = document.getElementById('occupant_list_display');
-        displayDiv.innerHTML = '';
-        occupantList.forEach((person, index) => {
-            const row = document.createElement('div');
-            row.className = 'occupant-entry';
-            
-            let nameDisplay = person.name;
-            let tagHtml = '';
-            
-            if (index === 0) {
-                tagHtml = '<span class="occupant-tag">本人</span>';
+    // 渲染成員填寫欄位
+    function renderOccupantInputs() {
+        const countSelect = document.getElementById('occupant_count_select');
+        const count = parseInt(countSelect.value);
+        const container = document.getElementById('occupant_dynamic_rows');
+        const mainName = document.getElementById('field_name').value || '';
+        
+        // 先暫存目前已填寫的資料 (避免切換人數時清空)
+        const currentData = [];
+        document.querySelectorAll('.member-card').forEach(card => {
+            currentData.push({
+                name: card.querySelector('.occ-name').value,
+                age: card.querySelector('.occ-age').value,
+                job: card.querySelector('.occ-job').value
+            });
+        });
+
+        container.innerHTML = '';
+        
+        if (!count) return;
+
+        for (let i = 1; i <= count; i++) {
+            const isSelf = (i === 1);
+            let valName = isSelf ? mainName : '';
+            let valAge = '';
+            let valJob = '';
+
+            if (currentData[i-1]) {
+                if (!isSelf) valName = currentData[i-1].name;
+                valAge = currentData[i-1].age;
+                valJob = currentData[i-1].job;
+            } else if (isSelf) {
+                valName = mainName; // 本人姓名保持同步
             }
 
-            let details = '';
-            if (person.age) details += ` / ${person.age}歲`;
-            if (person.job) details += ` / ${person.job}`;
+            const readonlyAttr = isSelf ? 'readonly' : '';
+            const bgClass = isSelf ? 'background-color: #f0fbff; border-color: #bde0ef;' : 'background-color: #fff; border-color: #ddd;';
+            const titleText = isSelf ? '1. 本人' : `${i}. 同住人`;
+            const namePlaceholder = isSelf ? '姓名 (自動帶入)' : '姓名 (必填)';
+            const titleColor = isSelf ? '#007894' : '#555';
 
-            row.innerHTML = `
-                <div class="occupant-info-text">
-                    ${tagHtml}${nameDisplay}${details}
+            const html = `
+            <div class="member-card" style="${bgClass}">
+                <div class="member-title" style="color:${titleColor}">${titleText}</div>
+                <div class="input-row">
+                    <input type="text" class="occ-name" value="${valName}" placeholder="${namePlaceholder}" ${readonlyAttr} style="flex:1; margin-bottom:0; font-size:16px; padding:12px;">
+                    <input type="text" class="occ-age" value="${valAge}" placeholder="年齡" style="flex:1; margin-bottom:0; font-size:16px; padding:12px;">
                 </div>
-                <span class="delete-btn" onclick="removeOccupant(${index})">刪除</span>
+                <input type="text" class="occ-job" value="${valJob}" placeholder="職業 (必填)" style="width:100%; margin-bottom:0; font-size:16px; padding:12px;">
+            </div>
             `;
-            displayDiv.appendChild(row);
+            container.insertAdjacentHTML('beforeend', html);
+        }
+    }
+
+    // 從 DOM 抓取最新資料更新到 occupantList
+    function updateOccupantListFromDOM() {
+        occupantList = [];
+        const cards = document.querySelectorAll('.member-card');
+        cards.forEach(card => {
+            const name = card.querySelector('.occ-name').value.trim();
+            const age = card.querySelector('.occ-age').value.trim();
+            const job = card.querySelector('.occ-job').value.trim();
+            // 只要有填任何一欄就抓取
+            if(name || job || age) {
+                occupantList.push({name, age, job});
+            }
         });
         updateOccupantHiddenField();
     }
 
     function updateOccupantHiddenField() {
         const relation = document.getElementById('occupant_relation').value;
-        let finalString = "";
         const count = occupantList.length;
+        
+        let finalString = "";
         if (relation) {
             finalString += `居住關係：${relation}`;
             if (count > 0) finalString += `（共${count}人）`;
@@ -800,45 +755,79 @@
         });
         document.getElementById('field_occupants_final').value = finalString;
         
+        // 寫入人數文字
         let countText = "";
-        if (count == 1) countText = "1位";
-        else if (count == 2) countText = "2位";
-        else if (count == 3) countText = "3位";
-        else if (count == 4) countText = "4位";
-        else if (count >= 5) countText = "5位以上";
-        else countText = "1位"; 
-        document.getElementById('field_occupant_count').value = countText;
+        const selectVal = document.getElementById('occupant_count_select').value;
+        if(selectVal) {
+             countText = selectVal + "位";
+        } else {
+             countText = count + "位";
+        }
+        document.getElementById('field_occupant_count_final').value = countText;
     }
-    document.getElementById('occupant_relation').addEventListener('change', updateOccupantHiddenField);
 
-    // 處理多選按鈕
+    // 處理多選按鈕 (含互斥邏輯)
     function toggleSelection(btn, type) {
-        btn.classList.toggle('active');
         const value = btn.innerText;
+
+        // ★★★ 特別處理：必要需求的互斥邏輯 ★★★
+        if (type === 'needs') {
+            const noneOptionText = "以上皆無需求";
+            const container = document.getElementById('needs_container');
+
+            if (value === noneOptionText) {
+                if (selectedNeeds.includes(noneOptionText)) {
+                    selectedNeeds = [];
+                    btn.classList.remove('active');
+                } else {
+                    selectedNeeds = [noneOptionText];
+                    container.querySelectorAll('.multi-select-btn').forEach(b => {
+                        b.classList.remove('active');
+                    });
+                    btn.classList.add('active');
+                }
+            } else {
+                if (selectedNeeds.includes(noneOptionText)) {
+                    selectedNeeds = selectedNeeds.filter(x => x !== noneOptionText);
+                    container.querySelectorAll('.multi-select-btn').forEach(b => {
+                        if (b.innerText === noneOptionText) b.classList.remove('active');
+                    });
+                }
+
+                if (selectedNeeds.includes(value)) {
+                    selectedNeeds = selectedNeeds.filter(item => item !== value);
+                    btn.classList.remove('active');
+                } else {
+                    selectedNeeds.push(value);
+                    btn.classList.add('active');
+                }
+            }
+            document.getElementById('field_needs').value = selectedNeeds.join(',');
+            return;
+        }
+
+        // 其他多選邏輯
+        btn.classList.toggle('active');
         
         let list;
         if (type === 'habits') list = selectedHabits;
-        else if (type === 'needs') list = selectedNeeds;
         else if (type === 'budget') list = selectedBudget;
         else if (type === 'layout') list = selectedLayout;
         else if (type === 'type') list = selectedType;
         
         if (list.includes(value)) {
             if (type === 'habits') selectedHabits = selectedHabits.filter(item => item !== value);
-            else if (type === 'needs') selectedNeeds = selectedNeeds.filter(item => item !== value);
             else if (type === 'budget') selectedBudget = selectedBudget.filter(item => item !== value);
             else if (type === 'layout') selectedLayout = selectedLayout.filter(item => item !== value);
             else if (type === 'type') selectedType = selectedType.filter(item => item !== value);
         } else {
             if (type === 'habits') selectedHabits.push(value);
-            else if (type === 'needs') selectedNeeds.push(value);
             else if (type === 'budget') selectedBudget.push(value);
             else if (type === 'layout') selectedLayout.push(value);
             else if (type === 'type') selectedType.push(value);
         }
 
         if (type === 'habits') document.getElementById('field_habits').value = selectedHabits.join(',');
-        else if (type === 'needs') document.getElementById('field_needs').value = selectedNeeds.join(',');
         else if (type === 'budget') document.getElementById('field_budget').value = selectedBudget.join(',');
         else if (type === 'layout') document.getElementById('field_layout').value = selectedLayout.join(',');
         else if (type === 'type') document.getElementById('field_type').value = selectedType.join(',');
@@ -848,12 +837,10 @@
         const nameEl = document.getElementById('display_agent_name');
         const labelEl = document.getElementById('display_agent_label');
 
-        // 電話：永遠保留可按（沒帶 phone 參數就用門市電話）
         const telLink = 'tel:' + String(agentPhone).replace(/[^\d+]/g, '');
         document.getElementById('display_agent_call').href = telLink;
         document.getElementById('display_agent_phone_text').innerText = '撥打電話';
 
-        // 沒帶 agent 參數：不顯示業務名稱（也不顯示「您的專屬租屋顧問」那行）
         if (!agentNameParam) {
             nameEl.style.display = 'none';
             labelEl.style.display = 'none';
@@ -864,39 +851,61 @@
             nameEl.innerText = agentName;
             document.getElementById('input_agent_name').value = agentName;
         }
-
-        // phone 欄位照樣送（如果沒帶參數就是門市電話）
         document.getElementById('input_agent_phone').value = agentPhone;
     }
 
-    // ★★★ 新增：產生「複製到LINE轉傳文字」並寫入 1000970 ★★★
+    // ★★★ 文案生成邏輯 (嚴格依照要求格式，強制重讀變數) ★★★
     function generateLineCopyText() {
-        // 入住人數：用 occupantList 長度
+        // 1. 確保 occupantList 是最新的
+        updateOccupantListFromDOM();
+
+        // 2. 抓取區域
+        const city = document.getElementById('field_city').value || "";
+        const area = document.getElementById('field_area').value || "";
+        const locationText = `${city} ${area}`.trim();
+
+        // 3. 類型
+        const typeText = selectedType.length > 0 ? selectedType.join('、') : "未選擇";
+
+        // 4. 房型
+        const layoutSet = new Set(selectedLayout.map(x => x === "廠房" ? "廠辦" : x));
+        const hasBizGroup = (layoutSet.has("店面") || layoutSet.has("倉庫") || layoutSet.has("商辦") || layoutSet.has("廠辦"));
+        if (hasBizGroup) {
+            layoutSet.delete("店面");
+            layoutSet.delete("倉庫");
+            layoutSet.delete("商辦");
+            layoutSet.delete("廠辦");
+        }
+        const ordered = [];
+        ["2房","3房","4房以上"].forEach(x => { if (layoutSet.has(x)) { ordered.push(x); layoutSet.delete(x); } });
+        if (hasBizGroup) ordered.push("店面/倉庫/商辦/廠辦");
+        selectedLayout.forEach(x => {
+            const v = (x === "廠房") ? "廠辦" : x;
+            if (layoutSet.has(v)) {
+                ordered.push(v);
+                layoutSet.delete(v);
+            }
+        });
+        const layoutText = ordered.length > 0 ? ordered.join('、') : "未選擇";
+
+        // 5. 人數與關係
         const count = occupantList.length;
         const countText = String(count);
+        const relation = document.getElementById('occupant_relation').value || "未填寫";
 
-        // 關係：依你要的字樣
-        const relation = document.getElementById('occupant_relation').value || "";
-        let relationText = "";
-        if (relation === "夫妻/情侶") relationText = "男女朋友";
-        else if (relation === "個人獨居") relationText = "個人獨居";
-        else if (relation === "家庭(有小孩/長輩)") relationText = "家庭(有小孩/長輩)";
-        else if (relation === "朋友/同事合租") relationText = "朋友/同事合租";
-        else relationText = relation;
-
-        // 年齡/職業串：不顯示姓名，只顯示「年齡/職業」，用 、 串起來
-        // 例如：32/房地產執行長特助、29/科技業總經理特助
-        const ageJobArr = occupantList.map(p => {
-            const a = (p.age || "").trim();
+        const memberDetailsArr = occupantList.map(p => {
+            const n = (p.name || "").trim();
             const j = (p.job || "").trim();
-            if (a && j) return `${a}/${j}`;
-            if (a && !j) return `${a}/`;
-            if (!a && j) return `/${j}`;
-            return "";
-        }).filter(x => x !== "");
-        const ageJobText = ageJobArr.join('、');
-
-        // 需求項目：固定輸出這 6 行（你說機車位先不管，所以不出現）
+            const a = (p.age || "").trim();
+            const parts = [];
+            if (n) parts.push(n);
+            if (j) parts.push(j);
+            if (a) parts.push(a + "歲");
+            return parts.join(' / ');
+        });
+        const memberDetailsText = memberDetailsArr.join('、');
+        
+        // 6. 需求
         const hasSmoking = selectedHabits.includes("有抽菸");
         const hasGod = selectedHabits.includes("需要設神明廳");
         const hasPet = (selectedHabits.includes("養貓") || selectedHabits.includes("養狗"));
@@ -913,11 +922,7 @@
             `${hasCar ? "⭕️" : "❌"}汽車位`
         ];
 
-        // 家具需求：你指定格式固定
-        const furnitureText = "❌空屋即可";
-
-        // 預算：把 ~ 改成 –，並補上「元」
-        // 例：25,000–30,000 元
+        // 7. 預算
         const budgetTextArr = selectedBudget.map(b => {
             const s = String(b).trim();
             if (!s) return "";
@@ -926,51 +931,26 @@
             if (s.includes("~")) return s.replace("~", "–") + " 元";
             return s;
         }).filter(x => x !== "");
-        const budgetText = budgetTextArr.join(', ');
+        const budgetText = budgetTextArr.length > 0 ? budgetTextArr.join('、') : "未填寫";
 
-        // 房型：把「店面/倉庫/商辦/廠辦」合併成一個項目；廠房 => 廠辦
-        const layoutSet = new Set(selectedLayout.map(x => x === "廠房" ? "廠辦" : x));
+        // 組合 (Template Literal)
+        const final = 
+`區域：${locationText}
+類型：${typeText}
+房型：${layoutText}
 
-        const hasBizGroup = (layoutSet.has("店面") || layoutSet.has("倉庫") || layoutSet.has("商辦") || layoutSet.has("廠辦"));
-        if (hasBizGroup) {
-            layoutSet.delete("店面");
-            layoutSet.delete("倉庫");
-            layoutSet.delete("商辦");
-            layoutSet.delete("廠辦");
-        }
-
-        // 依你示例的排列感覺：2房, 3房, 4房以上, 店面/倉庫/商辦/廠辦，其它照選到的再補
-        const ordered = [];
-        ["2房","3房","4房以上"].forEach(x => { if (layoutSet.has(x)) { ordered.push(x); layoutSet.delete(x); } });
-        if (hasBizGroup) ordered.push("店面/倉庫/商辦/廠辦");
-        // 剩下的（雅房/套房/其他...）維持原先選到的內容順序感（用 selectedLayout 走一次）
-        selectedLayout.forEach(x => {
-            const v = (x === "廠房") ? "廠辦" : x;
-            if (layoutSet.has(v)) {
-                ordered.push(v);
-                layoutSet.delete(v);
-            }
-        });
-
-        const layoutText = ordered.join(', ');
-
-        // ★★★ 注意：以下格式「完全照你的範本」 ★★★
-        const finalText =
-`入住人數：${countText} 位
-
-關係：${relationText}
-${ageJobText}
+入住人數：${countText} 位
+關係：${relation}（${memberDetailsText}）
 
 需求：
 ${needLines.join('\n')}
 
-家具需求：${furnitureText}
-預算：${budgetText}
+家具需求：❌空屋即可
+預算：${budgetText}`;
 
-房型：${layoutText}`;
-
-        return finalText;
+        return final;
     }
+
 
     let currentStep = 1;
     const totalSteps = 6;
@@ -1020,38 +1000,41 @@ ${needLines.join('\n')}
             if (!phone) { alert('請填寫手機號碼喔！'); return; }
         }
         else if (currentStep === 2) { 
-            // 房屋類別複選檢查
             if (selectedType.length === 0) { alert('請選擇房屋類型！'); return; }
             if (selectedLayout.length === 0) { alert('請選擇您需要的格局！'); return; }
         }
         else if (currentStep === 3) { 
             const moveIn = document.getElementById('field_movein').value;
             const relation = document.getElementById('occupant_relation').value;
+            const countVal = document.getElementById('occupant_count_select').value;
+
             if (!moveIn) { alert('請選擇預計入住時間喔！'); return; }
             if (!relation) { alert('請選擇「居住關係」喔！'); return; }
+            if (!countVal) { alert('請選擇「入住總人數」喔！'); return; }
 
-            const tempName = document.getElementById('add_name').value.trim();
-            if (occupantList.length === 0 && tempName !== "") {
-                addOccupant(); 
-            }
+            // 檢查必填
+            const cards = document.querySelectorAll('.member-card');
+            let allValid = true;
+            cards.forEach(card => {
+                const name = card.querySelector('.occ-name').value.trim();
+                const job = card.querySelector('.occ-job').value.trim();
+                if (!name || !job) {
+                    allValid = false;
+                    if(!name) card.querySelector('.occ-name').style.borderColor = "red";
+                    if(!job) card.querySelector('.occ-job').style.borderColor = "red";
+                }
+            });
 
-            if (occupantList.length === 0) { 
-                alert('請至少新增一位居住成員！\n(請填寫姓名、年齡、職業後，點擊「新增入住者」)'); 
-                return; 
+            if (!allValid) {
+                alert('請完整填寫每位成員的「姓名」與「職業」喔！');
+                return;
             }
-            updateOccupantHiddenField();
+            updateOccupantListFromDOM();
         }
         else if (currentStep === 4) { 
             const city = document.getElementById('field_city').value;
             if (!city) { alert('請選擇縣市！'); return; }
             if (selectedBudget.length === 0) { alert('請至少選擇一個預算範圍！'); return; }
-        }
-
-        if (currentStep === 2 && occupantList.length === 0) {
-             const userName = document.getElementById('field_name').value;
-             if(document.getElementById('add_name').value === "") {
-                 document.getElementById('add_name').value = userName;
-             }
         }
 
         if(currentStep < totalSteps - 1) { 
@@ -1069,10 +1052,6 @@ ${needLines.join('\n')}
         }
     }
 
-    function selectOption(inputId, value, element) {
-        // 舊版單選功能已停用，改由 toggleSelection 處理
-    }
-
     function submitForm() {
         document.getElementById('loadingOverlay').style.display = 'flex';
         
@@ -1088,9 +1067,8 @@ ${needLines.join('\n')}
                           ("0" + now.getSeconds()).slice(-2);
         document.getElementById('field_time').value = timeString;
 
+        // 生成兩組資料：一組給後台，一組給LINE複製文案
         updateOccupantHiddenField();
-
-        // ★★★ 新增：送出前產生 LINE 轉傳文字，寫入 1000970 ★★★
         document.getElementById('field_line_copy_text').value = generateLineCopyText();
 
         const form = document.getElementById('ragicForm');
