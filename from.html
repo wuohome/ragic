@@ -427,13 +427,13 @@
 
     <form id="ragicForm" target="hidden_iframe" method="POST" action="https://ap15.ragic.com/wuohome/property-data-kept/8?api=true&APIKey=VEZsOEwzYzVJdWdoWXRDM3ptS2YwRk9mUjFib2tWVXJ1RitpTGNSWk94R3YzbVVPU0JJaThraUkxVzRQbEFaOQ==">
         
-        <!-- 隱藏欄位 -->
+        <!-- 隱藏欄位 (維持與舊版一致) -->
         <input type="hidden" name="1000640" id="input_agent_name">
         <input type="hidden" name="1000641" id="input_agent_phone">
         <input type="hidden" name="1000908" id="input_source_mark">
         <input type="hidden" name="1000580" id="field_time">
 
-        <!-- ★★★ 複製到LINE轉傳文字 (1000970) ★★★ -->
+        <!-- ★★★ LINE 複製文案 (重要欄位) ★★★ -->
         <input type="hidden" name="1000970" id="field_line_copy_text">
         
         <!-- STEP 1: 基本資料 -->
@@ -443,7 +443,6 @@
             
             <input type="text" id="field_name" name="1000581" placeholder="您的姓名 / Line 暱稱 (必填)" required>
             <input type="tel" id="field_phone" name="1000583" placeholder="手機號碼 (必填)" required>
-            <!-- 1000647: line ID -->
             <input type="text" id="field_line" name="1000647" placeholder="LINE ID (選填)">
         </div>
 
@@ -476,7 +475,7 @@
             </div>
         </div>
 
-        <!-- STEP 3: 入住資訊 (整合新版下拉選單功能) -->
+        <!-- STEP 3: 入住資訊 -->
         <div class="step-content" id="step3">
             <h2>📅 入住與成員</h2>
             <p class="desc">請告訴我們您的入住計畫 (必填)</p>
@@ -491,7 +490,6 @@
             </select>
 
             <p class="question-label">2. 居住關係與人數</p>
-            <!-- 居住關係 -->
             <select id="occupant_relation" style="margin-bottom: 10px; text-align-last:center;">
                 <option value="">請選擇關係...</option>
                 <option value="個人獨居">個人獨居</option>
@@ -501,7 +499,6 @@
                 <option value="朋友/同事合租">朋友/同事合租</option>
             </select>
 
-            <!-- 入住總人數 (自動生成欄位) 1000586 -->
             <select id="occupant_count_select" onchange="renderOccupantInputs()" style="margin-bottom: 20px; text-align-last:center;">
                 <option value="">請選擇入住總人數...</option>
                 <option value="1">1位</option>
@@ -514,11 +511,9 @@
                 <option value="8">8位</option>
             </select>
 
-            <!-- 動態生成成員填寫區 -->
             <div id="occupant_dynamic_rows"></div>
 
             <input type="hidden" name="1000587" id="field_occupants_final">
-            <!-- 實際儲存人數的欄位 -->
             <input type="hidden" name="1000586" id="field_occupant_count_final">
         </div>
 
@@ -576,7 +571,8 @@
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">租屋補助</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">入戶籍</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">汽車位</div>
-                <!-- 新增：以上皆無需求 (互斥邏輯) -->
+                <!-- 新增附傢俱選項 -->
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">附傢俱</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">以上皆無需求</div>
             </div>
 
@@ -634,21 +630,18 @@
     const agentName = agentNameParam ? agentNameParam : defaultAgentName;
     const agentPhone = agentPhoneParam ? agentPhoneParam : defaultAgentPhone;
 
-    const ragicApiUrl = "https://ap15.ragic.com/wuohome/property-data-kept/8?api=true&APIKey=Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==";
+    // Ragic API
+    const ragicApiUrl = "https://ap15.ragic.com/wuohome/property-data-kept/8?api=true&APIKey=VEZsOEwzYzVJdWdoWXRDM3ptS2YwRk9mUjFib2tWVXJ1RitpTGNSWk94R3YzbVVPU0JJaThraUkxVzRQbEFaOQ==";
 
-    // 居住成員資料
+    // 資料暫存
     let occupantList = [];
-
-    // 多選資料暫存
     let selectedHabits = [];
     let selectedNeeds = [];
     let selectedBudget = []; 
     let selectedLayout = [];
     let selectedType = []; 
 
-    // ★★★ Step 3: 居住成員邏輯 (整合新版) ★★★
-
-    // 監聽居住關係改變 -> 個人獨居 自動設定為1人
+    // --- 居住成員邏輯 ---
     document.getElementById('occupant_relation').addEventListener('change', function() {
         if (this.value === '個人獨居') {
             const cnt = document.getElementById('occupant_count_select');
@@ -657,23 +650,19 @@
         }
     });
 
-    // 監聽第一步姓名輸入 -> 同步更新第一位成員姓名
     document.getElementById('field_name').addEventListener('input', function() {
-        // 如果目前格子已經產生，同步更新第一格
         const firstNameInput = document.querySelector('#occupant_dynamic_rows .member-card:first-child .occ-name');
         if (firstNameInput) {
             firstNameInput.value = this.value;
         }
     });
 
-    // 渲染成員填寫欄位
     function renderOccupantInputs() {
         const countSelect = document.getElementById('occupant_count_select');
         const count = parseInt(countSelect.value);
         const container = document.getElementById('occupant_dynamic_rows');
         const mainName = document.getElementById('field_name').value || '';
         
-        // 先暫存目前已填寫的資料 (避免切換人數時清空)
         const currentData = [];
         document.querySelectorAll('.member-card').forEach(card => {
             currentData.push({
@@ -684,7 +673,6 @@
         });
 
         container.innerHTML = '';
-        
         if (!count) return;
 
         for (let i = 1; i <= count; i++) {
@@ -698,7 +686,7 @@
                 valAge = currentData[i-1].age;
                 valJob = currentData[i-1].job;
             } else if (isSelf) {
-                valName = mainName; // 本人姓名保持同步
+                valName = mainName;
             }
 
             const readonlyAttr = isSelf ? 'readonly' : '';
@@ -721,7 +709,6 @@
         }
     }
 
-    // 從 DOM 抓取最新資料更新到 occupantList
     function updateOccupantListFromDOM() {
         occupantList = [];
         const cards = document.querySelectorAll('.member-card');
@@ -729,7 +716,6 @@
             const name = card.querySelector('.occ-name').value.trim();
             const age = card.querySelector('.occ-age').value.trim();
             const job = card.querySelector('.occ-job').value.trim();
-            // 只要有填任何一欄就抓取
             if(name || job || age) {
                 occupantList.push({name, age, job});
             }
@@ -753,24 +739,26 @@
             if (person.job) text += ` / ${person.job}`;
             finalString += text + "\n";
         });
-        document.getElementById('field_occupants_final').value = finalString;
         
-        // 寫入人數文字
+        // 確保寫入到 1000587
+        const finalField = document.getElementById('field_occupants_final');
+        if(finalField) finalField.value = finalString;
+        
+        // 寫入人數
         let countText = "";
         const selectVal = document.getElementById('occupant_count_select').value;
-        if(selectVal) {
-             countText = selectVal + "位";
-        } else {
-             countText = count + "位";
-        }
-        document.getElementById('field_occupant_count_final').value = countText;
+        if(selectVal) countText = selectVal + "位";
+        else countText = count + "位";
+        
+        const countField = document.getElementById('field_occupant_count_final');
+        if(countField) countField.value = countText;
     }
 
-    // 處理多選按鈕 (含互斥邏輯)
+    // --- 多選按鈕邏輯 ---
     function toggleSelection(btn, type) {
         const value = btn.innerText;
 
-        // ★★★ 特別處理：必要需求的互斥邏輯 ★★★
+        // 互斥邏輯
         if (type === 'needs') {
             const noneOptionText = "以上皆無需求";
             const container = document.getElementById('needs_container');
@@ -793,7 +781,6 @@
                         if (b.innerText === noneOptionText) b.classList.remove('active');
                     });
                 }
-
                 if (selectedNeeds.includes(value)) {
                     selectedNeeds = selectedNeeds.filter(item => item !== value);
                     btn.classList.remove('active');
@@ -806,7 +793,7 @@
             return;
         }
 
-        // 其他多選邏輯
+        // 一般多選
         btn.classList.toggle('active');
         
         let list;
@@ -827,6 +814,7 @@
             else if (type === 'type') selectedType.push(value);
         }
 
+        // 即時更新隱藏欄位
         if (type === 'habits') document.getElementById('field_habits').value = selectedHabits.join(',');
         else if (type === 'budget') document.getElementById('field_budget').value = selectedBudget.join(',');
         else if (type === 'layout') document.getElementById('field_layout').value = selectedLayout.join(',');
@@ -854,20 +842,17 @@
         document.getElementById('input_agent_phone').value = agentPhone;
     }
 
-    // ★★★ 文案生成邏輯 (嚴格依照要求格式，強制重讀變數) ★★★
+    // --- 文案生成 ---
     function generateLineCopyText() {
-        // 1. 確保 occupantList 是最新的
+        // 再次確保抓到最新DOM
         updateOccupantListFromDOM();
 
-        // 2. 抓取區域
         const city = document.getElementById('field_city').value || "";
         const area = document.getElementById('field_area').value || "";
         const locationText = `${city} ${area}`.trim();
 
-        // 3. 類型
         const typeText = selectedType.length > 0 ? selectedType.join('、') : "未選擇";
 
-        // 4. 房型
         const layoutSet = new Set(selectedLayout.map(x => x === "廠房" ? "廠辦" : x));
         const hasBizGroup = (layoutSet.has("店面") || layoutSet.has("倉庫") || layoutSet.has("商辦") || layoutSet.has("廠辦"));
         if (hasBizGroup) {
@@ -888,7 +873,6 @@
         });
         const layoutText = ordered.length > 0 ? ordered.join('、') : "未選擇";
 
-        // 5. 人數與關係
         const count = occupantList.length;
         const countText = String(count);
         const relation = document.getElementById('occupant_relation').value || "未填寫";
@@ -905,13 +889,13 @@
         });
         const memberDetailsText = memberDetailsArr.join('、');
         
-        // 6. 需求
         const hasSmoking = selectedHabits.includes("有抽菸");
         const hasGod = selectedHabits.includes("需要設神明廳");
         const hasPet = (selectedHabits.includes("養貓") || selectedHabits.includes("養狗"));
         const hasSubsidy = selectedNeeds.includes("租屋補助");
         const hasRegister = selectedNeeds.includes("入戶籍");
         const hasCar = selectedNeeds.includes("汽車位");
+        const hasFurniture = selectedNeeds.includes("附傢俱");
 
         const needLines = [
             `${hasPet ? "⭕️" : "❌"}養寵物`,
@@ -922,7 +906,8 @@
             `${hasCar ? "⭕️" : "❌"}汽車位`
         ];
 
-        // 7. 預算
+        const furnitureText = `家具需求：${hasFurniture ? "⭕️附傢俱" : "❌空屋即可"}`;
+
         const budgetTextArr = selectedBudget.map(b => {
             const s = String(b).trim();
             if (!s) return "";
@@ -933,7 +918,6 @@
         }).filter(x => x !== "");
         const budgetText = budgetTextArr.length > 0 ? budgetTextArr.join('、') : "未填寫";
 
-        // 組合 (Template Literal)
         const final = 
 `區域：${locationText}
 類型：${typeText}
@@ -945,7 +929,7 @@
 需求：
 ${needLines.join('\n')}
 
-家具需求：❌空屋即可
+${furnitureText}
 預算：${budgetText}`;
 
         return final;
@@ -1067,9 +1051,14 @@ ${needLines.join('\n')}
                           ("0" + now.getSeconds()).slice(-2);
         document.getElementById('field_time').value = timeString;
 
-        // 生成兩組資料：一組給後台，一組給LINE複製文案
+        // ★★★ 關鍵修復：送出前強制同步一次成員名單，再產生文案 ★★★
         updateOccupantHiddenField();
-        document.getElementById('field_line_copy_text').value = generateLineCopyText();
+        
+        // 確保 field_line_copy_text 真的被填入
+        const lineCopyField = document.getElementById('field_line_copy_text');
+        if(lineCopyField) {
+            lineCopyField.value = generateLineCopyText();
+        }
 
         const form = document.getElementById('ragicForm');
         form.submit();
@@ -1088,4 +1077,3 @@ ${needLines.join('\n')}
 
 </body>
 </html>
-
