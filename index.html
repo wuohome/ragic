@@ -26,6 +26,18 @@
         .btn-591 { display: inline-flex; align-items: center; gap: 4px; background-color: #ff8c00; color: white; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; text-decoration: none; transition: background 0.2s; }
         .btn-591:hover { background-color: #e07b00; }
         .btn-hidden { display: none; }
+        
+        /* 聯絡人按鈕樣式 */
+        .agent-btn { 
+            display: inline-flex; align-items: center; gap: 4px; 
+            background-color: #10b981; color: white; 
+            padding: 4px 8px; border-radius: 9999px; 
+            font-size: 12px; font-weight: 500; 
+            text-decoration: none; transition: background 0.2s; 
+            margin-right: 4px; margin-bottom: 4px;
+        }
+        .agent-btn:hover { background-color: #059669; }
+        
         .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.98); display: flex; justify-content: center; align-items: center; z-index: 9999; flex-direction: column; }
         
         #sync-progress-bar { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(31, 41, 55, 0.95); color: white; padding: 12px 24px; rounded: 9999px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 10000; display: none; align-items: center; gap: 12px; border-radius: 50px; font-size: 14px; font-weight: 500; white-space: nowrap; }
@@ -132,7 +144,11 @@
         const EID = {
             TITLE: "1000050", ADDR: "1000055", COORD: "1000759", 
             PRICE: "1000076", LAYOUT: "1000063", USAGE: "1000060", LINK_591: "1000113",
-            STATUS: "1000707" // 新增: 狀態欄位 ID
+            STATUS: "1000707", // 新增: 狀態欄位 ID
+            // 開發人員子表格相關 ID
+            SUB_DEV: "_subtable_1000254", 
+            DEV_NAME: "1000251", 
+            DEV_PHONE: "1000252"
         };
 
         const MAPS_KEY = "AIzaSyALdVJlv7IBxnqeShEbzIIWnV7WSjtRtZw";
@@ -344,6 +360,36 @@
             }
         }
 
+        // 新增：產生聯絡人按鈕 HTML
+        function getAgentsHtml(item) {
+            const subData = item[EID.SUB_DEV];
+            if (!subData) return '';
+            
+            // Ragic 子表格為物件，嘗試轉為陣列並排序 (若無順序則直接使用)
+            const rows = Object.values(subData); 
+            
+            let html = '<div class="flex flex-wrap mt-2">';
+            let hasAgent = false;
+            
+            rows.forEach(row => {
+                const name = row[EID.DEV_NAME];
+                const phone = row[EID.DEV_PHONE];
+                
+                if (name && phone) {
+                    hasAgent = true;
+                    // 使用 stopPropagation 防止觸發卡片點擊事件
+                    html += `
+                        <a href="tel:${phone}" class="agent-btn" onclick="event.stopPropagation()">
+                            <i class="fas fa-phone-alt"></i> ${name}
+                        </a>
+                    `;
+                }
+            });
+            
+            html += '</div>';
+            return hasAgent ? html : '';
+        }
+
         function createListItem(item, container, isNoCoord = false) {
             const div = document.createElement('div');
             const price = item[EID.PRICE] ? parseInt(item[EID.PRICE]).toLocaleString() : "面議";
@@ -351,7 +397,8 @@
             const hasLink = link591 && link591.startsWith('http');
             const usage = item[EID.USAGE] || '';
             const isShop = usage.includes('店');
-            
+            const agentsHtml = getAgentsHtml(item); // 產生聯絡人按鈕
+
             div.className = `property-card ${isNoCoord ? 'bg-red-50/30' : ''}`;
             div.id = `card-${item.id}`;
             div.onclick = (e) => {
@@ -366,6 +413,7 @@
                     <span class="text-gray-400">|</span>
                     <span class="truncate w-32 md:w-40" title="${item[EID.ADDR]}">${item[EID.ADDR] || ''}</span>
                 </div>
+                ${agentsHtml} <!-- 插入聯絡人按鈕 -->
                 <div class="card-footer">
                     <div class="card-price">$${price} <span class="price-unit">/月</span></div>
                     <a href="${link591}" target="_blank" class="btn-591 ${hasLink ? '' : 'btn-hidden'}" title="前往 591">
@@ -380,11 +428,13 @@
             const link591 = item[EID.LINK_591];
             const hasLink = link591 && link591.startsWith('http');
             const [lat, lng] = item[EID.COORD].split(',');
+            const agentsHtml = getAgentsHtml(item); // 產生聯絡人按鈕
 
             const infoContent = `
                 <div style="padding: 5px; min-width: 200px;">
                     <h3 class="font-bold text-base mb-1 text-gray-800">${item[EID.TITLE]}</h3>
                     <p class="text-gray-500 text-xs mb-2">${item[EID.LAYOUT]} | ${item[EID.ADDR]}</p>
+                    ${agentsHtml} <!-- 插入聯絡人按鈕 -->
                     <div class="flex justify-between items-center mt-2 border-t pt-2">
                         <span class="text-red-600 font-bold text-lg">$${price}</span>
                         <div class="flex gap-2">
