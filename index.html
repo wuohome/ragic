@@ -131,7 +131,8 @@
     <script>
         const EID = {
             TITLE: "1000050", ADDR: "1000055", COORD: "1000759", 
-            PRICE: "1000076", LAYOUT: "1000063", USAGE: "1000060", LINK_591: "1000113"
+            PRICE: "1000076", LAYOUT: "1000063", USAGE: "1000060", LINK_591: "1000113",
+            STATUS: "1000707" // 新增: 狀態欄位 ID
         };
 
         const MAPS_KEY = "AIzaSyALdVJlv7IBxnqeShEbzIIWnV7WSjtRtZw";
@@ -190,7 +191,8 @@
                 const data = await resp.json();
                 fetchedRecords = Object.entries(data).map(([id, val]) => ({ id, ...val }));
                 
-                // 更新總數
+                // 更新總數 (這裡顯示的是過濾前的總數，可能會包含下架的，若希望總數也不含下架，需在 filteredRecords 計算)
+                // 但為了維持原始邏輯，這裡先保留 API 回傳總數，或可選擇移至 applyFilters 後更新
                 document.getElementById('total-count').innerText = fetchedRecords.length;
                 
                 saveCurrentTime();
@@ -210,6 +212,9 @@
             const typeFilter = document.getElementById('filter-type').value;
 
             filteredRecords = fetchedRecords.filter(item => {
+                // 狀態為「下架」則不顯示
+                if (item[EID.STATUS] === '下架') return false;
+
                 const title = (item[EID.TITLE] || '').toLowerCase();
                 const addr = (item[EID.ADDR] || '').toLowerCase();
                 if (keyword && !title.includes(keyword) && !addr.includes(keyword)) return false;
@@ -232,6 +237,9 @@
                 }
                 return true;
             });
+
+            // 更新總數
+            document.getElementById('total-count').innerText = filteredRecords.length;
 
             renderMarkers(autoZoom);
             // 這裡不直接呼叫 renderListByMapBounds，因為 fitBounds 會觸發 idle 事件，進而更新列表
@@ -284,11 +292,18 @@
 
             if (!bounds) return;
 
+            // 1. 在地圖範圍內的正常物件
             let visibleItems = filteredRecords.filter(item => {
                 const coord = item[EID.COORD];
                 if (!coord || !coord.includes(',')) return false;
                 const [lat, lng] = coord.split(',').map(Number);
                 return bounds.contains({ lat, lng });
+            });
+
+            // 2. 符合篩選條件但「無座標」的物件
+            let noCoordItems = filteredRecords.filter(item => {
+                const coord = item[EID.COORD];
+                return !coord || !coord.includes(',') || isNaN(parseFloat(coord.split(',')[0]));
             });
 
             // 距離排序
@@ -300,19 +315,36 @@
                 return distA - distB;
             });
 
-            // 更新 "此區域" 數量
-            document.getElementById('visible-count').innerText = visibleItems.length;
+            // 更新 "此區域" 數量顯示
+            let countHtml = `${visibleItems.length}`;
+            if (noCoordItems.length > 0) {
+                countHtml += ` <span class="text-red-500 font-bold ml-1 text-xs" title="地址有錯誤抓不到地圖座標 可能是錯字或地址填寫有誤">(+${noCoordItems.length} 地址有錯誤抓不到地圖座標 可能是錯字或地址填寫有誤)</span>`;
+            }
+            document.getElementById('visible-count').innerHTML = countHtml;
             
             list.innerHTML = '';
 
-            if (visibleItems.length === 0) {
+            if (visibleItems.length === 0 && noCoordItems.length === 0) {
                 list.innerHTML = '<div class="p-8 text-center text-gray-400">此範圍無符合條件的物件</div>';
                 return;
             }
+
+            // 渲染地圖範圍內的物件
             visibleItems.forEach(item => createListItem(item, list));
+
+            // 渲染無座標物件 (加分隔線)
+            if (noCoordItems.length > 0) {
+                if (visibleItems.length > 0) {
+                    const separator = document.createElement('div');
+                    separator.className = "px-4 py-2 bg-red-50 text-red-600 text-xs font-bold border-t border-b border-red-100 mt-2";
+                    separator.innerHTML = `<i class="fas fa-exclamation-circle mr-1"></i> 以下物件地址有誤無法定位`;
+                    list.appendChild(separator);
+                }
+                noCoordItems.forEach(item => createListItem(item, list, true));
+            }
         }
 
-        function createListItem(item, container) {
+        function createListItem(item, container, isNoCoord = false) {
             const div = document.createElement('div');
             const price = item[EID.PRICE] ? parseInt(item[EID.PRICE]).toLocaleString() : "面議";
             const link591 = item[EID.LINK_591];
@@ -320,7 +352,7 @@
             const usage = item[EID.USAGE] || '';
             const isShop = usage.includes('店');
             
-            div.className = "property-card";
+            div.className = `property-card ${isNoCoord ? 'bg-red-50/30' : ''}`;
             div.id = `card-${item.id}`;
             div.onclick = (e) => {
                 if(e.target.tagName === 'A' || e.target.closest('a')) return;
@@ -461,4 +493,3 @@
     </script>
 </body>
 </html>
-
