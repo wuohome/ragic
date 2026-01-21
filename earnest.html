@@ -29,7 +29,7 @@
 
     <div id="test-mode-ui" class="hidden mt-8 bg-white p-10 rounded-[3rem] shadow-2xl max-w-sm w-full border-4 border-blue-500">
       <h2 class="text-3xl font-black text-blue-600 mb-6 text-center">測試模式</h2>
-      <p class="text-slate-500 mb-4 text-xl font-medium text-left">請輸入 Record ID (例如 3)：</p>
+      <p class="text-slate-500 mb-4 text-xl font-medium text-left">請輸入正確的 Record ID：</p>
       <input type="number" id="test-id-input" placeholder="3"
         class="w-full text-center text-6xl p-6 border-4 border-slate-200 rounded-3xl mb-8 outline-none font-bold bg-slate-50">
       <button id="btn-test" class="w-full bg-blue-600 text-white font-black py-7 rounded-3xl text-3xl shadow-xl big-btn">
@@ -37,7 +37,7 @@
       </button>
     </div>
 
-    <!-- 工程診斷視窗 (不再隱藏，直到成功) -->
+    <!-- 工程診斷視窗 -->
     <div id="debug-area" class="debug-box w-full max-w-lg">
       <p class="text-white font-bold mb-2">【連線診斷】</p>
       <div id="debug-content" class="font-mono">等待連線中...</div>
@@ -116,13 +116,9 @@
   </div>
 
   <script>
-    /**
-     * 【配置區】
-     */
     const RAGIC_API_KEY = "VEZsOEwzYzVJdWdoWXRDM3ptS2YwRUhIcG1iMjI0S2hXT2VieXpCc0p4M21pY29JTnRvL1pueThPTzNVcktWNQ==";
     const RAGIC_BASE_URL = "https://ap15.ragic.com/wuohome/payments/1";
 
-    // 擴展對照表：根據您提供的實際 JSON 內容對應中文標籤
     const FIELDS = {
       name: ["租客姓名", "1001091"],
       id: ["租客身分證字號", "1001092"],
@@ -146,7 +142,6 @@
 
     const $ = (id) => document.getElementById(id);
 
-    // 智能取值：只要 Keys 裡面的任何一個在紀錄裡有值就取出來
     function getValue(rec, keys) {
       for (let k of keys) { 
         if (rec[k] !== undefined && rec[k] !== null && rec[k] !== "") return rec[k]; 
@@ -158,40 +153,49 @@
       $("debug-area").style.display = 'block';
       const content = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
       $("debug-content").innerText = msg + "\n" + content.substring(0, 1000);
-      console.log(msg, obj);
     }
 
-    // 判定是否為 Ragic 紀錄的特徵
-    function isRagicRecord(obj) {
-      if (!obj || typeof obj !== "object") return false;
-      // 特徵：含有 _ragicId 或 租客姓名 或 100 開頭的 key
-      return obj["_ragicId"] !== undefined || obj["租客姓名"] !== undefined || Object.keys(obj).some(k => /^100\d{4}$/.test(k));
-    }
-
-    // 暴力搜尋：在 JSON 裡面尋找任何長得像紀錄的東西
-    function findRecord(obj) {
+    // 更新精準對齊邏輯
+    function findExactRecord(obj, targetId) {
       if (!obj || typeof obj !== 'object') return null;
-      if (isRagicRecord(obj)) return obj;
       
+      // 1. 優先檢查 Key 是否匹配 (例如回傳內容是 {"3":{...}})
+      if (obj[targetId]) return obj[targetId];
+
+      // 2. 檢查物件內部是否有 _ragicId 匹配
+      if (obj["_ragicId"] == targetId || obj["Record ID"] == targetId) return obj;
+
+      // 3. 如果目前的物件看起來就是紀錄 (包含租客姓名)，且沒找到其他匹配，暫時標記為候選
+      let candidate = null;
+      if (obj["租客姓名"] !== undefined) candidate = obj;
+
       // 遞迴尋找內層
       for (const k in obj) {
         if (typeof obj[k] === 'object') {
-          const res = findRecord(obj[k]);
+          const res = findExactRecord(obj[k], targetId);
           if (res) return res;
         }
       }
-      return null;
+      return candidate;
     }
 
     window.ragicCallback = function (data) {
       clearTimeout(loadTimer);
-      debug("✅ 成功連線，原始內容：", data);
+      debug("✅ 成功連線，尋找 ID: " + recordId, data);
 
-      currentRecord = findRecord(data);
+      // 使用精準匹配邏輯
+      currentRecord = findExactRecord(data, recordId);
+      
       if (!currentRecord) {
-        debug("❌ 解析失敗：回傳內容中找不到紀錄特徵。回傳 Key 為：", Object.keys(data));
-        $("loader-text").innerText = "找不到資料，請確認 ID 是否正確";
+        debug("❌ 找不到 ID: " + recordId + " 的資料。回傳內容中似乎沒有這筆紀錄。");
+        $("loader-text").innerText = "找不到編號 " + recordId + " 的資料";
         return;
+      }
+
+      // 安全檢查：如果抓到的紀錄 ID 真的不對，跳出警告
+      const foundId = currentRecord["_ragicId"] || currentRecord["Record ID"];
+      if (foundId && foundId != recordId) {
+        debug("⚠️ 警告：輸入 ID 為 " + recordId + " 但 API 回傳了 ID " + foundId + "。這可能是 Ragic 的權限限制。");
       }
 
       renderData();
@@ -206,18 +210,13 @@
       loadTimer = setTimeout(() => {
         if (!currentRecord) {
           $("loader-spinner").classList.add('hidden');
-          $("loader-text").innerText = "連線超時，請檢查連線";
+          $("loader-text").innerText = "讀取超時，請檢查 ID 是否正確";
           $("retry-btn").classList.remove('hidden');
         }
       }, 10000);
 
       const script = document.createElement('script');
-      // 強制使用 .json 搭配 callback
       script.src = `${RAGIC_BASE_URL}/${recordId}.json?api&APIKey=${encodeURIComponent(RAGIC_API_KEY)}&callback=ragicCallback`;
-      script.onerror = () => {
-        debug("❌ 連線錯誤：無法接觸 Ragic 伺服器。");
-        $("loader-text").innerText = "連線失敗";
-      };
       document.body.appendChild(script);
     }
 
@@ -228,8 +227,6 @@
       $("input_occ").value = getValue(currentRecord, FIELDS.occupation);
 
       $("show_addr").innerText = getValue(currentRecord, FIELDS.addr) || "-";
-      
-      // 金額處理
       const rent = getValue(currentRecord, FIELDS.rent).toString().replace(/[^\d]/g, "");
       const deposit = getValue(currentRecord, FIELDS.deposit).toString().replace(/[^\d]/g, "");
       const earnest = getValue(currentRecord, FIELDS.earnest).toString().replace(/[^\d]/g, "");
@@ -237,14 +234,9 @@
       $("show_rent").innerText = rent ? "$ " + Number(rent).toLocaleString() : "-";
       $("show_deposit").innerText = deposit ? "$ " + Number(deposit).toLocaleString() : "-";
       $("show_earnest").innerText = earnest ? "$ " + Number(earnest).toLocaleString() : "-";
-      
       $("show_date").innerText = getValue(currentRecord, FIELDS.date) || "-";
       $("show_pay_method").innerText = getValue(currentRecord, FIELDS.pay_method) || "月繳";
-      
-      // 處理換行
-      const cond = getValue(currentRecord, FIELDS.conditions) || "-";
-      $("show_cond").innerHTML = cond.replace(/\[br\]\[\/br\]/g, "<br>").replace(/\n/g, "<br>");
-      
+      $("show_cond").innerHTML = (getValue(currentRecord, FIELDS.conditions) || "-").replace(/\[br\]\[\/br\]/g, "<br>");
       $("show_no").innerText = getValue(currentRecord, FIELDS.no) || "ID-" + recordId;
     }
 
@@ -254,55 +246,34 @@
       canvas.width = canvas.offsetWidth * ratio;
       canvas.height = canvas.offsetHeight * ratio;
       canvas.getContext("2d").scale(ratio, ratio);
-      signaturePad = new SignaturePad(canvas, { minWidth: 2, maxWidth: 6, penColor: "black" });
+      signaturePad = new SignaturePad(canvas, { minWidth: 3, maxWidth: 8, penColor: "black" });
     }
 
     function goStep(n) {
-      $("step-1").classList.add('hidden');
-      $("step-2").classList.add('hidden');
-      $("step-" + n).classList.remove('hidden');
-      window.scrollTo(0, 0);
+      $("step-1").classList.add('hidden'); $("step-2").classList.add('hidden');
+      $("step-" + n).classList.remove('hidden'); window.scrollTo(0, 0);
       if (n === 2) setTimeout(initSignature, 250);
     }
 
     function submitData() {
-      if (!signaturePad || signaturePad.isEmpty()) { alert("請簽名哦！"); return; }
+      if (!signaturePad || signaturePad.isEmpty()) { alert("請簽名！"); return; }
       $("hidden_signature").value = signaturePad.toDataURL("image/png");
-
       const form = $("ragicForm");
       form.action = `${RAGIC_BASE_URL}/${recordId}?api&APIKey=${encodeURIComponent(RAGIC_API_KEY)}`;
-      
       $("loader").classList.remove('hidden');
-      $("loader-text").innerText = "簽署成功，正在存檔...";
-      
+      $("loader-text").innerText = "資料回傳中...";
       form.submit();
-
-      // 模擬成功
-      setTimeout(() => {
-        $("loader").classList.add('hidden');
-        $("step-2").classList.add('hidden');
-        $("step-success").classList.remove('hidden');
-      }, 3000);
+      setTimeout(() => { $("loader").classList.add('hidden'); $("step-2").classList.add('hidden'); $("step-success").classList.remove('hidden'); }, 3000);
     }
 
     window.onload = () => {
-      $("btn-test").onclick = () => {
-        recordId = $("test-id-input").value.trim();
-        $("test-mode-ui").classList.add('hidden');
-        executeLoad();
-      };
+      $("btn-test").onclick = () => { recordId = $("test-id-input").value.trim(); $("test-mode-ui").classList.add('hidden'); executeLoad(); };
       $("btn-next").onclick = () => goStep(2);
       $("btn-back").onclick = () => goStep(1);
       $("btn-clear").onclick = () => signaturePad.clear();
       $("btn-submit").onclick = () => submitData();
-
-      if (!recordId) {
-        $("loader-spinner").classList.add('hidden');
-        $("loader-text").innerText = "請輸入 Record ID 開始測試";
-        $("test-mode-ui").classList.remove('hidden');
-      } else {
-        executeLoad();
-      }
+      if (!recordId) { $("loader-spinner").classList.add('hidden'); $("loader-text").innerText = "請輸入 Record ID"; $("test-mode-ui").classList.remove('hidden'); }
+      else { executeLoad(); }
     };
   </script>
 </body>
