@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>不動產要約定金收據簽署</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .receipt-table th, .receipt-table td { border: 1.5px solid #000; padding: 10px; vertical-align: middle; }
+        .receipt-table th { background-color: #f3f4f6; font-weight: bold; width: 100px; }
+        .big-btn { transition: transform 0.1s; }
+        .big-btn:active { transform: scale(0.95); }
+        #signature-pad { background: white; border: 2px dashed #3b82f6; border-radius: 12px; cursor: crosshair; width: 100%; height: 250px; }
+        #loader { background: rgba(255, 255, 255, 0.95); z-index: 100; }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen">
+
+    <!-- 載入中動畫 -->
+    <div id="loader" class="fixed inset-0 flex flex-col items-center justify-center">
+        <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600 mb-4"></div>
+        <p id="loader-text" class="text-xl font-bold text-gray-700">資料準備中...</p>
+        <button id="retry-btn" onclick="location.reload()" class="hidden mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg">重試一次</button>
+    </div>
+
+    <div class="max-w-3xl mx-auto p-4 md:p-8">
+        <!-- 第一步：確認資料 -->
+        <div id="step-1" class="hidden bg-white rounded-3xl shadow-xl p-6 md:p-10 border-t-8 border-blue-600">
+            <h1 class="text-3xl font-black text-blue-700 mb-2 text-center md:text-left">您好，請確認資料</h1>
+            <p class="text-gray-500 mb-8 text-lg">如果您發現資料有錯，可以點擊格子修改。</p>
+
+            <div class="space-y-6">
+                <div>
+                    <label class="block text-xl font-bold text-gray-700 mb-2">您的姓名</label>
+                    <input type="text" id="input_name" class="w-full text-2xl border-2 border-gray-300 rounded-xl p-4 focus:border-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xl font-bold text-gray-700 mb-2">身分證字號</label>
+                    <input type="text" id="input_id" class="w-full text-2xl border-2 border-gray-300 rounded-xl p-4 focus:border-blue-500 outline-none uppercase">
+                </div>
+                <div>
+                    <label class="block text-xl font-bold text-gray-700 mb-2">聯絡電話</label>
+                    <input type="tel" id="input_phone" class="w-full text-2xl border-2 border-gray-300 rounded-xl p-4 focus:border-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xl font-bold text-gray-700 mb-2">職業</label>
+                    <input type="text" id="input_occ" class="w-full text-2xl border-2 border-gray-300 rounded-xl p-4 focus:border-blue-500 outline-none">
+                </div>
+            </div>
+
+            <button onclick="goStep(2)" class="big-btn w-full mt-10 bg-blue-600 hover:bg-blue-700 text-white text-2xl font-black py-6 rounded-2xl shadow-lg">
+                這是我本人，下一步 👉
+            </button>
+        </div>
+
+        <!-- 第二步：預覽收據與簽名 -->
+        <div id="step-2" class="hidden bg-white rounded-3xl shadow-xl p-4 md:p-10 border-t-8 border-green-600">
+            <h1 class="text-2xl font-black text-center mb-6">不動產要約定金收據</h1>
+            
+            <div class="overflow-x-auto">
+                <table class="receipt-table w-full text-sm md:text-base mb-6">
+                    <tr>
+                        <th>房屋地址</th>
+                        <td colspan="3" id="show_addr">-</td>
+                    </tr>
+                    <tr>
+                        <th>月租金</th>
+                        <td id="show_rent" class="font-bold text-lg">-</td>
+                        <th>押金</th>
+                        <td id="show_deposit">-</td>
+                    </tr>
+                    <tr>
+                        <th>起租日</th>
+                        <td id="show_date">-</td>
+                        <th>付費方式</th>
+                        <td>月繳</td>
+                    </tr>
+                    <tr>
+                        <th>要約條件</th>
+                        <td colspan="3" id="show_cond" class="text-xs h-24 align-top">無特別約定條件。</td>
+                    </tr>
+                    <tr>
+                        <th>要約定金</th>
+                        <td id="show_earnest" class="text-red-600 font-bold text-xl">-</td>
+                        <th>編號</th>
+                        <td id="show_no">-</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="bg-gray-50 p-4 rounded-xl text-xs text-gray-500 leading-relaxed mb-8">
+                壹、上述條件由房客確認無誤。貳、若屋主不同意承租，定金無息退還房客。參、如屋主同意承租，定金轉為部分押金或租金。肆、若房客反悔，定金由屋主沒收。
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-2xl font-black text-gray-800 mb-4 text-center underline decoration-blue-500 decoration-4 underline-offset-8">請在此處簽名</label>
+                <div class="relative">
+                    <canvas id="signature-pad"></canvas>
+                    <button onclick="signaturePad.clear()" class="absolute top-2 right-2 bg-gray-100 text-gray-500 px-4 py-2 rounded-lg font-bold text-sm">重簽</button>
+                </div>
+            </div>
+
+            <div class="flex flex-col md:flex-row gap-4">
+                <button onclick="goStep(1)" class="order-2 md:order-1 flex-1 bg-gray-200 text-gray-700 text-xl font-bold py-5 rounded-2xl">回上一步</button>
+                <button onclick="submitData()" id="btn-submit" class="order-1 md:order-2 big-btn flex-[2] bg-green-600 hover:bg-green-700 text-white text-2xl font-black py-5 rounded-2xl shadow-xl">
+                    簽好了，送出 ✅
+                </button>
+            </div>
+        </div>
+
+        <!-- 成功畫面 -->
+        <div id="step-success" class="hidden bg-white rounded-3xl shadow-xl p-10 text-center">
+            <div class="text-8xl mb-6">🎉</div>
+            <h1 class="text-4xl font-black text-green-600 mb-4">簽署成功！</h1>
+            <p class="text-gray-500 text-xl">資料已傳回給服務專員。<br>您可以關閉這個畫面了。</p>
+        </div>
+    </div>
+
+    <script>
+        const RAGIC_API_KEY = "Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==";
+        const RAGIC_BASE_URL = "https://www.ragic.com/demo/lease-management/2"; 
+        
+        const FIELDS = {
+            name: "1001091", id: "1001092", phone: "1001093", occupation: "1001094",
+            addr: "1001099", rent: "1001101", deposit: "1001107", date: "1001104",
+            conditions: "1001108", earnest: "1001109", no: "1001111", signature: "1001110"
+        };
+
+        let currentRecord = null;
+        let recordId = new URLSearchParams(window.location.search).get('id');
+        let signaturePad = null;
+
+        window.onload = async () => {
+            const loader = document.getElementById('loader');
+            const loaderText = document.getElementById('loader-text');
+            const retryBtn = document.getElementById('retry-btn');
+
+            if (!recordId) {
+                loaderText.innerHTML = "<span class='text-red-600'>⚠️ 網址缺少 ID 參數</span><br><small>請確認連結是否包含 ?id=...</small>";
+                return;
+            }
+
+            try {
+                await loadData();
+                initSignature();
+                // 資料載入成功後，隱藏 loader 並顯示第一步
+                loader.classList.add('hidden');
+                document.getElementById('step-1').classList.remove('hidden');
+            } catch (err) {
+                console.error(err);
+                loaderText.innerHTML = "<span class='text-red-600'>❌ 連線失敗</span><br><small>原因：" + err.message + "</small>";
+                retryBtn.classList.remove('hidden');
+            }
+        };
+
+        async function loadData() {
+            // 使用 api 參數並強制檢查回應
+            const url = `${RAGIC_BASE_URL}/${recordId}?api`;
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: { "Authorization": "Basic " + btoa(RAGIC_API_KEY) }
+            });
+
+            if (!response.ok) {
+                if (response.status === 401) throw new Error("API Key 無效或權限不足");
+                if (response.status === 404) throw new Error("找不到這筆定金單");
+                throw new Error("伺服器回應錯誤 (" + response.status + ")");
+            }
+
+            const data = await response.json();
+            currentRecord = data[recordId];
+
+            if (!currentRecord) throw new Error("資料庫內找不到對應的編號");
+
+            // 填入第一頁
+            document.getElementById('input_name').value = currentRecord[FIELDS.name] || "";
+            document.getElementById('input_id').value = currentRecord[FIELDS.id] || "";
+            document.getElementById('input_phone').value = currentRecord[FIELDS.phone] || "";
+            document.getElementById('input_occ').value = currentRecord[FIELDS.occupation] || "";
+
+            // 填入第二頁預覽
+            document.getElementById('show_addr').innerText = currentRecord[FIELDS.addr] || "-";
+            document.getElementById('show_rent').innerText = "$ " + (Number(currentRecord[FIELDS.rent]).toLocaleString());
+            document.getElementById('show_deposit').innerText = "$ " + (Number(currentRecord[FIELDS.deposit]).toLocaleString());
+            document.getElementById('show_date').innerText = currentRecord[FIELDS.date] || "-";
+            document.getElementById('show_cond').innerText = currentRecord[FIELDS.conditions] || "無特別約定條件。";
+            document.getElementById('show_earnest').innerText = "$ " + (Number(currentRecord[FIELDS.earnest]).toLocaleString());
+            document.getElementById('show_no').innerText = currentRecord[FIELDS.no] || "AUTO";
+        }
+
+        function initSignature() {
+            const canvas = document.getElementById('signature-pad');
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            canvas.width = canvas.offsetWidth * ratio;
+            canvas.height = canvas.offsetHeight * ratio;
+            canvas.getContext("2d").scale(ratio, ratio);
+            signaturePad = new SignaturePad(canvas, { minWidth: 2, maxWidth: 5, penColor: "black" });
+        }
+
+        function goStep(n) {
+            document.getElementById('step-1').classList.add('hidden');
+            document.getElementById('step-2').classList.add('hidden');
+            document.getElementById(`step-${n}`).classList.remove('hidden');
+            window.scrollTo(0, 0);
+            if(n === 2) {
+                // 進入第二步時重新調整簽名板大小以防跑版
+                setTimeout(initSignature, 200);
+            }
+        }
+
+        async function submitData() {
+            if (signaturePad.isEmpty()) {
+                alert("阿公/阿嬤，要在藍色框框內簽名才能送出哦！");
+                return;
+            }
+
+            const btn = document.getElementById('btn-submit');
+            const loader = document.getElementById('loader');
+            const loaderText = document.getElementById('loader-text');
+            
+            btn.disabled = true;
+            btn.innerText = "正在傳送...";
+            loader.classList.remove('hidden');
+            loaderText.innerText = "資料傳送中，請勿關閉...";
+
+            const payload = new URLSearchParams();
+            payload.append(FIELDS.name, document.getElementById('input_name').value);
+            payload.append(FIELDS.id, document.getElementById('input_id').value.toUpperCase());
+            payload.append(FIELDS.phone, document.getElementById('input_phone').value);
+            payload.append(FIELDS.occupation, document.getElementById('input_occ').value);
+            payload.append(FIELDS.signature, signaturePad.toDataURL()); 
+
+            try {
+                const response = await fetch(`${RAGIC_BASE_URL}/${recordId}?api`, {
+                    method: 'POST',
+                    headers: { 
+                        "Authorization": "Basic " + btoa(RAGIC_API_KEY),
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    body: payload
+                });
+
+                if (response.ok) {
+                    loader.classList.add('hidden');
+                    document.getElementById('step-2').classList.add('hidden');
+                    document.getElementById('step-success').classList.remove('hidden');
+                } else {
+                    throw new Error("傳送失敗，請聯繫業務員");
+                }
+            } catch (err) {
+                loader.classList.add('hidden');
+                alert("哎呀！傳送失敗了，請檢查網路後再試一次：\n" + err.message);
+                btn.disabled = false;
+                btn.innerText = "簽好了，送出 ✅";
+            }
+        }
+    </script>
+</body>
+</html>
