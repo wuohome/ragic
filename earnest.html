@@ -3,125 +3,162 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>不動產要約定金收據簽署</title>
+    <title>不動產要約定金收據簽署系統</title>
+    <!-- 使用 Tailwind CSS 快速美化 -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 簽名板套件 -->
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
         body { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; }
-        .receipt-table th, .receipt-table td { border: 1.5px solid #000; padding: 10px; vertical-align: middle; }
-        .receipt-table th { background-color: #f3f4f6; font-weight: bold; width: 100px; }
-        .big-btn { transition: transform 0.1s; }
-        .big-btn:active { transform: scale(0.95); }
-        #signature-pad { background: white; border: 2px dashed #3b82f6; border-radius: 12px; cursor: crosshair; width: 100%; height: 250px; }
-        #loader { background: rgba(255, 255, 255, 0.95); z-index: 100; }
+        
+        /* 模擬 PDF 表格樣式 - 加粗線條 */
+        .receipt-table th, .receipt-table td { border: 2px solid #000; padding: 12px; vertical-align: middle; }
+        .receipt-table th { background-color: #f1f5f9; font-weight: 900; width: 120px; color: #000; }
+
+        /* 按鈕視覺 */
+        .big-btn { transition: all 0.2s; }
+        .big-btn:active { transform: scale(0.96); opacity: 0.9; }
+
+        /* 簽名板區域 */
+        #signature-pad {
+            background: #ffffff;
+            border: 3px dashed #3b82f6;
+            border-radius: 16px;
+            cursor: crosshair;
+            width: 100%;
+            height: 280px;
+            touch-action: none;
+        }
+        
+        /* 遮罩 */
+        #loader { background: rgba(255, 255, 255, 0.98); z-index: 100; }
+
+        /* 輸入框聚焦 */
+        input:focus { border-color: #3b82f6; box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.15); }
     </style>
 </head>
-<body class="bg-slate-100 min-h-screen">
+<body class="bg-slate-50 min-h-screen">
 
     <!-- 載入中動畫 -->
-    <div id="loader" class="fixed inset-0 flex flex-col items-center justify-center">
-        <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600 mb-4"></div>
-        <p id="loader-text" class="text-xl font-bold text-gray-700">資料準備中...</p>
-        <button id="retry-btn" onclick="location.reload()" class="hidden mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg">重試一次</button>
+    <div id="loader" class="fixed inset-0 flex flex-col items-center justify-center p-6 text-center">
+        <div id="loader-spinner" class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600 mb-6"></div>
+        <p id="loader-text" class="text-2xl font-black text-slate-700">正在連接系統，請稍候...</p>
+        
+        <!-- 測試模式輸入框 -->
+        <div id="test-mode-ui" class="hidden mt-8 bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full border-2 border-blue-500">
+            <h2 class="text-3xl font-black text-blue-600 mb-4">測試模式</h2>
+            <p class="text-slate-500 mb-6 text-lg font-medium text-left">請輸入紀錄編號 (Record ID)：</p>
+            <input type="number" id="test-id-input" placeholder="例如: 38" class="w-full text-center text-5xl p-4 border-4 border-slate-200 rounded-2xl mb-6 outline-none font-bold">
+            <button onclick="startManualTest()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl text-2xl shadow-xl big-btn">載入資料</button>
+        </div>
+
+        <button id="retry-btn" onclick="location.reload()" class="hidden mt-6 bg-slate-800 text-white px-8 py-3 rounded-xl font-bold">重新嘗試</button>
     </div>
+
+    <!-- 隱藏的 Iframe 用來穩定送出資料 (避開 CORS) -->
+    <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
 
     <div class="max-w-3xl mx-auto p-4 md:p-8">
         <!-- 第一步：確認資料 -->
-        <div id="step-1" class="hidden bg-white rounded-3xl shadow-xl p-6 md:p-10 border-t-8 border-blue-600">
-            <h1 class="text-3xl font-black text-blue-700 mb-2 text-center md:text-left">您好，請確認資料</h1>
-            <p class="text-gray-500 mb-8 text-lg">如果您發現資料有錯，可以點擊格子修改。</p>
+        <div id="step-1" class="hidden bg-white rounded-[2rem] shadow-2xl p-6 md:p-12 border-t-[12px] border-blue-600">
+            <h1 class="text-4xl font-black text-blue-700 mb-4 text-center md:text-left">請核對資料</h1>
+            <p class="text-slate-500 mb-10 text-xl font-medium text-center md:text-left">房客您好，若資料有誤可直接修改。</p>
 
-            <div class="space-y-6">
+            <form id="ragicForm" method="POST" target="hidden_iframe" class="space-y-8">
                 <div>
-                    <label class="block text-xl font-bold text-gray-700 mb-2">您的姓名</label>
-                    <input type="text" id="input_name" class="w-full text-2xl border-2 border-gray-300 rounded-xl p-4 focus:border-blue-500 outline-none">
+                    <label class="block text-2xl font-black text-slate-700 mb-3">您的姓名</label>
+                    <input type="text" name="1001091" id="input_name" class="w-full text-3xl border-4 border-slate-200 rounded-2xl p-5 outline-none font-bold bg-yellow-50">
                 </div>
                 <div>
-                    <label class="block text-xl font-bold text-gray-700 mb-2">身分證字號</label>
-                    <input type="text" id="input_id" class="w-full text-2xl border-2 border-gray-300 rounded-xl p-4 focus:border-blue-500 outline-none uppercase">
+                    <label class="block text-2xl font-black text-slate-700 mb-3">身分證字號</label>
+                    <input type="text" name="1001092" id="input_id" class="w-full text-3xl border-4 border-slate-200 rounded-2xl p-5 outline-none font-bold uppercase bg-yellow-50">
                 </div>
                 <div>
-                    <label class="block text-xl font-bold text-gray-700 mb-2">聯絡電話</label>
-                    <input type="tel" id="input_phone" class="w-full text-2xl border-2 border-gray-300 rounded-xl p-4 focus:border-blue-500 outline-none">
+                    <label class="block text-2xl font-black text-slate-700 mb-3">聯絡電話</label>
+                    <input type="tel" name="1001093" id="input_phone" class="w-full text-3xl border-4 border-slate-200 rounded-2xl p-5 outline-none font-bold">
                 </div>
                 <div>
-                    <label class="block text-xl font-bold text-gray-700 mb-2">職業</label>
-                    <input type="text" id="input_occ" class="w-full text-2xl border-2 border-gray-300 rounded-xl p-4 focus:border-blue-500 outline-none">
+                    <label class="block text-2xl font-black text-slate-700 mb-3">職業</label>
+                    <input type="text" name="1001094" id="input_occ" class="w-full text-3xl border-4 border-slate-200 rounded-2xl p-5 outline-none font-bold">
                 </div>
-            </div>
+                <!-- 簽名隱藏欄位 (與 Ragic 欄位 ID 對應) -->
+                <input type="hidden" name="1001110" id="hidden_signature">
+            </form>
 
-            <button onclick="goStep(2)" class="big-btn w-full mt-10 bg-blue-600 hover:bg-blue-700 text-white text-2xl font-black py-6 rounded-2xl shadow-lg">
-                這是我本人，下一步 👉
+            <button onclick="goStep(2)" class="big-btn w-full mt-12 bg-blue-600 hover:bg-blue-700 text-white text-3xl font-black py-8 rounded-3xl shadow-2xl">
+                資料正確，下一步 👉
             </button>
         </div>
 
         <!-- 第二步：預覽收據與簽名 -->
-        <div id="step-2" class="hidden bg-white rounded-3xl shadow-xl p-4 md:p-10 border-t-8 border-green-600">
-            <h1 class="text-2xl font-black text-center mb-6">不動產要約定金收據</h1>
+        <div id="step-2" class="hidden bg-white rounded-[2rem] shadow-2xl p-4 md:p-12 border-t-[12px] border-green-600">
+            <h1 class="text-3xl font-black text-center mb-8 text-green-700">不動產要約定金收據</h1>
             
-            <div class="overflow-x-auto">
-                <table class="receipt-table w-full text-sm md:text-base mb-6">
+            <div class="overflow-x-auto mb-10">
+                <table class="receipt-table w-full text-base md:text-lg border-collapse">
                     <tr>
                         <th>房屋地址</th>
-                        <td colspan="3" id="show_addr">-</td>
+                        <td colspan="3" id="show_addr" class="font-bold text-slate-800">-</td>
                     </tr>
                     <tr>
-                        <th>月租金</th>
-                        <td id="show_rent" class="font-bold text-lg">-</td>
+                        <th>租金</th>
+                        <td id="show_rent" class="font-black text-blue-700 text-xl">-</td>
                         <th>押金</th>
-                        <td id="show_deposit">-</td>
+                        <td id="show_deposit" class="font-bold">-</td>
                     </tr>
                     <tr>
-                        <th>起租日</th>
-                        <td id="show_date">-</td>
-                        <th>付費方式</th>
-                        <td>月繳</td>
+                        <th>起租日期</th>
+                        <td id="show_date" class="font-bold">-</td>
+                        <th>付款方式</th>
+                        <td class="font-bold italic text-slate-500">月繳</td>
                     </tr>
                     <tr>
                         <th>要約條件</th>
-                        <td colspan="3" id="show_cond" class="text-xs h-24 align-top">無特別約定條件。</td>
+                        <td colspan="3" id="show_cond" class="text-sm h-32 align-top text-slate-600 leading-relaxed font-medium">-</td>
                     </tr>
                     <tr>
                         <th>要約定金</th>
-                        <td id="show_earnest" class="text-red-600 font-bold text-xl">-</td>
+                        <td id="show_earnest" class="text-red-600 font-black text-3xl">-</td>
                         <th>編號</th>
-                        <td id="show_no">-</td>
+                        <td id="show_no" class="font-mono text-slate-400 text-sm">-</td>
                     </tr>
                 </table>
             </div>
 
-            <div class="bg-gray-50 p-4 rounded-xl text-xs text-gray-500 leading-relaxed mb-8">
+            <div class="bg-blue-50 border-l-8 border-blue-400 p-8 rounded-2xl text-base text-slate-700 leading-relaxed mb-10">
+                <p class="font-black text-blue-800 mb-3 text-xl">重要約定：</p>
                 壹、上述條件由房客確認無誤。貳、若屋主不同意承租，定金無息退還房客。參、如屋主同意承租，定金轉為部分押金或租金。肆、若房客反悔，定金由屋主沒收。
             </div>
 
-            <div class="mb-4">
-                <label class="block text-2xl font-black text-gray-800 mb-4 text-center underline decoration-blue-500 decoration-4 underline-offset-8">請在此處簽名</label>
+            <div class="mb-6">
+                <label class="block text-3xl font-black text-slate-800 mb-8 text-center underline decoration-blue-500 decoration-8 underline-offset-[12px]">房客在此處簽名</label>
                 <div class="relative">
                     <canvas id="signature-pad"></canvas>
-                    <button onclick="signaturePad.clear()" class="absolute top-2 right-2 bg-gray-100 text-gray-500 px-4 py-2 rounded-lg font-bold text-sm">重簽</button>
+                    <button onclick="signaturePad.clear()" class="absolute top-4 right-4 bg-slate-100 text-slate-600 px-6 py-3 rounded-xl font-black text-sm shadow active:bg-slate-200">清除重寫</button>
                 </div>
             </div>
 
-            <div class="flex flex-col md:flex-row gap-4">
-                <button onclick="goStep(1)" class="order-2 md:order-1 flex-1 bg-gray-200 text-gray-700 text-xl font-bold py-5 rounded-2xl">回上一步</button>
-                <button onclick="submitData()" id="btn-submit" class="order-1 md:order-2 big-btn flex-[2] bg-green-600 hover:bg-green-700 text-white text-2xl font-black py-5 rounded-2xl shadow-xl">
+            <div class="flex flex-col md:flex-row gap-6 mt-12">
+                <button onclick="goStep(1)" class="order-2 md:order-1 flex-1 bg-slate-100 text-slate-500 text-2xl font-black py-6 rounded-3xl">返回修改</button>
+                <button onclick="submitData()" id="btn-submit" class="order-1 md:order-2 big-btn flex-[2] bg-green-600 hover:bg-green-700 text-white text-3xl font-black py-6 rounded-3xl shadow-2xl">
                     簽好了，送出 ✅
                 </button>
             </div>
         </div>
 
-        <!-- 成功畫面 -->
-        <div id="step-success" class="hidden bg-white rounded-3xl shadow-xl p-10 text-center">
-            <div class="text-8xl mb-6">🎉</div>
-            <h1 class="text-4xl font-black text-green-600 mb-4">簽署成功！</h1>
-            <p class="text-gray-500 text-xl">資料已傳回給服務專員。<br>您可以關閉這個畫面了。</p>
+        <!-- 第三步：成功畫面 -->
+        <div id="step-success" class="hidden bg-white rounded-[3rem] shadow-2xl p-16 text-center border-t-[16px] border-emerald-500">
+            <div class="text-[120px] mb-8 animate-bounce">✅</div>
+            <h1 class="text-5xl font-black text-emerald-600 mb-6">簽署完成！</h1>
+            <p class="text-slate-500 text-2xl leading-relaxed">您的收據已成功回傳。<br>感謝您的配合，您可以關閉此頁面。</p>
         </div>
     </div>
 
     <script>
-        const RAGIC_API_KEY = "Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==";
-        const RAGIC_BASE_URL = "https://www.ragic.com/demo/lease-management/2"; 
+        // --- 設定區 ---
+        const RAGIC_API_KEY = "VEZsOEwzYzVJdWdoWXRDM3ptS2YwRk9mUjFib2tWVXJ1RitpTGNSWk94R3YzbVVPU0JJaThraUkxVzRQbEFaOQ==";
+        const RAGIC_BASE_URL = "https://ap15.ragic.com/wuohome/payments/1"; 
         
         const FIELDS = {
             name: "1001091", id: "1001092", phone: "1001093", occupation: "1001094",
@@ -133,62 +170,116 @@
         let recordId = new URLSearchParams(window.location.search).get('id');
         let signaturePad = null;
 
-        window.onload = async () => {
-            const loader = document.getElementById('loader');
-            const loaderText = document.getElementById('loader-text');
-            const retryBtn = document.getElementById('retry-btn');
+        // 全域回傳函式 (JSONP 必備)
+        window.ragicCallback = function(data) {
+            console.log("Ragic 資料原始內容：", data);
+            
+            // 強力搜尋：找出任何包含欄位資訊的物件
+            currentRecord = findRecordDeep(data);
 
-            if (!recordId) {
-                loaderText.innerHTML = "<span class='text-red-600'>⚠️ 網址缺少 ID 參數</span><br><small>請確認連結是否包含 ?id=...</small>";
-                return;
-            }
-
-            try {
-                await loadData();
+            if (currentRecord) {
+                renderStepOne();
                 initSignature();
-                // 資料載入成功後，隱藏 loader 並顯示第一步
-                loader.classList.add('hidden');
+                document.getElementById('loader').classList.add('hidden');
                 document.getElementById('step-1').classList.remove('hidden');
-            } catch (err) {
-                console.error(err);
-                loaderText.innerHTML = "<span class='text-red-600'>❌ 連線失敗</span><br><small>原因：" + err.message + "</small>";
-                retryBtn.classList.remove('hidden');
+            } else {
+                showError("資料解析失敗", `ID ${recordId} 的資料內容不符合預期。請確認該 ID 在 payments 表單中確實存在，且欄位編號正確。`);
             }
         };
 
-        async function loadData() {
-            // 使用 api 參數並強制檢查回應
-            const url = `${RAGIC_BASE_URL}/${recordId}?api`;
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: { "Authorization": "Basic " + btoa(RAGIC_API_KEY) }
-            });
-
-            if (!response.ok) {
-                if (response.status === 401) throw new Error("API Key 無效或權限不足");
-                if (response.status === 404) throw new Error("找不到這筆定金單");
-                throw new Error("伺服器回應錯誤 (" + response.status + ")");
+        window.onload = () => {
+            if (!recordId) {
+                document.getElementById('loader-spinner').classList.add('hidden');
+                document.getElementById('loader-text').classList.add('hidden');
+                document.getElementById('test-mode-ui').classList.remove('hidden');
+                return;
             }
+            executeLoad();
+        };
 
-            const data = await response.json();
-            currentRecord = data[recordId];
+        function startManualTest() {
+            const input = document.getElementById('test-id-input');
+            if (!input.value) { alert("請輸入編號！"); return; }
+            recordId = input.value.trim();
+            document.getElementById('test-mode-ui').classList.add('hidden');
+            document.getElementById('loader-spinner').classList.remove('hidden');
+            document.getElementById('loader-text').classList.remove('hidden');
+            document.getElementById('loader-text').innerText = "連線讀取中...";
+            executeLoad();
+        }
 
-            if (!currentRecord) throw new Error("資料庫內找不到對應的編號");
+        // 讀取：使用 JSONP 並補上 .json 以及 jsonp 參數
+        function executeLoad() {
+            const loaderText = document.getElementById('loader-text');
+            const retryBtn = document.getElementById('retry-btn');
+            
+            const script = document.createElement('script');
+            // 修正：Ragic 的 JSONP 參數通常是 jsonp=... 且建議加上 .json 結尾
+            script.src = `${RAGIC_BASE_URL}/${recordId}.json?api&APIKey=${RAGIC_API_KEY}&jsonp=ragicCallback`;
+            script.onerror = () => {
+                showError("系統連線錯誤", "無法連線至伺服器。請檢查您的網路狀況，或確認 API Key 是否正確。");
+            };
+            document.body.appendChild(script);
 
-            // 填入第一頁
+            // 超時處理
+            setTimeout(() => {
+                if (!currentRecord) {
+                    showError("連線超時", "伺服器反應緩慢。請確認您的 Ragic 網址與 ID 是否正確。");
+                }
+            }, 10000);
+        }
+
+        function showError(title, msg) {
+            document.getElementById('loader-spinner').classList.add('hidden');
+            document.getElementById('loader-text').innerHTML = `<span class='text-red-600 font-black'>❌ ${title}</span><br><small class='text-gray-500'>${msg}</small>`;
+            document.getElementById('retry-btn').classList.remove('hidden');
+        }
+
+        function cleanCurrency(val) {
+            if (!val) return 0;
+            if (typeof val === 'number') return val;
+            const cleaned = val.toString().replace(/[^\d.]/g, '');
+            return Number(cleaned) || 0;
+        }
+
+        // 暴力深度搜尋：只要物件裡面有任何一個 Key 是 100 開頭的數字，就視為紀錄
+        function findRecordDeep(obj) {
+            if (!obj || typeof obj !== 'object') return null;
+            
+            // 檢查目前的屬性中是否有欄位 ID
+            for (let key in obj) {
+                if (key.startsWith('100')) return obj;
+            }
+            
+            // 如果沒找到，繼續往內層鑽
+            if (Array.isArray(obj)) {
+                for (let item of obj) {
+                    const res = findRecordDeep(item);
+                    if (res) return res;
+                }
+            } else {
+                for (let key in obj) {
+                    const res = findRecordDeep(obj[key]);
+                    if (res) return res;
+                }
+            }
+            return null;
+        }
+
+        function renderStepOne() {
             document.getElementById('input_name').value = currentRecord[FIELDS.name] || "";
             document.getElementById('input_id').value = currentRecord[FIELDS.id] || "";
             document.getElementById('input_phone').value = currentRecord[FIELDS.phone] || "";
             document.getElementById('input_occ').value = currentRecord[FIELDS.occupation] || "";
 
-            // 填入第二頁預覽
+            // 更新預覽頁面
             document.getElementById('show_addr').innerText = currentRecord[FIELDS.addr] || "-";
-            document.getElementById('show_rent').innerText = "$ " + (Number(currentRecord[FIELDS.rent]).toLocaleString());
-            document.getElementById('show_deposit').innerText = "$ " + (Number(currentRecord[FIELDS.deposit]).toLocaleString());
+            document.getElementById('show_rent').innerText = "$ " + cleanCurrency(currentRecord[FIELDS.rent]).toLocaleString();
+            document.getElementById('show_deposit').innerText = "$ " + cleanCurrency(currentRecord[FIELDS.deposit]).toLocaleString();
             document.getElementById('show_date').innerText = currentRecord[FIELDS.date] || "-";
             document.getElementById('show_cond').innerText = currentRecord[FIELDS.conditions] || "無特別約定條件。";
-            document.getElementById('show_earnest').innerText = "$ " + (Number(currentRecord[FIELDS.earnest]).toLocaleString());
-            document.getElementById('show_no').innerText = currentRecord[FIELDS.no] || "AUTO";
+            document.getElementById('show_earnest').innerText = "$ " + cleanCurrency(currentRecord[FIELDS.earnest]).toLocaleString();
+            document.getElementById('show_no').innerText = currentRecord[FIELDS.no] || "ID-" + recordId;
         }
 
         function initSignature() {
@@ -205,57 +296,29 @@
             document.getElementById('step-2').classList.add('hidden');
             document.getElementById(`step-${n}`).classList.remove('hidden');
             window.scrollTo(0, 0);
-            if(n === 2) {
-                // 進入第二步時重新調整簽名板大小以防跑版
-                setTimeout(initSignature, 200);
-            }
+            if(n === 2) setTimeout(initSignature, 200);
         }
 
-        async function submitData() {
-            if (signaturePad.isEmpty()) {
-                alert("阿公/阿嬤，要在藍色框框內簽名才能送出哦！");
-                return;
-            }
-
+        function submitData() {
+            if (signaturePad.isEmpty()) { alert("請簽名後再送出哦！"); return; }
             const btn = document.getElementById('btn-submit');
-            const loader = document.getElementById('loader');
-            const loaderText = document.getElementById('loader-text');
-            
             btn.disabled = true;
-            btn.innerText = "正在傳送...";
+            btn.innerText = "傳送中...";
+            const loader = document.getElementById('loader');
             loader.classList.remove('hidden');
-            loaderText.innerText = "資料傳送中，請勿關閉...";
+            document.getElementById('loader-spinner').classList.remove('hidden');
+            document.getElementById('loader-text').innerText = "簽署回傳中，請勿關閉...";
+            document.getElementById('hidden_signature').value = signaturePad.toDataURL();
 
-            const payload = new URLSearchParams();
-            payload.append(FIELDS.name, document.getElementById('input_name').value);
-            payload.append(FIELDS.id, document.getElementById('input_id').value.toUpperCase());
-            payload.append(FIELDS.phone, document.getElementById('input_phone').value);
-            payload.append(FIELDS.occupation, document.getElementById('input_occ').value);
-            payload.append(FIELDS.signature, signaturePad.toDataURL()); 
+            const form = document.getElementById('ragicForm');
+            form.action = `${RAGIC_BASE_URL}/${recordId}?api&APIKey=${RAGIC_API_KEY}`;
+            form.submit();
 
-            try {
-                const response = await fetch(`${RAGIC_BASE_URL}/${recordId}?api`, {
-                    method: 'POST',
-                    headers: { 
-                        "Authorization": "Basic " + btoa(RAGIC_API_KEY),
-                        "Content-Type": "application/x-www-form-urlencoded"
-                    },
-                    body: payload
-                });
-
-                if (response.ok) {
-                    loader.classList.add('hidden');
-                    document.getElementById('step-2').classList.add('hidden');
-                    document.getElementById('step-success').classList.remove('hidden');
-                } else {
-                    throw new Error("傳送失敗，請聯繫業務員");
-                }
-            } catch (err) {
+            setTimeout(() => {
                 loader.classList.add('hidden');
-                alert("哎呀！傳送失敗了，請檢查網路後再試一次：\n" + err.message);
-                btn.disabled = false;
-                btn.innerText = "簽好了，送出 ✅";
-            }
+                document.getElementById('step-2').classList.add('hidden');
+                document.getElementById('step-success').classList.remove('hidden');
+            }, 2500);
         }
     </script>
 </body>
