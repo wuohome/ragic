@@ -87,9 +87,9 @@
       <p class="text-slate-500 mb-12 text-2xl font-medium text-center md:text-left">房客您好，資料若有誤可直接修改。</p>
       
       <!-- 
-        【修正說明】
-        這裡的 name 屬性是「寫入目標」，嚴格遵守您指定的新 ID。
-        encType 設為 multipart/form-data 以符合某些 Ragic API 的簽名上傳需求。
+        表單設定：
+        1. target="hidden_iframe" -> 避免頁面跳轉
+        2. enctype="multipart/form-data" -> 支援檔案上傳 (PDF)
       -->
       <form id="ragicForm" method="POST" target="hidden_iframe" accept-charset="UTF-8" enctype="multipart/form-data" class="space-y-10">
         <div>
@@ -107,8 +107,12 @@
           <!-- 寫入 ID：1000837 -->
           <input type="text" name="1000837" id="input_occ" class="grandpa-input w-full text-4xl border-4 border-slate-200 rounded-3xl p-6 outline-none font-bold">
         </div>
-        <!-- 簽名欄位 (Hidden) 寫入 ID：1000816 -->
+        
+        <!-- 簽名欄位 (Hidden) 寫入 ID：1000816 (Base64字串) -->
         <input type="hidden" name="1000816" id="hidden_signature">
+
+        <!-- 【新增】PDF 自動上傳欄位 (Hidden File Input) 寫入 ID：1001709 -->
+        <input type="file" name="1001709" id="hidden_pdf_input" style="display:none;">
       </form>
       
       <button id="btn-next" class="big-btn w-full mt-14 bg-blue-600 hover:bg-blue-700 text-white text-4xl font-black py-9 rounded-[2.5rem] shadow-2xl">資料正確，下一頁 👉</button>
@@ -225,10 +229,10 @@
     <div id="step-success" class="hidden bg-white rounded-[3rem] shadow-2xl p-10 md:p-20 text-center border-t-[16px] border-emerald-500">
       <div class="text-[120px] mb-8">✅</div>
       <h1 class="text-6xl font-black text-emerald-600 mb-6">簽署完成！</h1>
-      <p class="text-slate-500 text-2xl mb-12">收據已傳回系統存檔。<br>請點擊下方按鈕將收據存入手機。</p>
+      <p class="text-slate-500 text-2xl mb-12">收據已傳回系統存檔。<br>PDF 也已自動上傳歸檔。</p>
       
       <button onclick="downloadReceiptPDF()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-9 rounded-[2.5rem] text-4xl shadow-xl big-btn flex items-center justify-center gap-4 mb-8">
-        📥 點我下載收據 PDF
+        📥 下載備份 PDF
       </button>
       <p class="text-slate-400 text-xl italic font-medium">※ 下載後請至手機的「檔案」或「下載管理」查看</p>
     </div>
@@ -357,14 +361,12 @@
       service_fee: ["1000839", "服務費"],
       
       // 【修正】：讀取來源設定
-      // 邏輯：優先讀取新 ID (1000792) -> 如果沒資料 -> 讀取舊 ID (1001091) -> 如果也沒 -> 讀取欄位名稱
-      // 這樣可以確保畫面上一定有字！
       cust_name: ["1000792", "1001091", "租客姓名"],   
       cust_phone: ["1000808", "租客電話"], 
       cust_occ: ["1000837", "租客職業"],
       
-      // 簽名 (主要用於存檔)
-      signature: "1000816"
+      signature: "1000816",
+      pdf_upload: "1001709" // 新增 PDF 欄位 ID
     };
 
     let currentRecord = null;
@@ -465,18 +467,15 @@
     }
 
     function renderData() {
-      // 1. 填入 Step 1 (這裡會聰明地嘗試多個 ID，確保不會空白)
       if($("input_name")) $("input_name").value = getValue(currentRecord, FIELDS.cust_name);
       if($("input_phone")) $("input_phone").value = getValue(currentRecord, FIELDS.cust_phone);
       if($("input_occ")) $("input_occ").value = getValue(currentRecord, FIELDS.cust_occ);
 
-      // 車位資訊
       const pType = getValue(currentRecord, FIELDS.parking_type);
       const pPre = getValue(currentRecord, FIELDS.parking_pre);
       const pNum = getValue(currentRecord, FIELDS.parking_num);
       const parkingFull = pType ? `${pType}${pPre ? '，' + pPre : ''}${pNum ? ' ' + pNum : ''}` : "無車位";
 
-      // 填入 Step 2 & PDF
       const mapping = [
           { s: "show_no", p: "pdf_no", v: getValue(currentRecord, FIELDS.no) },
           { s: "show_addr", p: "pdf_addr", v: getValue(currentRecord, FIELDS.addr) },
@@ -506,7 +505,6 @@
       if($("show_cond")) $("show_cond").innerHTML = cond; 
       if($("pdf_cond")) $("pdf_cond").innerHTML = cond; 
 
-      // 處理後五碼
       const rCode = getValue(currentRecord, FIELDS.remit_code);
       const showCode = (rCode && rCode.trim() !== "");
       if($("show_remit_code")) $("show_remit_code").innerText = rCode;
@@ -524,7 +522,6 @@
       signaturePad = new SignaturePad(canvas, { minWidth: 3, maxWidth: 8, penColor: "black" });
     }
 
-    // 關鍵：將 Step 1 輸入的值同步到 Step 2 預覽
     function updatePreviewFromForm() {
       const name = $("input_name").value;
       const phone = $("input_phone").value;
@@ -534,7 +531,6 @@
       if($("show_final_phone")) $("show_final_phone").innerText = phone;
       if($("show_final_occ")) $("show_final_occ").innerText = occ;
       
-      // 同步到 PDF
       if($("pdf_phone")) $("pdf_phone").innerText = phone;
       if($("pdf_occ")) $("pdf_occ").innerText = occ;
     }
@@ -548,51 +544,90 @@
       $("step-" + n).classList.remove('hidden'); window.scrollTo(0, 0);
     }
 
+    // 【新增】產生 PDF Blob 的共用函式
+    async function generatePDFBlob() {
+        const element = $("pdf-export-area");
+        // 使用較高的 scale 以確保列印品質
+        const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+        const imgWidth = 210; 
+        const imgHeight = (canvas.height * imgWidth) / canvas.width; 
+        const { jsPDF } = window.jspdf; 
+        const pdf = new jsPDF('p', 'mm', [imgWidth, imgHeight]);
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgWidth, imgHeight);
+        return pdf.output('blob'); // 回傳 Blob 物件
+    }
+
+    // 下載按鈕 (現在可以重用生成邏輯)
     async function downloadReceiptPDF() {
         const btn = event.currentTarget; btn.innerText = "PDF 產生中..."; btn.disabled = true;
         try {
-            const element = $("pdf-export-area");
-            const canvas = await html2canvas(element, { scale: 2, useCORS: true });
-            const imgWidth = 210; 
-            const imgHeight = (canvas.height * imgWidth) / canvas.width; 
-            const { jsPDF } = window.jspdf; 
-            const pdf = new jsPDF('p', 'mm', [imgWidth, imgHeight]);
-            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgWidth, imgHeight);
-            pdf.save(`定金收據_${$("show_final_name").innerText}.pdf`);
+            const pdfBlob = await generatePDFBlob();
+            // 建立下載連結
+            const url = URL.createObjectURL(pdfBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `定金收據_${$("show_final_name").innerText}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         } catch (err) { 
             console.error(err);
             alert("下載失敗，請先截圖存檔。"); 
         } finally { 
-            btn.innerText = "📥 點我下載收據 PDF"; btn.disabled = false; 
+            btn.innerText = "📥 下載備份 PDF"; btn.disabled = false; 
         }
     }
 
-    function submitData() {
+    // 【修正】提交資料：先產生 PDF，放入 input，再送出
+    async function submitData() {
       if (!signaturePad || signaturePad.isEmpty()) { alert("請先完成簽名喔！"); return; }
       if (!recordId) { alert("系統錯誤：無法取得單號 (Record ID)，無法存檔。請重新載入。"); return; }
 
-      const sigData = signaturePad.toDataURL("image/png");
-      if($("pdf_signature_img")) $("pdf_signature_img").src = sigData;
-      if($("hidden_signature")) $("hidden_signature").value = sigData;
-      
       $("loader").classList.remove('hidden'); 
-      $("loader-text").innerText = "存檔傳送中...";
+      $("loader-text").innerText = "正在生成收據 PDF 並上傳...";
 
-      const form = $("ragicForm");
-      // 使用 v=3 API 進行更新
-      form.action = `${RAGIC_BASE_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_API_KEY)}`;
-      
-      form.submit();
+      try {
+          // 1. 同步簽名到 PDF 區域
+          const sigData = signaturePad.toDataURL("image/png");
+          if($("pdf_signature_img")) $("pdf_signature_img").src = sigData;
+          if($("hidden_signature")) $("hidden_signature").value = sigData;
 
-      setTimeout(() => { 
-          $("loader").classList.add('hidden'); 
-          $("step-2").classList.add('hidden'); 
-          $("step-success").classList.remove('hidden'); 
-          window.scrollTo(0, 0); 
-      }, 3000);
+          // 2. 等待圖片渲染 (雖然 src 是同步的，但稍微緩衝比較保險)
+          await new Promise(r => setTimeout(r, 100));
+
+          // 3. 生成 PDF Blob
+          const pdfBlob = await generatePDFBlob();
+
+          // 4. 將 PDF Blob 塞入隱藏的 File Input
+          const fileInput = $("hidden_pdf_input");
+          const dataTransfer = new DataTransfer();
+          const fileName = `不動產要約定金收據_${$("show_final_name").innerText}.pdf`;
+          // 建立檔案物件
+          const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
+          dataTransfer.items.add(pdfFile);
+          fileInput.files = dataTransfer.files;
+
+          // 5. 送出表單
+          const form = $("ragicForm");
+          form.action = `${RAGIC_BASE_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_API_KEY)}`;
+          form.submit();
+
+          // 6. 顯示成功
+          setTimeout(() => { 
+              $("loader").classList.add('hidden'); 
+              $("step-2").classList.add('hidden'); 
+              $("step-success").classList.remove('hidden'); 
+              window.scrollTo(0, 0); 
+          }, 4000); // 延長時間給檔案上傳
+
+      } catch (e) {
+          console.error("PDF 生成或上傳失敗", e);
+          alert("自動上傳 PDF 失敗，但文字資料可能已送出。請手動下載 PDF 備份。");
+          $("loader").classList.add('hidden');
+      }
     }
 
-    // 除錯工具：顯示這筆資料所有的欄位 ID
     function showFieldIds() {
         if (!currentRecord) return alert("尚未載入資料");
         $("debug-area").style.display = "block";
@@ -601,7 +636,7 @@
             output += `ID: ${key} | 值: ${currentRecord[key]}\n`;
         }
         $("debug-content").innerText = output;
-        alert("請查看頁面下方的黑色診斷框，確認是否有 1000792, 1000808, 1000837, 1000816 這些欄位 ID。");
+        alert("請查看頁面下方的黑色診斷框，確認是否有 1000792, 1000808, 1000837, 1000816, 1001709 這些欄位 ID。");
     }
 
     window.onload = () => {
