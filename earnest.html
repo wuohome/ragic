@@ -14,9 +14,17 @@
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
     body { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; }
     
+    /* 預覽頁面表格樣式 */
     .receipt-table { border-collapse: collapse; width: 100%; border: 2.5px solid #000; }
     .receipt-table th, .receipt-table td { border: 1.5px solid #000; padding: 12px; vertical-align: middle; }
     .receipt-table th { background-color: #f8fafc; font-weight: 900; width: 130px; color: #000; font-size: 1.1rem; text-align: center; }
+    
+    /* PDF 專用樣式 (強制覆寫以確保 html2canvas 渲染正確) */
+    .pdf-table th, .pdf-table td { 
+        vertical-align: middle !important; 
+        padding: 15px 20px !important; /* 增加內距，幫助視覺置中 */
+        line-height: 1.4 !important;
+    }
     
     .big-btn { transition: all 0.2s; cursor: pointer; }
     .big-btn:active { transform: scale(0.96); opacity: 0.9; }
@@ -30,7 +38,7 @@
     .pdf-title { font-size: 36px; font-weight: 900; text-align: center; margin-bottom: 25px; color: #000; }
     .pdf-header-info { text-align: right; font-size: 18px; margin-bottom: 12px; font-weight: bold; }
 
-    /* 水印專用樣式 - 修正版 */
+    /* 水印專用樣式 - 螢幕預覽用 */
     .watermark-bg {
       position: relative;
       z-index: 0;
@@ -39,11 +47,12 @@
       content: "";
       position: absolute;
       top: 0; left: 0; width: 100%; height: 100%;
-      background-image: url('https://ap15.ragic.com/sims/file.jsp?a=wuohome&f=ezPxf7j0Uo%40S__73105435.png');
+      /* GitHub 圖床連結 */
+      background-image: url('https://raw.githubusercontent.com/wuohome/ragic/refs/heads/main/logooo.png');
       background-position: center center;
       background-repeat: no-repeat;
-      background-size: 500px auto; /* 浮水印大小 */
-      opacity: 0.15; /* 透明度設定為 15% 以確保文字清晰 */
+      background-size: 500px auto; 
+      opacity: 0.15;
       pointer-events: none;
       z-index: -1;
     }
@@ -117,6 +126,7 @@
         <div class="text-right mb-4 font-bold text-2xl">編號：<span id="show_no">-</span></div>
         <h1 class="text-4xl font-black text-center mb-8 text-slate-900">不動產要約定金收據</h1>
         
+        <!-- 預覽頁使用 Flexbox 置中 (螢幕顯示較佳) -->
         <table class="receipt-table mb-8 text-lg">
           <tr>
             <th>房屋地址</th>
@@ -130,7 +140,6 @@
           <tr>
             <th>押 金</th>
             <td id="show_deposit" class="font-bold text-2xl">-</td>
-            <!-- 管理費備註排版 -->
             <td colspan="2" class="font-bold align-middle">
                 管理費：<span id="show_mgmt">-</span><br>
                 <span class="text-sm text-slate-500 font-normal">※實際金額依管委會規定繳納</span>
@@ -153,35 +162,37 @@
             <td colspan="3" id="show_cond" class="text-base h-40 align-top leading-relaxed">-</td>
           </tr>
           <tr>
-            <th>要約定金</th>
-            <td id="show_earnest" class="text-red-600 font-black text-3xl">-</td>
+            <th rowspan="2">要約定金</th> <!-- 修改：合併儲存格 -->
+            <td rowspan="2" id="show_earnest" class="text-red-600 font-black text-3xl">-</td> <!-- 修改：合併儲存格 -->
             <th style="width: 80px;">簽約</th>
             <td id="show_sign_date" class="font-bold">-</td>
           </tr>
           <tr>
-            <td colspan="2" class="border-none"></td>
             <th style="width: 80px;">起租</th>
             <td id="show_start_date" class="font-bold">-</td>
           </tr>
           <tr>
             <th>付款方式</th>
             <td colspan="3" class="font-bold">
-                <span id="show_remit_method">-</span> 後五碼：<span id="show_remit_code">-</span>
+                <!-- 預覽頁付款方式2顯示邏輯修改 -->
+                <span id="show_remit_method">-</span> <span id="show_remit_label">後五碼：</span><span id="show_remit_code">-</span>
             </td>
           </tr>
         </table>
 
-        <div class="bg-slate-100 p-4 rounded-xl text-lg font-bold text-center mb-10 border-2 border-dashed border-slate-300">
+        <!-- 預覽頁提示框 -->
+        <div class="bg-slate-100 p-4 rounded-xl text-lg font-bold text-center mb-10 border-2 border-dashed border-slate-300 flex flex-col justify-center items-center h-24">
             簽約請攜帶：定金收據、押租金、服務費尾款、印章、雙證件影本3份。
         </div>
 
         <div class="grid grid-cols-2 gap-8 px-6 mb-12 border-b-2 pb-10">
             <div class="space-y-4">
-                <p class="text-2xl font-bold">房客：<span id="show_final_name" class="underline px-4">-</span></p>
+                <p class="text-2xl font-bold">房客（簽名）：<span id="show_final_name" class="underline px-4">-</span></p>
                 <p class="text-xl">電話：<span id="show_final_phone">-</span></p>
                 <p class="text-xl">職業：<span id="show_final_occ">-</span></p>
             </div>
             <div class="text-right space-y-4">
+                <p class="text-sm font-bold text-slate-500">優式租售管理 - 窩的家三重加盟店</p>
                 <p class="text-2xl font-bold">經辦人員：<span id="show_agent">-</span></p>
                 <p class="text-xl">電話：<span id="show_agent_phone">-</span></p>
             </div>
@@ -189,13 +200,14 @@
       </div>
 
       <div class="mb-12">
+          <!-- 預覽頁重要約定 (保持正常字體大小) -->
           <p class="font-black text-2xl mb-4 text-slate-800">重要約定：</p>
           <ul class="text-base space-y-2 text-slate-700 list-none">
               <li>壹、上述條件由房客確認無誤，付定金後成立要約。</li>
               <li>貳、如房東不同意上述條件，則定金無息全額退還於房客。</li>
               <li>參、如房東同意上述條件，但因另有考量因素導致無法簽約，則定金無息全數退還於房客，不需支付額外費用。</li>
               <li>肆、如房東同意上述條件，但房客因故反悔不租或超過簽約日仍不辦理簽約者，定金不予退還。</li>
-              <li>伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="pdf_service_fee" class="font-bold underline text-blue-700">-</span> 作為服務費。</li>
+              <li>伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="show_service_fee" class="font-bold underline text-blue-700">-</span> 作為服務費。</li>
           </ul>
       </div>
 
@@ -227,85 +239,110 @@
     </div>
   </div>
 
-  <!-- PDF 生成區域 -->
-  <div id="pdf-export-area" class="watermark-bg">
-      <div class="pdf-header-info">編號：<span id="pdf_no">-</span></div>
-      <div class="pdf-title">不動產要約定金收據</div>
-      <table class="receipt-table" style="font-size: 19px; line-height: 1.5;">
-          <tr>
-              <th style="height: 65px;">房屋地址</th>
-              <td colspan="3" id="pdf_addr" style="padding-left: 20px; font-weight: bold;">-</td>
-          </tr>
-          <tr>
-            <th style="height: 65px;">租 金</th>
-            <td id="pdf_rent" style="padding-left: 20px; font-weight: 900; font-size: 26px;">-</td>
-            <td colspan="2" style="padding-left: 20px; font-weight: bold;">稅金：<span id="pdf_tax">-</span></td>
-          </tr>
-          <tr>
-            <th style="height: 85px;">押 金</th>
-            <td id="pdf_deposit" style="padding-left: 20px; font-weight: bold; font-size: 24px;">-</td>
-            <td colspan="2" style="padding-left: 20px; font-weight: bold; vertical-align: middle;">
-                管理費：<span id="pdf_mgmt">-</span><br>
-                <span style="font-size: 13px; color: #333; font-weight: normal;">※實際金額依管委會規定繳納</span>
-            </td>
-          </tr>
-          <tr>
-            <th style="height: 65px;">租 期</th>
-            <td colspan="3" id="pdf_period" style="padding-left: 20px; font-weight: bold;">-</td>
-          </tr>
-          <tr>
-            <th style="height: 65px;">車 位</th>
-            <td colspan="3" id="pdf_parking" style="padding-left: 20px; font-weight: bold;">-</td>
-          </tr>
-          <tr>
-            <th>付款方式</th>
-            <td colspan="3" id="pdf_pay_method" style="padding-left: 20px; font-weight: bold;">-</td>
-          </tr>
-          <tr>
-            <th style="height: 160px;">要約條件</th>
-            <td colspan="3" id="pdf_cond" style="padding: 20px; vertical-align: top; font-size: 17px; line-height: 1.8;">-</td>
-          </tr>
-          <tr>
-            <th style="height: 80px;">要約定金</th>
-            <td id="pdf_earnest" style="padding-left: 20px; font-weight: 900; font-size: 30px; color: #d00;">-</td>
-            <th style="width: 80px;">簽約</th>
-            <td id="pdf_sign_date" style="text-align: center; font-weight: bold;">-</td>
-          </tr>
-          <tr>
-            <td colspan="2" style="border: none;"></td>
-            <th style="width: 80px;">起租</th>
-            <td id="pdf_start_date" style="text-align: center; font-weight: bold;">-</td>
-          </tr>
-          <tr>
-            <th style="height: 65px;">付款方式</th>
-            <td colspan="3" style="padding-left: 20px; font-weight: bold;">
-                <span id="pdf_remit_method">-</span> 後五碼：<span id="pdf_remit_code">-</span>
-            </td>
-          </tr>
-      </table>
-      <div style="font-size: 16px; margin-top: 15px; color: #000; font-weight: bold;">簽約請攜帶： 定金收據、押租金、服務費尾款、印章、雙證件影本3份。</div>
+  <!-- PDF 生成區域 - GitHub 圖床優化版 -->
+  <div id="pdf-export-area" style="position: relative; background: white;">
       
-      <div style="display: flex; justify-content: space-between; margin-top: 50px; padding: 0 10px;">
-          <div style="width: 55%;">
-              <p style="font-size: 24px; font-weight: bold; margin-bottom: 35px;">房客：<img id="pdf_signature_img" style="display: inline-block; vertical-align: middle; max-height: 90px;"></p>
-              <p style="font-size: 18px;">電話：<span id="pdf_phone">-</span></p>
-              <p style="font-size: 18px;">職業：<span id="pdf_occ">-</span></p>
-          </div>
-          <div style="text-align: right; width: 45%;">
-              <p style="font-size: 24px; font-weight: bold; margin-bottom: 35px;">經辦人員：<span id="pdf_agent">-</span></p>
-              <p style="font-size: 18px;">電話：<span id="pdf_agent_phone">-</span></p>
-          </div>
-      </div>
+      <!-- 
+        使用 GitHub Raw 連結，並加上 crossorigin="anonymous" 
+        這會讓瀏覽器以 CORS 模式請求圖片，html2canvas 就能順利讀取內容
+      -->
+      <img id="pdf-watermark-img"
+           src="https://raw.githubusercontent.com/wuohome/ragic/refs/heads/main/logooo.png" 
+           crossorigin="anonymous"
+           style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px; opacity: 0.15; z-index: 0; pointer-events: none;">
 
-      <div style="margin-top: 60px; border-top: 3px solid #000; padding-top: 25px;">
-          <p style="font-weight: 900; font-size: 22px; margin-bottom: 15px;">重要約定：</p>
-          <p style="font-size: 15px; line-height: 2; text-align: justify;">
-              壹、上述條件由房客確認無誤，付定金後成立要約。<br>
-              貳、如房東不同意上述條件，則定金無息全額退還於房客。<br>
-              參、如房東同意上述條件，但因另有考量因素導致無法簽約，則定金無息全數退還於房客，不需支付額外費用。<br>
-              肆、如房東同意上述條件，但房客因故反悔不租或超過簽約日仍不辦理簽約者，定金不予退還。<br>
-              伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="pdf_service_fee" class="font-bold underline text-blue-700">-</span> 作為服務費。
-          </p>
+      <!-- 內容層：z-index 設為 1 確保在圖片上方 -->
+      <div style="position: relative; z-index: 1;">
+          <div class="pdf-header-info">編號：<span id="pdf_no">-</span></div>
+          <div class="pdf-title">不動產要約定金收據</div>
+          
+          <!-- PDF 表格：加入 pdf-table class 強制垂直置中 -->
+          <table class="receipt-table pdf-table" style="font-size: 19px; line-height: 1.5;">
+              <tr>
+                  <th style="height: 65px; vertical-align: middle;">房屋地址</th>
+                  <td colspan="3" id="pdf_addr" style="padding-left: 20px; font-weight: bold; vertical-align: middle;">-</td>
+              </tr>
+              <tr>
+                <th style="height: 65px; vertical-align: middle;">租 金</th>
+                <td id="pdf_rent" style="font-weight: 900; font-size: 26px; vertical-align: middle;">-</td>
+                <td colspan="2" style="padding-left: 20px; font-weight: bold; vertical-align: middle;">稅金：<span id="pdf_tax">-</span></td>
+              </tr>
+              <tr>
+                <th style="height: 85px; vertical-align: middle;">押 金</th>
+                <td id="pdf_deposit" style="font-weight: bold; font-size: 24px; vertical-align: middle;">-</td>
+                <td colspan="2" style="padding-left: 20px; font-weight: bold; vertical-align: middle;">
+                    管理費：<span id="pdf_mgmt">-</span><br>
+                    <span style="font-size: 13px; color: #333; font-weight: normal;">※實際金額依管委會規定繳納</span>
+                </td>
+              </tr>
+              <tr>
+                <th style="height: 65px; vertical-align: middle;">租 期</th>
+                <td colspan="3" id="pdf_period" style="padding-left: 20px; font-weight: bold; vertical-align: middle;">-</td>
+              </tr>
+              <tr>
+                <th style="height: 65px; vertical-align: middle;">車 位</th>
+                <td colspan="3" id="pdf_parking" style="padding-left: 20px; font-weight: bold; vertical-align: middle;">-</td>
+              </tr>
+              <tr>
+                <th style="height: 65px; vertical-align: middle;">付款方式</th>
+                <td colspan="3" id="pdf_pay_method" style="padding-left: 20px; font-weight: bold; vertical-align: middle;">-</td>
+              </tr>
+              <tr>
+                <th style="height: 160px; vertical-align: middle;">要約條件</th>
+                <td colspan="3" id="pdf_cond" style="padding: 20px; vertical-align: top !important; font-size: 17px; line-height: 1.8;">-</td>
+              </tr>
+              <tr>
+                <th rowspan="2" style="height: 80px; vertical-align: middle;">要約定金</th> <!-- 修改：合併儲存格 -->
+                <td rowspan="2" id="pdf_earnest" style="font-weight: 900; font-size: 30px; color: #d00; vertical-align: middle;">-</td> <!-- 修改：合併儲存格 -->
+                <th style="width: 80px; vertical-align: middle;">簽約</th>
+                <td id="pdf_sign_date" style="text-align: center; font-weight: bold; vertical-align: middle;">-</td>
+              </tr>
+              <tr>
+                <th style="width: 80px; vertical-align: middle;">起租</th>
+                <td id="pdf_start_date" style="text-align: center; font-weight: bold; vertical-align: middle;">-</td>
+              </tr>
+              <tr>
+                <th style="height: 65px; vertical-align: middle;">付款方式</th>
+                <td colspan="3" style="font-weight: bold; padding-left: 20px; vertical-align: middle;">
+                    <!-- PDF頁付款方式2顯示邏輯修改 -->
+                    <span id="pdf_remit_method">-</span> <span id="pdf_remit_label">後五碼：</span><span id="pdf_remit_code">-</span>
+                </td>
+              </tr>
+          </table>
+          
+          <!-- 修改 PDF 區域的【簽約請攜帶】樣式：改用 display: table 確保垂直置中 -->
+          <div style="background-color: #f1f5f9; border: 2px dashed #cbd5e1; border-radius: 12px; margin: 20px 0; display: table; width: 100%; height: 90px;">
+              <div style="display: table-cell; vertical-align: middle; text-align: center; color: #334155; font-size: 18px; font-weight: bold;">
+                簽約請攜帶：定金收據、押租金、服務費尾款、印章、雙證件影本3份。
+              </div>
+          </div>
+          
+          <!-- 重要約定：移至簽名區上方，小字 -->
+          <div style="margin-top: 40px; padding-top: 25px;">
+              <p style="font-weight: 900; font-size: 22px; margin-bottom: 15px;">重要約定：</p>
+              <ul style="font-size: 12px; line-height: 1.6; list-style: none; padding: 0; margin: 0;">
+                  <li style="margin-bottom: 5px;">壹、上述條件由房客確認無誤，付定金後成立要約。</li>
+                  <li style="margin-bottom: 5px;">貳、如房東不同意上述條件，則定金無息全額退還於房客。</li>
+                  <li style="margin-bottom: 5px;">參、如房東同意上述條件，但因另有考量因素導致無法簽約，則定金無息全數退還於房客，不需支付額外費用。</li>
+                  <li style="margin-bottom: 5px;">肆、如房東同意上述條件，但房客因故反悔不租或超過簽約日仍不辦理簽約者，定金不予退還。</li>
+                  <li>伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="pdf_service_fee" style="font-weight: bold; text-decoration: underline;">-</span> 作為服務費。</li>
+              </ul>
+          </div>
+
+          <!-- 簽名區：移至最下方 -->
+          <div style="display: flex; justify-content: space-between; margin-top: 50px; padding: 0 10px; border-top: 3px solid #000; padding-top: 30px;">
+              <div style="width: 55%;">
+                  <p style="font-size: 24px; font-weight: bold; margin-bottom: 35px;">房客（簽名）：<img id="pdf_signature_img" style="display: inline-block; vertical-align: middle; max-height: 90px;"></p>
+                  <p style="font-size: 18px;">電話：<span id="pdf_phone">-</span></p>
+                  <p style="font-size: 18px;">職業：<span id="pdf_occ">-</span></p>
+              </div>
+              <div style="text-align: right; width: 45%;">
+                  <p style="font-size: 14px; font-weight: bold; color: #555; margin-bottom: 5px;">優式租售管理 - 窩的家三重加盟店</p>
+                  <p style="font-size: 24px; font-weight: bold; margin-bottom: 35px;">經辦人員：<span id="pdf_agent">-</span></p>
+                  <p style="font-size: 18px;">電話：<span id="pdf_agent_phone">-</span></p>
+              </div>
+          </div>
+
       </div>
   </div>
 
@@ -502,7 +539,7 @@
           { s: "show_sign_date", p: "pdf_sign_date", v: getValue(currentRecord, FIELDS.sign_date) },
           { s: "show_start_date", p: "pdf_start_date", v: getValue(currentRecord, FIELDS.start_date) },
           { s: "show_remit_method", p: "pdf_remit_method", v: getValue(currentRecord, FIELDS.remit_method) || "現金" },
-          { s: "show_remit_code", p: "pdf_remit_code", v: getValue(currentRecord, FIELDS.remit_code) },
+          // remit_code 在後面單獨處理
           { s: "show_agent", p: "pdf_agent", v: getValue(currentRecord, FIELDS.agent) },
           { s: "show_agent_phone", p: "pdf_agent_phone", v: getValue(currentRecord, FIELDS.agent_phone) },
           { s: "show_final_phone", p: "pdf_phone", v: getValue(currentRecord, FIELDS.cust_phone) },
@@ -520,6 +557,20 @@
       if($("show_cond")) $("show_cond").innerHTML = cond; 
       if($("pdf_cond")) $("pdf_cond").innerHTML = cond; 
       if($("show_final_name")) $("show_final_name").innerText = getValue(currentRecord, "租客姓名");
+
+      // 處理後五碼顯示隱藏邏輯
+      const rCode = getValue(currentRecord, FIELDS.remit_code);
+      const showCode = (rCode && rCode.trim() !== "");
+      
+      // 更新預覽頁
+      if($("show_remit_code")) $("show_remit_code").innerText = rCode;
+      if($("show_remit_label")) $("show_remit_label").style.display = showCode ? "inline" : "none";
+      if($("show_remit_code")) $("show_remit_code").style.display = showCode ? "inline" : "none";
+
+      // 更新 PDF 頁
+      if($("pdf_remit_code")) $("pdf_remit_code").innerText = rCode;
+      if($("pdf_remit_label")) $("pdf_remit_label").style.display = showCode ? "inline" : "none";
+      if($("pdf_remit_code")) $("pdf_remit_code").style.display = showCode ? "inline" : "none";
     }
 
     function initSignature() {
@@ -555,12 +606,23 @@
         try {
             const element = $("pdf-export-area");
             const canvas = await html2canvas(element, { scale: 2, useCORS: true });
-            const { jsPDF } = window.jspdf; const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, imgHeight);
+            
+            // 計算 PDF 尺寸 (不限制高度，防止裁切)
+            const imgWidth = 210; // A4 寬度 (mm)
+            const imgHeight = (canvas.height * imgWidth) / canvas.width; // 依比例計算高度
+            
+            // 設定 PDF 頁面大小為內容的實際大小 (長條圖概念)
+            const { jsPDF } = window.jspdf; 
+            const pdf = new jsPDF('p', 'mm', [imgWidth, imgHeight]);
+            
+            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgWidth, imgHeight);
             pdf.save(`定金收據_${$("show_final_name").innerText}.pdf`);
-        } catch (err) { alert("下載失敗，請先截圖存檔。"); } finally { btn.innerText = "📥 點我下載收據 PDF"; btn.disabled = false; }
+        } catch (err) { 
+            console.error(err);
+            alert("下載失敗，請先截圖存檔。"); 
+        } finally { 
+            btn.innerText = "📥 點我下載收據 PDF"; btn.disabled = false; 
+        }
     }
 
     // 修正：回歸 Form Submit + Hidden Iframe 模式，以繞過 CORS
