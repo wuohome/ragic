@@ -304,7 +304,7 @@
               貳、如房東不同意上述條件，則定金無息全額退還於房客。<br>
               參、如房東同意上述條件，但因另有考量因素導致無法簽約，則定金無息全數退還於房客，不需支付額外費用。<br>
               肆、如房東同意上述條件，但房客因故反悔不租或超過簽約日仍不辦理簽約者，定金不予退還。<br>
-              伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="pdf_service_fee" style="font-weight: bold; text-decoration: underline;">-</span> 作為服務費。
+              伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="pdf_service_fee" class="font-bold underline text-blue-700">-</span> 作為服務費。
           </p>
       </div>
   </div>
@@ -351,7 +351,22 @@
     };
 
     let currentRecord = null;
-    let recordId = new URLSearchParams(window.location.search).get('id');
+    
+    // 優先檢查 URL 參數 'code'，若無則檢查 'id'
+    let urlParams = new URLSearchParams(window.location.search);
+    let recordId = urlParams.get('code');
+    
+    // 若無法透過標準方式取得 (例如使用者使用了 &code=... 格式)，則嘗試從 href 解析
+    if (!recordId) {
+        const match = window.location.href.match(/[?&]code=([^&]+)/);
+        if (match) recordId = match[1];
+    }
+    
+    // 若仍無 code，嘗試檢查舊版 id 參數
+    if (!recordId) {
+        recordId = urlParams.get('id');
+    }
+
     let signaturePad = null;
     let loadTimer = null;
     let submitting = false;
