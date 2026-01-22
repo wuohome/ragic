@@ -352,20 +352,28 @@
 
     let currentRecord = null;
     
-    // 優先檢查 URL 參數 'code'，若無則檢查 'id'
-    let urlParams = new URLSearchParams(window.location.search);
-    let recordId = urlParams.get('code');
+    // ------------------------------------------------------------
+    // [修復] 強制解析 URL 參數，確保 ?code=38 或 &code=38 都能讀取
+    // ------------------------------------------------------------
+    let recordId = null;
+    const href = window.location.href;
     
-    // 若無法透過標準方式取得 (例如使用者使用了 &code=... 格式)，則嘗試從 href 解析
-    if (!recordId) {
-        const match = window.location.href.match(/[?&]code=([^&]+)/);
-        if (match) recordId = match[1];
+    // 1. 優先嘗試正則表達式抓取 (最穩定的方式)
+    const matchCode = href.match(/[?&]code=([^&#]+)/i);
+    const matchId = href.match(/[?&]id=([^&#]+)/i);
+    
+    if (matchCode) {
+        recordId = matchCode[1];
+    } else if (matchId) {
+        recordId = matchId[1];
+    } else {
+        // 2. 備用：標準 URLSearchParams
+        const urlParams = new URLSearchParams(window.location.search);
+        recordId = urlParams.get('code') || urlParams.get('id');
     }
     
-    // 若仍無 code，嘗試檢查舊版 id 參數
-    if (!recordId) {
-        recordId = urlParams.get('id');
-    }
+    if (recordId) recordId = recordId.trim(); // 去除可能的多餘空白
+    // ------------------------------------------------------------
 
     let signaturePad = null;
     let loadTimer = null;
@@ -581,7 +589,7 @@
           $("step-2").classList.add('hidden'); 
           $("step-success").classList.remove('hidden'); 
           window.scrollTo(0, 0); 
-      }, 2500);
+      }, 3000);
     }
 
     function debug(m, o) { console.log(m, o); $("debug-area").style.display = 'block'; $("debug-content").innerText = m + "\n" + JSON.stringify(o, null, 2).substring(0, 400); }
