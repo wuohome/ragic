@@ -29,6 +29,29 @@
     #pdf-export-area { width: 850px; padding: 40px; background: white; position: absolute; left: -9999px; top: 0; }
     .pdf-title { font-size: 36px; font-weight: 900; text-align: center; margin-bottom: 25px; color: #000; }
     .pdf-header-info { text-align: right; font-size: 18px; margin-bottom: 12px; font-weight: bold; }
+
+    /* 水印專用樣式 - 修正版 */
+    .watermark-bg {
+      position: relative;
+      z-index: 0;
+    }
+    .watermark-bg::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background-image: url('https://ap15.ragic.com/sims/file.jsp?a=wuohome&f=ezPxf7j0Uo%40S__73105435.png');
+      background-position: center center;
+      background-repeat: no-repeat;
+      background-size: 500px auto; /* 浮水印大小 */
+      opacity: 0.15; /* 透明度設定為 15% 以確保文字清晰 */
+      pointer-events: none;
+      z-index: -1;
+    }
+    /* 確保內容在水印上方 */
+    .watermark-bg > * {
+      position: relative;
+      z-index: 1;
+    }
   </style>
 </head>
 
@@ -58,6 +81,7 @@
     </button>
   </div>
 
+  <!-- 隱藏的 iframe 用於接收表單提交結果，繞過 CORS -->
   <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
 
   <div class="max-w-4xl mx-auto p-4 md:p-8">
@@ -65,14 +89,12 @@
     <div id="step-1" class="hidden bg-white rounded-[3rem] shadow-2xl p-8 md:p-14 border-t-[16px] border-blue-600">
       <h1 class="text-5xl font-black text-blue-700 mb-6 text-center md:text-left">請核對房客資料</h1>
       <p class="text-slate-500 mb-12 text-2xl font-medium text-center md:text-left">房客您好，資料若有誤可直接修改。</p>
+      
+      <!-- 修正：表單指向隱藏 iframe -->
       <form id="ragicForm" method="POST" target="hidden_iframe" class="space-y-10">
         <div>
           <label class="block text-3xl font-black text-slate-700 mb-4">房客姓名</label>
           <input type="text" name="1001091" id="input_name" class="grandpa-input w-full text-4xl border-4 border-slate-200 rounded-3xl p-6 outline-none font-bold bg-yellow-50 shadow-inner">
-        </div>
-        <div>
-          <label class="block text-3xl font-black text-slate-700 mb-4">身分證字號</label>
-          <input type="text" name="1001092" id="input_id" class="grandpa-input w-full text-4xl border-4 border-slate-200 rounded-3xl p-6 outline-none font-bold uppercase bg-yellow-50 shadow-inner">
         </div>
         <div>
           <label class="block text-3xl font-black text-slate-700 mb-4">聯絡電話</label>
@@ -82,6 +104,7 @@
           <label class="block text-3xl font-black text-slate-700 mb-4">房客職業</label>
           <input type="text" name="1001094" id="input_occ" class="grandpa-input w-full text-4xl border-4 border-slate-200 rounded-3xl p-6 outline-none font-bold">
         </div>
+        <!-- 簽名欄位 (Hidden) -->
         <input type="hidden" name="1001110" id="hidden_signature">
       </form>
       <button id="btn-next" class="big-btn w-full mt-14 bg-blue-600 hover:bg-blue-700 text-white text-4xl font-black py-9 rounded-[2.5rem] shadow-2xl">資料正確，下一頁 👉</button>
@@ -89,7 +112,8 @@
 
     <!-- 第二步：預覽收據 -->
     <div id="step-2" class="hidden bg-white rounded-[3rem] shadow-2xl p-4 md:p-10 border-t-[16px] border-green-600">
-      <div id="receipt-preview-container">
+      <!-- 加上浮水印樣式 -->
+      <div id="receipt-preview-container" class="watermark-bg">
         <div class="text-right mb-4 font-bold text-2xl">編號：<span id="show_no">-</span></div>
         <h1 class="text-4xl font-black text-center mb-8 text-slate-900">不動產要約定金收據</h1>
         
@@ -106,8 +130,11 @@
           <tr>
             <th>押 金</th>
             <td id="show_deposit" class="font-bold text-2xl">-</td>
-            <td class="font-bold">管理費：<span id="show_mgmt">-</span></td>
-            <td class="text-sm text-slate-500">※實際金額依管委會規定繳納</td>
+            <!-- 管理費備註排版 -->
+            <td colspan="2" class="font-bold align-middle">
+                管理費：<span id="show_mgmt">-</span><br>
+                <span class="text-sm text-slate-500 font-normal">※實際金額依管委會規定繳納</span>
+            </td>
           </tr>
           <tr>
             <th>租 期</th>
@@ -168,7 +195,7 @@
               <li>貳、如房東不同意上述條件，則定金無息全額退還於房客。</li>
               <li>參、如房東同意上述條件，但因另有考量因素導致無法簽約，則定金無息全數退還於房客，不需支付額外費用。</li>
               <li>肆、如房東同意上述條件，但房客因故反悔不租或超過簽約日仍不辦理簽約者，定金不予退還。</li>
-              <li>伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="show_service_fee" class="font-bold underline text-blue-700">-</span> 作為服務費。</li>
+              <li>伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="pdf_service_fee" class="font-bold underline text-blue-700">-</span> 作為服務費。</li>
           </ul>
       </div>
 
@@ -200,8 +227,8 @@
     </div>
   </div>
 
-  <!-- PDF 生成區域 (完全還原 Word 範本排版) -->
-  <div id="pdf-export-area">
+  <!-- PDF 生成區域 -->
+  <div id="pdf-export-area" class="watermark-bg">
       <div class="pdf-header-info">編號：<span id="pdf_no">-</span></div>
       <div class="pdf-title">不動產要約定金收據</div>
       <table class="receipt-table" style="font-size: 19px; line-height: 1.5;">
@@ -217,8 +244,10 @@
           <tr>
             <th style="height: 85px;">押 金</th>
             <td id="pdf_deposit" style="padding-left: 20px; font-weight: bold; font-size: 24px;">-</td>
-            <td style="padding-left: 20px; font-weight: bold;">管理費：<span id="pdf_mgmt">-</span></td>
-            <td style="font-size: 13px; text-align: center; color: #333;">※實際金額依管委會規定繳納</td>
+            <td colspan="2" style="padding-left: 20px; font-weight: bold; vertical-align: middle;">
+                管理費：<span id="pdf_mgmt">-</span><br>
+                <span style="font-size: 13px; color: #333; font-weight: normal;">※實際金額依管委會規定繳納</span>
+            </td>
           </tr>
           <tr>
             <th style="height: 65px;">租 期</th>
@@ -229,7 +258,7 @@
             <td colspan="3" id="pdf_parking" style="padding-left: 20px; font-weight: bold;">-</td>
           </tr>
           <tr>
-            <th style="height: 65px;">付款方式</th>
+            <th>付款方式</th>
             <td colspan="3" id="pdf_pay_method" style="padding-left: 20px; font-weight: bold;">-</td>
           </tr>
           <tr>
@@ -290,7 +319,8 @@
 
     const FIELDS = {
       // Step 1 用於寫回 Ragic 的欄位 (保留原本邏輯)
-      save_name: "1001091", save_id: "1001092", save_phone: "1001093", save_occ: "1001094",
+      // 移除身分證欄位 save_id
+      save_name: "1001091", save_phone: "1001093", save_occ: "1001094",
       
       // Step 2 顯示用欄位 (對應 Word 範本)
       no: ["1000796", "定金單編號"],
@@ -340,34 +370,75 @@
         return "$ " + Number(digits).toLocaleString("zh-TW");
     }
 
-    // 精準匹配邏輯
-    function findExactRecord(obj, targetId) {
-      if (!obj || typeof obj !== 'object') return null;
-      if (obj[targetId]) return obj[targetId];
-      if (obj["_ragicId"] == targetId || obj["Record ID"] == targetId) return obj;
-      for (const k in obj) {
-        if (typeof obj[k] === 'object') {
-          const res = findExactRecord(obj[k], targetId);
-          if (res) return res;
+    // BBCode 解析函式
+    function parseBBCode(text) {
+        if (!text) return "無";
+        return text
+            // 先處理 List 相關標籤 (避免被換行處理干擾)
+            .replace(/\[ul(=.*?)?\]/gi, "<ul style='list-style-type: disc; padding-left: 1.5em; margin: 0.5em 0;'>")
+            .replace(/\[\/ul\]/gi, "</ul>")
+            .replace(/\[ol(=.*?)?\]/gi, "<ol style='list-style-type: decimal; padding-left: 1.5em; margin: 0.5em 0;'>")
+            .replace(/\[\/ol\]/gi, "</ol>")
+            .replace(/\[li\]/gi, "<li>")
+            .replace(/\[\/li\]/gi, "</li>")
+            
+            // 處理一般樣式
+            .replace(/\[b\](.*?)\[\/b\]/gi, "<strong>$1</strong>") // 粗體
+            .replace(/\[i\](.*?)\[\/i\]/gi, "<em>$1</em>")         // 斜體
+            .replace(/\[u\](.*?)\[\/u\]/gi, "<u>$1</u>")           // 底線
+            .replace(/\[s\](.*?)\[\/s\]/gi, "<s>$1</s>")           // 刪除線
+            .replace(/\[color=(.*?)\](.*?)\[\/color\]/gi, "<span style='color:$1'>$2</span>") // 顏色
+            
+            // 最後處理換行 (List 內部的換行可能會被視為空行，但瀏覽器渲染HTML會忽略多餘空白，所以安全)
+            .replace(/\[br\]\[\/br\]/gi, "<br>") // Ragic 特定換行
+            .replace(/\[br\]/gi, "<br>")         // 一般 BBCode 換行
+            .replace(/\n/g, "<br>");             // 系統換行
+    }
+
+    // 精準匹配邏輯 - 修正為寬鬆比對 (Loose Equality)
+    function findExactRecord(data, targetId) {
+      if (!data || typeof data !== 'object') return null;
+      // 比對 ID 時使用 == 而非 ===，以容許 string/number 差異
+      if (isMatch(data, targetId)) return data;
+      // 支援 Dictionary Pattern
+      if (data[targetId] && typeof data[targetId] === 'object') return data[targetId];
+      
+      for (const k in data) {
+        const row = data[k];
+        if (typeof row === 'object' && row !== null) {
+          if (isMatch(row, targetId)) return row;
         }
       }
       return null;
+    }
+
+    function isMatch(row, targetId) {
+      if (row["_ragicId"] == targetId) return true;
+      if (row["Record ID"] == targetId) return true;
+      if (row["_seq"] == targetId) return true;
+      let recNo = row["1000796"] || row["定金單編號"];
+      if (recNo && recNo == targetId) return true;
+      return false;
     }
 
     window.ragicCallback = function (data) {
       clearTimeout(loadTimer);
       debug("已接收資料", data);
 
+      // 1. 使用您輸入的 ID 查找資料 (不再使用 fallback)
       currentRecord = findExactRecord(data, recordId);
       
+      // 2. 只有完全找不到時才報錯，絕對不抓第一筆充數
       if (!currentRecord) {
-        for(let k in data) { if(data[k] && data[k]["租客姓名"]) { currentRecord = data[k]; break; } }
-      }
-
-      if (!currentRecord) {
-        $("loader-text").innerText = "找不到編號 " + recordId + " 的資料";
+        $("loader-text").innerText = "找不到編號 " + recordId + " 的資料 (請確認 ID 正確)";
         return;
       }
+      
+      // 3. 確保 recordId 更新為找到的那筆資料的真實 ID (這很重要，存檔才不會錯)
+      if (currentRecord["_ragicId"]) {
+          recordId = currentRecord["_ragicId"];
+      }
+      
       renderData();
       $("loader").classList.add('hidden');
       $("step-1").classList.remove('hidden');
@@ -382,11 +453,10 @@
     }
 
     function renderData() {
-      // 填入 Step 1
-      $("input_name").value = getValue(currentRecord, "租客姓名") || getValue(currentRecord, "1001091");
-      $("input_id").value = (getValue(currentRecord, "1001092") || "").toUpperCase();
-      $("input_phone").value = getValue(currentRecord, FIELDS.cust_phone);
-      $("input_occ").value = getValue(currentRecord, FIELDS.cust_occ);
+      // 填入 Step 1 (安全檢查：確認元素存在)
+      if($("input_name")) $("input_name").value = getValue(currentRecord, "租客姓名") || getValue(currentRecord, "1001091");
+      if($("input_phone")) $("input_phone").value = getValue(currentRecord, FIELDS.cust_phone);
+      if($("input_occ")) $("input_occ").value = getValue(currentRecord, FIELDS.cust_occ);
 
       // 車位資訊組合
       const pType = getValue(currentRecord, FIELDS.parking_type);
@@ -417,9 +487,16 @@
           { s: "show_service_fee", p: "pdf_service_fee", v: formatCurrency(getValue(currentRecord, FIELDS.service_fee)) }
       ];
 
-      mapping.forEach(m => { if(m.s) $(m.s).innerText = m.v; if(m.p) $(m.p).innerText = m.v; });
-      const cond = (getValue(currentRecord, FIELDS.conditions) || "無").replace(/\[br\]\[\/br\]/g, "<br>");
-      $("show_cond").innerHTML = cond; $("pdf_cond").innerHTML = cond; $("show_final_name").innerText = getValue(currentRecord, "租客姓名");
+      mapping.forEach(m => { 
+        if(m.s && $(m.s)) $(m.s).innerText = m.v;
+        if(m.p && $(m.p)) $(m.p).innerText = m.v;
+      });
+      
+      const rawCond = getValue(currentRecord, FIELDS.conditions);
+      const cond = parseBBCode(rawCond);
+      if($("show_cond")) $("show_cond").innerHTML = cond; 
+      if($("pdf_cond")) $("pdf_cond").innerHTML = cond; 
+      if($("show_final_name")) $("show_final_name").innerText = getValue(currentRecord, "租客姓名");
     }
 
     function initSignature() {
@@ -429,10 +506,25 @@
       signaturePad = new SignaturePad(canvas, { minWidth: 3, maxWidth: 8, penColor: "black" });
     }
 
+    function updatePreviewFromForm() {
+      const name = $("input_name").value;
+      const phone = $("input_phone").value;
+      const occ = $("input_occ").value;
+
+      if($("show_final_name")) $("show_final_name").innerText = name;
+      if($("show_final_phone")) $("show_final_phone").innerText = phone;
+      if($("show_final_occ")) $("show_final_occ").innerText = occ;
+      if($("pdf_phone")) $("pdf_phone").innerText = phone;
+      if($("pdf_occ")) $("pdf_occ").innerText = occ;
+    }
+
     function goStep(n) {
+      if (n === 2) {
+        updatePreviewFromForm();
+        setTimeout(initSignature, 250);
+      }
       $("step-1").classList.add('hidden'); $("step-2").classList.add('hidden');
       $("step-" + n).classList.remove('hidden'); window.scrollTo(0, 0);
-      if (n === 2) setTimeout(initSignature, 250);
     }
 
     async function downloadReceiptPDF() {
@@ -448,13 +540,33 @@
         } catch (err) { alert("下載失敗，請先截圖存檔。"); } finally { btn.innerText = "📥 點我下載收據 PDF"; btn.disabled = false; }
     }
 
+    // 修正：回歸 Form Submit + Hidden Iframe 模式，以繞過 CORS
     function submitData() {
       if (!signaturePad || signaturePad.isEmpty()) { alert("請先完成簽名喔！"); return; }
+      if (!recordId) { alert("系統錯誤：無法取得單號 (Record ID)，無法存檔。請重新載入。"); return; }
+
       const sigData = signaturePad.toDataURL("image/png");
-      $("hidden_signature").value = sigData; $("pdf_signature_img").src = sigData;
-      const form = $("ragicForm"); form.action = `${RAGIC_BASE_URL}/${recordId}?api&APIKey=${encodeURIComponent(RAGIC_API_KEY)}`;
-      $("loader").classList.remove('hidden'); $("loader-text").innerText = "存檔傳送中..."; form.submit();
-      setTimeout(() => { $("loader").classList.add('hidden'); $("step-2").classList.add('hidden'); $("step-success").classList.remove('hidden'); window.scrollTo(0, 0); }, 3000);
+      if($("pdf_signature_img")) $("pdf_signature_img").src = sigData;
+      if($("hidden_signature")) $("hidden_signature").value = sigData;
+      
+      $("loader").classList.remove('hidden'); 
+      $("loader-text").innerText = "存檔傳送中...";
+
+      // 取得表單並設定正確的 action URL
+      // 注意：必須加上 v=3 以使用最新 API
+      const form = $("ragicForm");
+      form.action = `${RAGIC_BASE_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_API_KEY)}`;
+      
+      // 提交表單到隱藏的 iframe (跨域提交)
+      form.submit();
+
+      // 因為是跨域提交，無法透過 JS 讀取 iframe 回應，所以使用延遲顯示成功
+      setTimeout(() => { 
+          $("loader").classList.add('hidden'); 
+          $("step-2").classList.add('hidden'); 
+          $("step-success").classList.remove('hidden'); 
+          window.scrollTo(0, 0); 
+      }, 2500);
     }
 
     function debug(m, o) { console.log(m, o); $("debug-area").style.display = 'block'; $("debug-content").innerText = m + "\n" + JSON.stringify(o, null, 2).substring(0, 400); }
