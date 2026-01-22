@@ -14,12 +14,18 @@
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
     body { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; }
     
-    /* 預覽頁面表格樣式 */
+    /* 預覽頁面表格樣式 - 手機版優化 */
     .receipt-table { border-collapse: collapse; width: 100%; border: 2.5px solid #000; }
     .receipt-table th, .receipt-table td { border: 1.5px solid #000; padding: 12px; vertical-align: middle; }
     .receipt-table th { background-color: #f8fafc; font-weight: 900; width: 130px; color: #000; font-size: 1.1rem; text-align: center; }
+
+    /* 手機版表格微調 (螢幕小於 768px 時觸發) */
+    @media (max-width: 768px) {
+        .receipt-table th, .receipt-table td { padding: 8px 4px; font-size: 0.95rem; }
+        .receipt-table th { width: 90px; font-size: 1rem; }
+    }
     
-    /* PDF 專用樣式 */
+    /* PDF 專用樣式 (保持原樣，確保列印品質) */
     .pdf-table th, .pdf-table td { 
         vertical-align: middle !important; 
         padding: 15px 20px !important; 
@@ -29,7 +35,12 @@
     .big-btn { transition: all 0.2s; cursor: pointer; }
     .big-btn:active { transform: scale(0.96); opacity: 0.9; }
     
-    #signature-pad { background: #ffffff; border: 3px dashed #3b82f6; border-radius: 20px; width: 100%; height: 320px; touch-action: none; }
+    /* 簽名板高度在手機上稍微縮小，避免佔據太多空間 */
+    #signature-pad { background: #ffffff; border: 3px dashed #3b82f6; border-radius: 20px; width: 100%; height: 250px; touch-action: none; }
+    @media (min-width: 768px) {
+        #signature-pad { height: 320px; }
+    }
+
     #loader { background: rgba(255, 255, 255, 0.98); z-index: 100; }
     .debug-box { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 12px; font-size: 14px; margin-top: 20px; text-align: left; overflow-x: auto; display: none; border: 2px solid #333; max-height: 300px; overflow-y: auto; }
     .grandpa-input:focus { border-color: #2563eb; box-shadow: 0 0 0 10px rgba(37, 99, 235, 0.1); background-color: #fff; }
@@ -43,8 +54,11 @@
     .watermark-bg::before {
       content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       background-image: url('https://raw.githubusercontent.com/wuohome/ragic/refs/heads/main/logooo.png');
-      background-position: center center; background-repeat: no-repeat; background-size: 500px auto; 
+      background-position: center center; background-repeat: no-repeat; background-size: 300px auto; 
       opacity: 0.15; pointer-events: none; z-index: -1;
+    }
+    @media (min-width: 768px) {
+        .watermark-bg::before { background-size: 500px auto; }
     }
     .watermark-bg > * { position: relative; z-index: 1; }
   </style>
@@ -53,15 +67,15 @@
 <body class="bg-slate-100 min-h-screen">
 
   <div id="loader" class="fixed inset-0 flex flex-col items-center justify-center p-6 text-center">
-    <div id="loader-spinner" class="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-blue-600 mb-6"></div>
-    <p id="loader-text" class="text-3xl font-black text-slate-800">正在讀取 Ragic 資料...</p>
+    <div id="loader-spinner" class="animate-spin rounded-full h-16 w-16 md:h-20 md:w-20 border-t-4 border-b-4 border-blue-600 mb-6"></div>
+    <p id="loader-text" class="text-xl md:text-3xl font-black text-slate-800">正在讀取 Ragic 資料...</p>
 
-    <div id="test-mode-ui" class="hidden mt-8 bg-white p-10 rounded-[3rem] shadow-2xl max-w-sm w-full border-4 border-blue-500">
-      <h2 class="text-3xl font-black text-blue-600 mb-6 text-center">測試模式</h2>
-      <p class="text-slate-500 mb-4 text-xl font-medium text-left">請輸入正確的 Record ID：</p>
+    <div id="test-mode-ui" class="hidden mt-8 bg-white p-6 md:p-10 rounded-3xl md:rounded-[3rem] shadow-2xl max-w-sm w-full border-4 border-blue-500">
+      <h2 class="text-2xl md:text-3xl font-black text-blue-600 mb-4 md:mb-6 text-center">測試模式</h2>
+      <p class="text-slate-500 mb-3 md:mb-4 text-lg md:text-xl font-medium text-left">請輸入正確的 Record ID：</p>
       <input type="number" id="test-id-input" placeholder="3"
-        class="w-full text-center text-6xl p-6 border-4 border-slate-200 rounded-3xl mb-8 outline-none font-bold bg-slate-50">
-      <button id="btn-test" class="w-full bg-blue-600 text-white font-black py-7 rounded-3xl text-3xl shadow-xl big-btn">
+        class="w-full text-center text-4xl md:text-6xl p-4 md:p-6 border-4 border-slate-200 rounded-2xl md:rounded-3xl mb-6 md:mb-8 outline-none font-bold bg-slate-50">
+      <button id="btn-test" class="w-full bg-blue-600 text-white font-black py-4 md:py-7 rounded-2xl md:rounded-3xl text-xl md:text-3xl shadow-xl big-btn">
         開始載入
       </button>
     </div>
@@ -71,7 +85,7 @@
       <div id="debug-content" class="font-mono whitespace-pre-wrap">等待連線中...</div>
     </div>
 
-    <button id="retry-btn" onclick="location.reload()" class="hidden mt-8 bg-slate-800 text-white px-10 py-4 rounded-2xl font-black text-xl">
+    <button id="retry-btn" onclick="location.reload()" class="hidden mt-8 bg-slate-800 text-white px-8 md:px-10 py-3 md:py-4 rounded-xl md:rounded-2xl font-black text-lg md:text-xl">
       重新載入
     </button>
   </div>
@@ -79,33 +93,33 @@
   <!-- 隱藏 iframe 用於接收表單提交 -->
   <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
 
-  <div class="max-w-4xl mx-auto p-4 md:p-8">
+  <div class="max-w-4xl mx-auto p-3 md:p-8">
     
     <!-- 第一步：核對資料 -->
-    <div id="step-1" class="hidden bg-white rounded-[3rem] shadow-2xl p-8 md:p-14 border-t-[16px] border-blue-600">
-      <h1 class="text-5xl font-black text-blue-700 mb-6 text-center md:text-left">請核對房客資料</h1>
-      <p class="text-slate-500 mb-12 text-2xl font-medium text-center md:text-left">房客您好，資料若有誤可直接修改。</p>
+    <div id="step-1" class="hidden bg-white rounded-3xl md:rounded-[3rem] shadow-2xl p-5 md:p-14 border-t-[10px] md:border-t-[16px] border-blue-600">
+      <h1 class="text-2xl md:text-5xl font-black text-blue-700 mb-3 md:mb-6 text-center md:text-left">請核對房客資料</h1>
+      <p class="text-slate-500 mb-6 md:mb-12 text-base md:text-2xl font-medium text-center md:text-left">房客您好，資料若有誤可直接修改。</p>
       
       <!-- 
         表單設定：
         1. target="hidden_iframe" -> 避免頁面跳轉
         2. enctype="multipart/form-data" -> 支援檔案上傳 (PDF)
       -->
-      <form id="ragicForm" method="POST" target="hidden_iframe" accept-charset="UTF-8" enctype="multipart/form-data" class="space-y-10">
+      <form id="ragicForm" method="POST" target="hidden_iframe" accept-charset="UTF-8" enctype="multipart/form-data" class="space-y-6 md:space-y-10">
         <div>
-          <label class="block text-3xl font-black text-slate-700 mb-4">房客姓名</label>
+          <label class="block text-lg md:text-3xl font-black text-slate-700 mb-2 md:mb-4">房客姓名</label>
           <!-- 寫入 ID：1000792 -->
-          <input type="text" name="1000792" id="input_name" class="grandpa-input w-full text-4xl border-4 border-slate-200 rounded-3xl p-6 outline-none font-bold bg-yellow-50 shadow-inner">
+          <input type="text" name="1000792" id="input_name" class="grandpa-input w-full text-xl md:text-4xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-6 outline-none font-bold bg-yellow-50 shadow-inner">
         </div>
         <div>
-          <label class="block text-3xl font-black text-slate-700 mb-4">聯絡電話</label>
+          <label class="block text-lg md:text-3xl font-black text-slate-700 mb-2 md:mb-4">聯絡電話</label>
           <!-- 寫入 ID：1000808 -->
-          <input type="tel" name="1000808" id="input_phone" class="grandpa-input w-full text-4xl border-4 border-slate-200 rounded-3xl p-6 outline-none font-bold">
+          <input type="tel" name="1000808" id="input_phone" class="grandpa-input w-full text-xl md:text-4xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-6 outline-none font-bold">
         </div>
         <div>
-          <label class="block text-3xl font-black text-slate-700 mb-4">房客職業</label>
+          <label class="block text-lg md:text-3xl font-black text-slate-700 mb-2 md:mb-4">房客職業</label>
           <!-- 寫入 ID：1000837 -->
-          <input type="text" name="1000837" id="input_occ" class="grandpa-input w-full text-4xl border-4 border-slate-200 rounded-3xl p-6 outline-none font-bold">
+          <input type="text" name="1000837" id="input_occ" class="grandpa-input w-full text-xl md:text-4xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-6 outline-none font-bold">
         </div>
         
         <!-- 簽名欄位 (Hidden) 寫入 ID：1000816 (Base64字串) -->
@@ -115,36 +129,36 @@
         <input type="file" name="1001709" id="hidden_pdf_input" style="display:none;">
       </form>
       
-      <button id="btn-next" class="big-btn w-full mt-14 bg-blue-600 hover:bg-blue-700 text-white text-4xl font-black py-9 rounded-[2.5rem] shadow-2xl">資料正確，下一頁 👉</button>
+      <button id="btn-next" class="big-btn w-full mt-8 md:mt-14 bg-blue-600 hover:bg-blue-700 text-white text-xl md:text-4xl font-black py-4 md:py-9 rounded-2xl md:rounded-[2.5rem] shadow-2xl">資料正確，下一頁 👉</button>
       
       <!-- 診斷按鈕 -->
-      <div class="mt-8 text-center">
-        <button onclick="showFieldIds()" class="text-slate-300 text-sm underline">顯示所有欄位 ID (除錯用)</button>
+      <div class="mt-6 md:mt-8 text-center">
+        <button onclick="showFieldIds()" class="text-slate-300 text-xs md:text-sm underline">顯示所有欄位 ID (除錯用)</button>
       </div>
     </div>
 
     <!-- 第二步：預覽收據 -->
-    <div id="step-2" class="hidden bg-white rounded-[3rem] shadow-2xl p-4 md:p-10 border-t-[16px] border-green-600">
+    <div id="step-2" class="hidden bg-white rounded-3xl md:rounded-[3rem] shadow-2xl p-4 md:p-10 border-t-[10px] md:border-t-[16px] border-green-600">
       <div id="receipt-preview-container" class="watermark-bg">
-        <div class="text-right mb-4 font-bold text-2xl">編號：<span id="show_no">-</span></div>
-        <h1 class="text-4xl font-black text-center mb-8 text-slate-900">不動產要約定金收據</h1>
+        <div class="text-right mb-2 md:mb-4 font-bold text-lg md:text-2xl">編號：<span id="show_no">-</span></div>
+        <h1 class="text-2xl md:text-4xl font-black text-center mb-5 md:mb-8 text-slate-900">不動產要約定金收據</h1>
         
-        <table class="receipt-table mb-8 text-lg">
+        <table class="receipt-table mb-6 md:mb-8 text-base md:text-lg">
           <tr>
             <th>房屋地址</th>
-            <td colspan="3" id="show_addr" class="font-bold">-</td>
+            <td colspan="3" id="show_addr" class="font-bold break-all">-</td>
           </tr>
           <tr>
             <th>租 金</th>
-            <td id="show_rent" class="font-black text-2xl">-</td>
+            <td id="show_rent" class="font-black text-xl md:text-2xl">-</td>
             <td colspan="2" class="font-bold">稅金：<span id="show_tax">-</span></td>
           </tr>
           <tr>
             <th>押 金</th>
-            <td id="show_deposit" class="font-bold text-2xl">-</td>
+            <td id="show_deposit" class="font-bold text-xl md:text-2xl">-</td>
             <td colspan="2" class="font-bold align-middle">
                 管理費：<span id="show_mgmt">-</span><br>
-                <span class="text-sm text-slate-500 font-normal">※實際金額依管委會規定繳納</span>
+                <span class="text-xs md:text-sm text-slate-500 font-normal">※實際金額依管委會規定繳納</span>
             </td>
           </tr>
           <tr>
@@ -161,48 +175,48 @@
           </tr>
           <tr>
             <th>要約條件</th>
-            <td colspan="3" id="show_cond" class="text-base h-40 align-top leading-relaxed">-</td>
+            <td colspan="3" id="show_cond" class="text-sm md:text-base h-24 md:h-40 align-top leading-relaxed overflow-y-auto">-</td>
           </tr>
           <tr>
             <th rowspan="2">要約定金</th>
-            <td rowspan="2" id="show_earnest" class="text-red-600 font-black text-3xl">-</td>
+            <td rowspan="2" id="show_earnest" class="text-red-600 font-black text-xl md:text-3xl">-</td>
             <th style="width: 80px;">簽約</th>
-            <td id="show_sign_date" class="font-bold">-</td>
+            <td id="show_sign_date" class="font-bold text-sm md:text-base">-</td>
           </tr>
           <tr>
             <th style="width: 80px;">起租</th>
-            <td id="show_start_date" class="font-bold">-</td>
+            <td id="show_start_date" class="font-bold text-sm md:text-base">-</td>
           </tr>
           <tr>
             <th>付款方式</th>
-            <td colspan="3" class="font-bold">
+            <td colspan="3" class="font-bold break-all">
                 <span id="show_remit_method">-</span> <span id="show_remit_label">後五碼：</span><span id="show_remit_code">-</span>
             </td>
           </tr>
         </table>
 
-        <div class="bg-slate-100 p-4 rounded-xl text-lg font-bold text-center mb-10 border-2 border-dashed border-slate-300 flex flex-col justify-center items-center h-24">
+        <div class="bg-slate-100 p-3 md:p-4 rounded-xl text-sm md:text-lg font-bold text-center mb-6 md:mb-10 border-2 border-dashed border-slate-300 flex flex-col justify-center items-center h-20 md:h-24">
             簽約請攜帶：定金收據、押租金、服務費尾款、印章、雙證件影本3份。
         </div>
 
-        <div class="grid grid-cols-2 gap-8 px-6 mb-12 border-b-2 pb-10">
-            <div class="space-y-4">
-                <p class="text-2xl font-bold">房客（簽名）：<span id="show_final_name" class="underline px-4">-</span></p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 px-2 md:px-6 mb-8 md:mb-12 border-b-2 pb-6 md:pb-10">
+            <div class="space-y-2 md:space-y-4">
+                <p class="text-lg md:text-2xl font-bold">房客（簽名）：<span id="show_final_name" class="underline px-2 md:px-4">-</span></p>
                 <!-- 這裡會顯示 Step 1 修改後的電話 -->
-                <p class="text-xl">電話：<span id="show_final_phone">-</span></p>
-                <p class="text-xl">職業：<span id="show_final_occ">-</span></p>
+                <p class="text-base md:text-xl">電話：<span id="show_final_phone">-</span></p>
+                <p class="text-base md:text-xl">職業：<span id="show_final_occ">-</span></p>
             </div>
-            <div class="text-right space-y-4">
-                <p class="text-sm font-bold text-slate-500">優式租售管理 - 窩的家三重加盟店</p>
-                <p class="text-2xl font-bold">經辦人員：<span id="show_agent">-</span></p>
-                <p class="text-xl">電話：<span id="show_agent_phone">-</span></p>
+            <div class="text-left md:text-right space-y-2 md:space-y-4 mt-4 md:mt-0">
+                <p class="text-xs md:text-sm font-bold text-slate-500">優式租售管理 - 窩的家三重加盟店</p>
+                <p class="text-lg md:text-2xl font-bold">經辦人員：<span id="show_agent">-</span></p>
+                <p class="text-base md:text-xl">電話：<span id="show_agent_phone">-</span></p>
             </div>
         </div>
       </div>
 
-      <div class="mb-12">
-          <p class="font-black text-2xl mb-4 text-slate-800">重要約定：</p>
-          <ul class="text-base space-y-2 text-slate-700 list-none">
+      <div class="mb-8 md:mb-12">
+          <p class="font-black text-xl md:text-2xl mb-2 md:mb-4 text-slate-800">重要約定：</p>
+          <ul class="text-sm md:text-base space-y-2 text-slate-700 list-none">
               <li>壹、上述條件由房客確認無誤，付定金後成立要約。</li>
               <li>貳、如房東不同意上述條件，則定金無息全額退還於房客。</li>
               <li>參、如房東同意上述條件，但因另有考量因素導致無法簽約，則定金無息全數退還於房客，不需支付額外費用。</li>
@@ -211,30 +225,30 @@
           </ul>
       </div>
 
-      <div class="mb-10 text-center">
-        <label class="block text-4xl font-black text-slate-800 mb-10 underline decoration-blue-500 decoration-8 underline-offset-[16px]">房客簽名處</label>
+      <div class="mb-6 md:mb-10 text-center">
+        <label class="block text-2xl md:text-4xl font-black text-slate-800 mb-6 md:mb-10 underline decoration-blue-500 decoration-4 md:decoration-8 underline-offset-[8px] md:underline-offset-[16px]">房客簽名處</label>
         <div class="relative">
             <canvas id="signature-pad"></canvas>
-            <button id="btn-clear" class="absolute top-4 right-4 bg-slate-100 text-slate-600 px-8 py-4 rounded-xl font-black text-sm shadow border border-slate-300">清除重寫</button>
+            <button id="btn-clear" class="absolute top-2 right-2 md:top-4 md:right-4 bg-slate-100 text-slate-600 px-4 md:px-8 py-2 md:py-4 rounded-lg md:rounded-xl font-black text-xs md:text-sm shadow border border-slate-300">清除重寫</button>
         </div>
       </div>
 
-      <div class="flex flex-col md:flex-row gap-6 mt-12">
-        <button id="btn-back" class="order-2 md:order-1 flex-1 bg-slate-200 text-slate-500 text-3xl font-black py-7 rounded-3xl">回上一步</button>
-        <button id="btn-submit" class="order-1 md:order-2 big-btn flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white text-4xl font-black py-7 rounded-3xl shadow-2xl">簽好了，送出 ✅</button>
+      <div class="flex flex-col md:flex-row gap-4 md:gap-6 mt-8 md:mt-12">
+        <button id="btn-back" class="order-2 md:order-1 flex-1 bg-slate-200 text-slate-500 text-xl md:text-3xl font-black py-4 md:py-7 rounded-2xl md:rounded-3xl">回上一步</button>
+        <button id="btn-submit" class="order-1 md:order-2 big-btn flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white text-xl md:text-4xl font-black py-4 md:py-7 rounded-2xl md:rounded-3xl shadow-2xl">簽好了，送出 ✅</button>
       </div>
     </div>
 
     <!-- 第三步：成功 -->
-    <div id="step-success" class="hidden bg-white rounded-[3rem] shadow-2xl p-10 md:p-20 text-center border-t-[16px] border-emerald-500">
-      <div class="text-[120px] mb-8">✅</div>
-      <h1 class="text-6xl font-black text-emerald-600 mb-6">簽署完成！</h1>
-      <p class="text-slate-500 text-2xl mb-12">收據已傳回系統存檔。<br>PDF 也已自動上傳歸檔。</p>
+    <div id="step-success" class="hidden bg-white rounded-3xl md:rounded-[3rem] shadow-2xl p-8 md:p-20 text-center border-t-[10px] md:border-t-[16px] border-emerald-500">
+      <div class="text-6xl md:text-[120px] mb-6 md:mb-8">✅</div>
+      <h1 class="text-3xl md:text-6xl font-black text-emerald-600 mb-4 md:mb-6">簽署完成！</h1>
+      <p class="text-slate-500 text-lg md:text-2xl mb-8 md:mb-12">收據已傳回系統存檔。<br>PDF 也已自動上傳歸檔。</p>
       
-      <button onclick="downloadReceiptPDF()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-9 rounded-[2.5rem] text-4xl shadow-xl big-btn flex items-center justify-center gap-4 mb-8">
+      <button onclick="downloadReceiptPDF()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 md:py-9 rounded-2xl md:rounded-[2.5rem] text-xl md:text-4xl shadow-xl big-btn flex items-center justify-center gap-2 md:gap-4 mb-4 md:mb-8">
         📥 下載備份 PDF
       </button>
-      <p class="text-slate-400 text-xl italic font-medium">※ 下載後請至手機的「檔案」或「下載管理」查看</p>
+      <p class="text-slate-400 text-sm md:text-xl italic font-medium">※ 下載後請至手機的「檔案」或「下載管理」查看</p>
     </div>
   </div>
 
