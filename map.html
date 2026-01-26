@@ -427,6 +427,9 @@
             const isShop = usage.includes('店');
             const agentsHtml = getAgentsHtml(item); // 產生聯絡人按鈕
 
+            // 檢查是否有座標
+            const hasCoord = item[EID.COORD] && item[EID.COORD].includes(',') && !isNoCoord;
+
             div.className = `property-card ${isNoCoord ? 'bg-red-50/30' : ''}`;
             div.id = `card-${item.id}`;
             div.onclick = (e) => {
@@ -444,9 +447,12 @@
                 ${agentsHtml} <!-- 插入聯絡人按鈕 -->
                 <div class="card-footer">
                     <div class="card-price">$${price} <span class="price-unit">/月</span></div>
-                    <a href="${link591}" target="_blank" class="btn-591 ${hasLink ? '' : 'btn-hidden'}" title="前往 591">
-                        <i class="fas fa-external-link-alt"></i> 591
-                    </a>
+                    <div class="flex gap-2">
+                        ${hasCoord ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${item[EID.COORD]}" target="_blank" class="inline-flex items-center gap-1 bg-blue-600 text-white py-1 px-2.5 rounded text-xs font-bold transition hover:bg-blue-700" onclick="event.stopPropagation()" title="導航"><i class="fas fa-location-arrow"></i> 導航</a>` : ''}
+                        <a href="${link591}" target="_blank" class="btn-591 ${hasLink ? '' : 'btn-hidden'}" title="前往 591">
+                            <i class="fas fa-external-link-alt"></i> 591
+                        </a>
+                    </div>
                 </div>`;
             container.appendChild(div);
         }
@@ -570,15 +576,13 @@
                         const formData = new URLSearchParams();
                         formData.append(EID.COORD, coordStr);
                         
-                        // 修改: 移除 URL 上的 APIKey，改用 Header 傳送，避免被視為 Guest
-                        const updateUrl = `${API_URL}/${recordId}?api&v=3`;
+                        // 維持 URL 參數傳遞 (雙重確保)
+                        const updateUrl = `${API_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_KEY)}`;
                         
                         const updateResp = await fetch(updateUrl, {
                             method: 'POST',
                             headers: { 
-                                "Content-Type": "application/x-www-form-urlencoded",
-                                // 關鍵修改: 使用 Authorization Header 確保身分驗證 (Ragic 標準寫法: Basic base64(Key:))
-                                "Authorization": "Basic " + btoa(RAGIC_KEY + ":")
+                                "Content-Type": "application/x-www-form-urlencoded"
                             },
                             body: formData.toString()
                         });
@@ -599,8 +603,8 @@
                             // 捕捉 Ragic 具體錯誤訊息
                             const errMsg = json.msg || json.message || "未知錯誤";
                             appendLog(`<i class="fas fa-times"></i> Ragic 拒絕更新 (ID: ${recordId}): <b>${errMsg}</b>`, 'error');
-                            if(errMsg.includes("permission") || errMsg.includes("權限")) {
-                                appendLog(`提示: 請檢查 API Key 是否有「修改」權限`, 'warn');
+                            if(errMsg.includes("permission") || errMsg.includes("權限") || errMsg.includes("guest")) {
+                                appendLog(`提示: 您的 API Key 可能只有讀取權限。請至 Ragic 後台重新產生並勾選「修改」權限。`, 'warn');
                             }
                         }
                     } catch (e) {
