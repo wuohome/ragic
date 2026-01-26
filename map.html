@@ -249,7 +249,8 @@
                     sessionStorage.setItem('ragic_auto_sync_executed', 'true');
                     console.log("觸發首次載入自動同步...");
                     // 稍微延遲 1 秒，等待 UI 渲染完畢後再詢問，避免阻擋載入動畫
-                    setTimeout(() => syncAllToRagic(), 1000);
+                    // 修改: 傳入 true 參數，啟用靜默自動同步模式
+                    setTimeout(() => syncAllToRagic(true), 1000);
                 }
 
             } catch (err) {
@@ -538,18 +539,29 @@
             logBody.scrollTop = logBody.scrollHeight;
         }
 
-        async function syncAllToRagic() {
-            if(!confirm("確定要執行同步？\n系統將自動解析缺座標的物件並寫回 Ragic。")) return;
+        // 修改: 增加 isAuto 參數，預設為 false (手動模式)
+        async function syncAllToRagic(isAuto = false) {
+            // 修改: 如果是手動模式 (!isAuto) 才顯示 confirm，自動模式直接通過
+            if(!isAuto && !confirm("確定要執行同步？\n系統將自動解析缺座標的物件並寫回 Ragic。")) return;
             
             const btn = document.querySelector('button[onclick="syncAllToRagic()"]');
             btn.disabled = true;
             
             const modal = document.getElementById('sync-log-modal');
             const logBody = document.getElementById('sync-log-body');
-            logBody.innerHTML = ''; // 清空舊日誌
-            modal.style.display = 'flex';
-            
-            appendLog('<i class="fas fa-search"></i> 正在掃描資料...', 'normal');
+            // 新增: 取得進度條元素
+            const progressBar = document.getElementById('sync-progress-bar');
+            const progressText = document.getElementById('sync-text');
+
+            // 修改: 根據模式決定顯示哪種 UI
+            if (isAuto) {
+                progressBar.style.display = 'flex';
+                progressText.innerText = '系統自動同步中...';
+            } else {
+                logBody.innerHTML = ''; // 清空舊日誌
+                modal.style.display = 'flex';
+                appendLog('<i class="fas fa-search"></i> 正在掃描資料...', 'normal');
+            }
 
             let success = 0;
             let errors = 0;
@@ -559,14 +571,19 @@
             });
 
             if (toProcess.length === 0) {
-                appendLog('<i class="fas fa-check-circle"></i> 資料已完整，無需同步！', 'success');
+                // 修改: 自動模式下靜默結束，不跳訊息；手動模式才顯示 Log
+                if (!isAuto) appendLog('<i class="fas fa-check-circle"></i> 資料已完整，無需同步！', 'success');
+                if (isAuto) progressBar.style.display = 'none'; // 確保自動模式下隱藏 bar
                 btn.disabled = false;
                 return;
             }
 
-            appendLog(`共發現 <b>${toProcess.length}</b> 筆資料需要同步...`, 'warn');
+            if (!isAuto) appendLog(`共發現 <b>${toProcess.length}</b> 筆資料需要同步...`, 'warn');
 
             for (let i = 0; i < toProcess.length; i++) {
+                // 新增: 自動模式下更新進度條文字
+                if (isAuto) progressText.innerText = `同步座標中: ${i+1} / ${toProcess.length}`;
+                
                 const item = toProcess[i];
                 const address = item[EID.ADDR];
                 const recordId = item.id;
@@ -579,7 +596,7 @@
                         });
                         const coordStr = `${result.geometry.location.lat()},${result.geometry.location.lng()}`;
                         
-                        appendLog(`[${i+1}/${toProcess.length}] Google定位成功: ${address} -> ${coordStr}`, 'normal');
+                        if (!isAuto) appendLog(`[${i+1}/${toProcess.length}] Google定位成功: ${address} -> ${coordStr}`, 'normal');
 
                         // 2. 準備寫回 Ragic
                         const formData = new URLSearchParams();
@@ -606,31 +623,44 @@
                         
                         if (json.status === 'SUCCESS') {
                             success++;
-                            appendLog(`<i class="fas fa-check"></i> Ragic 更新成功 (ID: ${recordId})`, 'success');
+                            if (!isAuto) appendLog(`<i class="fas fa-check"></i> Ragic 更新成功 (ID: ${recordId})`, 'success');
                         } else {
                             errors++;
                             // 捕捉 Ragic 具體錯誤訊息
                             const errMsg = json.msg || json.message || "未知錯誤";
-                            appendLog(`<i class="fas fa-times"></i> Ragic 拒絕更新 (ID: ${recordId}): <b>${errMsg}</b>`, 'error');
-                            if(errMsg.includes("permission") || errMsg.includes("權限") || errMsg.includes("guest")) {
-                                appendLog(`提示: 您的 API Key 可能只有讀取權限。請至 Ragic 後台重新產生並勾選「修改」權限。`, 'warn');
+                            if (!isAuto) {
+                                appendLog(`<i class="fas fa-times"></i> Ragic 拒絕更新 (ID: ${recordId}): <b>${errMsg}</b>`, 'error');
+                                if(errMsg.includes("permission") || errMsg.includes("權限") || errMsg.includes("guest")) {
+                                    appendLog(`提示: 您的 API Key 可能只有讀取權限。請至 Ragic 後台重新產生並勾選「修改」權限。`, 'warn');
+                                }
                             }
                         }
                     } catch (e) {
                         errors++;
-                        appendLog(`<i class="fas fa-exclamation-triangle"></i> 處理失敗 (ID: ${recordId}): ${e.message || e}`, 'error');
-                        if (e.toString().includes('Failed to fetch')) {
-                             appendLog(`提示: 可能是跨域 (CORS) 錯誤，或 API Key 限制了來源`, 'warn');
+                        if (!isAuto) {
+                            appendLog(`<i class="fas fa-exclamation-triangle"></i> 處理失敗 (ID: ${recordId}): ${e.message || e}`, 'error');
+                            if (e.toString().includes('Failed to fetch')) {
+                                appendLog(`提示: 可能是跨域 (CORS) 錯誤，或 API Key 限制了來源`, 'warn');
+                            }
                         }
                     }
                     // 稍微暫停
                     await new Promise(r => setTimeout(r, 600));
                 } else {
-                    appendLog(`[${i+1}/${toProcess.length}] ID: ${recordId} 無地址，跳過`, 'warn');
+                    if (!isAuto) appendLog(`[${i+1}/${toProcess.length}] ID: ${recordId} 無地址，跳過`, 'warn');
                 }
             }
             
-            appendLog(`<hr><b>同步結束！</b> 成功: ${success} 筆, 失敗: ${errors} 筆`, 'normal');
+            // 修改: 結束後的行為區分
+            if (isAuto) {
+                // 自動模式: 隱藏進度條，靜默結束
+                progressBar.style.display = 'none';
+                console.log(`自動同步結束。成功: ${success}, 失敗: ${errors}`);
+            } else {
+                // 手動模式: 顯示 Log 總結
+                appendLog(`<hr><b>同步結束！</b> 成功: ${success} 筆, 失敗: ${errors} 筆`, 'normal');
+            }
+            
             btn.disabled = false;
         }
     </script>
