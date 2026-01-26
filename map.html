@@ -243,6 +243,15 @@
                 applyFilters(true); // 初次載入自動定位
 
                 setTimeout(() => loading.style.display = 'none', 500);
+
+                // [新增] 自動同步防呆機制：確保同一瀏覽器 Session 只會自動執行一次
+                if (!sessionStorage.getItem('ragic_auto_sync_executed')) {
+                    sessionStorage.setItem('ragic_auto_sync_executed', 'true');
+                    console.log("觸發首次載入自動同步...");
+                    // 稍微延遲 1 秒，等待 UI 渲染完畢後再詢問，避免阻擋載入動畫
+                    setTimeout(() => syncAllToRagic(), 1000);
+                }
+
             } catch (err) {
                 console.error(err);
                 alert("讀取失敗，請確認網路或權限");
