@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>窩的家 - 智慧找房地圖 (標準版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { display: flex; height: 100vh; overflow: hidden; font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; background-color: #f3f4f6; }
+        #sidebar { width: 380px; background: #fff; box-shadow: 2px 0 10px rgba(0,0,0,0.05); z-index: 20; display: flex; flex-direction: column; transition: transform 0.3s ease; }
+        #map-container { flex: 1; position: relative; }
+        #map { height: 100%; width: 100%; }
+        
+        .property-card { padding: 16px; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: all 0.2s; background: #fff; position: relative; }
+        .property-card:hover { background: #f9fafb; padding-left: 20px; }
+        .property-card.active { background: #eff6ff; border-left: 4px solid #2563eb; padding-left: 16px; }
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+        .card-title { font-weight: bold; font-size: 16px; color: #1f2937; line-height: 1.4; flex: 1; }
+        .card-details { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #4b5563; margin-bottom: 8px; flex-wrap: wrap; }
+        .tag { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+        .tag-shop { background: #fee2e2; color: #991b1b; }
+        .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+        .card-price { color: #dc2626; font-weight: bold; font-size: 18px; }
+        .price-unit { font-size: 12px; color: #6b7280; font-weight: normal; }
+        .btn-591 { display: inline-flex; align-items: center; gap: 4px; background-color: #ff8c00; color: white; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; text-decoration: none; transition: background 0.2s; }
+        .btn-591:hover { background-color: #e07b00; }
+        .btn-hidden { display: none; }
+        .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.98); display: flex; justify-content: center; align-items: center; z-index: 9999; flex-direction: column; }
+        
+        #sync-progress-bar { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(31, 41, 55, 0.95); color: white; padding: 12px 24px; rounded: 9999px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 10000; display: none; align-items: center; gap: 12px; border-radius: 50px; font-size: 14px; font-weight: 500; white-space: nowrap; }
+        .filter-section { padding: 12px 16px; background: white; border-bottom: 1px solid #e5e7eb; }
+        .search-input { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background-color: #f9fafb; outline: none; transition: border-color 0.2s; }
+        .search-input:focus { border-color: #2563eb; background-color: white; }
+        .filter-row { display: flex; gap: 8px; margin-top: 8px; }
+        .filter-select { flex: 1; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background-color: white; outline: none; cursor: pointer; }
+
+        /* 數據統計儀表板 */
+        .stats-dashboard {
+            display: flex; justify-content: space-between; background: #f0f9ff; padding: 10px 16px; border-bottom: 1px solid #bfdbfe; font-size: 12px; color: #1e3a8a;
+        }
+        .stat-item b { font-size: 14px; margin-left: 4px; }
+
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            #sidebar { width: 100%; height: 0; overflow: hidden; order: 2; display: none; }
+            #map-container { height: 100%; order: 1; }
+            #sidebar.mobile-active { display: flex; height: 60vh; position: fixed; bottom: 0; left: 0; width: 100%; border-radius: 16px 16px 0 0; box-shadow: 0 -4px 20px rgba(0,0,0,0.15); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading" class="loading-overlay">
+        <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
+        <p class="mt-4 text-gray-600 font-bold tracking-widest text-sm">載入中...</p>
+    </div>
+
+    <div id="sync-progress-bar">
+        <i class="fas fa-sync-alt fa-spin text-blue-400"></i>
+        <span id="sync-text">正在同步...</span>
+    </div>
+
+    <div id="sidebar">
+        <!-- 標題區 -->
+        <div class="px-4 py-3 border-b flex justify-between items-center bg-white">
+            <div class="flex items-center gap-2">
+                <div class="bg-blue-600 text-white w-7 h-7 rounded flex items-center justify-center font-bold text-sm">窩</div>
+                <div>
+                    <h2 class="text-base font-bold text-gray-800">物件列表</h2>
+                    <div id="last-update-time" class="text-[10px] text-gray-400 font-normal">最後更新: --</div>
+                </div>
+            </div>
+            <button onclick="fetchData()" class="text-gray-400 hover:text-blue-600 p-2 rounded-full hover:bg-gray-50 transition" title="重新整理">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+        </div>
+
+        <!-- 數據儀表板 -->
+        <div class="stats-dashboard">
+            <div class="stat-item text-blue-700">
+                <i class="fas fa-map-marker-alt"></i> 此區域: <b id="visible-count">0</b> 筆
+            </div>
+            <div class="stat-item text-gray-600">
+                <i class="fas fa-home"></i> 總可租: <b id="total-count">0</b> 筆
+            </div>
+        </div>
+
+        <!-- 篩選區 -->
+        <div class="filter-section">
+            <div class="relative">
+                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
+                <input type="text" id="search-input" class="search-input pl-9" placeholder="搜尋案名、地址...">
+            </div>
+            <div class="filter-row">
+                <select id="filter-room" class="filter-select">
+                    <option value="">格局不限</option>
+                    <option value="1">1房</option>
+                    <option value="2">2房</option>
+                    <option value="3">3房</option>
+                    <option value="4">4房以上</option>
+                </select>
+                <select id="filter-type" class="filter-select">
+                    <option value="">用途不限</option>
+                    <option value="住宅">住宅</option>
+                    <option value="店面">店面/商業</option>
+                    <option value="辦公">辦公室</option>
+                    <option value="車位">車位</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="property-list" class="flex-1 overflow-y-auto bg-gray-50 pb-20 md:pb-0"></div>
+    </div>
+
+    <div id="map-container">
+        <div id="map"></div>
+        <button onclick="toggleSidebar()" class="md:hidden fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-5 py-3 rounded-full shadow-xl font-bold z-50 flex items-center gap-2 text-sm">
+            <i class="fas fa-list-ul"></i> 列表模式
+        </button>
+        <div class="absolute top-4 right-4 z-10 flex flex-col gap-2">
+             <button onclick="syncAllToRagic()" class="bg-white p-3 rounded-lg shadow-md hover:bg-gray-50 text-gray-600 transition group relative" title="執行座標同步">
+                <i class="fas fa-cloud-upload-alt text-lg group-hover:text-blue-600"></i>
+                <span class="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none shadow-lg">
+                    同步缺座標資料
+                </span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 設定面板 (僅同步提示) -->
+    <div id="settings-panel" class="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl z-50 p-6 overflow-y-auto border-l transition-transform transform translate-x-full">
+        <div class="flex justify-between items-center mb-6 border-b pb-4">
+            <h2 class="text-xl font-bold text-gray-800">同步設定</h2>
+            <button onclick="toggleSettings()" class="text-gray-400 hover:text-red-500 text-2xl transition">✕</button>
+        </div>
+        
+        <div class="space-y-6">
+            <section class="bg-blue-50 p-5 rounded-2xl border border-blue-100 shadow-sm">
+                <h3 class="font-bold text-base mb-2 text-blue-800">
+                    <i class="fas fa-magic mr-1"></i> 執行座標同步
+                </h3>
+                <p class="text-xs text-blue-600 mb-4 leading-relaxed">
+                    自動將地址轉換為座標並存回 Ragic。已存在的資料會自動跳過。
+                </p>
+                <button onclick="syncAllToRagic()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition shadow-md">
+                    開始同步
+                </button>
+            </section>
+
+            <div class="text-[10px] text-gray-400 text-center">
+                提示：若修改了地址，請手動清空該筆資料的「地圖經緯度」欄位，系統會自動偵測並更新。
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const EID = {
+            TITLE: "1000050", ADDR: "1000055", COORD: "1000759", 
+            PRICE: "1000076", LAYOUT: "1000063", USAGE: "1000060", LINK_591: "1000113"
+        };
+
+        const MAPS_KEY = "AIzaSyALdVJlv7IBxnqeShEbzIIWnV7WSjtRtZw";
+        const RAGIC_KEY = "Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==";
+        const API_URL = "https://ap15.ragic.com/wuohome/property-data-kept/10";
+
+        let map, geocoder;
+        let markers = [];
+        let fetchedRecords = [];
+        let filteredRecords = [];
+        let activeInfoWindow = null;
+        let mapMoveTimeout;
+
+        window.onload = () => {
+            updateTimeDisplay();
+            const script = document.createElement('script');
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&callback=initMap&libraries=geometry`;
+            script.async = true;
+            document.head.appendChild(script);
+
+            document.getElementById('search-input').addEventListener('input', () => applyFilters(true));
+            document.getElementById('filter-room').addEventListener('change', () => applyFilters(true));
+            document.getElementById('filter-type').addEventListener('change', () => applyFilters(true));
+        };
+
+        function initMap() {
+            map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 12,
+                center: { lat: 25.0330, lng: 121.5654 },
+                mapTypeControl: false,
+                fullscreenControl: false,
+                styles: [{ "featureType": "poi", "stylers": [{ "visibility": "off" }] }]
+            });
+            geocoder = new google.maps.Geocoder();
+            map.addListener('idle', () => {
+                clearTimeout(mapMoveTimeout);
+                mapMoveTimeout = setTimeout(renderListByMapBounds, 300);
+            });
+            fetchData();
+        }
+
+        async function fetchData() {
+            const loading = document.getElementById('loading');
+            loading.style.display = 'flex';
+            
+            try {
+                const ts = new Date().getTime();
+                const fetchUrl = `${API_URL}?api&v=3&naming=EID&t=${ts}&filterId=103&APIKey=${encodeURIComponent(RAGIC_KEY)}`;
+                
+                const resp = await fetch(fetchUrl); 
+                
+                if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
+                
+                const data = await resp.json();
+                fetchedRecords = Object.entries(data).map(([id, val]) => ({ id, ...val }));
+                
+                document.getElementById('total-count').innerText = fetchedRecords.length;
+                
+                saveCurrentTime();
+                applyFilters(true);
+
+                setTimeout(() => loading.style.display = 'none', 500);
+            } catch (err) {
+                console.error(err);
+                alert("讀取失敗，請確認網路或權限");
+                loading.style.display = 'none';
+            }
+        }
+
+        function applyFilters(autoZoom = false) {
+            const keyword = document.getElementById('search-input').value.toLowerCase();
+            const roomFilter = document.getElementById('filter-room').value;
+            const typeFilter = document.getElementById('filter-type').value;
+
+            filteredRecords = fetchedRecords.filter(item => {
+                const title = (item[EID.TITLE] || '').toLowerCase();
+                const addr = (item[EID.ADDR] || '').toLowerCase();
+                if (keyword && !title.includes(keyword) && !addr.includes(keyword)) return false;
+
+                if (roomFilter) {
+                    const layout = item[EID.LAYOUT] || '';
+                    const roomMatch = layout.match(/(\d+)房/);
+                    const roomNum = roomMatch ? parseInt(roomMatch[1]) : 0;
+                    if (roomFilter === '4' && roomNum < 4) return false;
+                    if (roomFilter !== '4' && roomNum !== parseInt(roomFilter)) return false;
+                }
+
+                if (typeFilter) {
+                    const usage = (item[EID.USAGE] || '').toLowerCase();
+                    const layout = (item[EID.LAYOUT] || '').toLowerCase();
+                    if (typeFilter === '店面' && !usage.includes('店') && !layout.includes('店')) return false;
+                    if (typeFilter === '住宅' && (usage.includes('店') || usage.includes('辦') || usage.includes('商'))) return false;
+                    if (typeFilter === '辦公' && !usage.includes('辦') && !usage.includes('商')) return false;
+                    if (typeFilter === '車位' && !usage.includes('車')) return false;
+                }
+                return true;
+            });
+
+            renderMarkers(autoZoom);
+            if (!autoZoom) renderListByMapBounds();
+        }
+
+        function renderMarkers(autoZoom) {
+            markers.forEach(m => m.setMap(null));
+            markers = [];
+            
+            let bounds = new google.maps.LatLngBounds();
+            let hasCoords = false;
+
+            filteredRecords.forEach(item => {
+                const coord = item[EID.COORD];
+                if (coord && coord.includes(',') && !isNaN(parseFloat(coord.split(',')[0]))) {
+                    const [lat, lng] = coord.split(',').map(Number);
+                    const marker = new google.maps.Marker({
+                        position: { lat, lng }, map: map, title: item[EID.TITLE],
+                        icon: { url: "https://maps.google.com/mapfiles/ms/icons/red-dot.png" }
+                    });
+                    marker.recordId = item.id;
+                    marker.addListener("click", () => {
+                        showInfoWindow(marker, item);
+                        scrollToCard(item.id);
+                    });
+                    markers.push(marker);
+                    bounds.extend({ lat, lng });
+                    hasCoords = true;
+                }
+            });
+
+            if (hasCoords && (autoZoom || !map.getBounds())) {
+                map.fitBounds(bounds);
+                if (markers.length === 1) {
+                    const listener = google.maps.event.addListener(map, "idle", () => { 
+                        if (map.getZoom() > 16) map.setZoom(16); 
+                        google.maps.event.removeListener(listener); 
+                    });
+                }
+            }
+        }
+
+        function renderListByMapBounds() {
+            const list = document.getElementById('property-list');
+            const bounds = map.getBounds();
+            const center = map.getCenter();
+
+            if (!bounds) return;
+
+            let visibleItems = filteredRecords.filter(item => {
+                const coord = item[EID.COORD];
+                if (!coord || !coord.includes(',')) return false;
+                const [lat, lng] = coord.split(',').map(Number);
+                return bounds.contains({ lat, lng });
+            });
+
+            visibleItems.sort((a, b) => {
+                const [latA, lngA] = a[EID.COORD].split(',').map(Number);
+                const [latB, lngB] = b[EID.COORD].split(',').map(Number);
+                const distA = google.maps.geometry.spherical.computeDistanceBetween(center, new google.maps.LatLng(latA, lngA));
+                const distB = google.maps.geometry.spherical.computeDistanceBetween(center, new google.maps.LatLng(latB, lngB));
+                return distA - distB;
+            });
+
+            document.getElementById('visible-count').innerText = visibleItems.length;
+            
+            list.innerHTML = '';
+
+            if (visibleItems.length === 0) {
+                list.innerHTML = '<div class="p-8 text-center text-gray-400">此範圍無符合條件的物件</div>';
+                return;
+            }
+            visibleItems.forEach(item => createListItem(item, list));
+        }
+
+        function createListItem(item, container) {
+            const div = document.createElement('div');
+            const price = item[EID.PRICE] ? parseInt(item[EID.PRICE]).toLocaleString() : "面議";
+            const link591 = item[EID.LINK_591];
+            const hasLink = link591 && link591.startsWith('http');
+            const usage = item[EID.USAGE] || '';
+            const isShop = usage.includes('店');
+            
+            div.className = "property-card";
+            div.id = `card-${item.id}`;
+            div.onclick = (e) => {
+                if(e.target.tagName === 'A' || e.target.closest('a')) return;
+                focusOnMap(item.id, item[EID.COORD]);
+            };
+            
+            div.innerHTML = `
+                <div class="card-header"><div class="card-title">${item[EID.TITLE] || '(未命名)'}</div></div>
+                <div class="card-details">
+                    <span class="tag ${isShop ? 'tag-shop' : ''}"><i class="fas ${isShop ? 'fa-store' : 'fa-home'} mr-1"></i>${item[EID.LAYOUT] || usage || '未分類'}</span>
+                    <span class="text-gray-400">|</span>
+                    <span class="truncate w-32 md:w-40" title="${item[EID.ADDR]}">${item[EID.ADDR] || ''}</span>
+                </div>
+                <div class="card-footer">
+                    <div class="card-price">$${price} <span class="price-unit">/月</span></div>
+                    <a href="${link591}" target="_blank" class="btn-591 ${hasLink ? '' : 'btn-hidden'}" title="前往 591">
+                        <i class="fas fa-external-link-alt"></i> 591
+                    </a>
+                </div>`;
+            container.appendChild(div);
+        }
+
+        function showInfoWindow(marker, item) {
+            const price = item[EID.PRICE] ? parseInt(item[EID.PRICE]).toLocaleString() : "面議";
+            const link591 = item[EID.LINK_591];
+            const hasLink = link591 && link591.startsWith('http');
+            const [lat, lng] = item[EID.COORD].split(',');
+
+            const infoContent = `
+                <div style="padding: 5px; min-width: 200px;">
+                    <h3 class="font-bold text-base mb-1 text-gray-800">${item[EID.TITLE]}</h3>
+                    <p class="text-gray-500 text-xs mb-2">${item[EID.LAYOUT]} | ${item[EID.ADDR]}</p>
+                    <div class="flex justify-between items-center mt-2 border-t pt-2">
+                        <span class="text-red-600 font-bold text-lg">$${price}</span>
+                        <div class="flex gap-2">
+                            ${hasLink ? `<a href="${link591}" target="_blank" class="text-xs bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600" style="text-decoration:none;">591</a>` : ''}
+                            <a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank" class="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700" style="text-decoration:none;">導航</a>
+                        </div>
+                    </div>
+                </div>`;
+
+            if (activeInfoWindow) activeInfoWindow.close();
+            const infoWindow = new google.maps.InfoWindow({ content: infoContent });
+            infoWindow.open(map, marker);
+            activeInfoWindow = infoWindow;
+        }
+
+        function focusOnMap(id, coord) {
+            if (!coord || !coord.includes(',')) { alert("尚無座標 (需同步)"); return; }
+            const [lat, lng] = coord.split(',').map(Number);
+            map.setCenter({ lat, lng });
+            map.setZoom(16);
+            const targetMarker = markers.find(m => m.recordId === id);
+            if (targetMarker) google.maps.event.trigger(targetMarker, 'click');
+            if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('mobile-active');
+        }
+
+        function scrollToCard(id) {
+            document.querySelectorAll('.property-card').forEach(el => el.classList.remove('active'));
+            const card = document.getElementById(`card-${id}`);
+            if (card) { card.classList.add('active'); card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('mobile-active');
+            sidebar.style.display = sidebar.classList.contains('mobile-active') ? 'flex' : 'none';
+        }
+
+        function saveCurrentTime() {
+            const now = new Date();
+            const timeStr = `${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+            localStorage.setItem('ragic_last_update', timeStr);
+            updateTimeDisplay();
+        }
+
+        function updateTimeDisplay() {
+            const lastTime = localStorage.getItem('ragic_last_update');
+            const el = document.getElementById('last-update-time');
+            if(lastTime) el.innerText = `最後更新: ${lastTime}`;
+        }
+
+        async function syncAllToRagic() {
+            if(!confirm("確定要執行同步？\n系統將自動解析缺座標的物件並寫回 Ragic。")) return;
+            
+            const btn = document.querySelector('button[onclick="syncAllToRagic()"]');
+            btn.disabled = true;
+            const progressBar = document.getElementById('sync-progress-bar');
+            const progressText = document.getElementById('sync-text');
+            progressBar.style.display = 'flex';
+            progressText.innerText = '檢查資料中...';
+            
+            let success = 0;
+            const toProcess = fetchedRecords.filter(i => {
+                const c = i[EID.COORD];
+                return !c || !c.toString().includes(',') || isNaN(parseFloat(c.split(',')[0]));
+            });
+
+            if (toProcess.length === 0) {
+                alert("資料已完整，無需同步！");
+                btn.disabled = false;
+                progressBar.style.display = 'none';
+                return;
+            }
+
+            for (let i = 0; i < toProcess.length; i++) {
+                const item = toProcess[i];
+                const address = item[EID.ADDR];
+                const recordId = item.id;
+                
+                progressText.innerText = `同步中: ${i+1} / ${toProcess.length}`;
+
+                if (address) {
+                    try {
+                        const result = await new Promise((res, rej) => {
+                            geocoder.geocode({ address }, (r, s) => s === 'OK' ? res(r[0]) : rej(s));
+                        });
+                        const coordStr = `${result.geometry.location.lat()},${result.geometry.location.lng()}`;
+                        const formData = new URLSearchParams();
+                        formData.append(EID.COORD, coordStr);
+                        
+                        const updateResp = await fetch(`${API_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_KEY)}`, {
+                            method: 'POST',
+                            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                            body: formData.toString()
+                        });
+                        const json = await updateResp.json();
+                        if (json.status === 'SUCCESS') success++;
+                    } catch (e) {}
+                    await new Promise(r => setTimeout(r, 400));
+                }
+            }
+            progressBar.style.display = 'none';
+            alert(`同步完成！更新 ${success} 筆。頁面將重新載入。`);
+            btn.disabled = false;
+            location.reload();
+        }
+    </script>
+</body>
+</html>
