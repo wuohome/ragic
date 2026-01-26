@@ -41,6 +41,22 @@
         .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.98); display: flex; justify-content: center; align-items: center; z-index: 9999; flex-direction: column; }
         
         #sync-progress-bar { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(31, 41, 55, 0.95); color: white; padding: 12px 24px; rounded: 9999px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 10000; display: none; align-items: center; gap: 12px; border-radius: 50px; font-size: 14px; font-weight: 500; white-space: nowrap; }
+        
+        /* 同步日誌視窗樣式 */
+        #sync-log-modal {
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 90%; max-width: 500px; background: white; border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2); z-index: 10001; flex-direction: column;
+            max-height: 80vh; overflow: hidden;
+        }
+        #sync-log-header { padding: 16px; background: #f3f4f6; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
+        #sync-log-body { padding: 16px; overflow-y: auto; flex: 1; font-size: 13px; }
+        #sync-log-footer { padding: 12px 16px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; }
+        .log-item { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #f0f0f0; }
+        .log-success { color: #059669; }
+        .log-error { color: #dc2626; }
+        .log-warn { color: #d97706; }
+
         .filter-section { padding: 12px 16px; background: white; border-bottom: 1px solid #e5e7eb; }
         .search-input { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background-color: #f9fafb; outline: none; transition: border-color 0.2s; }
         .search-input:focus { border-color: #2563eb; background-color: white; }
@@ -71,6 +87,20 @@
     <div id="sync-progress-bar">
         <i class="fas fa-sync-alt fa-spin text-blue-400"></i>
         <span id="sync-text">正在同步...</span>
+    </div>
+
+    <!-- 同步日誌視窗 -->
+    <div id="sync-log-modal">
+        <div id="sync-log-header">
+            <span>同步詳細報告</span>
+            <button onclick="document.getElementById('sync-log-modal').style.display='none'" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="sync-log-body"></div>
+        <div id="sync-log-footer">
+            <button onclick="document.getElementById('sync-log-modal').style.display='none'; location.reload();" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">關閉並重整</button>
+        </div>
     </div>
 
     <div id="sidebar">
@@ -483,16 +513,29 @@
             if(lastTime) el.innerText = `最後更新: ${lastTime}`;
         }
 
+        // 新增：寫入日誌的輔助函式
+        function appendLog(message, type = 'normal') {
+            const logBody = document.getElementById('sync-log-body');
+            const div = document.createElement('div');
+            div.className = `log-item ${type === 'success' ? 'log-success' : type === 'error' ? 'log-error' : type === 'warn' ? 'log-warn' : ''}`;
+            div.innerHTML = message;
+            logBody.appendChild(div);
+            logBody.scrollTop = logBody.scrollHeight;
+        }
+
         async function syncAllToRagic() {
             if(!confirm("確定要執行同步？\n系統將自動解析缺座標的物件並寫回 Ragic。")) return;
             
             const btn = document.querySelector('button[onclick="syncAllToRagic()"]');
             btn.disabled = true;
-            const progressBar = document.getElementById('sync-progress-bar');
-            const progressText = document.getElementById('sync-text');
-            progressBar.style.display = 'flex';
-            progressText.innerText = '檢查資料中...';
             
+            const modal = document.getElementById('sync-log-modal');
+            const logBody = document.getElementById('sync-log-body');
+            logBody.innerHTML = ''; // 清空舊日誌
+            modal.style.display = 'flex';
+            
+            appendLog('<i class="fas fa-search"></i> 正在掃描資料...', 'normal');
+
             let success = 0;
             let errors = 0;
             const toProcess = fetchedRecords.filter(i => {
@@ -501,21 +544,18 @@
             });
 
             if (toProcess.length === 0) {
-                alert("資料已完整，無需同步！");
+                appendLog('<i class="fas fa-check-circle"></i> 資料已完整，無需同步！', 'success');
                 btn.disabled = false;
-                progressBar.style.display = 'none';
                 return;
             }
 
-            console.log("開始同步，共需處理: " + toProcess.length + " 筆");
+            appendLog(`共發現 <b>${toProcess.length}</b> 筆資料需要同步...`, 'warn');
 
             for (let i = 0; i < toProcess.length; i++) {
                 const item = toProcess[i];
                 const address = item[EID.ADDR];
                 const recordId = item.id;
                 
-                progressText.innerText = `同步中: ${i+1} / ${toProcess.length}`;
-
                 if (address) {
                     try {
                         // 1. 先從 Google Maps 抓座標
@@ -524,13 +564,12 @@
                         });
                         const coordStr = `${result.geometry.location.lat()},${result.geometry.location.lng()}`;
                         
-                        console.log(`[${i+1}/${toProcess.length}] 取得座標成功: ${address} -> ${coordStr}`);
+                        appendLog(`[${i+1}/${toProcess.length}] Google定位成功: ${address} -> ${coordStr}`, 'normal');
 
                         // 2. 準備寫回 Ragic
                         const formData = new URLSearchParams();
                         formData.append(EID.COORD, coordStr);
                         
-                        // Ragic API URL: https://ap15.ragic.com/wuohome/property-data-kept/10/{RagicId}
                         const updateUrl = `${API_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_KEY)}`;
                         
                         const updateResp = await fetch(updateUrl, {
@@ -539,33 +578,42 @@
                             body: formData.toString()
                         });
                         
-                        const json = await updateResp.json();
+                        // 嘗試解析 JSON，如果解析失敗則可能是網路錯誤或純文字錯誤
+                        let json;
+                        try {
+                            json = await updateResp.json();
+                        } catch(e) {
+                            throw new Error("API 回傳格式錯誤或網路中斷");
+                        }
                         
                         if (json.status === 'SUCCESS') {
                             success++;
-                            console.log(`Ragic 更新成功 (ID: ${recordId})`);
+                            appendLog(`<i class="fas fa-check"></i> Ragic 更新成功 (ID: ${recordId})`, 'success');
                         } else {
                             errors++;
-                            console.error(`Ragic 更新失敗 (ID: ${recordId}):`, json);
+                            // 捕捉 Ragic 具體錯誤訊息
+                            const errMsg = json.msg || json.message || "未知錯誤";
+                            appendLog(`<i class="fas fa-times"></i> Ragic 拒絕更新 (ID: ${recordId}): <b>${errMsg}</b>`, 'error');
+                            if(errMsg.includes("permission") || errMsg.includes("權限")) {
+                                appendLog(`提示: 請檢查 API Key 是否有「修改」權限`, 'warn');
+                            }
                         }
                     } catch (e) {
                         errors++;
-                        console.error(`處理失敗 (ID: ${recordId}, 地址: ${address}):`, e);
+                        appendLog(`<i class="fas fa-exclamation-triangle"></i> 處理失敗 (ID: ${recordId}): ${e.message || e}`, 'error');
+                        if (e.toString().includes('Failed to fetch')) {
+                             appendLog(`提示: 可能是跨域 (CORS) 錯誤，或 API Key 限制了來源`, 'warn');
+                        }
                     }
-                    // 稍微暫停，避免 Google Maps 或 Ragic API 限制 (Rate Limiting)
+                    // 稍微暫停
                     await new Promise(r => setTimeout(r, 600));
                 } else {
-                    console.warn(`ID: ${recordId} 無地址，跳過`);
+                    appendLog(`[${i+1}/${toProcess.length}] ID: ${recordId} 無地址，跳過`, 'warn');
                 }
             }
             
-            progressBar.style.display = 'none';
-            let msg = `同步結束！\n成功: ${success} 筆\n失敗: ${errors} 筆`;
-            if (errors > 0) msg += "\n\n請按 F12 開啟 Console 查看失敗詳細原因 (可能是 API 權限不足或地址錯誤)";
-            
-            alert(msg);
+            appendLog(`<hr><b>同步結束！</b> 成功: ${success} 筆, 失敗: ${errors} 筆`, 'normal');
             btn.disabled = false;
-            if (success > 0) location.reload();
         }
     </script>
 </body>
