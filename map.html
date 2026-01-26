@@ -570,11 +570,16 @@
                         const formData = new URLSearchParams();
                         formData.append(EID.COORD, coordStr);
                         
-                        const updateUrl = `${API_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_KEY)}`;
+                        // 修改: 移除 URL 上的 APIKey，改用 Header 傳送，避免被視為 Guest
+                        const updateUrl = `${API_URL}/${recordId}?api&v=3`;
                         
                         const updateResp = await fetch(updateUrl, {
                             method: 'POST',
-                            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                            headers: { 
+                                "Content-Type": "application/x-www-form-urlencoded",
+                                // 關鍵修改: 使用 Authorization Header 確保身分驗證 (Ragic 標準寫法: Basic base64(Key:))
+                                "Authorization": "Basic " + btoa(RAGIC_KEY + ":")
+                            },
                             body: formData.toString()
                         });
                         
