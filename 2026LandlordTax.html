@@ -1,0 +1,496 @@
+import React, { useState } from 'react';
+import { Calculator, Building2, Heart, Home, AlertCircle, TrendingDown, Info, DollarSign, ChevronDown, ChevronUp, HelpCircle, FileText } from 'lucide-react';
+
+export default function App() {
+  // --- 基礎設定 ---
+  // 114年度(2025/2026) 綜所稅免稅額與扣除額參考 (單身無扶養)
+  const BASIC_DEDUCTION = 97000 + 131000; // 免稅額 9.7萬 + 標扣額 13.1萬 = 22.8萬
+
+  // --- 狀態管理 ---
+  const [rent, setRent] = useState(35000);
+  const [otherIncome, setOtherIncome] = useState(600000); // 全年其他所得
+  
+  // 市值與稅基
+  const [buildingMarketValue, setBuildingMarketValue] = useState(0); 
+  const [landMarketValue, setLandMarketValue] = useState(0);    
+  const [houseValue, setHouseValue] = useState(500000); // 房屋評定現值
+  const [landValue, setLandValue] = useState(1000000);  // 土地申報地價
+
+  // 稅率設定
+  const [hoardingRate, setHoardingRate] = useState(2.4); // 囤房稅率
+  const [generalLandTaxRate, setGeneralLandTaxRate] = useState(0.010); // 一般地價稅率
+
+  // UI 狀態
+  const [showAdvanced, setShowAdvanced] = useState(false); // 展開進階稅基設定
+  const [showSalesTips, setShowSalesTips] = useState(false); // 顯示業務小抄
+
+  // --- 連動計算：市值 -> 稅基 ---
+  const handleBuildingMarketChange = (val) => {
+    setBuildingMarketValue(val);
+    if (val > 0) setHouseValue(Math.floor(val * 0.5)); // 估算係數 0.5
+  };
+
+  const handleLandMarketChange = (val) => {
+    setLandMarketValue(val);
+    if (val > 0) setLandValue(Math.floor(val * 0.6)); // 估算係數 0.6
+  };
+
+  // --- 核心邏輯 (維持不變) ---
+  const calculateProgressiveTax = (netIncome) => {
+    if (netIncome <= 0) return { tax: 0, rate: 0, bracket: "0%" };
+    
+    let tax = 0;
+    let rate = 0;
+    let bracket = "";
+
+    if (netIncome <= 610000) {
+      tax = netIncome * 0.05;
+      rate = 0.05;
+      bracket = "5%";
+    } else if (netIncome <= 1380000) {
+      tax = netIncome * 0.12 - 42700;
+      rate = 0.12;
+      bracket = "12%";
+    } else if (netIncome <= 2720000) {
+      tax = netIncome * 0.20 - 153100;
+      rate = 0.20;
+      bracket = "20%";
+    } else if (netIncome <= 5090000) {
+      tax = netIncome * 0.30 - 425100;
+      rate = 0.30;
+      bracket = "30%";
+    } else {
+      tax = netIncome * 0.40 - 934100;
+      rate = 0.40;
+      bracket = "40%";
+    }
+
+    return { tax, rate, bracket };
+  };
+
+  const calculateTotal = () => {
+    const annualRent = rent * 12;
+    
+    // 一般自租: 成本 43%
+    const generalRentalNet = annualRent * (1 - 0.43);
+    
+    // 公益出租: (租金 - 1.5萬) * (1 - 43%)
+    const welfareRentalNet = Math.max(0, rent - 15000) * 12 * (1 - 0.43);
+    
+    // 社宅包租代管: (租金 - 1.5萬) * (1 - 60%)
+    const socialRentalNet = Math.max(0, rent - 15000) * 12 * (1 - 0.60);
+
+    // 持有稅
+    const generalHouseTax = houseValue * (hoardingRate / 100);
+    const generalLandTax = landValue * generalLandTaxRate;
+
+    const preferHouseTax = houseValue * 0.012;
+    const preferLandTax = landValue * 0.002;
+
+    // 綜所稅
+    const calcIncomeTax = (rentalNet) => {
+      const totalNetIncome = Math.max(0, otherIncome + rentalNet - BASIC_DEDUCTION);
+      return calculateProgressiveTax(totalNetIncome);
+    };
+
+    const generalIT = calcIncomeTax(generalRentalNet);
+    const welfareIT = calcIncomeTax(welfareRentalNet);
+    const socialIT = calcIncomeTax(socialRentalNet);
+
+    return {
+      general: {
+        incomeTax: generalIT.tax,
+        houseTax: generalHouseTax,
+        landTax: generalLandTax,
+        total: generalIT.tax + generalHouseTax + generalLandTax,
+        bracket: generalIT.bracket,
+        effectiveRate: (generalIT.tax / Math.max(1, otherIncome + annualRent)) * 100
+      },
+      welfare: {
+        incomeTax: welfareIT.tax,
+        houseTax: preferHouseTax,
+        landTax: preferLandTax,
+        total: welfareIT.tax + preferHouseTax + preferLandTax,
+        bracket: welfareIT.bracket
+      },
+      social: {
+        incomeTax: socialIT.tax,
+        houseTax: preferHouseTax,
+        landTax: preferLandTax,
+        total: socialIT.tax + preferHouseTax + preferLandTax,
+        bracket: socialIT.bracket
+      }
+    };
+  };
+
+  const results = calculateTotal();
+  const fmt = (num) => new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 }).format(num);
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 p-4 md:p-8">
+      <div className="max-w-6xl mx-auto">
+        
+        {/* Header & Sales Tips Toggle */}
+        <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-3 bg-slate-800 rounded-xl shadow-lg">
+                <Calculator className="w-8 h-8 text-white" />
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900">房東稅務情境試算工具</h1>
+            </div>
+            <p className="text-slate-500 text-sm md:ml-14">
+              協助分析不同出租方案之稅負差異方向 (2026年制)
+            </p>
+          </div>
+          <button 
+            onClick={() => setShowSalesTips(!showSalesTips)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
+              showSalesTips ? 'bg-amber-100 text-amber-800' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            <HelpCircle size={18} />
+            {showSalesTips ? '隱藏業務提示' : '業務說明提示'}
+          </button>
+        </header>
+
+        {/* 業務說明提示區塊 (Collapsible) */}
+        {showSalesTips && (
+          <div className="mb-8 bg-amber-50 border border-amber-200 rounded-xl p-6 animate-fadeIn">
+            <h3 className="font-bold text-amber-900 mb-4 flex items-center gap-2">
+              <Info size={20} /> 業務說明重點 (內部參考)
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-amber-800">
+              <div className="bg-white/60 p-4 rounded-lg">
+                <strong className="block mb-2 text-slate-700">1. 一般出租 (風險提醒)</strong>
+                <p>切勿恐嚇。重點放在「囤房稅2.0全國歸戶」後，非自住稅率區間提高(2%~4.8%)，持有成本變動風險較高。</p>
+              </div>
+              <div className="bg-white/60 p-4 rounded-lg">
+                <strong className="block mb-2 text-emerald-700">2. 公益出租人 (租補)</strong>
+                <p>強調「權益保障」。成為公益出租人可享自用住宅稅率(1.2%/2‰)，且有每月1.5萬免稅額，讓房客申請租補創造雙贏。</p>
+              </div>
+              <div className="bg-white/60 p-4 rounded-lg">
+                <strong className="block mb-2 text-blue-700">3. 社宅/包租代管 (優勢)</strong>
+                <p>強調「省心與扣除額」。除了比照公益出租人的稅率優惠外，必要費用扣除額提高至60%，降低綜合所得稅基。</p>
+              </div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-amber-200 text-xs text-amber-700">
+              <span className="font-bold">⚠️ 避雷針：</span> 避免使用「一定節稅」、「政府保證」、「完全免稅」等絕對用語。改用「依目前法規試算」、「相較之下稅負較低」、「評估起來較有利」等中性說法。
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          {/* 左側：輸入控制面板 */}
+          <div className="lg:col-span-5 space-y-6">
+            
+            {/* 租金補貼說明區塊 */}
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5">
+              <h3 className="text-blue-900 font-bold flex items-center gap-2 mb-3">
+                <FileText className="w-5 h-5" /> 關於租金補貼說明
+              </h3>
+              <ul className="space-y-2 text-sm text-blue-800">
+                <li className="flex gap-2">
+                  <span className="text-blue-500">•</span>
+                  <span>補貼款項直接撥給<strong>「房客」</strong>，減輕其租金負擔，並非房東的額外收入。</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-blue-500">•</span>
+                  <span>房東報稅以「實際收取租金」為準。</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-blue-500">•</span>
+                  <span>房客申請補貼後，房東將成為「公益出租人」，享有稅賦優惠，不必然導致稅負增加。</span>
+                </li>
+              </ul>
+              <div className="mt-3 text-[11px] text-blue-400 border-t border-blue-200 pt-2">
+                * 實際認定仍以國稅局核定為準，本說明僅供參考。
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 border-b pb-3">
+                <DollarSign className="w-5 h-5 text-slate-600" />
+                所得與試算條件
+              </h2>
+
+              <div className="grid grid-cols-1 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">每月租金收入</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                    <input 
+                      type="number" 
+                      value={rent} 
+                      onChange={(e) => setRent(Number(e.target.value))}
+                      className="w-full pl-8 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-lg font-bold text-slate-900"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    全年其他所得 (薪資/股利等)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                    <input 
+                      type="number" 
+                      value={otherIncome} 
+                      onChange={(e) => setOtherIncome(Number(e.target.value))}
+                      className="w-full pl-8 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    * 系統將自動扣除基本免稅額與標準扣除額，合併試算累進稅率。
+                  </p>
+                </div>
+              </div>
+
+              {/* 快速試算提示 */}
+              <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg text-xs text-slate-600 mb-4">
+                <Info size={16} className="text-slate-400 flex-shrink-0" />
+                <p>此試算重點在於<strong>「不同出租方式的稅負差異方向」</strong>，若暫無精確稅基資料，可直接參考下方比較。</p>
+              </div>
+
+              {/* 進階設定開關 */}
+              <button 
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="w-full flex items-center justify-center gap-2 py-2 text-sm text-slate-500 hover:text-slate-700 border-t border-slate-100 transition-colors"
+              >
+                {showAdvanced ? '收合詳細稅基設定' : '展開詳細稅基設定 (選填)'}
+                {showAdvanced ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+
+              {/* 進階設定內容 (Collapsible) */}
+              {showAdvanced && (
+                <div className="mt-4 pt-4 border-t border-slate-100 animate-fadeIn">
+                  <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 mb-4">
+                     <p className="text-xs text-amber-800 mb-2 font-medium flex items-center gap-1">
+                       <Info className="w-3 h-3" /> 若不知道稅基，可填寫市值，系統將以參數自動推估：
+                     </p>
+                     <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs text-amber-700 mb-1">建物市值預估</label>
+                          <input 
+                            type="number" 
+                            placeholder="例：10000000"
+                            value={buildingMarketValue || ''}
+                            onChange={(e) => handleBuildingMarketChange(Number(e.target.value))}
+                            className="w-full px-3 py-2 text-sm bg-white border border-amber-200 rounded-lg focus:ring-amber-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-amber-700 mb-1">土地市值預估</label>
+                          <input 
+                            type="number" 
+                            placeholder="例：20000000"
+                            value={landMarketValue || ''}
+                            onChange={(e) => handleLandMarketChange(Number(e.target.value))}
+                            className="w-full px-3 py-2 text-sm bg-white border border-amber-200 rounded-lg focus:ring-amber-500"
+                          />
+                        </div>
+                     </div>
+                     <p className="text-[10px] text-amber-600/70 mt-2 text-center">* 僅供快速試算，不影響比較方向</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 mb-6">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">房屋評定現值</label>
+                      <input 
+                        type="number" 
+                        value={houseValue} 
+                        onChange={(e) => setHouseValue(Number(e.target.value))}
+                        className="w-full px-3 py-2 text-sm bg-slate-100 border border-slate-300 rounded-lg text-slate-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">土地申報地價</label>
+                      <input 
+                        type="number" 
+                        value={landValue} 
+                        onChange={(e) => setLandValue(Number(e.target.value))}
+                        className="w-full px-3 py-2 text-sm bg-slate-100 border border-slate-300 rounded-lg text-slate-700"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-red-600 mb-1 flex justify-between">
+                        一般出租適用稅率 (囤房稅2.0)
+                        <span className="text-[10px] font-normal bg-red-50 text-red-600 px-1 rounded">非自住 2%~4.8%</span>
+                      </label>
+                      <select 
+                        value={hoardingRate} 
+                        onChange={(e) => setHoardingRate(Number(e.target.value))}
+                        className="w-full px-3 py-2 text-sm bg-white border border-red-200 rounded-lg text-slate-700"
+                      >
+                        <option value={2.0}>2.0% (法定下限)</option>
+                        <option value={2.4}>2.4% (常見級距)</option>
+                        <option value={3.6}>3.6% (高風險區間)</option>
+                        <option value={4.8}>4.8% (最高級距)</option>
+                      </select>
+                    </div>
+
+                     <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1 flex justify-between">
+                        一般用地地價稅率
+                      </label>
+                      <select 
+                        value={generalLandTaxRate} 
+                        onChange={(e) => setGeneralLandTaxRate(Number(e.target.value))}
+                        className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-700"
+                      >
+                        <option value={0.010}>10‰ (預設最低)</option>
+                        <option value={0.015}>15‰</option>
+                        <option value={0.055}>55‰ (最高)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 右側：結果比較卡片 */}
+          <div className="lg:col-span-7 space-y-4">
+            
+            {/* 卡片 1: 一般自租 */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 relative overflow-hidden group hover:border-slate-300 transition-colors">
+               <div className="absolute top-0 left-0 w-1 h-full bg-slate-400"></div>
+               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
+                 <div className="flex items-center gap-3">
+                    <div className="p-2 bg-slate-100 rounded-lg text-slate-600"><Building2 size={24}/></div>
+                    <div>
+                      <h3 className="font-bold text-lg text-slate-700">一般出租 (未申報/未加入社宅)</h3>
+                      <p className="text-xs text-slate-500">房屋稅 2.0%~4.8% | 成本率 43%</p>
+                    </div>
+                 </div>
+                 <div className="mt-2 md:mt-0 text-right">
+                    <p className="text-xs text-slate-400">試算年稅負</p>
+                    <p className="text-3xl font-bold text-slate-800">{fmt(results.general.total)}</p>
+                 </div>
+               </div>
+               
+               <div className="grid grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl text-sm">
+                  <div>
+                    <span className="block text-xs text-slate-400">所得稅 (級距 {results.general.bracket})</span>
+                    <span className="font-semibold text-slate-700">{fmt(results.general.incomeTax)}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-slate-400">房屋稅 ({hoardingRate}%)</span>
+                    <span className="font-semibold text-red-600">{fmt(results.general.houseTax)}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-slate-400">地價稅 ({(generalLandTaxRate*1000).toFixed(0)}‰)</span>
+                    <span className="font-semibold text-red-600">{fmt(results.general.landTax)}</span>
+                  </div>
+               </div>
+            </div>
+
+            {/* 卡片 2: 公益出租人 */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-emerald-200 relative overflow-hidden group hover:border-emerald-300 transition-colors">
+               <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
+               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
+                 <div className="flex items-center gap-3">
+                    <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600"><Heart size={24}/></div>
+                    <div>
+                      <h3 className="font-bold text-lg text-emerald-800">公益出租人 (房客領租補)</h3>
+                      <p className="text-xs text-emerald-600">免稅額 1.5 萬 | 成本率 43%</p>
+                    </div>
+                 </div>
+                 <div className="mt-2 md:mt-0 text-right">
+                    <div className="flex items-center gap-2 justify-end mb-1">
+                      <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                        與一般出租相比，試算差異約 {fmt(results.general.total - results.welfare.total)}
+                      </span>
+                    </div>
+                    <p className="text-3xl font-bold text-emerald-700">{fmt(results.welfare.total)}</p>
+                 </div>
+               </div>
+               
+               <div className="grid grid-cols-3 gap-4 bg-emerald-50 p-4 rounded-xl text-sm">
+                  <div>
+                    <span className="block text-xs text-emerald-600/70">所得稅 ({results.welfare.bracket})</span>
+                    <span className="font-semibold text-emerald-800">{fmt(results.welfare.incomeTax)}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-emerald-600/70">房屋稅 (1.2%)</span>
+                    <span className="font-semibold text-emerald-800">{fmt(results.welfare.houseTax)}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-emerald-600/70">地價稅 (2‰)</span>
+                    <span className="font-semibold text-emerald-800">{fmt(results.welfare.landTax)}</span>
+                  </div>
+               </div>
+            </div>
+
+            {/* 卡片 3: 社會住宅 */}
+            <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-blue-500 relative overflow-hidden z-10">
+               <div className="absolute top-0 right-0 bg-blue-500 text-white text-[10px] px-3 py-1 rounded-bl-lg font-bold">
+                 試算差異最大方案
+               </div>
+               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
+                 <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 rounded-lg text-blue-600"><Home size={24}/></div>
+                    <div>
+                      <h3 className="font-bold text-lg text-blue-800">社會住宅 (包租代管)</h3>
+                      <p className="text-xs text-blue-600">免稅額 1.5 萬 | <span className="font-bold bg-blue-100 px-1 rounded">成本率 60%</span></p>
+                    </div>
+                 </div>
+                 <div className="mt-2 md:mt-0 text-right">
+                    <div className="flex items-center gap-2 justify-end mb-1">
+                       <TrendingDown className="w-4 h-4 text-blue-600" />
+                       <span className="text-xs font-bold text-blue-600">與一般出租相比，試算年稅負差異約 {fmt(results.general.total - results.social.total)}</span>
+                    </div>
+                    <p className="text-4xl font-bold text-blue-700">{fmt(results.social.total)}</p>
+                 </div>
+               </div>
+               
+               <div className="grid grid-cols-3 gap-4 bg-blue-50 p-4 rounded-xl text-sm">
+                  <div>
+                    <span className="block text-xs text-blue-600/70">所得稅 ({results.social.bracket})</span>
+                    <span className="font-semibold text-blue-800">{fmt(results.social.incomeTax)}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-blue-600/70">房屋稅 (1.2%)</span>
+                    <span className="font-semibold text-blue-800">{fmt(results.social.houseTax)}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-blue-600/70">地價稅 (2‰)</span>
+                    <span className="font-semibold text-blue-800">{fmt(results.social.landTax)}</span>
+                  </div>
+               </div>
+               
+               {/* 效益分析條 */}
+               <div className="mt-4 pt-3 border-t border-blue-100">
+                  <div className="flex justify-between items-center text-xs">
+                     <span className="text-blue-500">試算年淨收益差異 (含稅後)</span>
+                     <span className="font-bold text-blue-700">+{fmt((rent*12 - results.social.total) - (rent*12 - results.general.total))} / 年</span>
+                  </div>
+               </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* 底部說明 */}
+        <footer className="mt-12 pt-8 border-t border-slate-200 text-slate-500 text-xs leading-relaxed">
+          <p className="font-bold mb-2 text-slate-700 text-sm">使用注意事項與免責聲明：</p>
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 list-disc pl-4 text-slate-600">
+              <li>本工具為<strong>「稅務情境試算」</strong>，旨在幫助房東理解不同出租選擇之稅負差異方向。</li>
+              <li>試算結果非正式報稅依據，亦不代表最終核定稅額。</li>
+              <li>實際稅額應以稅捐機關核發之稅單或國稅局核定為準。</li>
+              <li>房屋稅(囤房稅2.0)與地價稅試算，係假設一般出租未符合自住條件，並採預設稅率估算。</li>
+              <li>計算參數參考 2026 年(民國115年) 適用之法規進行估算。</li>
+            </ul>
+          </div>
+        </footer>
+
+      </div>
+    </div>
+  );
+}
