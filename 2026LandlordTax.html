@@ -50,7 +50,7 @@
                     <h1 class="text-2xl md:text-3xl font-bold text-slate-900">房東稅務情境試算工具</h1>
                 </div>
                 <p class="text-slate-500 text-sm md:ml-14">
-                    協助分析不同出租方案之稅負差異方向 (2026年制)
+                    協助分析不同出租方案之「租金行為增加稅負」試算 (2026年制)
                 </p>
             </div>
             <button id="btn-sales-tips" class="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">
@@ -67,20 +67,20 @@
                 </h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-amber-800">
                     <div class="bg-white/60 p-4 rounded-lg">
-                        <strong class="block mb-2 text-slate-700">1. 一般出租 (風險提醒)</strong>
-                        <p>切勿恐嚇。重點放在「囤房稅2.0全國歸戶」後，非自住稅率區間提高(2%~4.8%)，持有成本變動風險較高。</p>
+                        <strong class="block mb-2 text-slate-700">1. 一般出租 (重點)</strong>
+                        <p>提醒房東：一般出租無免稅額，且必要費用率僅43%。若所得稅率較高，租金收入將顯著增加稅負。</p>
                     </div>
                     <div class="bg-white/60 p-4 rounded-lg">
                         <strong class="block mb-2 text-emerald-700">2. 公益出租人 (租補)</strong>
-                        <p>強調「權益保障」。成為公益出租人可享自用住宅稅率(1.2%/2‰)，且有每月1.5萬免稅額，讓房客申請租補創造雙贏。</p>
+                        <p>強調「1.5萬免稅額」的威力。對於大部分租金在1.5萬以下的案件，租賃所得稅甚至是0元。</p>
                     </div>
                     <div class="bg-white/60 p-4 rounded-lg">
                         <strong class="block mb-2 text-blue-700">3. 社宅/包租代管 (優勢)</strong>
-                        <p>強調「省心與扣除額」。除了比照公益出租人的稅率優惠外，必要費用扣除額提高至60%，降低綜合所得稅基。</p>
+                        <p>強調「60%費用率」。超過1.5萬的部分，還能扣除60%成本，大幅降低計稅金額，適合高租金或高稅率房東。</p>
                     </div>
                 </div>
                 <div class="mt-4 pt-4 border-t border-amber-200 text-xs text-amber-700">
-                    <span class="font-bold">⚠️ 避雷針：</span> 避免使用「一定節稅」、「政府保證」、「完全免稅」等絕對用語。改用「依目前法規試算」、「相較之下稅負較低」、「評估起來較有利」等中性說法。
+                    <span class="font-bold">⚠️ 注意事項：</span> 本次試算僅針對「租金行為產生的所得稅」進行比較，不包含房屋稅與地價稅。
                 </div>
             </div>
         </div>
@@ -106,7 +106,7 @@
                         </li>
                         <li class="flex gap-2">
                             <span class="text-blue-500">•</span>
-                            <span>房客申請補貼後，房東將成為「公益出租人」，享有稅賦優惠，不必然導致稅負增加。</span>
+                            <span>房客申請補貼後，房東將成為「公益出租人」，享有稅賦優惠。</span>
                         </li>
                     </ul>
                     <div class="mt-3 text-[11px] text-blue-400 border-t border-blue-200 pt-2">
@@ -132,14 +132,22 @@
 
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">
-                                全年其他所得 (薪資/股利等)
+                                屋主所得級距 (僅用於估算邊際稅率)
                             </label>
                             <div class="relative">
-                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
-                                <input type="number" id="input-other-income" value="600000" class="w-full pl-8 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <select id="select-income-range" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-slate-700 appearance-none">
+                                    <option value="0.05" selected>低於 61 萬（適用稅率 5%）</option>
+                                    <option value="0.12">61 萬 ～ 138 萬（適用稅率 12%）</option>
+                                    <option value="0.20">138 萬 ～ 272 萬（適用稅率 20%）</option>
+                                    <option value="0.30">272 萬 ～ 509 萬（適用稅率 30%）</option>
+                                    <option value="0.40">高於 509 萬（適用稅率 40%）</option>
+                                </select>
+                                <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                                    <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
+                                </div>
                             </div>
                             <p class="text-[11px] text-slate-400 mt-1">
-                                * 系統將自動扣除基本免稅額與標準扣除額，合併試算累進稅率。
+                                * 僅用於推估租金行為產生之所得稅，不涉及其他稅額計算。
                             </p>
                         </div>
                     </div>
@@ -147,68 +155,34 @@
                     <!-- Quick Calc Hint -->
                     <div class="flex items-center gap-2 p-3 bg-slate-50 rounded-lg text-xs text-slate-600 mb-4">
                         <i data-lucide="info" class="w-4 h-4 text-slate-400 flex-shrink-0"></i>
-                        <p>此試算重點在於<strong>「不同出租方式的稅負差異方向」</strong>，若暫無精確稅基資料，可直接參考下方比較。</p>
+                        <p>此試算僅針對<strong>「租金行為增加之所得稅」</strong>進行差異比較。</p>
                     </div>
 
-                    <!-- Advanced Toggle -->
+                    <!-- Advanced Toggle (Kept for UI consistency but data unused in total) -->
                     <button id="btn-advanced" class="w-full flex items-center justify-center gap-2 py-2 text-sm text-slate-500 hover:text-slate-700 border-t border-slate-100 transition-colors">
-                        <span id="txt-advanced">展開詳細稅基設定 (選填)</span>
+                        <span id="txt-advanced">展開詳細稅基設定 (本模式不計入持有稅)</span>
                         <i id="icon-advanced" data-lucide="chevron-down" class="w-4 h-4 transition-transform"></i>
                     </button>
 
                     <!-- Advanced Section (Collapsible) -->
                     <div id="section-advanced" class="collapsible-content pt-2">
-                        <div class="bg-amber-50 p-4 rounded-xl border border-amber-100 mb-4 mt-2">
-                            <p class="text-xs text-amber-800 mb-2 font-medium flex items-center gap-1">
-                                <i data-lucide="info" class="w-3 h-3"></i> 若不知道稅基，可填寫市值，系統將以參數自動推估：
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-4 mt-2">
+                            <p class="text-xs text-slate-500 mb-2 text-center">
+                                * 依據目前設定，房屋稅與地價稅已排除於比較計算之外。
                             </p>
-                            <div class="grid grid-cols-2 gap-3">
+                        </div>
+                        
+                        <!-- Inputs kept but visually dimmed to indicate inactivity for current mode -->
+                        <div class="opacity-50 pointer-events-none">
+                            <div class="grid grid-cols-2 gap-3 mb-6">
                                 <div>
-                                    <label class="block text-xs text-amber-700 mb-1">建物市值預估</label>
-                                    <input type="number" id="input-market-building" placeholder="例：10000000" class="w-full px-3 py-2 text-sm bg-white border border-amber-200 rounded-lg focus:ring-amber-500">
+                                    <label class="block text-xs font-bold text-slate-700 mb-1">房屋評定現值</label>
+                                    <input type="number" id="input-house-value" value="500000" class="w-full px-3 py-2 text-sm bg-slate-100 border border-slate-300 rounded-lg text-slate-700">
                                 </div>
                                 <div>
-                                    <label class="block text-xs text-amber-700 mb-1">土地市值預估</label>
-                                    <input type="number" id="input-market-land" placeholder="例：20000000" class="w-full px-3 py-2 text-sm bg-white border border-amber-200 rounded-lg focus:ring-amber-500">
+                                    <label class="block text-xs font-bold text-slate-700 mb-1">土地申報地價</label>
+                                    <input type="number" id="input-land-value" value="1000000" class="w-full px-3 py-2 text-sm bg-slate-100 border border-slate-300 rounded-lg text-slate-700">
                                 </div>
-                            </div>
-                            <p class="text-[10px] text-amber-600/70 mt-2 text-center">* 僅供快速試算，不影響比較方向</p>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-3 mb-6">
-                            <div>
-                                <label class="block text-xs font-bold text-slate-700 mb-1">房屋評定現值</label>
-                                <input type="number" id="input-house-value" value="500000" class="w-full px-3 py-2 text-sm bg-slate-100 border border-slate-300 rounded-lg text-slate-700">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-slate-700 mb-1">土地申報地價</label>
-                                <input type="number" id="input-land-value" value="1000000" class="w-full px-3 py-2 text-sm bg-slate-100 border border-slate-300 rounded-lg text-slate-700">
-                            </div>
-                        </div>
-
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-bold text-red-600 mb-1 flex justify-between">
-                                    一般出租適用稅率 (囤房稅2.0)
-                                    <span class="text-[10px] font-normal bg-red-50 text-red-600 px-1 rounded">非自住 2%~4.8%</span>
-                                </label>
-                                <select id="select-hoarding" class="w-full px-3 py-2 text-sm bg-white border border-red-200 rounded-lg text-slate-700">
-                                    <option value="2.0">2.0% (法定下限)</option>
-                                    <option value="2.4" selected>2.4% (常見級距)</option>
-                                    <option value="3.6">3.6% (高風險區間)</option>
-                                    <option value="4.8">4.8% (最高級距)</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label class="block text-xs font-bold text-slate-700 mb-1 flex justify-between">
-                                    一般用地地價稅率
-                                </label>
-                                <select id="select-land-rate" class="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-700">
-                                    <option value="0.010" selected>10‰ (預設最低)</option>
-                                    <option value="0.015">15‰</option>
-                                    <option value="0.055">55‰ (最高)</option>
-                                </select>
                             </div>
                         </div>
                     </div>
@@ -221,74 +195,43 @@
                 <!-- Card 1: General -->
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 relative overflow-hidden group hover:border-slate-300 transition-colors">
                     <div class="absolute top-0 left-0 w-1 h-full bg-slate-400"></div>
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
-                        <div class="flex items-center gap-3">
+                    <div class="flex flex-col justify-between items-start mb-2">
+                        <div class="flex items-center gap-3 mb-2">
                             <div class="p-2 bg-slate-100 rounded-lg text-slate-600">
                                 <i data-lucide="building-2" class="w-6 h-6"></i>
                             </div>
                             <div>
-                                <h3 class="font-bold text-lg text-slate-700">一般出租 (未申報/未加入社宅)</h3>
-                                <p class="text-xs text-slate-500">房屋稅 2.0%~4.8% | 成本率 43%</p>
+                                <h3 class="font-bold text-lg text-slate-700">一般出租（租金增加稅負試算）</h3>
+                                <p class="text-xs text-slate-500">無免稅額 | 成本率 43%</p>
                             </div>
                         </div>
-                        <div class="mt-2 md:mt-0 text-right">
-                            <p class="text-xs text-slate-400">試算年稅負</p>
-                            <p class="text-3xl font-bold text-slate-800" id="res-gen-total">$0</p>
-                        </div>
                     </div>
-                    
-                    <div class="grid grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl text-sm">
-                        <div>
-                            <span class="block text-xs text-slate-400">所得稅 (級距 <span id="res-gen-bracket">0%</span>)</span>
-                            <span class="font-semibold text-slate-700" id="res-gen-income">$0</span>
-                        </div>
-                        <div>
-                            <span class="block text-xs text-slate-400">房屋稅 (<span id="res-gen-house-rate">2.4</span>%)</span>
-                            <span class="font-semibold text-red-600" id="res-gen-house">$0</span>
-                        </div>
-                        <div>
-                            <span class="block text-xs text-slate-400">地價稅 (<span id="res-gen-land-rate">10</span>‰)</span>
-                            <span class="font-semibold text-red-600" id="res-gen-land">$0</span>
-                        </div>
+                    <div class="pt-2 border-t border-slate-100 mt-2">
+                         <p class="text-xs text-slate-400 mb-1">租金行為所產生的所得稅試算結果</p>
+                         <p class="text-3xl font-bold text-slate-700" id="res-gen-total">$0</p>
                     </div>
                 </div>
 
                 <!-- Card 2: Welfare -->
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-emerald-200 relative overflow-hidden group hover:border-emerald-300 transition-colors">
                     <div class="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
-                        <div class="flex items-center gap-3">
+                    <div class="flex flex-col justify-between items-start mb-2">
+                        <div class="flex items-center gap-3 mb-2">
                             <div class="p-2 bg-emerald-100 rounded-lg text-emerald-600">
                                 <i data-lucide="heart" class="w-6 h-6"></i>
                             </div>
                             <div>
-                                <h3 class="font-bold text-lg text-emerald-800">公益出租人 (房客領租補)</h3>
+                                <h3 class="font-bold text-lg text-emerald-800">公益出租人（租金增加稅負試算）</h3>
                                 <p class="text-xs text-emerald-600">免稅額 1.5 萬 | 成本率 43%</p>
                             </div>
                         </div>
-                        <div class="mt-2 md:mt-0 text-right">
-                            <div class="flex items-center gap-2 justify-end mb-1">
-                                <span class="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                                    與一般出租相比，試算差異約 <span id="res-wel-diff">$0</span>
-                                </span>
-                            </div>
-                            <p class="text-3xl font-bold text-emerald-700" id="res-wel-total">$0</p>
-                        </div>
                     </div>
-                    
-                    <div class="grid grid-cols-3 gap-4 bg-emerald-50 p-4 rounded-xl text-sm">
-                        <div>
-                            <span class="block text-xs text-emerald-600/70">所得稅 (<span id="res-wel-bracket">0%</span>)</span>
-                            <span class="font-semibold text-emerald-800" id="res-wel-income">$0</span>
-                        </div>
-                        <div>
-                            <span class="block text-xs text-emerald-600/70">房屋稅 (1.2%)</span>
-                            <span class="font-semibold text-emerald-800" id="res-wel-house">$0</span>
-                        </div>
-                        <div>
-                            <span class="block text-xs text-emerald-600/70">地價稅 (2‰)</span>
-                            <span class="font-semibold text-emerald-800" id="res-wel-land">$0</span>
-                        </div>
+                    <div class="pt-2 border-t border-emerald-100 mt-2">
+                        <p class="text-xs text-emerald-600 mb-1">租金行為所產生的所得稅試算結果</p>
+                        <p class="text-3xl font-bold text-emerald-700" id="res-wel-total">$0</p>
+                    </div>
+                    <div class="mt-2 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
+                        相較一般出租，租金增加稅負試算結果約為：<span id="res-wel-diff-text">...</span>
                     </div>
                 </div>
 
@@ -297,53 +240,47 @@
                     <div class="absolute top-0 right-0 bg-blue-500 text-white text-[10px] px-3 py-1 rounded-bl-lg font-bold">
                         試算差異最大方案
                     </div>
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
-                        <div class="flex items-center gap-3">
+                    <div class="flex flex-col justify-between items-start mb-2">
+                        <div class="flex items-center gap-3 mb-2">
                             <div class="p-2 bg-blue-100 rounded-lg text-blue-600">
                                 <i data-lucide="home" class="w-6 h-6"></i>
                             </div>
                             <div>
-                                <h3 class="font-bold text-lg text-blue-800">社會住宅 (包租代管)</h3>
-                                <p class="text-xs text-blue-600">免稅額 1.5 萬 | <span class="font-bold bg-blue-100 px-1 rounded">成本率 60%</span></p>
+                                <h3 class="font-bold text-lg text-blue-800">社會住宅（租金增加稅負試算）</h3>
+                                <p class="text-xs text-blue-600">免稅額 1.5 萬 | 成本率 60%</p>
                             </div>
-                        </div>
-                        <div class="mt-2 md:mt-0 text-right">
-                            <div class="flex items-center gap-2 justify-end mb-1">
-                                <i data-lucide="trending-down" class="w-4 h-4 text-blue-600"></i>
-                                <span class="text-xs font-bold text-blue-600">與一般出租相比，試算年稅負差異約 <span id="res-soc-diff">$0</span></span>
-                            </div>
-                            <p class="text-4xl font-bold text-blue-700" id="res-soc-total">$0</p>
                         </div>
                     </div>
-                    
-                    <div class="grid grid-cols-3 gap-4 bg-blue-50 p-4 rounded-xl text-sm">
-                        <div>
-                            <span class="block text-xs text-blue-600/70">所得稅 (<span id="res-soc-bracket">0%</span>)</span>
-                            <span class="font-semibold text-blue-800" id="res-soc-income">$0</span>
-                        </div>
-                        <div>
-                            <span class="block text-xs text-blue-600/70">房屋稅 (1.2%)</span>
-                            <span class="font-semibold text-blue-800" id="res-soc-house">$0</span>
-                        </div>
-                        <div>
-                            <span class="block text-xs text-blue-600/70">地價稅 (2‰)</span>
-                            <span class="font-semibold text-blue-800" id="res-soc-land">$0</span>
-                        </div>
+                    <div class="pt-2 border-t border-blue-100 mt-2">
+                        <p class="text-xs text-blue-600 mb-1">租金行為所產生的所得稅試算結果</p>
+                        <p class="text-4xl font-bold text-blue-700" id="res-soc-total">$0</p>
+                    </div>
+                    <div class="mt-2 text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                        相較一般出租，租金增加稅負試算結果約為：<span id="res-soc-diff-text">...</span>
                     </div>
                     
                     <!-- Benefit Bar -->
                     <div class="mt-4 pt-3 border-t border-blue-100">
                         <div class="flex justify-between items-center text-xs">
-                            <span class="text-blue-500">試算年淨收益差異 (含稅後)</span>
-                            <span class="font-bold text-blue-700">+<span id="res-net-benefit">$0</span> / 年</span>
+                            <span class="text-blue-400">本試算僅比較不同出租方式下，『租金行為』所造成的所得稅負差異，房屋原本持有即應繳納之房屋稅、地價稅，未列入比較基準。</span>
                         </div>
                     </div>
+                </div>
+
+                <!-- Sales Summary -->
+                <div class="bg-slate-100 border border-slate-200 rounded-xl p-4 mt-4">
+                    <h4 class="font-bold text-slate-700 mb-2 text-sm flex items-center gap-2">
+                        <i data-lucide="message-square" class="w-4 h-4 text-slate-500"></i> 業務說明用摘要文字
+                    </h4>
+                    <p class="text-sm text-slate-600 leading-relaxed font-medium bg-white p-3 rounded-lg border border-slate-200" id="txt-sales-summary">
+                        <!-- JS generated text -->
+                    </p>
                 </div>
 
             </div>
         </div>
 
-        <!-- FAQ Section (New Requirement) -->
+        <!-- FAQ Section -->
         <div class="mt-12 mb-8">
             <h3 class="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2">
                 <i data-lucide="help-circle" class="w-5 h-5 text-slate-500"></i>
@@ -393,7 +330,7 @@
                     <li>本工具為<strong>「稅務情境試算」</strong>，旨在幫助房東理解不同出租選擇之稅負差異方向。</li>
                     <li>試算結果非正式報稅依據，亦不代表最終核定稅額。</li>
                     <li>實際稅額應以稅捐機關核發之稅單或國稅局核定為準。</li>
-                    <li>房屋稅(囤房稅2.0)與地價稅試算，係假設一般出租未符合自住條件，並採預設稅率估算。</li>
+                    <li>本試算僅比較不同出租方式下，『租金行為』所造成的所得稅負差異，房屋原本持有即應繳納之房屋稅、地價稅，未列入比較基準。</li>
                     <li>計算參數參考 2026 年(民國115年) 適用之法規進行估算。</li>
                 </ul>
             </div>
@@ -405,93 +342,38 @@
         // --- State Management ---
         const state = {
             rent: 35000,
-            otherIncome: 600000,
-            buildingMarketValue: '',
-            landMarketValue: '',
-            houseValue: 500000,
-            landValue: 1000000,
-            hoardingRate: 2.4,
-            generalLandTaxRate: 0.010,
+            incomeRate: 0.05, // MANDATORY DEFAULT: 5% (Income < 610,000)
             showSalesTips: false,
             showAdvanced: false
+            // Note: houseValue and landValue are no longer used in total calculation
         };
 
-        const BASIC_DEDUCTION = 97000 + 131000; // 228000
-
-        // --- Logic Functions (Ported from React) ---
-        function calculateProgressiveTax(netIncome) {
-            if (netIncome <= 0) return { tax: 0, rate: 0, bracket: "0%" };
-            
-            let tax = 0;
-            let bracket = "";
-
-            if (netIncome <= 610000) {
-                tax = netIncome * 0.05;
-                bracket = "5%";
-            } else if (netIncome <= 1380000) {
-                tax = netIncome * 0.12 - 42700;
-                bracket = "12%";
-            } else if (netIncome <= 2720000) {
-                tax = netIncome * 0.20 - 153100;
-                bracket = "20%";
-            } else if (netIncome <= 5090000) {
-                tax = netIncome * 0.30 - 425100;
-                bracket = "30%";
-            } else {
-                tax = netIncome * 0.40 - 934100;
-                bracket = "40%";
-            }
-
-            return { tax, bracket };
-        }
-
+        // --- Logic Functions (Strictly Rental Income Tax Only) ---
         function calculateTotal() {
+            // 1. Annual Rent
             const annualRent = state.rent * 12;
-            
-            // 1. Net Rental Income
-            const generalRentalNet = annualRent * (1 - 0.43);
-            const welfareRentalNet = Math.max(0, state.rent - 15000) * 12 * (1 - 0.43);
-            const socialRentalNet = Math.max(0, state.rent - 15000) * 12 * (1 - 0.60);
 
-            // 2. Holding Tax
-            const generalHouseTax = state.houseValue * (state.hoardingRate / 100);
-            const generalLandTax = state.landValue * state.generalLandTaxRate;
+            // 2. Net Rental Income Calculation
+            // General: Cost rate 43%, No deduction
+            const generalNet = annualRent * (1 - 0.43);
 
-            const preferHouseTax = state.houseValue * 0.012;
-            const preferLandTax = state.landValue * 0.002;
+            // Welfare: Cost rate 43%, 15000 deduction
+            // If rent < 15000, net income is 0
+            const welfareNet = Math.max(0, state.rent - 15000) * 12 * (1 - 0.43);
 
-            // 3. Income Tax
-            const calcIncomeTax = (rentalNet) => {
-                const totalNetIncome = Math.max(0, state.otherIncome + rentalNet - BASIC_DEDUCTION);
-                return calculateProgressiveTax(totalNetIncome);
-            };
+            // Social: Cost rate 60%, 15000 deduction
+            const socialNet = Math.max(0, state.rent - 15000) * 12 * (1 - 0.60);
 
-            const generalIT = calcIncomeTax(generalRentalNet);
-            const welfareIT = calcIncomeTax(welfareRentalNet);
-            const socialIT = calcIncomeTax(socialRentalNet);
+            // 3. Tax Calculation (Net * Marginal Rate)
+            // STRICTLY excluding House Tax and Land Tax
+            const generalTax = generalNet * state.incomeRate;
+            const welfareTax = welfareNet * state.incomeRate;
+            const socialTax = socialNet * state.incomeRate;
 
             return {
-                general: {
-                    incomeTax: generalIT.tax,
-                    houseTax: generalHouseTax,
-                    landTax: generalLandTax,
-                    total: generalIT.tax + generalHouseTax + generalLandTax,
-                    bracket: generalIT.bracket
-                },
-                welfare: {
-                    incomeTax: welfareIT.tax,
-                    houseTax: preferHouseTax,
-                    landTax: preferLandTax,
-                    total: welfareIT.tax + preferHouseTax + preferLandTax,
-                    bracket: welfareIT.bracket
-                },
-                social: {
-                    incomeTax: socialIT.tax,
-                    houseTax: preferHouseTax,
-                    landTax: preferLandTax,
-                    total: socialIT.tax + preferHouseTax + preferLandTax,
-                    bracket: socialIT.bracket
-                }
+                general: { total: generalTax },
+                welfare: { total: welfareTax },
+                social: { total: socialTax }
             };
         }
 
@@ -500,36 +382,27 @@
         // --- UI Update Function ---
         function updateUI() {
             const results = calculateTotal();
-            const annualRent = state.rent * 12;
-
-            // General
-            document.getElementById('res-gen-total').textContent = fmt(results.general.total);
-            document.getElementById('res-gen-income').textContent = fmt(results.general.incomeTax);
-            document.getElementById('res-gen-house').textContent = fmt(results.general.houseTax);
-            document.getElementById('res-gen-land').textContent = fmt(results.general.landTax);
-            document.getElementById('res-gen-bracket').textContent = results.general.bracket;
-            document.getElementById('res-gen-house-rate').textContent = state.hoardingRate;
-            document.getElementById('res-gen-land-rate').textContent = (state.generalLandTaxRate * 1000).toFixed(0);
-
-            // Welfare
-            document.getElementById('res-wel-total').textContent = fmt(results.welfare.total);
-            document.getElementById('res-wel-income').textContent = fmt(results.welfare.incomeTax);
-            document.getElementById('res-wel-house').textContent = fmt(results.welfare.houseTax);
-            document.getElementById('res-wel-land').textContent = fmt(results.welfare.landTax);
-            document.getElementById('res-wel-bracket').textContent = results.welfare.bracket;
-            document.getElementById('res-wel-diff').textContent = fmt(results.general.total - results.welfare.total);
-
-            // Social
-            document.getElementById('res-soc-total').textContent = fmt(results.social.total);
-            document.getElementById('res-soc-income').textContent = fmt(results.social.incomeTax);
-            document.getElementById('res-soc-house').textContent = fmt(results.social.houseTax);
-            document.getElementById('res-soc-land').textContent = fmt(results.social.landTax);
-            document.getElementById('res-soc-bracket').textContent = results.social.bracket;
-            document.getElementById('res-soc-diff').textContent = fmt(results.general.total - results.social.total);
             
-            // Net Benefit
-            const benefit = (annualRent - results.social.total) - (annualRent - results.general.total);
-            document.getElementById('res-net-benefit').textContent = fmt(benefit);
+            // Display Totals (Independent Scenarios)
+            document.getElementById('res-gen-total').textContent = fmt(results.general.total);
+            document.getElementById('res-wel-total').textContent = fmt(results.welfare.total);
+            document.getElementById('res-soc-total').textContent = fmt(results.social.total);
+
+            // Diff calculation (General - Welfare) for text description
+            const welDiff = results.welfare.total - results.general.total;
+            const welDiffText = welDiff <= 0 ? `少 ${fmt(Math.abs(welDiff))} 元／年` : `多 ${fmt(welDiff)} 元／年`;
+            document.getElementById('res-wel-diff-text').textContent = welDiffText;
+
+            // Diff calculation (General - Social) for text description
+            const socDiff = results.social.total - results.general.total;
+            const socDiffText = socDiff <= 0 ? `少 ${fmt(Math.abs(socDiff))} 元／年` : `多 ${fmt(socDiff)} 元／年`;
+            document.getElementById('res-soc-diff-text').textContent = socDiffText;
+
+            // Sales Summary Text Generation
+            const diffAmount = Math.round(socDiff);
+            const comparisonText = diffAmount <= 0 ? "少" : "多";
+            const summaryText = `以您選擇的收入區間來看，不同出租方式下，租金行為所產生的稅負試算結果有所差異。相較一般出租，若讓房客申請租金補貼／加入社會住宅，整體評估下租金相關稅負約為『${comparisonText}』${fmt(Math.abs(diffAmount))} 元／年。`;
+            document.getElementById('txt-sales-summary').textContent = summaryText;
 
             // Toggles
             // Sales Tips
@@ -561,7 +434,7 @@
             } else {
                 advSection.classList.remove('open');
                 advIcon.style.transform = 'rotate(0deg)';
-                advTxt.textContent = '展開詳細稅基設定 (選填)';
+                advTxt.textContent = '展開詳細稅基設定 (本模式不計入持有稅)';
             }
         }
 
@@ -581,32 +454,11 @@
             };
 
             bindInput('input-rent', 'rent');
-            bindInput('input-other-income', 'otherIncome');
-            bindInput('input-house-value', 'houseValue');
-            bindInput('input-land-value', 'landValue');
-            bindInput('select-hoarding', 'hoardingRate', true);
-            bindInput('select-land-rate', 'generalLandTaxRate', true);
-
-            // Market Value Estimators
-            document.getElementById('input-market-building').addEventListener('input', (e) => {
-                const val = parseInt(e.target.value);
-                state.buildingMarketValue = isNaN(val) ? 0 : val;
-                if (state.buildingMarketValue > 0) {
-                    state.houseValue = Math.floor(state.buildingMarketValue * 0.5);
-                    document.getElementById('input-house-value').value = state.houseValue;
-                }
-                updateUI();
-            });
-
-            document.getElementById('input-market-land').addEventListener('input', (e) => {
-                const val = parseInt(e.target.value);
-                state.landMarketValue = isNaN(val) ? 0 : val;
-                if (state.landMarketValue > 0) {
-                    state.landValue = Math.floor(state.landMarketValue * 0.6);
-                    document.getElementById('input-land-value').value = state.landValue;
-                }
-                updateUI();
-            });
+            // Advanced inputs are technically bound but logic ignores them
+            // bindInput('input-house-value', 'houseValue');
+            // bindInput('input-land-value', 'landValue');
+            // Income Range Binding
+            bindInput('select-income-range', 'incomeRate', true); 
 
             // Toggles
             document.getElementById('btn-sales-tips').addEventListener('click', () => {
