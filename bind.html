@@ -3,85 +3,222 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>建立推廣連結</title>
+    <title>優式窩的家 - 業務綁定</title>
+    <!-- 引入 LINE LIFF SDK -->
     <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 20px; display: flex; flex-direction: column; align-items: center; color: #333; }
-        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 100%; max-width: 320px; text-align: center; margin-top: 20px; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f2f5;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #333;
+        }
+        .card {
+            background-color: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 320px;
+            text-align: center;
+            margin-top: 20px;
+        }
         h2 { margin-bottom: 20px; font-weight: 600; color: #4a4a4a; }
-        input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; outline: none; }
+        p.desc { color: #666; font-size: 14px; margin-bottom: 20px; }
+        
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
         input:focus { border-color: #00B900; }
-        button { width: 100%; padding: 12px; background: #00B900; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; }
+
+        /* 按鈕樣式：預設灰色 (Disabled) */
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #ccc; /* 預設灰色 */
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: not-allowed;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        
+        /* 啟用狀態的按鈕 (Active) */
+        button.active {
+            background-color: #00B900; /* LINE 綠 */
+            cursor: pointer;
+        }
         button:active { transform: scale(0.98); }
-        .hint { font-size: 12px; color: #888; margin-top: 15px; }
+
+        .loading-text { font-size: 12px; color: #888; margin-bottom: 10px; }
+        #successArea { display: none; }
+        .error-msg { color: red; font-size: 12px; margin-top: 5px; }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h2>📋 建立推廣連結</h2>
+    <!-- 表單填寫區 -->
+    <div class="card" id="formArea">
+        <h2>📝 業務身份綁定</h2>
+        <p class="desc">初次使用請輸入姓名與電話建檔</p>
         
+        <!-- 系統狀態提示 -->
+        <p id="systemMsg" class="loading-text">正在連接 LINE 系統...</p>
+
         <input type="text" id="name" placeholder="您的姓名 (例: 張瓊安)" />
         <input type="tel" id="phone" placeholder="您的電話 (例: 0981...)" />
         
-        <button id="btn" onclick="sendLink()">建立並傳送</button>
-        
-        <p class="hint">系統會自動記住您的資料，下次不用再輸入。</p>
+        <button id="btn" onclick="submitData()" disabled>系統讀取中...</button>
+        <div id="status" class="status" style="margin-top:10px; font-size:14px; color:red;"></div>
+    </div>
+
+    <!-- 成功訊息區 -->
+    <div class="card" id="successArea">
+        <h2 style="color:#00B900;">✅ 綁定成功！</h2>
+        <p class="desc">資料已存入 Google Sheet。<br>請關閉視窗，再次點擊選單即可。</p>
+        <button class="active" onclick="liff.closeWindow()">關閉視窗</button>
     </div>
 
 <script>
+    // ==========================================
+    // 參數設定區
+    // ==========================================
+    // ⚠️ 請填入部署後的新 GAS 網址
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbxOJtpO1K-fGRnXifT8Pvt9ITPRxI9i0Q89XsSbdLSpvArp61ElkzgIY6N-TpOriyVZ/exec';
+    
     const LIFF_ID = '2009040494-frTNmMZ7';
-    const BASE_URL = 'https://wuohome.github.io/ragic/from.html';
+
+    let userLineId = "";
 
     window.onload = function() {
-        // 1. 先讀取記憶中的資料
-        loadUserData();
-        
-        // 2. 初始化 LIFF
-        if (typeof liff !== 'undefined') {
-            liff.init({ liffId: LIFF_ID }).then(() => {
-                if (!liff.isLoggedIn()) liff.login();
-            });
+        if (typeof liff === 'undefined') {
+            document.getElementById('systemMsg').innerText = "⚠️ 請在手機 LINE 開啟";
+            return;
         }
+        initializeLiff();
     };
 
-    function sendLink() {
+    function initializeLiff() {
+        const msgElement = document.getElementById('systemMsg');
+        
+        liff.init({ liffId: LIFF_ID })
+            .then(() => {
+                msgElement.innerText = "LINE 連線成功";
+                
+                // 1. 檢查是否登入
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
+                }
+                
+                // 2. 嘗試取得 User ID
+                getUserId();
+            })
+            .catch((err) => {
+                console.error('LIFF Init Error:', err);
+                msgElement.innerText = "❌ 初始化失敗";
+                msgElement.style.color = "red";
+                document.getElementById('status').innerText = "錯誤: " + err.message;
+            });
+    }
+
+    function getUserId() {
+        liff.getProfile()
+            .then(profile => {
+                userLineId = profile.userId;
+                enableSubmitButton();
+            })
+            .catch(err => {
+                const context = liff.getContext();
+                if (context && context.userId) {
+                    userLineId = context.userId;
+                    enableSubmitButton();
+                } else {
+                    document.getElementById('systemMsg').innerText = "❌ 無法取得 ID (請確認已授權)";
+                }
+            });
+    }
+
+    function enableSubmitButton() {
+        const btn = document.getElementById('btn');
+        const msg = document.getElementById('systemMsg');
+        
+        btn.disabled = false;
+        btn.classList.add('active'); // 變綠色
+        btn.innerText = "確認綁定";
+        
+        msg.innerText = "✅ 已取得 LINE 授權";
+        msg.style.color = "green";
+    }
+
+    function submitData() {
         const name = document.getElementById('name').value.trim();
         const phone = document.getElementById('phone').value.trim();
+        const btn = document.getElementById('btn');
+        const status = document.getElementById('status');
 
         if(!name || !phone) {
             alert("請輸入完整的姓名與電話");
             return;
         }
 
-        // ✨ 儲存資料到手機 (Local Storage)
-        saveUserData(name, phone);
-
-        // 產生連結
-        const finalUrl = `${BASE_URL}?agent=${encodeURIComponent(name)}&phone=${encodeURIComponent(phone)}`;
-        
-        const msg = `【優式窩的家三重加盟店 – 租屋需求調查邀請】\n您好，為了協助您更快找到心儀的房子，請點擊下方連結填寫您的租屋需求：\n\n🔗 需求表連結：${finalUrl}`;
-
-        // 透過 LINE 發送
-        if (liff.isInClient()) {
-            liff.sendMessages([{ type: 'text', text: msg }])
-                .then(() => liff.closeWindow())
-                .catch(err => alert("發送失敗: " + err));
-        } else {
-            alert("測試模式連結 (請在 LINE 中開啟才可發送):\n" + finalUrl);
+        if(!userLineId) {
+            alert("系統尚未抓到 ID，請重新整理網頁");
+            return;
         }
+
+        btn.disabled = true;
+        btn.classList.remove('active');
+        btn.innerText = "資料傳送中...";
+        status.innerText = "";
+
+        // 準備傳送資料 (POST 到 GAS)
+        const postData = {
+            action: 'register',
+            userId: userLineId,
+            name: name,
+            phone: phone
+        };
+
+        fetch(GAS_URL, {
+            method: 'POST',
+            body: JSON.stringify(postData)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') {
+                document.getElementById('formArea').style.display = 'none';
+                document.getElementById('successArea').style.display = 'block';
+            } else {
+                status.innerText = "綁定失敗: " + (data.msg || "未知錯誤");
+                resetButton();
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            status.innerText = "連線失敗，請檢查網路或 GAS 設定";
+            resetButton();
+        });
     }
 
-    function saveUserData(name, phone) {
-        localStorage.setItem('agent_name', name);
-        localStorage.setItem('agent_phone', phone);
-    }
-
-    function loadUserData() {
-        const savedName = localStorage.getItem('agent_name');
-        const savedPhone = localStorage.getItem('agent_phone');
-        if (savedName) document.getElementById('name').value = savedName;
-        if (savedPhone) document.getElementById('phone').value = savedPhone;
+    function resetButton() {
+        const btn = document.getElementById('btn');
+        btn.disabled = false;
+        btn.classList.add('active');
+        btn.innerText = "確認綁定";
     }
 </script>
 
