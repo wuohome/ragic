@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>優式窩的家 - 業務綁定</title>
+    <!-- 回歸標準寫法：直接引入 SDK，確保最穩定 -->
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -70,13 +72,13 @@
         <h2>📝 業務身份綁定</h2>
         <p class="desc">初次使用請輸入姓名與電話建檔</p>
         
-        <p id="systemMsg" class="loading-text">正在載入 LINE 系統...</p>
+        <p id="systemMsg" class="loading-text">正在初始化 LINE 系統...</p>
 
         <input type="text" id="name" placeholder="您的姓名 (例: 張瓊安)" />
         <input type="tel" id="phone" placeholder="您的電話 (例: 0981...)" />
         
         <button id="btn" onclick="submitData()" disabled>系統讀取中...</button>
-        <div id="status" class="status"></div>
+        <div id="status" class="status" style="margin-top:10px; font-size:14px; color:red;"></div>
     </div>
 
     <div class="card" id="successArea">
@@ -94,43 +96,34 @@
 
     let userLineId = "";
 
-    // 使用動態腳本載入，確保 SDK 下載完才執行
     window.onload = function() {
-        loadLiffSdk();
+        // 安全檢查：如果沒載入 SDK (例如電腦預覽)，就顯示提示但不報錯
+        if (typeof liff === 'undefined') {
+            document.getElementById('systemMsg').innerText = "⚠️ 請在手機 LINE 開啟此頁面";
+            document.getElementById('status').innerText = "LIFF SDK 未載入 (此為電腦預覽正常現象)";
+            return;
+        }
+        initializeLiff();
     };
-
-    function loadLiffSdk() {
-        const script = document.createElement('script');
-        script.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js';
-        script.charset = 'utf-8';
-        
-        // 當腳本載入成功
-        script.onload = function() {
-            initializeLiff();
-        };
-        
-        // 當腳本載入失敗 (例如電腦端阻擋)
-        script.onerror = function() {
-            const msgElement = document.getElementById('systemMsg');
-            msgElement.innerText = "⚠️ 無法載入 LINE SDK";
-            msgElement.innerHTML += "<br><span class='error-msg'>(若在電腦預覽中，請忽略此錯誤)</span>";
-            console.warn("LIFF SDK failed to load. Likely blocked by environment.");
-        };
-
-        document.head.appendChild(script);
-    }
 
     function initializeLiff() {
         const msgElement = document.getElementById('systemMsg');
-        msgElement.innerText = "正在連接 LINE...";
+        const statusElement = document.getElementById('status');
 
         liff.init({ liffId: LIFF_ID })
             .then(() => {
+                // 初始化成功，清除錯誤訊息
+                msgElement.innerText = "LINE 連線成功";
+                
+                // 1. 檢查是否登入
                 if (!liff.isLoggedIn()) {
-                    liff.login();
+                    // 這裡不自動 login() 以免死循環，改顯示按鈕讓用戶手動點
+                    // 但在 LINE 內建瀏覽器中，通常 init 後就是已登入狀態
+                    liff.login(); 
                     return;
                 }
                 
+                // 2. 取得 User ID
                 const context = liff.getContext();
                 if (context && context.userId) {
                     userLineId = context.userId;
@@ -143,16 +136,15 @@
                         })
                         .catch(err => {
                             console.error(err);
-                            msgElement.innerText = "❌ 無法取得 ID (Scope 權限不足)";
-                            msgElement.style.color = "red";
+                            statusElement.innerText = "❌ 無法取得 ID，請確認已授權";
                         });
                 }
             })
             .catch((err) => {
-                console.error(err);
-                msgElement.innerText = "❌ 初始化失敗 (ID 錯誤)";
-                msgElement.style.color = "red";
-                alert("錯誤：" + err.message + "\n請確認 LIFF ID 正確。");
+                console.error('LIFF Init Error:', err);
+                msgElement.innerText = "❌ 初始化失敗";
+                // 顯示具體錯誤代碼，方便除錯
+                statusElement.innerText = "錯誤: " + err.message + "\n請確認 LIFF ID 是否正確";
             });
     }
 
@@ -180,7 +172,7 @@
         }
 
         if(!userLineId) {
-            alert("系統尚未抓到 ID，請稍後再試");
+            alert("系統尚未抓到 ID，請重新整理頁面");
             return;
         }
 
@@ -205,14 +197,12 @@
                 document.getElementById('successArea').style.display = 'block';
             } else {
                 status.innerText = "綁定失敗: " + (data.msg || "未知錯誤");
-                status.style.color = "red";
                 resetButton();
             }
         })
         .catch(err => {
             console.error(err);
-            status.innerText = "連線失敗，請檢查網路";
-            status.style.color = "red";
+            status.innerText = "連線失敗，請檢查網路或 GAS 設定";
             resetButton();
         });
     }
