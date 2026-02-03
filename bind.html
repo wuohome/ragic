@@ -10,9 +10,13 @@
         .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 320px; margin: 20px auto; }
         h2 { color: #4a4a4a; margin-bottom: 20px; }
         input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
-        button { width: 100%; padding: 12px; background: #00B900; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; }
-        button:disabled { background: #ccc; }
+        
+        /* 按鈕樣式：預設灰色，啟用變綠色 */
+        button { width: 100%; padding: 12px; background: #ccc; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: not-allowed; font-weight: bold; transition: 0.3s; }
+        button.active { background: #00B900; cursor: pointer; }
+        
         .status { color: red; font-size: 14px; margin-top: 10px; }
+        .loading { font-size: 12px; color: #888; margin-bottom: 10px;}
     </style>
 </head>
 <body>
@@ -21,39 +25,77 @@
     <h2>📝 業務身份綁定</h2>
     <p style="color:#666; font-size:14px;">初次使用請先輸入資料建檔</p>
     
+    <!-- 這裡會顯示系統載入狀態 -->
+    <p id="systemMsg" class="loading">正在連接 LINE 系統...</p>
+
     <input type="text" id="name" placeholder="您的姓名 (例: 張瓊安)" />
     <input type="tel" id="phone" placeholder="您的電話 (例: 0981...)" />
     
-    <button id="btn" onclick="submitData()">確認綁定</button>
+    <!-- 按鈕預設 disabled -->
+    <button id="btn" onclick="submitData()" disabled>系統讀取中...</button>
     <div class="status" id="status"></div>
 </div>
 
 <div class="card" id="successArea" style="display:none;">
     <h2 style="color:#00B900;">✅ 綁定成功！</h2>
-    <p>您現在可以關閉此視窗，<br>並再次點擊「租屋需求調查」按鈕。</p>
-    <button onclick="liff.closeWindow()">關閉視窗</button>
+    <p>資料已建檔完成。<br>請關閉視窗，再次點擊選單即可。</p>
+    <button class="active" onclick="liff.closeWindow()">關閉視窗</button>
 </div>
 
 <script>
-    // ⚠️ 請換成你等一下部署好的 GAS 網址 (以 /exec 結尾)
+    // ⚠️ 這裡一定要確認是你的 GAS 網址 (https://script.google.com/.../exec)
     const GAS_URL = '請貼上你的GAS網頁應用程式網址';
     
-    // ⚠️ 請換成你的 LIFF ID
-    const LIFF_ID = '你的_LIFF_ID';
+    // ⚠️ 這裡一定要是你的新 LIFF ID
+    const LIFF_ID = '請貼上你的LIFF_ID';
 
-    let userId = "";
+    let userLineId = "";
 
     window.onload = function() {
+        // 初始化 LIFF
         liff.init({ liffId: LIFF_ID })
             .then(() => {
-                if (!liff.isLoggedIn()) liff.login();
-                else {
-                    liff.getProfile().then(profile => {
-                        userId = profile.userId;
-                    });
+                // 1. 檢查是否登入
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
                 }
+                
+                // 2. 嘗試取得 User ID (優先使用 getContext 比較快)
+                const context = liff.getContext();
+                if (context && context.userId) {
+                    userLineId = context.userId;
+                    enableButton();
+                } else {
+                    // 如果 getContext 沒抓到，改用 getProfile
+                    liff.getProfile()
+                        .then(profile => {
+                            userLineId = profile.userId;
+                            enableButton();
+                        })
+                        .catch(err => {
+                            document.getElementById('systemMsg').innerText = "錯誤：無法取得個人資料 (Scope未開?)";
+                            alert("錯誤：" + err.message);
+                        });
+                }
+            })
+            .catch((err) => {
+                document.getElementById('systemMsg').innerText = "LIFF 初始化失敗";
+                alert("初始化失敗：" + err);
             });
     };
+
+    function enableButton() {
+        const btn = document.getElementById('btn');
+        const msg = document.getElementById('systemMsg');
+        
+        // 抓到 ID 了，啟用按鈕
+        btn.disabled = false;
+        btn.classList.add('active');
+        btn.innerText = "確認綁定";
+        msg.innerText = "✅ 已取得 LINE 授權";
+        msg.style.color = "green";
+    }
 
     function submitData() {
         const name = document.getElementById('name').value.trim();
@@ -61,18 +103,27 @@
         const btn = document.getElementById('btn');
         const status = document.getElementById('status');
 
-        if(!name || !phone) { status.innerText = "請輸入完整資訊"; return; }
-        if(!userId) { status.innerText = "無法取得 LINE ID，請重新整理"; return; }
+        if(!name || !phone) { 
+            status.innerText = "請輸入姓名與電話"; 
+            return; 
+        }
+
+        if(!userLineId) {
+            status.innerText = "系統尚未抓到 ID，請重新整理網頁";
+            return;
+        }
 
         btn.disabled = true;
+        btn.classList.remove('active');
         btn.innerText = "資料傳送中...";
+        status.innerText = "";
 
         // 傳送資料給 GAS
         fetch(GAS_URL, {
             method: 'POST',
             body: JSON.stringify({
                 action: 'register',
-                userId: userId,
+                userId: userLineId,
                 name: name,
                 phone: phone
             })
@@ -85,12 +136,16 @@
             } else {
                 status.innerText = "綁定失敗: " + data.msg;
                 btn.disabled = false;
+                btn.classList.add('active');
                 btn.innerText = "確認綁定";
             }
         })
         .catch(err => {
-            status.innerText = "系統錯誤，請稍後再試";
+            status.innerText = "連線錯誤，請檢查網路或 GAS 網址";
             btn.disabled = false;
+            btn.classList.add('active');
+            btn.innerText = "確認綁定";
+            console.error(err);
         });
     }
 </script>
