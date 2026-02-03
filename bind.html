@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>優式窩的家 - 業務綁定</title>
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 20px; text-align: center; }
+        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 320px; margin: 20px auto; }
+        h2 { color: #4a4a4a; margin-bottom: 20px; }
+        input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        button { width: 100%; padding: 12px; background: #00B900; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; }
+        button:disabled { background: #ccc; }
+        .status { color: red; font-size: 14px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="card" id="formArea">
+    <h2>📝 業務身份綁定</h2>
+    <p style="color:#666; font-size:14px;">初次使用請先輸入資料建檔</p>
+    
+    <input type="text" id="name" placeholder="您的姓名 (例: 張瓊安)" />
+    <input type="tel" id="phone" placeholder="您的電話 (例: 0981...)" />
+    
+    <button id="btn" onclick="submitData()">確認綁定</button>
+    <div class="status" id="status"></div>
+</div>
+
+<div class="card" id="successArea" style="display:none;">
+    <h2 style="color:#00B900;">✅ 綁定成功！</h2>
+    <p>您現在可以關閉此視窗，<br>並再次點擊「租屋需求調查」按鈕。</p>
+    <button onclick="liff.closeWindow()">關閉視窗</button>
+</div>
+
+<script>
+    // ⚠️ 請換成你等一下部署好的 GAS 網址 (以 /exec 結尾)
+    const GAS_URL = '請貼上你的GAS網頁應用程式網址';
+    
+    // ⚠️ 請換成你的 LIFF ID
+    const LIFF_ID = '你的_LIFF_ID';
+
+    let userId = "";
+
+    window.onload = function() {
+        liff.init({ liffId: LIFF_ID })
+            .then(() => {
+                if (!liff.isLoggedIn()) liff.login();
+                else {
+                    liff.getProfile().then(profile => {
+                        userId = profile.userId;
+                    });
+                }
+            });
+    };
+
+    function submitData() {
+        const name = document.getElementById('name').value.trim();
+        const phone = document.getElementById('phone').value.trim();
+        const btn = document.getElementById('btn');
+        const status = document.getElementById('status');
+
+        if(!name || !phone) { status.innerText = "請輸入完整資訊"; return; }
+        if(!userId) { status.innerText = "無法取得 LINE ID，請重新整理"; return; }
+
+        btn.disabled = true;
+        btn.innerText = "資料傳送中...";
+
+        // 傳送資料給 GAS
+        fetch(GAS_URL, {
+            method: 'POST',
+            body: JSON.stringify({
+                action: 'register',
+                userId: userId,
+                name: name,
+                phone: phone
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') {
+                document.getElementById('formArea').style.display = 'none';
+                document.getElementById('successArea').style.display = 'block';
+            } else {
+                status.innerText = "綁定失敗: " + data.msg;
+                btn.disabled = false;
+                btn.innerText = "確認綁定";
+            }
+        })
+        .catch(err => {
+            status.innerText = "系統錯誤，請稍後再試";
+            btn.disabled = false;
+        });
+    }
+</script>
+
+</body>
+</html>
