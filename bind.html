@@ -93,9 +93,9 @@
 
 <script>
     // ==========================================
-    // 參數設定區
+    // 參數設定區 (已更新為最新 GAS 網址)
     // ==========================================
-    const GAS_URL = 'https://script.google.com/macros/s/AKfycbxTgiO2sP8zKR4Oe5V2rTyhkfZ3yeOOymYu_0T2UcNKKhHyoZwiiBfaL2cMyyv_uPoF/exec';
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbyo4UY7vXMtPXYjo_harMLRdvleGrIgfTvl5Z56OmWk-2HeREWIWlvDygVd6M9EB737/exec';
     const LIFF_ID = '2009040494-frTNmMZ7';
 
     let userLineId = "";
@@ -119,15 +119,12 @@
                 
                 // 1. 檢查是否登入
                 if (!liff.isLoggedIn()) {
-                    // ⛔️ 關鍵修改：不自動跳轉，改顯示按鈕讓使用者自己點
-                    // 這樣可以阻止無限迴圈閃爍
                     msgElement.innerText = "需要登入 LINE 才能使用";
                     msgElement.style.color = "orange";
                     
                     btn.innerText = "👉 點此登入 LINE";
                     btn.disabled = false;
                     btn.classList.add('login-btn');
-                    // 臨時把按鈕功能改成去登入
                     btn.onclick = function() {
                         liff.login();
                     };
