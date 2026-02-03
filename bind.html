@@ -105,6 +105,14 @@
 
     // 頁面載入後執行
     window.onload = function() {
+        // 安全檢查：確認 liff 物件是否存在 (避免電腦端報錯)
+        if (typeof liff === 'undefined') {
+            const msgElement = document.getElementById('systemMsg');
+            msgElement.innerText = "⚠️ LIFF SDK 未載入 (請在 LINE 手機版開啟)";
+            msgElement.style.color = "red";
+            console.warn("LIFF SDK not loaded. This is expected in preview environments.");
+            return;
+        }
         initializeLiff();
     };
 
