@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>優式窩的家 - 業務綁定</title>
-    <!-- 引入 LINE LIFF SDK -->
-    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -42,11 +40,10 @@
         }
         input:focus { border-color: #00B900; }
 
-        /* 按鈕樣式：預設灰色 (Disabled) */
         button {
             width: 100%;
             padding: 12px;
-            background-color: #ccc; /* 預設灰色 */
+            background-color: #ccc;
             color: white;
             border: none;
             border-radius: 8px;
@@ -56,38 +53,32 @@
             transition: background-color 0.3s;
         }
         
-        /* 啟用狀態的按鈕 (Active) */
         button.active {
-            background-color: #00B900; /* LINE 綠 */
+            background-color: #00B900;
             cursor: pointer;
         }
         button:active { transform: scale(0.98); }
 
-        .status { color: #e74c3c; font-size: 14px; margin-top: 15px; min-height: 20px;}
         .loading-text { font-size: 12px; color: #888; margin-bottom: 10px; }
-        
-        /* 成功區塊 */
         #successArea { display: none; }
+        .error-msg { color: red; font-size: 12px; margin-top: 5px; }
     </style>
 </head>
 <body>
 
-    <!-- 表單填寫區 -->
     <div class="card" id="formArea">
         <h2>📝 業務身份綁定</h2>
         <p class="desc">初次使用請輸入姓名與電話建檔</p>
         
-        <!-- 系統狀態提示 -->
-        <p id="systemMsg" class="loading-text">正在連接 LINE 系統...</p>
+        <p id="systemMsg" class="loading-text">正在載入 LINE 系統...</p>
 
         <input type="text" id="name" placeholder="您的姓名 (例: 張瓊安)" />
         <input type="tel" id="phone" placeholder="您的電話 (例: 0981...)" />
         
         <button id="btn" onclick="submitData()" disabled>系統讀取中...</button>
-        <div class="status" id="status"></div>
+        <div id="status" class="status"></div>
     </div>
 
-    <!-- 成功訊息區 -->
     <div class="card" id="successArea">
         <h2 style="color:#00B900;">✅ 綁定成功！</h2>
         <p class="desc">資料已建檔完成。<br>請關閉視窗，再次點擊選單即可。</p>
@@ -96,45 +87,55 @@
 
 <script>
     // ==========================================
-    // 參數設定區 (已填入你提供的資料)
+    // 參數設定區
     // ==========================================
     const GAS_URL = 'https://script.google.com/macros/s/AKfycbxTgiO2sP8zKR4Oe5V2rTyhkfZ3yeOOymYu_0T2UcNKKhHyoZwiiBfaL2cMyyv_uPoF/exec';
     const LIFF_ID = '2009040494-frTNmMZ7';
 
     let userLineId = "";
 
-    // 頁面載入後執行
+    // 使用動態腳本載入，確保 SDK 下載完才執行
     window.onload = function() {
-        // 安全檢查：確認 liff 物件是否存在 (避免電腦端報錯)
-        if (typeof liff === 'undefined') {
-            const msgElement = document.getElementById('systemMsg');
-            msgElement.innerText = "⚠️ LIFF SDK 未載入 (請在 LINE 手機版開啟)";
-            msgElement.style.color = "red";
-            console.warn("LIFF SDK not loaded. This is expected in preview environments.");
-            return;
-        }
-        initializeLiff();
+        loadLiffSdk();
     };
+
+    function loadLiffSdk() {
+        const script = document.createElement('script');
+        script.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js';
+        script.charset = 'utf-8';
+        
+        // 當腳本載入成功
+        script.onload = function() {
+            initializeLiff();
+        };
+        
+        // 當腳本載入失敗 (例如電腦端阻擋)
+        script.onerror = function() {
+            const msgElement = document.getElementById('systemMsg');
+            msgElement.innerText = "⚠️ 無法載入 LINE SDK";
+            msgElement.innerHTML += "<br><span class='error-msg'>(若在電腦預覽中，請忽略此錯誤)</span>";
+            console.warn("LIFF SDK failed to load. Likely blocked by environment.");
+        };
+
+        document.head.appendChild(script);
+    }
 
     function initializeLiff() {
         const msgElement = document.getElementById('systemMsg');
-        
+        msgElement.innerText = "正在連接 LINE...";
+
         liff.init({ liffId: LIFF_ID })
             .then(() => {
-                // 1. 檢查是否已登入
                 if (!liff.isLoggedIn()) {
                     liff.login();
                     return;
                 }
                 
-                // 2. 嘗試取得 User ID
-                // 優先從 context 拿，速度較快
                 const context = liff.getContext();
                 if (context && context.userId) {
                     userLineId = context.userId;
                     enableSubmitButton();
                 } else {
-                    // 如果 context 沒拿到，改呼叫 getProfile
                     liff.getProfile()
                         .then(profile => {
                             userLineId = profile.userId;
@@ -142,85 +143,76 @@
                         })
                         .catch(err => {
                             console.error(err);
-                            msgElement.innerText = "錯誤：無法取得 ID (請檢查 Scope)";
+                            msgElement.innerText = "❌ 無法取得 ID (Scope 權限不足)";
                             msgElement.style.color = "red";
-                            alert("無法取得 LINE ID，請確認 Login Channel 的 OpenID 權限已開啟。");
                         });
                 }
             })
             .catch((err) => {
                 console.error(err);
-                msgElement.innerText = "LIFF 初始化失敗";
+                msgElement.innerText = "❌ 初始化失敗 (ID 錯誤)";
                 msgElement.style.color = "red";
+                alert("錯誤：" + err.message + "\n請確認 LIFF ID 正確。");
             });
     }
 
-    // 啟用按鈕 (當抓到 ID 後執行)
     function enableSubmitButton() {
         const btn = document.getElementById('btn');
         const msg = document.getElementById('systemMsg');
         
         btn.disabled = false;
-        btn.classList.add('active'); // 變綠色
+        btn.classList.add('active');
         btn.innerText = "確認綁定";
         
         msg.innerText = "✅ 已取得 LINE 授權";
         msg.style.color = "green";
     }
 
-    // 送出資料
     function submitData() {
         const name = document.getElementById('name').value.trim();
         const phone = document.getElementById('phone').value.trim();
         const btn = document.getElementById('btn');
         const status = document.getElementById('status');
 
-        // 基本檢查
         if(!name || !phone) {
-            status.innerText = "請輸入完整的姓名與電話";
+            alert("請輸入完整的姓名與電話");
             return;
         }
 
-        // 二次檢查 ID
         if(!userLineId) {
-            status.innerText = "系統尚未抓到 ID，請重新整理網頁";
+            alert("系統尚未抓到 ID，請稍後再試");
             return;
         }
 
-        // 鎖定按鈕避免重複發送
         btn.disabled = true;
         btn.classList.remove('active');
         btn.innerText = "資料傳送中...";
         status.innerText = "";
 
-        // 準備傳送資料
-        const postData = {
-            action: 'register', // 告訴 GAS 這是註冊動作
-            userId: userLineId,
-            name: name,
-            phone: phone
-        };
-
-        // 發送 POST 請求給 GAS
         fetch(GAS_URL, {
             method: 'POST',
-            body: JSON.stringify(postData) // 不需要 headers，用 text/plain 避免 CORS preflight
+            body: JSON.stringify({
+                action: 'register',
+                userId: userLineId,
+                name: name,
+                phone: phone
+            })
         })
         .then(res => res.json())
         .then(data => {
             if(data.status === 'success') {
-                // 成功：切換顯示畫面
                 document.getElementById('formArea').style.display = 'none';
                 document.getElementById('successArea').style.display = 'block';
             } else {
-                // 失敗：顯示錯誤訊息，重開按鈕
                 status.innerText = "綁定失敗: " + (data.msg || "未知錯誤");
+                status.style.color = "red";
                 resetButton();
             }
         })
         .catch(err => {
             console.error(err);
-            status.innerText = "連線失敗，請檢查網路或 GAS 設定";
+            status.innerText = "連線失敗，請檢查網路";
+            status.style.color = "red";
             resetButton();
         });
     }
