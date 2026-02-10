@@ -103,12 +103,11 @@
     </div>
 
 <script>
-    // ================= CONFIG 區 (請務必修改這裡) =================
-    // 1. 請填入 LINE Developers 的 LIFF ID
-    const LIFF_ID = "YOUR_LIFF_ID_HERE"; 
+    // ================= CONFIG 區 =================
+    // 1. LINE LIFF ID (請確保 ID 正確)
+    const LIFF_ID = "2009098181-8kGzQhuZ"; 
     
-    // 2. ⚠️ 重要：請填入 GAS 部署後的 Web App URL (以 /exec 結尾)
-    // 若未填寫，程式會跳出錯誤提示
+    // 2. GAS Web App URL
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbx7sUL1-ho29u_cL7YNCAG1K32hiPxCDOuwQEajnMEY8d--5VF9tPjMkwsatn3P9i4H/exec"; 
     // ========================================================
 
@@ -125,7 +124,6 @@
 
     // 初始化：網頁載入後執行
     window.onload = async function() {
-        // 基本防呆：檢查是否在 LIFF 環境或已載入 SDK
         if (typeof liff === 'undefined') {
             enableMockMode("LIFF SDK 未載入");
             return;
@@ -137,7 +135,6 @@
     async function initializeLiff() {
         showLoading(true);
 
-        // 如果使用者還沒填 LIFF ID，直接進入測試模式
         if (LIFF_ID === "YOUR_LIFF_ID_HERE" || !LIFF_ID) {
             console.warn("未設定 LIFF ID，切換至測試模式");
             enableMockMode("未設定 LIFF ID");
@@ -149,7 +146,9 @@
             
             // 檢查是否已登入
             if (!liff.isLoggedIn()) {
-                liff.login();
+                // 技術長修正：加入 redirectUri 參數，強制跳回當前頁面
+                // 這能解決「無限閃爍」的問題
+                liff.login({ redirectUri: window.location.href });
                 return;
             }
 
@@ -168,7 +167,6 @@
 
         } catch (err) {
             console.error('LIFF Init Error:', err);
-            // 當發生錯誤時，啟用測試模式
             enableMockMode(`連線錯誤 (${err.code || 'Unknown'})`);
         }
     }
@@ -182,9 +180,8 @@
         
         // 填入假資料
         els.displayName.textContent = "測試人員 (Mock User)";
-        els.lineUserId.value = "U1234567890abcdef1234567890abcdef"; // 假 ID
+        els.lineUserId.value = "U1234567890abcdef1234567890abcdef"; 
         
-        // 自動填入表單方便測試
         document.getElementById('name').value = "王小明"; 
         document.getElementById('phone').value = "0912345678"; 
         
@@ -195,28 +192,23 @@
     els.form.addEventListener('submit', async (e) => {
         e.preventDefault();
         
-        // 檢查 API URL 是否已設定
         if (!GAS_API_URL || GAS_API_URL.includes("YOUR_GAS")) {
             showStatus("❌ 設定錯誤：請先在程式碼中填入 GAS Web App URL", "error");
             return;
         }
 
-        // 取得表單值
         const name = document.getElementById('name').value.trim();
         const phone = document.getElementById('phone').value.trim();
         const room = document.getElementById('room').value.trim();
         const lineId = els.lineUserId.value;
 
-        // 前端驗證
         if (!name || !phone || !lineId) {
             showStatus("請填寫完整資料", "error");
             return;
         }
 
-        // 鎖定按鈕避免重複送出
         setSubmitting(true);
 
-        // 準備要送出的資料
         const payload = {
             name: name,
             phone: phone,
@@ -224,11 +216,7 @@
             lineId: lineId
         };
 
-        console.log("正在傳送資料至:", GAS_API_URL);
-        console.log("傳送內容:", payload);
-
         try {
-            // 發送請求到 GAS
             const response = await fetch(GAS_API_URL, {
                 method: 'POST',
                 headers: {
@@ -237,16 +225,12 @@
                 body: JSON.stringify(payload)
             });
 
-            // 先讀取文字回應，以便除錯
             const textResult = await response.text();
-            console.log("GAS 回應原始內容:", textResult);
-
             let result;
             try {
                 result = JSON.parse(textResult);
             } catch (jsonErr) {
-                // 如果解析 JSON 失敗，通常代表回傳了 404, 403 或 HTML 錯誤頁面
-                throw new Error(`伺服器回應格式錯誤 (可能網址錯誤或權限不足)。回應片段: ${textResult.substring(0, 50)}...`);
+                throw new Error(`伺服器回應格式錯誤。回應片段: ${textResult.substring(0, 50)}...`);
             }
 
             if (result.status === 'success') {
@@ -265,15 +249,13 @@
     function showSuccessUI(name) {
         showStatus("✅ 綁定成功！資料已寫入系統。", "success");
         
-        // 嘗試發送訊息給使用者 (LIFF 環境下)
         if (typeof liff !== 'undefined' && liff.isInClient && liff.isInClient()) {
             liff.sendMessages([{
                 type: 'text',
                 text: `【系統通知】\n親愛的 ${name} 您好，您的租客身份已綁定成功！`
-            }]).catch(err => console.log("Message send skipped in mock mode"));
+            }]).catch(err => console.log("Message send skipped"));
         }
 
-        // 3秒後關閉視窗
         setTimeout(() => {
             if (typeof liff !== 'undefined' && liff.closeWindow) {
                 liff.closeWindow();
@@ -281,7 +263,6 @@
         }, 3000);
     }
 
-    // UI 輔助函式
     function showLoading(isLoading) {
         if (isLoading) {
             els.loading.classList.remove('hidden');
