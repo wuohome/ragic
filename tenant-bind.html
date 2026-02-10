@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>窩的家 - 租客身份綁定</title>
+    <!-- 使用 Tailwind CSS 快速切版 (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 LINE LIFF SDK (標準載入方式) -->
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        /* 簡單的 Loading 動畫 */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            display: none; /* 預設隱藏 */
+            margin: 10px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+
+    <div class="max-w-md mx-auto min-h-screen bg-white shadow-md flex flex-col">
+        <!-- Header -->
+        <div class="bg-green-600 p-6 text-center shadow-sm relative">
+            <h1 class="text-white text-xl font-bold tracking-wide">窩的家</h1>
+            <p class="text-green-100 text-sm mt-1">租客身份綁定服務</p>
+            
+            <!-- 開發模式提示條 (預設隱藏) -->
+            <div id="debugBanner" class="hidden absolute top-0 left-0 w-full bg-yellow-400 text-yellow-900 text-xs py-1 font-bold">
+                ⚠️ 開發測試模式 (Mock Mode)
+            </div>
+        </div>
+
+        <!-- Content Container -->
+        <div class="p-6 flex-grow">
+            <!-- Loading 狀態顯示 -->
+            <div id="loadingBlock" class="text-center py-10">
+                <div class="loader" style="display:block"></div>
+                <p class="text-gray-500 text-sm mt-2">系統連線中...</p>
+            </div>
+
+            <!-- 綁定表單 (預設隱藏，LIFF Ready 後顯示) -->
+            <form id="bindingForm" class="space-y-5 hidden">
+                
+                <!-- 隱藏欄位：存放 LINE User ID -->
+                <input type="hidden" id="lineUserId" name="lineUserId">
+                
+                <!-- 使用者資訊區塊 -->
+                <div class="flex items-center space-x-4 p-4 bg-green-50 rounded-xl border border-green-100">
+                    <img id="userPicture" src="https://placehold.co/100x100/png?text=User" alt="User" class="w-12 h-12 rounded-full bg-gray-200 object-cover border-2 border-white shadow-sm">
+                    <div>
+                        <p class="text-xs text-gray-500 mb-0.5">目前登入帳號</p>
+                        <p id="displayName" class="font-bold text-gray-800">讀取中...</p>
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">真實姓名 <span class="text-red-500">*</span></label>
+                        <input type="text" id="name" required placeholder="請輸入合約上的姓名"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition bg-gray-50 focus:bg-white">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">手機號碼 <span class="text-red-500">*</span></label>
+                        <input type="tel" id="phone" required placeholder="0912345678" pattern="09[0-9]{8}"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition bg-gray-50 focus:bg-white">
+                        <p class="text-xs text-gray-400 mt-1 pl-1">請輸入 10 碼手機號碼</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">房號 (選填)</label>
+                        <input type="text" id="room" placeholder="例如：A-101"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition bg-gray-50 focus:bg-white">
+                    </div>
+                </div>
+
+                <div class="pt-2">
+                    <button type="submit" id="submitBtn"
+                            class="w-full bg-green-600 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg hover:bg-green-700 active:bg-green-800 active:scale-95 transition duration-150 ease-in-out">
+                        確認綁定身份
+                    </button>
+                </div>
+            </form>
+
+            <!-- 狀態訊息區 -->
+            <div id="statusMessage" class="mt-6 p-4 rounded-lg text-center text-sm hidden"></div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="p-4 text-center text-gray-400 text-xs border-t border-gray-100">
+            &copy; Wo De Jia Group System
+        </div>
+    </div>
+
+<script>
+    // ================= CONFIG 區 (請務必修改這裡) =================
+    // 1. 請填入 LINE Developers 的 LIFF ID
+    const LIFF_ID = "YOUR_LIFF_ID_HERE"; 
+    
+    // 2. ⚠️ 重要：請填入 GAS 部署後的 Web App URL (以 /exec 結尾)
+    // 若未填寫，程式會跳出錯誤提示
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbx7sUL1-ho29u_cL7YNCAG1K32hiPxCDOuwQEajnMEY8d--5VF9tPjMkwsatn3P9i4H/exec"; 
+    // ========================================================
+
+    const els = {
+        loading: document.getElementById('loadingBlock'),
+        form: document.getElementById('bindingForm'),
+        displayName: document.getElementById('displayName'),
+        userPicture: document.getElementById('userPicture'),
+        lineUserId: document.getElementById('lineUserId'),
+        status: document.getElementById('statusMessage'),
+        submitBtn: document.getElementById('submitBtn'),
+        debugBanner: document.getElementById('debugBanner')
+    };
+
+    // 初始化：網頁載入後執行
+    window.onload = async function() {
+        // 基本防呆：檢查是否在 LIFF 環境或已載入 SDK
+        if (typeof liff === 'undefined') {
+            enableMockMode("LIFF SDK 未載入");
+            return;
+        }
+        await initializeLiff();
+    };
+
+    // LIFF 初始化邏輯
+    async function initializeLiff() {
+        showLoading(true);
+
+        // 如果使用者還沒填 LIFF ID，直接進入測試模式
+        if (LIFF_ID === "YOUR_LIFF_ID_HERE" || !LIFF_ID) {
+            console.warn("未設定 LIFF ID，切換至測試模式");
+            enableMockMode("未設定 LIFF ID");
+            return;
+        }
+
+        try {
+            await liff.init({ liffId: LIFF_ID });
+            
+            // 檢查是否已登入
+            if (!liff.isLoggedIn()) {
+                liff.login();
+                return;
+            }
+
+            // 取得使用者公開資料 (Profile)
+            const profile = await liff.getProfile();
+            els.displayName.textContent = profile.displayName;
+            els.lineUserId.value = profile.userId;
+            
+            if (profile.pictureUrl) {
+                els.userPicture.src = profile.pictureUrl;
+            }
+
+            // 準備就緒，顯示表單
+            showLoading(false);
+            els.form.classList.remove('hidden');
+
+        } catch (err) {
+            console.error('LIFF Init Error:', err);
+            // 當發生錯誤時，啟用測試模式
+            enableMockMode(`連線錯誤 (${err.code || 'Unknown'})`);
+        }
+    }
+
+    // 啟用開發/測試模式 (Mock Mode)
+    function enableMockMode(reason) {
+        showLoading(false);
+        els.form.classList.remove('hidden');
+        els.debugBanner.classList.remove('hidden');
+        els.debugBanner.textContent = `⚠️ 開發測試模式: ${reason}`;
+        
+        // 填入假資料
+        els.displayName.textContent = "測試人員 (Mock User)";
+        els.lineUserId.value = "U1234567890abcdef1234567890abcdef"; // 假 ID
+        
+        // 自動填入表單方便測試
+        document.getElementById('name').value = "王小明"; 
+        document.getElementById('phone').value = "0912345678"; 
+        
+        console.log("Mock Mode Enabled: ", reason);
+    }
+
+    // 表單送出處理
+    els.form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        // 檢查 API URL 是否已設定
+        if (!GAS_API_URL || GAS_API_URL.includes("YOUR_GAS")) {
+            showStatus("❌ 設定錯誤：請先在程式碼中填入 GAS Web App URL", "error");
+            return;
+        }
+
+        // 取得表單值
+        const name = document.getElementById('name').value.trim();
+        const phone = document.getElementById('phone').value.trim();
+        const room = document.getElementById('room').value.trim();
+        const lineId = els.lineUserId.value;
+
+        // 前端驗證
+        if (!name || !phone || !lineId) {
+            showStatus("請填寫完整資料", "error");
+            return;
+        }
+
+        // 鎖定按鈕避免重複送出
+        setSubmitting(true);
+
+        // 準備要送出的資料
+        const payload = {
+            name: name,
+            phone: phone,
+            room: room,
+            lineId: lineId
+        };
+
+        console.log("正在傳送資料至:", GAS_API_URL);
+        console.log("傳送內容:", payload);
+
+        try {
+            // 發送請求到 GAS
+            const response = await fetch(GAS_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'text/plain;charset=utf-8', 
+                },
+                body: JSON.stringify(payload)
+            });
+
+            // 先讀取文字回應，以便除錯
+            const textResult = await response.text();
+            console.log("GAS 回應原始內容:", textResult);
+
+            let result;
+            try {
+                result = JSON.parse(textResult);
+            } catch (jsonErr) {
+                // 如果解析 JSON 失敗，通常代表回傳了 404, 403 或 HTML 錯誤頁面
+                throw new Error(`伺服器回應格式錯誤 (可能網址錯誤或權限不足)。回應片段: ${textResult.substring(0, 50)}...`);
+            }
+
+            if (result.status === 'success') {
+                showSuccessUI(name);
+            } else {
+                throw new Error(result.message || "後端回傳未知錯誤");
+            }
+
+        } catch (err) {
+            console.error(err);
+            showStatus(`綁定失敗: ${err.message}`, "error");
+            setSubmitting(false);
+        }
+    });
+
+    function showSuccessUI(name) {
+        showStatus("✅ 綁定成功！資料已寫入系統。", "success");
+        
+        // 嘗試發送訊息給使用者 (LIFF 環境下)
+        if (typeof liff !== 'undefined' && liff.isInClient && liff.isInClient()) {
+            liff.sendMessages([{
+                type: 'text',
+                text: `【系統通知】\n親愛的 ${name} 您好，您的租客身份已綁定成功！`
+            }]).catch(err => console.log("Message send skipped in mock mode"));
+        }
+
+        // 3秒後關閉視窗
+        setTimeout(() => {
+            if (typeof liff !== 'undefined' && liff.closeWindow) {
+                liff.closeWindow();
+            }
+        }, 3000);
+    }
+
+    // UI 輔助函式
+    function showLoading(isLoading) {
+        if (isLoading) {
+            els.loading.classList.remove('hidden');
+            els.form.classList.add('hidden');
+        } else {
+            els.loading.classList.add('hidden');
+        }
+    }
+
+    function showStatus(msg, type) {
+        els.status.textContent = msg;
+        els.status.classList.remove('hidden', 'bg-red-50', 'text-red-600', 'bg-green-50', 'text-green-600');
+        
+        if (type === "error") {
+            els.status.classList.add('bg-red-50', 'text-red-600');
+        } else {
+            els.status.classList.add('bg-green-50', 'text-green-600');
+        }
+    }
+
+    function setSubmitting(isSubmitting) {
+        els.submitBtn.disabled = isSubmitting;
+        els.submitBtn.textContent = isSubmitting ? "資料處理中..." : "確認綁定身份";
+        if (isSubmitting) {
+            els.submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+            els.submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    }
+</script>
+</body>
+</html>
