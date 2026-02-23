@@ -348,8 +348,9 @@
   </div>
 
   <script>
-    const RAGIC_API_KEY = "VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==";
-    const RAGIC_BASE_URL = "https://ap15.ragic.com/wuohome/payments/1";
+    // 安全改造：前端不再保存 API Key，改由後端代理處理授權。
+    const API_PROXY_BASE = "/api/ragic";
+    const RAGIC_FORM_PATH = "payments/1";
 
     const FIELDS = {
       // Step 2 顯示用欄位
@@ -475,9 +476,14 @@
     function executeLoad() {
       $("loader-text").innerText = "開啟中...";
       loadTimer = setTimeout(() => { if (!currentRecord) $("loader-text").innerText = "讀取逾時"; }, 10000);
-      const script = document.createElement('script');
-      script.src = `${RAGIC_BASE_URL}/${recordId}.json?api&APIKey=${encodeURIComponent(RAGIC_API_KEY)}&callback=ragicCallback`;
-      document.body.appendChild(script);
+      fetch(`${API_PROXY_BASE}/${RAGIC_FORM_PATH}/${recordId}`)
+        .then(resp => { if (!resp.ok) throw new Error(`HTTP ${resp.status}`); return resp.json(); })
+        .then(data => window.ragicCallback(data))
+        .catch((err) => {
+          clearTimeout(loadTimer);
+          console.error(err);
+          $("loader-text").innerText = "讀取失敗，請聯絡管理員檢查後端代理";
+        });
     }
 
     function renderData() {
@@ -624,7 +630,7 @@
 
           // 5. 送出表單
           const form = $("ragicForm");
-          form.action = `${RAGIC_BASE_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_API_KEY)}`;
+          form.action = `${API_PROXY_BASE}/${RAGIC_FORM_PATH}/${recordId}`;
           form.submit();
 
           // 6. 顯示成功

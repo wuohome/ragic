@@ -55,11 +55,8 @@
          * ==========================================================================================
          */
         const RAGIC_CONFIG = {
-            // Ragic 基礎網址
-            BASE_URL: "https://ap15.ragic.com",
-            
-            // 您的 API Key
-            API_KEY: "Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==", 
+            // 後端代理基礎路徑（由後端注入 API Key）
+            BASE_URL: "/api/ragic",
 
             // 表單路徑
             PATHS: {
@@ -104,11 +101,9 @@
         // 通用 Fetch 函數
         const ragicFetch = async (path, options = {}) => {
             const url = `${RAGIC_CONFIG.BASE_URL}${path}`;
-            const apiKey = (RAGIC_CONFIG.API_KEY || "").trim();
-            
             const queryChar = url.includes('?') ? '&' : '?';
-            // naming=EID 很重要，確保回傳欄位 ID 而非名稱
-            const fullUrl = `${url}${queryChar}api=true&v=3&naming=EID&APIKey=${encodeURIComponent(apiKey)}`;
+            // naming=EID 由代理層協助補齊；此處僅保留相容參數
+            const fullUrl = `${url}${queryChar}naming=EID`;
             
             console.log(`%c[API Request] %c${path}`, "color: blue; font-weight: bold;", "color: black;");
 
