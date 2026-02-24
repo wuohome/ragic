@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>房屋修繕報修單</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 自訂一些基本的表單元素樣式，提升質感 */
+        body {
+            background-color: #f3f4f6;
+            font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+        }
+        .required-star::after {
+            content: '*';
+            color: #ef4444;
+            margin-left: 4px;
+        }
+        /* 隱藏的 iframe，用來吸收表單跳轉 */
+        .cto-hidden-iframe {
+            display: none;
+        }
+    </style>
+</head>
+<body class="antialiased text-gray-800 p-4 md:p-8">
+
+    <div class="max-w-xl mx-auto bg-white rounded-2xl shadow-lg overflow-hidden relative">
+        
+        <!-- 表單標題區塊 -->
+        <div class="bg-blue-600 px-6 py-8 text-white text-center">
+            <h1 class="text-2xl font-bold tracking-wider">房屋修繕報修單</h1>
+            <p class="text-blue-100 mt-2 text-sm">請詳細填寫下方資訊，管理團隊將於 <strong class="text-white">24小時內</strong> 與您聯繫</p>
+        </div>
+
+        <!-- 
+            核心機制：隱藏 Iframe 表單術
+            target="hidden_iframe" 確保送出後畫面不會跳轉到 Ragic 的 API 回應頁面
+            enctype="multipart/form-data" 確保照片檔案能被正確編碼傳送
+        -->
+        <form id="repairForm" target="hidden_iframe" method="POST" action="https://ap15.ragic.com/wuohome/maintenance-management/8?api" enctype="multipart/form-data" class="p-6 md:p-8 space-y-6">
+            
+            <!-- 房屋資訊 -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="md:col-span-2">
+                    <label for="address" class="block text-sm font-semibold text-gray-700 mb-1 required-star">房屋地址</label>
+                    <!-- 對應 Ragic ID: 1001856 -->
+                    <input type="text" id="address" name="1001856" required placeholder="例：新北市新莊區中正路123號" 
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow">
+                </div>
+                <div>
+                    <label for="room" class="block text-sm font-semibold text-gray-700 mb-1">房號</label>
+                    <!-- 對應 Ragic ID: 1001855 -->
+                    <input type="text" id="room" name="1001855" placeholder="例：501" 
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow">
+                </div>
+            </div>
+
+            <!-- 聯絡人資訊 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="tenantName" class="block text-sm font-semibold text-gray-700 mb-1 required-star">姓名</label>
+                    <!-- 對應 Ragic ID: 1001852 -->
+                    <input type="text" id="tenantName" name="1001852" required placeholder="請輸入姓名" 
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow">
+                </div>
+                <div>
+                    <label for="phone" class="block text-sm font-semibold text-gray-700 mb-1 required-star">聯絡電話</label>
+                    <!-- 對應 Ragic ID: 1001853 -->
+                    <input type="tel" id="phone" name="1001853" required placeholder="例：0912345678" pattern="[0-9]{10}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow">
+                </div>
+            </div>
+
+            <hr class="border-gray-200">
+
+            <!-- 問題分類 -->
+            <div>
+                <label for="category" class="block text-sm font-semibold text-gray-700 mb-1 required-star">問題分類</label>
+                <!-- 對應 Ragic ID: 1001854 -->
+                <select id="category" name="1001854" required 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white transition-shadow">
+                    <option value="" disabled selected>請選擇分類</option>
+                    <option value="水電">水電 (漏水、無電、燈具等)</option>
+                    <option value="泥作">泥作 (磁磚破裂、牆壁剝落等)</option>
+                    <option value="木作">木作 (地板隆起、木門損壞等)</option>
+                    <option value="家電">家電 (冷氣、冰箱、洗衣機等)</option>
+                    <option value="門鎖">門鎖 (門把鬆脫、無法上鎖等)</option>
+                    <option value="其他">其他</option>
+                </select>
+            </div>
+
+            <!-- 問題描述 -->
+            <div>
+                <label for="description" class="block text-sm font-semibold text-gray-700 mb-1">問題詳細描述</label>
+                <!-- 對應 Ragic ID: 1000486 -->
+                <textarea id="description" name="1000486" rows="3" placeholder="請盡量詳細描述損壞狀況、發生時間等資訊..." 
+                          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow resize-none"></textarea>
+            </div>
+
+            <!-- 現場照片與影片 -->
+            <div>
+                <label for="photo" class="block text-sm font-semibold text-gray-700 mb-1 required-star">現場照片 / 影片上傳</label>
+                <p class="text-xs text-gray-500 mb-2">請上傳清晰的損壞處照片或影片，以利師傅備料與初估。</p>
+                <!-- 對應 Ragic ID: 1000788 -->
+                <input type="file" id="photo" name="1000788" accept="image/*,video/*" required multiple
+                       class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-colors">
+            </div>
+
+            <hr class="border-gray-200">
+
+            <!-- 可維修時段 -->
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2 required-star">可配合維修時段 (可複選)</label>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <label class="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 transition-colors">
+                        <input type="checkbox" data-group="time" value="平日白天" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <span class="ml-2 text-sm text-gray-700">平日白天</span>
+                    </label>
+                    <label class="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 transition-colors">
+                        <input type="checkbox" data-group="time" value="平日晚上" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <span class="ml-2 text-sm text-gray-700">平日晚上</span>
+                    </label>
+                    <label class="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 transition-colors">
+                        <input type="checkbox" data-group="time" value="假日白天" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <span class="ml-2 text-sm text-gray-700">假日白天</span>
+                    </label>
+                    
+                    <!-- 其他選項區塊 -->
+                    <div class="col-span-2 md:col-span-3 flex items-center p-3 border border-gray-200 rounded-lg hover:bg-blue-50 transition-colors">
+                        <input type="checkbox" id="timeOther" data-group="time" value="其他" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer">
+                        <label for="timeOther" class="ml-2 text-sm text-gray-700 cursor-pointer whitespace-nowrap">其他：</label>
+                        <input type="text" id="timeOtherInput" placeholder="例如：平日晚上8點後" class="ml-2 flex-1 bg-transparent border-b border-gray-400 focus:border-blue-500 outline-none text-sm px-2 py-1 text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity" disabled>
+                    </div>
+                </div>
+                <p id="timeError" class="text-xs text-red-500 mt-2 hidden">請至少選擇一個時段</p>
+                
+                <!-- 真正要送給 Ragic 的隱藏時段欄位 (1001864) -->
+                <input type="hidden" name="1001864" id="ragic_time_field" value="">
+
+                <!-- ================= 後端隱藏欄位區塊 ================= -->
+                <!-- 案件狀態：強制預設 "新進件" (1001311) -->
+                <input type="hidden" name="1001311" value="新進件">
+                <!-- 報修時間：送出時由 JS 動態寫入當下時間 (1000489) -->
+                <input type="hidden" name="1000489" id="ragic_report_time" value="">
+                <!-- 已申報天數：強制帶入預設值 '0' (1000490) -->
+                <input type="hidden" name="1000490" value="0">
+                <!-- ==================================================== -->
+            </div>
+
+            <!-- 提交按鈕與 Loading 遮罩 -->
+            <div class="pt-4 relative">
+                <button type="submit" id="submitBtn"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    確認送出報修單
+                </button>
+            </div>
+        </form>
+
+        <!-- 成功訊息區塊 (預設隱藏) -->
+        <div id="successMessage" class="hidden p-8 text-center bg-white min-h-[400px] flex flex-col items-center justify-center">
+            <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">報修已送出！</h2>
+            <p class="text-gray-600 mb-6">我們已收到您的報修申請，管理員將於 <strong class="text-gray-800 font-semibold">24小時內</strong> 與您聯繫確認細節，請留意您的手機來電。</p>
+            <button onclick="location.reload()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-6 rounded-lg transition-colors">
+                返回重填
+            </button>
+        </div>
+        
+        <!-- Loading 狀態遮罩 -->
+        <div id="loadingOverlay" class="hidden absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-50">
+            <div class="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
+            <p class="text-blue-600 font-semibold">資料傳送中...</p>
+        </div>
+
+        <!-- 隱藏的 iframe：接收 Ragic API 回應，避免畫面跳轉 -->
+        <iframe name="hidden_iframe" id="hidden_iframe" class="cto-hidden-iframe"></iframe>
+
+        <!-- 檔案過大警告彈窗 -->
+        <div id="customAlertModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60]">
+            <div class="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4 transform transition-all">
+                <div class="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+                    <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-bold text-center text-gray-900 mb-2">檔案總大小超過 1GB</h3>
+                <p class="text-sm text-gray-500 text-center mb-6">您選擇的照片或影片加總已超過 1GB 上限。<br>請減少檔案數量或壓縮後再試。</p>
+                <button type="button" onclick="document.getElementById('customAlertModal').classList.add('hidden')" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                    我知道了
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const form = document.getElementById('repairForm');
+        const iframe = document.getElementById('hidden_iframe');
+        const submitBtn = document.getElementById('submitBtn');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        let isSubmitting = false;
+
+        // 1. 處理表單送出前的邏輯 (整理「可維修時段」)
+        form.addEventListener('submit', function(e) {
+            // 驗證複選框
+            const checkboxes = document.querySelectorAll('input[data-group="time"]:checked');
+            const errorMsg = document.getElementById('timeError');
+            
+            if (checkboxes.length === 0) {
+                e.preventDefault(); // 沒勾選時阻擋送出
+                errorMsg.classList.remove('hidden');
+                return;
+            } else {
+                errorMsg.classList.add('hidden');
+            }
+
+            // 組裝「可維修時段」資料給 Ragic (1001864)
+            let selectedTimes = [];
+            checkboxes.forEach(cb => {
+                if (cb.value === '其他') {
+                    const otherText = document.getElementById('timeOtherInput').value.trim();
+                    if (otherText) selectedTimes.push(otherText);
+                } else {
+                    selectedTimes.push(cb.value);
+                }
+            });
+            document.getElementById('ragic_time_field').value = selectedTimes.join(', ');
+
+            // 自動產生報修當下時間
+            // 產生 Ragic 系統能識別的標準時間格式：YYYY/MM/DD HH:mm:ss
+            const now = new Date();
+            const formattedTime = now.getFullYear() + '/' + 
+                                  String(now.getMonth() + 1).padStart(2, '0') + '/' + 
+                                  String(now.getDate()).padStart(2, '0') + ' ' + 
+                                  String(now.getHours()).padStart(2, '0') + ':' + 
+                                  String(now.getMinutes()).padStart(2, '0') + ':' + 
+                                  String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('ragic_report_time').value = formattedTime;
+
+            // UI 狀態切換：顯示 Loading
+            isSubmitting = true;
+            submitBtn.disabled = true;
+            loadingOverlay.classList.remove('hidden');
+        });
+
+        // 2. 處理 Iframe 載入完成事件 (代表資料已拋轉給 Ragic)
+        iframe.addEventListener('load', function() {
+            if (isSubmitting) {
+                isSubmitting = false;
+                
+                // 隱藏表單與 Loading，顯示成功畫面
+                loadingOverlay.classList.add('hidden');
+                form.classList.add('hidden');
+                document.getElementById('successMessage').classList.remove('hidden');
+                
+                // 捲動回頂部
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                
+                // 清空表單避免重複送出
+                form.reset();
+            }
+        });
+
+        // 3. 監聽「其他」選項來開啟/關閉輸入框
+        document.getElementById('timeOther').addEventListener('change', function() {
+            const input = document.getElementById('timeOtherInput');
+            input.disabled = !this.checked;
+            if (this.checked) {
+                input.focus();
+                document.getElementById('timeError').classList.add('hidden');
+            } else {
+                input.value = '';
+            }
+        });
+
+        // 4. 監聽複選框變化，隱藏錯誤訊息
+        document.querySelectorAll('input[data-group="time"]').forEach(box => {
+            box.addEventListener('change', () => {
+                document.getElementById('timeError').classList.add('hidden');
+            });
+        });
+
+        // 5. 監聽照片/影片上傳大小 (總和不得超過 1GB)
+        document.getElementById('photo').addEventListener('change', function() {
+            const MAX_SIZE = 1024 * 1024 * 1024; // 1GB 轉換為 Bytes
+            let totalSize = 0;
+            
+            // 將所有選取的檔案大小加總
+            for (let i = 0; i < this.files.length; i++) {
+                totalSize += this.files[i].size;
+            }
+
+            if (totalSize > MAX_SIZE) {
+                // 顯示自訂警告彈窗
+                document.getElementById('customAlertModal').classList.remove('hidden');
+                // 清空已選取的檔案，強制使用者重選
+                this.value = '';
+            }
+        });
+    </script>
+</body>
+</html>
