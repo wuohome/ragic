@@ -190,6 +190,31 @@
         let fetchedRecords = [];
         let filteredRecords = [];
         let activeInfoWindow = null;
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function sanitizeExternalUrl(url) {
+            if (!url) return '';
+            try {
+                const parsed = new URL(String(url));
+                return ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : '';
+            } catch {
+                return '';
+            }
+        }
+
+        function sanitizePhone(phone) {
+            if (!phone) return '';
+            const normalized = String(phone).replace(/[^\d+\-()\s]/g, '').trim();
+            return /^[\d+\-()\s]{6,20}$/.test(normalized) ? normalized : '';
+        }
         let mapMoveTimeout;
 
         window.onload = () => {
@@ -411,14 +436,14 @@
             
             rows.forEach(row => {
                 const name = row[EID.DEV_NAME];
-                const phone = row[EID.DEV_PHONE];
+                const phone = sanitizePhone(row[EID.DEV_PHONE]);
                 
                 if (name && phone) {
                     hasAgent = true;
                     // 使用 stopPropagation 防止觸發卡片點擊事件
                     html += `
-                        <a href="tel:${phone}" class="agent-btn" onclick="event.stopPropagation()">
-                            <i class="fas fa-phone-alt"></i> ${name}
+                        <a href="tel:${encodeURIComponent(phone)}" class="agent-btn" onclick="event.stopPropagation()">
+                            <i class="fas fa-phone-alt"></i> ${escapeHtml(name)}
                         </a>
                     `;
                 }
@@ -431,11 +456,15 @@
         function createListItem(item, container, isNoCoord = false) {
             const div = document.createElement('div');
             const price = item[EID.PRICE] ? parseInt(item[EID.PRICE]).toLocaleString() : "面議";
-            const link591 = item[EID.LINK_591];
-            const hasLink = link591 && link591.startsWith('http');
+            const link591 = sanitizeExternalUrl(item[EID.LINK_591]);
+            const hasLink = Boolean(link591);
             const usage = item[EID.USAGE] || '';
             const isShop = usage.includes('店');
             const agentsHtml = getAgentsHtml(item); // 產生聯絡人按鈕
+            const title = escapeHtml(item[EID.TITLE] || '(未命名)');
+            const layoutOrUsage = escapeHtml(item[EID.LAYOUT] || usage || '未分類');
+            const address = escapeHtml(item[EID.ADDR] || '');
+            const coordForNav = encodeURIComponent(String(item[EID.COORD] || ''));
 
             // 檢查是否有座標
             const hasCoord = item[EID.COORD] && item[EID.COORD].includes(',') && !isNoCoord;
@@ -448,18 +477,18 @@
             };
             
             div.innerHTML = `
-                <div class="card-header"><div class="card-title">${item[EID.TITLE] || '(未命名)'}</div></div>
+                <div class="card-header"><div class="card-title">${title}</div></div>
                 <div class="card-details">
-                    <span class="tag ${isShop ? 'tag-shop' : ''}"><i class="fas ${isShop ? 'fa-store' : 'fa-home'} mr-1"></i>${item[EID.LAYOUT] || usage || '未分類'}</span>
+                    <span class="tag ${isShop ? 'tag-shop' : ''}"><i class="fas ${isShop ? 'fa-store' : 'fa-home'} mr-1"></i>${layoutOrUsage}</span>
                     <span class="text-gray-400">|</span>
-                    <span class="truncate w-32 md:w-40" title="${item[EID.ADDR]}">${item[EID.ADDR] || ''}</span>
+                    <span class="truncate w-32 md:w-40" title="${address}">${address}</span>
                 </div>
                 ${agentsHtml} <!-- 插入聯絡人按鈕 -->
                 <div class="card-footer">
                     <div class="card-price">$${price} <span class="price-unit">/月</span></div>
                     <div class="flex gap-2">
-                        ${hasCoord ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${item[EID.COORD]}" target="_blank" class="inline-flex items-center gap-1 bg-blue-600 text-white py-1 px-2.5 rounded text-xs font-bold transition hover:bg-blue-700" onclick="event.stopPropagation()" title="導航"><i class="fas fa-location-arrow"></i> 導航</a>` : ''}
-                        <a href="${link591}" target="_blank" class="btn-591 ${hasLink ? '' : 'btn-hidden'}" title="前往 591">
+                        ${hasCoord ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${coordForNav}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 bg-blue-600 text-white py-1 px-2.5 rounded text-xs font-bold transition hover:bg-blue-700" onclick="event.stopPropagation()" title="導航"><i class="fas fa-location-arrow"></i> 導航</a>` : ''}
+                        <a href="${link591}" target="_blank" rel="noopener noreferrer" class="btn-591 ${hasLink ? '' : 'btn-hidden'}" title="前往 591">
                             <i class="fas fa-external-link-alt"></i> 591
                         </a>
                     </div>
@@ -469,21 +498,25 @@
 
         function showInfoWindow(marker, item) {
             const price = item[EID.PRICE] ? parseInt(item[EID.PRICE]).toLocaleString() : "面議";
-            const link591 = item[EID.LINK_591];
-            const hasLink = link591 && link591.startsWith('http');
+            const link591 = sanitizeExternalUrl(item[EID.LINK_591]);
+            const hasLink = Boolean(link591);
             const [lat, lng] = item[EID.COORD].split(',');
             const agentsHtml = getAgentsHtml(item); // 產生聯絡人按鈕
+            const title = escapeHtml(item[EID.TITLE] || '(未命名)');
+            const layout = escapeHtml(item[EID.LAYOUT] || '');
+            const addr = escapeHtml(item[EID.ADDR] || '');
+            const navCoord = `${encodeURIComponent(lat)},${encodeURIComponent(lng)}`;
 
             const infoContent = `
                 <div style="padding: 5px; min-width: 200px;">
-                    <h3 class="font-bold text-base mb-1 text-gray-800">${item[EID.TITLE]}</h3>
-                    <p class="text-gray-500 text-xs mb-2">${item[EID.LAYOUT]} | ${item[EID.ADDR]}</p>
+                    <h3 class="font-bold text-base mb-1 text-gray-800">${title}</h3>
+                    <p class="text-gray-500 text-xs mb-2">${layout} | ${addr}</p>
                     ${agentsHtml} <!-- 插入聯絡人按鈕 -->
                     <div class="flex justify-between items-center mt-2 border-t pt-2">
                         <span class="text-red-600 font-bold text-lg">$${price}</span>
                         <div class="flex gap-2">
-                            ${hasLink ? `<a href="${link591}" target="_blank" class="text-xs bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600" style="text-decoration:none;">591</a>` : ''}
-                            <a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank" class="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700" style="text-decoration:none;">導航</a>
+                            ${hasLink ? `<a href="${link591}" target="_blank" rel="noopener noreferrer" class="text-xs bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600" style="text-decoration:none;">591</a>` : ''}
+                            <a href="https://www.google.com/maps/dir/?api=1&destination=${navCoord}" target="_blank" rel="noopener noreferrer" class="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700" style="text-decoration:none;">導航</a>
                         </div>
                     </div>
                 </div>`;
