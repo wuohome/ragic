@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>市場行情分析報告 - 特區名人錄 12F-1</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Google Fonts: Noto Sans TC -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <!-- 引入 Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans TC"', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* 列印專用樣式 */
+        @media print {
+            body {
+                background-color: white !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-shadow-none {
+                box-shadow: none !important;
+            }
+            .print-p-0 {
+                padding: 0 !important;
+            }
+            .print-m-0 {
+                margin: 0 !important;
+            }
+            .avoid-break {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+            .page-break {
+                page-break-before: always;
+            }
+            /* 確保背景色在列印時顯示 */
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
+        
+        body {
+            background-color: #f8fafc;
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased font-sans pb-12 print:pb-0">
+
+    <!-- 頂部操作列 (僅螢幕顯示) -->
+    <div class="max-w-4xl mx-auto pt-6 px-4 flex justify-end no-print">
+        <button onclick="window.print()" class="flex items-center gap-2 bg-brand-700 hover:bg-brand-800 text-white px-5 py-2.5 rounded-lg shadow transition-colors font-medium">
+            <i data-lucide="printer" class="w-5 h-5"></i>
+            列印 / 匯出 PDF
+        </button>
+    </div>
+
+    <!-- 報告主體 -->
+    <div class="max-w-4xl mx-auto bg-white sm:mt-6 sm:mb-12 shadow-xl sm:rounded-xl print-shadow-none print-m-0 sm:border border-slate-200 overflow-hidden">
+        
+        <!-- Header -->
+        <header class="bg-brand-900 text-white p-8 md:p-10">
+            <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                <div>
+                    <div class="text-brand-100 font-medium tracking-wider mb-2 flex items-center gap-2">
+                        <i data-lucide="bar-chart-2" class="w-5 h-5"></i>
+                        市場行情分析報告
+                    </div>
+                    <h1 class="text-3xl md:text-4xl font-bold mb-3 tracking-tight">特區名人錄｜12F-1</h1>
+                    <p class="text-brand-50 text-lg flex items-center gap-2">
+                        <i data-lucide="map-pin" class="w-5 h-5"></i>
+                        台北市中正區南昌路一段
+                    </p>
+                </div>
+                <div class="bg-brand-800/50 rounded-lg p-3 text-sm text-brand-100 border border-brand-700 backdrop-blur-sm self-start">
+                    <p class="font-medium text-white mb-1">報告用途</p>
+                    <p>供賣方定價與溝通參考</p>
+                </div>
+            </div>
+        </header>
+
+        <div class="p-8 md:p-10 space-y-10">
+            
+            <!-- 1. 本戶基本資料 -->
+            <section class="avoid-break">
+                <div class="flex items-center gap-2 border-b-2 border-brand-700 pb-2 mb-6">
+                    <i data-lucide="home" class="w-6 h-6 text-brand-700"></i>
+                    <h2 class="text-2xl font-bold text-slate-800">1. 本戶基本資料</h2>
+                </div>
+                <p class="text-slate-500 mb-4 text-sm">以下資料取自原簡報內容整理（可再依實際權狀/現況補齊）。</p>
+                
+                <div class="bg-slate-50 rounded-xl p-6 border border-slate-200">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-8">
+                        <div class="col-span-1 md:col-span-2 flex flex-col">
+                            <span class="text-sm font-semibold text-slate-500 mb-1">地址</span>
+                            <span class="text-lg font-bold text-slate-900">台北市中正區南昌路一段 53號 12樓之1</span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-sm font-semibold text-slate-500 mb-1">權狀含車位</span>
+                            <span class="text-xl font-bold text-brand-700">48.38 <span class="text-base text-slate-600 font-medium">坪</span></span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-sm font-semibold text-slate-500 mb-1">屋齡</span>
+                            <span class="text-xl font-bold text-slate-800">約 24 <span class="text-base text-slate-600 font-medium">年</span></span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-sm font-semibold text-slate-500 mb-1">主建物＋附屬</span>
+                            <span class="text-lg font-bold text-slate-800">35.37 <span class="text-base text-slate-600 font-medium">坪</span></span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-sm font-semibold text-slate-500 mb-1">車位</span>
+                            <span class="text-lg font-bold text-slate-800">1 個坡平車位 <span class="text-sm text-slate-500 font-normal">(13.01 坪)</span></span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-sm font-semibold text-slate-500 mb-1">公設比</span>
+                            <span class="text-lg font-bold text-slate-800">約 29.7%</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. 周邊社區行情比較（摘要） -->
+            <section class="avoid-break">
+                <div class="flex items-center gap-2 border-b-2 border-brand-700 pb-2 mb-6">
+                    <i data-lucide="building-2" class="w-6 h-6 text-brand-700"></i>
+                    <h2 class="text-2xl font-bold text-slate-800">2. 周邊社區行情比較（摘要）</h2>
+                </div>
+                
+                <div class="bg-blue-50 border-l-4 border-brand-600 p-4 mb-6 rounded-r-lg">
+                    <p class="text-brand-900 font-medium flex items-start gap-2">
+                        <i data-lucide="eye" class="w-5 h-5 mt-0.5 flex-shrink-0 text-brand-600"></i>
+                        <span><strong class="text-brand-800">觀察重點：</strong>同屋齡社區成交多落在 <strong>100–110 萬/坪</strong>；屋齡較新或管理/位置優勢者可上探 <strong>110–130+ 萬/坪</strong>。</span>
+                    </p>
+                </div>
+
+                <div class="overflow-x-auto rounded-lg border border-slate-200">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-700 text-sm uppercase tracking-wider">
+                                <th class="p-4 font-semibold border-b border-slate-200">社區</th>
+                                <th class="p-4 font-semibold border-b border-slate-200">屋齡</th>
+                                <th class="p-4 font-semibold border-b border-slate-200">坪單價（萬/坪）</th>
+                                <th class="p-4 font-semibold border-b border-slate-200">備註</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-slate-800 divide-y divide-slate-100">
+                            <tr class="bg-brand-50/50 hover:bg-brand-50 transition-colors">
+                                <td class="p-4 font-bold text-brand-800">特區名人錄</td>
+                                <td class="p-4">23 ~ 24</td>
+                                <td class="p-4 font-bold">約 94</td>
+                                <td class="p-4 text-sm text-slate-600">同社成交平均</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="p-4 font-medium">中正DC</td>
+                                <td class="p-4">16</td>
+                                <td class="p-4 font-medium">95 ~ 140+</td>
+                                <td class="p-4 text-sm text-slate-600">新屋齡較高下限</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="p-4 font-medium">領SHOW 大廈</td>
+                                <td class="p-4">18</td>
+                                <td class="p-4 font-medium">98 ~ 120</td>
+                                <td class="p-4 text-sm text-slate-600">周邊行情</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="p-4 font-medium">南昌路一段舊社區</td>
+                                <td class="p-4">30+</td>
+                                <td class="p-4 font-medium">88 ~ 101</td>
+                                <td class="p-4 text-sm text-slate-600">區域次要樣本</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 3. 路段/建物行情比較（完整表） -->
+            <section class="avoid-break page-break-after">
+                <div class="flex items-center gap-2 border-b-2 border-brand-700 pb-2 mb-6">
+                    <i data-lucide="table" class="w-6 h-6 text-brand-700"></i>
+                    <h2 class="text-2xl font-bold text-slate-800">3. 路段/建物行情比較（完整表）</h2>
+                </div>
+
+                <div class="overflow-x-auto rounded-lg border border-slate-200">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-800 text-white text-sm uppercase tracking-wider">
+                                <th class="p-4 font-semibold">社區／建物</th>
+                                <th class="p-4 font-semibold">地址</th>
+                                <th class="p-4 font-semibold">屋齡 (年)</th>
+                                <th class="p-4 font-semibold">坪單價 (萬/坪)</th>
+                                <th class="p-4 font-semibold">成交特色</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-slate-800 divide-y divide-slate-200">
+                            <tr class="bg-brand-50 hover:bg-brand-100 transition-colors">
+                                <td class="p-4 font-bold text-brand-800">特區名人錄大廈</td>
+                                <td class="p-4 text-sm">南昌路一段近 59 巷</td>
+                                <td class="p-4">~23–24</td>
+                                <td class="p-4 font-bold">約 94 萬</td>
+                                <td class="p-4 text-sm text-slate-700">同社區近期成交平均</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="p-4 font-medium">中正DC</td>
+                                <td class="p-4 text-sm">南昌路一段 108 號</td>
+                                <td class="p-4">~16</td>
+                                <td class="p-4 font-medium">~95 ~ 140+萬</td>
+                                <td class="p-4 text-sm text-slate-700">屋齡較新、大坪效</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="p-4 font-medium">南昌路一段 39 號</td>
+                                <td class="p-4 text-sm">同路段老社區</td>
+                                <td class="p-4">~40+</td>
+                                <td class="p-4 font-medium">~94 ~ 101萬</td>
+                                <td class="p-4 text-sm text-slate-700">歷史成交參考</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="p-4 font-medium">領SHOW 大廈</td>
+                                <td class="p-4 text-sm">南昌路一段 24 巷</td>
+                                <td class="p-4">~18+</td>
+                                <td class="p-4 font-medium">~98 ~ 123萬</td>
+                                <td class="p-4 text-sm text-slate-700">區域中堅行情</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 4. 本戶行情推估（核心結論頁） -->
+            <section class="avoid-break mt-12">
+                <div class="flex items-center gap-2 border-b-2 border-amber-500 pb-2 mb-6">
+                    <i data-lucide="target" class="w-6 h-6 text-amber-500"></i>
+                    <h2 class="text-2xl font-bold text-slate-800">4. 本戶行情推估（核心結論）</h2>
+                </div>
+
+                <!-- 估價數據區塊 -->
+                <div class="bg-white border-2 border-slate-200 rounded-xl p-6 shadow-sm relative overflow-hidden mb-8">
+                    <div class="absolute top-0 right-0 bg-brand-100 text-brand-700 px-3 py-1 text-xs font-bold rounded-bl-lg">台灣常規算法（車位拆算）</div>
+                    <h3 class="text-xl font-bold text-slate-700 mb-4">標準拆分估價</h3>
+                    
+                    <div class="flex flex-col md:flex-row gap-4 items-center md:items-stretch mb-2">
+                        <!-- 房屋價值 -->
+                        <div class="flex-1 bg-slate-50 p-5 rounded-lg border border-slate-100 w-full flex flex-col justify-center">
+                            <div class="text-sm font-bold text-slate-500 mb-1">房屋總價 <span class="font-normal">(35.37 坪)</span></div>
+                            <div class="text-2xl font-bold text-slate-800 mb-1">3,540 <span class="text-lg text-slate-400 font-medium mx-1">~</span> 3,890 <span class="text-base font-medium">萬</span></div>
+                            <div class="text-xs text-slate-500 mt-auto">單價 100 – 110 萬/坪 試算</div>
+                        </div>
+                        <div class="text-slate-300 font-black text-2xl hidden md:block">+</div>
+                        <!-- 車位價值 -->
+                        <div class="flex-1 bg-slate-50 p-5 rounded-lg border border-slate-100 w-full flex flex-col justify-center">
+                            <div class="text-sm font-bold text-slate-500 mb-1">坡平車位 <span class="font-normal">(1個)</span></div>
+                            <div class="text-2xl font-bold text-slate-800 mb-1">300 <span class="text-lg text-slate-400 font-medium mx-1">~</span> 350 <span class="text-base font-medium">萬</span></div>
+                            <div class="text-xs text-slate-500 mt-auto">區域單一車位行情估算</div>
+                        </div>
+                        <div class="text-slate-300 font-black text-2xl hidden md:block">=</div>
+                        <!-- 總價值 -->
+                        <div class="flex-1 bg-brand-50 p-5 rounded-lg border border-brand-200 w-full flex flex-col justify-center">
+                            <div class="text-sm font-bold text-brand-700 mb-1">合理總價區間</div>
+                            <div class="text-3xl font-black text-brand-700">3,840 <span class="text-xl text-brand-400 font-medium mx-1">-</span> 4,240 <span class="text-xl font-medium">萬</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 定價策略建議 -->
+                <div class="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-6 md:p-8 shadow-sm">
+                    <h3 class="text-xl font-bold text-amber-900 mb-4 flex items-center gap-2">
+                        <i data-lucide="lightbulb" class="w-5 h-5 text-amber-600"></i>
+                        定價策略建議 (對外掛牌)
+                    </h3>
+                    <ul class="space-y-4 mb-8">
+                        <li class="flex items-start gap-3">
+                            <div class="mt-1 bg-amber-500 text-white rounded-full p-1"><i data-lucide="zap" class="w-3 h-3"></i></div>
+                            <div>
+                                <strong class="text-slate-800 block mb-0.5">若希望「快速成交」</strong>
+                                <span class="text-slate-600">建議落在區間中下緣（總價約 3,850 萬上下）。</span>
+                            </div>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <div class="mt-1 bg-amber-500 text-white rounded-full p-1"><i data-lucide="trending-up" class="w-3 h-3"></i></div>
+                            <div>
+                                <strong class="text-slate-800 block mb-0.5">若物件條件佳（樓層/採光/景觀/裝修/稀缺性）</strong>
+                                <span class="text-slate-600">可向上測試（總價挑戰 4,250 萬以上）。</span>
+                            </div>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <div class="mt-1 bg-slate-300 text-slate-700 rounded-full p-1"><i data-lucide="sliders-horizontal" class="w-3 h-3"></i></div>
+                            <div>
+                                <strong class="text-slate-800 block mb-0.5">微調變數</strong>
+                                <span class="text-slate-600 text-sm">實際仍需依：室內裝修狀況、車位所在樓層與好不好停、面向噪音等微調。</span>
+                            </div>
+                        </li>
+                    </ul>
+
+                    <!-- 核心總結 -->
+                    <div class="bg-white rounded-lg p-5 border-l-4 border-amber-500 shadow-sm">
+                        <p class="text-sm font-bold text-amber-600 mb-2 tracking-wider">💡 本戶估價總結：</p>
+                        <p class="text-lg md:text-xl font-medium text-slate-800 leading-relaxed">
+                            周邊行情多在 100–110 萬/坪，本戶房屋 35.37 坪加上 1 個坡平車位拆算，合理總價區間約 <span class="text-brand-700 font-bold border-b-2 border-brand-300">3,840–4,240 萬</span>；若屋況條件佳可再往上開價測試。
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5. 銀行估價參考 -->
+            <section class="avoid-break mt-12">
+                <div class="flex items-center gap-2 border-b-2 border-blue-600 pb-2 mb-6">
+                    <i data-lucide="landmark" class="w-6 h-6 text-blue-600"></i>
+                    <h2 class="text-2xl font-bold text-slate-800">5. 銀行估價參考</h2>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- 玉山銀行 -->
+                    <div class="bg-white border-2 border-slate-100 hover:border-blue-200 transition-colors rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="bg-green-100 text-green-700 p-2.5 rounded-lg"><i data-lucide="building-2" class="w-5 h-5"></i></div>
+                            <h3 class="font-bold text-xl text-slate-700">玉山銀行</h3>
+                        </div>
+                        <div class="text-3xl font-black text-slate-800 mb-2">84 <span class="text-xl text-slate-400 font-medium mx-1">~</span> 93 <span class="text-lg font-medium text-slate-600">萬/坪</span></div>
+                        <p class="text-sm text-slate-500">純房屋單價估算基準</p>
+                    </div>
+                    <!-- 富邦銀行 -->
+                    <div class="bg-white border-2 border-slate-100 hover:border-blue-200 transition-colors rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="bg-blue-100 text-blue-700 p-2.5 rounded-lg"><i data-lucide="briefcase" class="w-5 h-5"></i></div>
+                            <h3 class="font-bold text-xl text-slate-700">富邦銀行</h3>
+                        </div>
+                        <div class="text-3xl font-black text-slate-800 mb-2">3,802 <span class="text-xl text-slate-400 font-medium mx-1">~</span> 4,002 <span class="text-lg font-medium text-slate-600">萬</span></div>
+                        <p class="text-sm text-slate-500">總價估值（內含車位估價 285~300 萬）</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 6. 產權現況與獲利試算 -->
+            <section class="avoid-break mt-12">
+                <div class="flex items-center gap-2 border-b-2 border-emerald-600 pb-2 mb-6">
+                    <i data-lucide="pie-chart" class="w-6 h-6 text-emerald-600"></i>
+                    <h2 class="text-2xl font-bold text-slate-800">6. 產權現況與售屋獲利試算</h2>
+                </div>
+                <div class="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-xl p-6 md:p-8 shadow-sm">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <!-- 產權現況 -->
+                        <div>
+                            <h3 class="text-lg font-bold text-emerald-900 mb-4 flex items-center gap-2">
+                                <i data-lucide="file-text" class="w-5 h-5 text-emerald-600"></i>
+                                目前產權與抵押現況
+                            </h3>
+                            <ul class="space-y-4">
+                                <li class="flex items-center gap-4 bg-white p-3 rounded-lg border border-emerald-100 shadow-sm">
+                                    <div class="bg-emerald-100 text-emerald-700 rounded-full p-2"><i data-lucide="users" class="w-5 h-5"></i></div>
+                                    <div>
+                                        <span class="text-slate-500 text-sm block mb-0.5">所有權人</span>
+                                        <div class="text-slate-800 font-bold text-lg">4 位 <span class="text-emerald-600 text-sm font-medium ml-1 bg-emerald-100 px-2 py-0.5 rounded-full">研判為繼承</span></div>
+                                    </div>
+                                </li>
+                                <li class="flex items-center gap-4 bg-white p-3 rounded-lg border border-emerald-100 shadow-sm">
+                                    <div class="bg-rose-100 text-rose-700 rounded-full p-2"><i data-lucide="credit-card" class="w-5 h-5"></i></div>
+                                    <div>
+                                        <span class="text-slate-500 text-sm block mb-0.5">現有抵押借款</span>
+                                        <div class="text-slate-800 font-bold text-lg">第一銀行 約 2,760 萬</div>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                        <!-- 獲利試算 -->
+                        <div>
+                            <h3 class="text-lg font-bold text-emerald-900 mb-4 flex items-center gap-2">
+                                <i data-lucide="calculator" class="w-5 h-5 text-emerald-600"></i>
+                                售屋帳面餘額粗估
+                            </h3>
+                            <div class="bg-white p-5 rounded-lg border border-emerald-200 shadow-sm">
+                                <div class="flex justify-between items-center mb-3">
+                                    <span class="text-slate-600 font-medium">預估售出總價</span>
+                                    <span class="font-bold text-slate-800 text-lg">3,840 ~ 4,240 萬</span>
+                                </div>
+                                <div class="flex justify-between items-center mb-3 text-rose-600">
+                                    <span class="font-medium flex items-center gap-1"><i data-lucide="minus-circle" class="w-4 h-4"></i> 清償銀行借款</span>
+                                    <span class="font-bold text-lg">2,760 萬</span>
+                                </div>
+                                <div class="border-t-2 border-dashed border-slate-200 my-3"></div>
+                                <div class="flex justify-between items-end mb-4">
+                                    <span class="text-slate-700 font-bold">帳面剩餘總額</span>
+                                    <span class="font-black text-2xl text-emerald-700">1,080 ~ 1,480 萬</span>
+                                </div>
+                                <div class="bg-emerald-600 text-white p-3 rounded-lg text-center font-bold shadow-inner">
+                                    若 4 人均分，每人約可分得 <span class="text-xl text-yellow-300 mx-1">270 ~ 370</span> 萬
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-5 text-sm text-slate-500 flex gap-2 items-start bg-white/60 p-3 rounded-lg border border-white">
+                        <i data-lucide="info" class="w-5 h-5 flex-shrink-0 text-amber-500"></i>
+                        <p class="leading-relaxed">註：以上為「帳面毛利」粗估。實際分回金額仍需扣除<strong>土地增值稅</strong>、<strong>房地合一稅</strong>（需視繼承取得時間與條件而定）、仲介服務費、代書費與塗銷規費等必要交易成本。</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 專屬顧問資訊 -->
+            <section class="mt-12 pt-8 border-t border-slate-200 avoid-break">
+                <div class="bg-gradient-to-r from-brand-50 to-white rounded-2xl p-6 md:p-8 flex flex-col md:flex-row items-center md:justify-between gap-6 border border-brand-100 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-brand-600 text-white px-4 py-1 text-xs font-bold rounded-bl-xl tracking-widest">專屬顧問</div>
+                    
+                    <div class="flex items-center gap-5 mt-4 md:mt-0">
+                        <img src="image_412f7b.png" alt="吳彥廷 店經理" class="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover shadow-md border-4 border-white flex-shrink-0" onerror="this.src='https://ui-avatars.com/api/?name=吳&background=0369a1&color=fff&size=128'">
+                        <div>
+                            <div class="text-sm font-bold text-brand-600 mb-1 tracking-wider">中信房屋｜品客團隊</div>
+                            <h3 class="text-2xl font-bold text-slate-800 flex flex-col sm:flex-row sm:items-end gap-1 sm:gap-3">
+                                吳彥廷 
+                                <span class="text-base font-medium text-slate-500 mb-0.5">(小吳哥) <span class="text-sm border-l-2 border-slate-300 pl-2 ml-1">店經理</span></span>
+                            </h3>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-col gap-3 w-full md:w-auto bg-white/60 p-4 rounded-xl border border-white backdrop-blur-sm">
+                        <a href="tel:0975407841" class="flex items-center gap-3 text-slate-700 hover:text-brand-700 transition-colors">
+                            <div class="bg-brand-100 p-2.5 rounded-full text-brand-700"><i data-lucide="phone" class="w-5 h-5"></i></div>
+                            <span class="font-bold text-xl tracking-wide">0975-407841</span>
+                        </a>
+                        <div class="flex items-center gap-3 text-slate-700">
+                            <div class="bg-green-100 p-2.5 rounded-full text-green-700"><i data-lucide="message-circle" class="w-5 h-5"></i></div>
+                            <div class="font-medium text-lg flex items-center gap-2">
+                                <span class="text-slate-500 text-sm">Line ID</span>
+                                <span class="font-bold tracking-wider">atwoo</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+        
+        <!-- Footer -->
+        <footer class="bg-slate-50 text-center py-6 text-sm text-slate-400 border-t border-slate-200">
+            <p>本報告僅供市場定價與溝通參考，實際成交價格依市場供需與物件現場條件而定。</p>
+        </footer>
+    </div>
+
+    <!-- 初始化 Icons -->
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>
