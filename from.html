@@ -24,7 +24,7 @@
             width: 100%;
             max-width: 600px;
             min-height: 80vh;
-            height: auto; 
+            height: auto;
             border-radius: 20px;
             box-shadow: 0 10px 30px rgba(0, 120, 148, 0.15);
             display: flex;
@@ -59,9 +59,9 @@
             padding: 20px 30px;
             display: none;
             flex-direction: column;
-            justify-content: flex-start; 
+            justify-content: flex-start;
             animation: fadeIn 0.5s;
-            padding-bottom: 40px; 
+            padding-bottom: 40px;
         }
 
         .step-content.active {
@@ -105,7 +105,7 @@
             box-shadow: 0 2px 5px rgba(0, 120, 148, 0.05);
             margin-bottom: 5px;
         }
-        
+
         .agent-info {
             text-align: left;
             display: flex;
@@ -281,7 +281,7 @@
             margin: 0;
             letter-spacing: 1px;
         }
-        
+
         /* --- Footer --- */
         .app-footer {
             background-color: #ffffff;
@@ -293,23 +293,23 @@
             align-items: center;
             gap: 10px;
         }
-        
+
         .footer-content {
             display: flex;
             align-items: center;
             justify-content: center;
-            flex-wrap: wrap; 
+            flex-wrap: wrap;
             gap: 5px;
             font-size: 13px;
             color: #555;
             line-height: 1.5;
         }
-        
+
         .brand-name {
             color: #005f75;
             font-weight: 900;
         }
-        
+
         .divider {
             color: #ccc;
             margin: 0 2px;
@@ -343,7 +343,7 @@
                 padding: 0;
             }
             .wizard-container {
-                height: auto; 
+                height: auto;
                 min-height: 100vh;
                 max-height: none;
                 border-radius: 0;
@@ -356,8 +356,8 @@
                 border-bottom: 1px solid #eee;
             }
             .step-content {
-                padding: 15px 20px; 
-                justify-content: flex-start; 
+                padding: 15px 20px;
+                justify-content: flex-start;
                 padding-top: 20px;
                 padding-bottom: 20px;
             }
@@ -394,7 +394,7 @@
             gap: 10px;
             margin-bottom: 10px;
         }
-        
+
         .question-label {
             font-weight: bold;
             color: #007894;
@@ -412,7 +412,7 @@
     <div class="logo-header">
         <h1 class="logo-title">租屋需求小幫手</h1>
     </div>
-    
+
     <div class="progress-bar">
         <div class="progress-fill" id="progress"></div>
     </div>
@@ -425,8 +425,8 @@
 
     <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
 
-    <form id="ragicForm" target="hidden_iframe" method="POST" action="https://ap15.ragic.com/wuohome/property-data-kept/8?api=true&APIKey=VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==">
-        
+    <form id="ragicForm" target="hidden_iframe" method="POST" action="/api/ragic/property-data-kept/8">
+
         <!-- 隱藏欄位 (維持與舊版一致) -->
         <input type="hidden" name="1000640" id="input_agent_name">
         <input type="hidden" name="1000641" id="input_agent_phone">
@@ -435,12 +435,12 @@
 
         <!-- ★★★ LINE 複製文案 (重要欄位) ★★★ -->
         <input type="hidden" name="1000970" id="field_line_copy_text">
-        
+
         <!-- STEP 1: 基本資料 -->
         <div class="step-content active" id="step1">
             <h2>👋 您好！</h2>
             <p class="desc">歡迎來到窩的家。<br>請先留下您的聯絡方式</p>
-            
+
             <input type="text" id="field_name" name="1000581" placeholder="您的姓名 / Line 暱稱 (必填)" required>
             <input type="tel" id="field_phone" name="1000583" placeholder="手機號碼 (必填)" required>
             <input type="text" id="field_line" name="1000647" placeholder="LINE ID (選填)">
@@ -450,7 +450,7 @@
         <div class="step-content" id="step2">
             <h2>🏢 房屋類型與格局</h2>
             <p class="desc">請選擇您需要的房子</p>
-            
+
             <p class="question-label">1. 房屋類別 (可複選)</p>
             <input type="hidden" id="field_type" name="1000584">
             <div id="type_container" class="option-grid" style="margin-bottom: 25px;">
@@ -479,7 +479,7 @@
         <div class="step-content" id="step3">
             <h2>📅 入住與成員</h2>
             <p class="desc">請告訴我們您的入住計畫 (必填)</p>
-            
+
             <p class="question-label">1. 預計什麼時候入住？</p>
             <select name="1000590" id="field_movein" style="margin-bottom: 20px;">
                 <option value="">請選擇...</option>
@@ -521,7 +521,7 @@
         <div class="step-content" id="step4">
             <h2>📍 地點與預算</h2>
             <p class="desc">告訴我們您想找的範圍</p>
-            
+
             <p class="question-label">1. 想住在哪個縣市？</p>
             <select name="1000638" id="field_city" style="margin-bottom: 20px;">
                 <option value="">選擇縣市...</option>
@@ -620,8 +620,8 @@
 </div>
 
 <script>
-    let defaultAgentName = ""; 
-    let defaultAgentPhone = "02 2286 5755"; 
+    let defaultAgentName = "";
+    let defaultAgentPhone = "02 2286 5755";
 
     const urlParams = new URLSearchParams(window.location.search);
     const agentNameParam = (urlParams.get('agent') || "").trim();
@@ -631,15 +631,16 @@
     const agentPhone = agentPhoneParam ? agentPhoneParam : defaultAgentPhone;
 
     // Ragic API
-    const ragicApiUrl = "https://ap15.ragic.com/wuohome/property-data-kept/8?api=true&APIKey=VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==";
+    // 安全改造：交由後端代理呼叫 Ragic，前端不存放 API Key
+    const ragicApiUrl = "/api/ragic/property-data-kept/8";
 
     // 資料暫存
     let occupantList = [];
     let selectedHabits = [];
     let selectedNeeds = [];
-    let selectedBudget = []; 
+    let selectedBudget = [];
     let selectedLayout = [];
-    let selectedType = []; 
+    let selectedType = [];
 
     // --- 居住成員邏輯 ---
     document.getElementById('occupant_relation').addEventListener('change', function() {
@@ -662,7 +663,7 @@
         const count = parseInt(countSelect.value);
         const container = document.getElementById('occupant_dynamic_rows');
         const mainName = document.getElementById('field_name').value || '';
-        
+
         const currentData = [];
         document.querySelectorAll('.member-card').forEach(card => {
             currentData.push({
@@ -726,7 +727,7 @@
     function updateOccupantHiddenField() {
         const relation = document.getElementById('occupant_relation').value;
         const count = occupantList.length;
-        
+
         let finalString = "";
         if (relation) {
             finalString += `居住關係：${relation}`;
@@ -739,17 +740,17 @@
             if (person.job) text += ` / ${person.job}`;
             finalString += text + "\n";
         });
-        
+
         // 確保寫入到 1000587
         const finalField = document.getElementById('field_occupants_final');
         if(finalField) finalField.value = finalString;
-        
+
         // 寫入人數
         let countText = "";
         const selectVal = document.getElementById('occupant_count_select').value;
         if(selectVal) countText = selectVal + "位";
         else countText = count + "位";
-        
+
         const countField = document.getElementById('field_occupant_count_final');
         if(countField) countField.value = countText;
     }
@@ -795,13 +796,13 @@
 
         // 一般多選
         btn.classList.toggle('active');
-        
+
         let list;
         if (type === 'habits') list = selectedHabits;
         else if (type === 'budget') list = selectedBudget;
         else if (type === 'layout') list = selectedLayout;
         else if (type === 'type') list = selectedType;
-        
+
         if (list.includes(value)) {
             if (type === 'habits') selectedHabits = selectedHabits.filter(item => item !== value);
             else if (type === 'budget') selectedBudget = selectedBudget.filter(item => item !== value);
@@ -888,7 +889,7 @@
             return parts.join(' / ');
         });
         const memberDetailsText = memberDetailsArr.join('、');
-        
+
         const hasSmoking = selectedHabits.includes("有抽菸");
         const hasGod = selectedHabits.includes("需要設神明廳");
         const hasPet = (selectedHabits.includes("養貓") || selectedHabits.includes("養狗"));
@@ -918,7 +919,7 @@
         }).filter(x => x !== "");
         const budgetText = budgetTextArr.length > 0 ? budgetTextArr.join('、') : "未填寫";
 
-        const final = 
+        const final =
 `區域：${locationText}
 類型：${typeText}
 房型：${layoutText}
@@ -954,25 +955,25 @@ ${furnitureText}
 
         const footer = document.getElementById('appFooter');
         const agentCard = document.getElementById('agentCardWrapper');
-        
+
         if (currentStep === 1 || currentStep === totalSteps) {
             footer.style.display = 'flex';
-            agentCard.style.display = 'block'; 
+            agentCard.style.display = 'block';
         } else {
             footer.style.display = 'none';
-            agentCard.style.display = 'none'; 
+            agentCard.style.display = 'none';
         }
 
         if(currentStep === totalSteps) {
              document.querySelector('.footer-btns').style.display = 'none';
-        } else if (currentStep === totalSteps - 1) { 
+        } else if (currentStep === totalSteps - 1) {
             document.getElementById('nextBtn').innerText = '確認送出';
-            document.getElementById('nextBtn').style.backgroundColor = '#e74c3c'; 
-            document.querySelector('.footer-btns').style.display = 'flex'; 
+            document.getElementById('nextBtn').style.backgroundColor = '#e74c3c';
+            document.querySelector('.footer-btns').style.display = 'flex';
         } else {
             document.getElementById('nextBtn').innerText = '下一步';
             document.getElementById('nextBtn').style.backgroundColor = '#007894';
-            document.querySelector('.footer-btns').style.display = 'flex'; 
+            document.querySelector('.footer-btns').style.display = 'flex';
         }
     }
 
@@ -983,11 +984,11 @@ ${furnitureText}
             if (!name) { alert('請填寫姓名喔！'); return; }
             if (!phone) { alert('請填寫手機號碼喔！'); return; }
         }
-        else if (currentStep === 2) { 
+        else if (currentStep === 2) {
             if (selectedType.length === 0) { alert('請選擇房屋類型！'); return; }
             if (selectedLayout.length === 0) { alert('請選擇您需要的格局！'); return; }
         }
-        else if (currentStep === 3) { 
+        else if (currentStep === 3) {
             const moveIn = document.getElementById('field_movein').value;
             const relation = document.getElementById('occupant_relation').value;
             const countVal = document.getElementById('occupant_count_select').value;
@@ -1015,16 +1016,16 @@ ${furnitureText}
             }
             updateOccupantListFromDOM();
         }
-        else if (currentStep === 4) { 
+        else if (currentStep === 4) {
             const city = document.getElementById('field_city').value;
             if (!city) { alert('請選擇縣市！'); return; }
             if (selectedBudget.length === 0) { alert('請至少選擇一個預算範圍！'); return; }
         }
 
-        if(currentStep < totalSteps - 1) { 
+        if(currentStep < totalSteps - 1) {
             currentStep++;
             updateUI();
-        } else if (currentStep === totalSteps - 1) { 
+        } else if (currentStep === totalSteps - 1) {
             submitForm();
         }
     }
@@ -1038,22 +1039,22 @@ ${furnitureText}
 
     function submitForm() {
         document.getElementById('loadingOverlay').style.display = 'flex';
-        
+
         const timestamp = new Date().getTime();
         document.getElementById('input_source_mark').value = 'wizard_v1_' + timestamp;
-        
+
         const now = new Date();
-        const timeString = now.getFullYear() + "/" + 
-                          ("0" + (now.getMonth()+1)).slice(-2) + "/" + 
-                          ("0" + now.getDate()).slice(-2) + " " + 
-                          ("0" + now.getHours()).slice(-2) + ":" + 
-                          ("0" + now.getMinutes()).slice(-2) + ":" + 
+        const timeString = now.getFullYear() + "/" +
+                          ("0" + (now.getMonth()+1)).slice(-2) + "/" +
+                          ("0" + now.getDate()).slice(-2) + " " +
+                          ("0" + now.getHours()).slice(-2) + ":" +
+                          ("0" + now.getMinutes()).slice(-2) + ":" +
                           ("0" + now.getSeconds()).slice(-2);
         document.getElementById('field_time').value = timeString;
 
         // ★★★ 關鍵修復：送出前強制同步一次成員名單，再產生文案 ★★★
         updateOccupantHiddenField();
-        
+
         // 確保 field_line_copy_text 真的被填入
         const lineCopyField = document.getElementById('field_line_copy_text');
         if(lineCopyField) {
@@ -1065,12 +1066,12 @@ ${furnitureText}
 
         setTimeout(() => {
             document.getElementById('loadingOverlay').style.display = 'none';
-            currentStep = totalSteps; 
+            currentStep = totalSteps;
             updateUI();
         }, 1500);
     }
 
-    initAgentInfo(); 
+    initAgentInfo();
     updateUI();
     window.addEventListener('resize', updateUI);
 </script>
