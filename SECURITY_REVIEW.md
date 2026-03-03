@@ -34,3 +34,10 @@
 - `.gitignore`
 - `.pre-commit-config.yaml`
 - `.github/workflows/secret-scan.yml`
+
+## 相容性（避免網頁失效）
+- 本次已加入 **多別名相容讀取**，以下任一方式都可提供金鑰：
+  - Query：`ragic_api_key`、`ragic_key`、`APIKey`、`maps_key`
+  - localStorage：`RAGIC_API_KEY`、`RAGIC_KEY`、`MAPS_KEY`
+  - `window.__APP_CONFIG__`：同名欄位
+- 目標是降低改版造成「API 連不上」的機率；若未提供金鑰，頁面會顯示明確提示。

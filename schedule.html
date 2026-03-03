@@ -54,11 +54,28 @@
          * 【系統設定區】
          * ==========================================================================================
          */
-        const getRuntimeSecret = (keyName, queryKey = keyName.toLowerCase()) => {
-            const appConfigValue = window.__APP_CONFIG__?.[keyName];
-            const queryValue = new URLSearchParams(window.location.search).get(queryKey);
-            const localValue = window.localStorage.getItem(keyName);
-            return (appConfigValue || queryValue || localValue || "").trim();
+        const getRuntimeSecret = (keyName, queryKey = keyName.toLowerCase(), aliases = []) => {
+            const params = new URLSearchParams(window.location.search);
+            const appConfig = window.__APP_CONFIG__ || {};
+            const local = window.localStorage;
+
+            const queryCandidates = [queryKey, keyName, keyName.toLowerCase(), ...aliases, "APIKey", "apiKey"];
+            const storageCandidates = [keyName, queryKey, keyName.toLowerCase(), ...aliases, "API_KEY", "apiKey"];
+            const appCandidates = [keyName, queryKey, keyName.toLowerCase(), ...aliases, "API_KEY", "apiKey"];
+
+            const pick = (arr, getter) => {
+                for (const k of arr) {
+                    const v = getter(k);
+                    if (typeof v === "string" && v.trim()) return v.trim();
+                }
+                return "";
+            };
+
+            return (
+                pick(appCandidates, (k) => appConfig[k]) ||
+                pick(queryCandidates, (k) => params.get(k)) ||
+                pick(storageCandidates, (k) => local.getItem(k))
+            );
         };
 
         const RAGIC_CONFIG = {
@@ -66,7 +83,7 @@
             BASE_URL: "https://ap15.ragic.com",
 
             // 請透過 ?ragic_api_key=... 或 localStorage.RAGIC_API_KEY 注入
-            API_KEY: getRuntimeSecret("RAGIC_API_KEY", "ragic_api_key"),
+            API_KEY: getRuntimeSecret("RAGIC_API_KEY", "ragic_api_key", ["RAGIC_KEY", "ragic_key"]),
 
             // 表單路徑
             PATHS: {
@@ -116,7 +133,7 @@
             const queryChar = url.includes('?') ? '&' : '?';
             // naming=EID 很重要，確保回傳欄位 ID 而非名稱
             if (!apiKey) {
-                throw new Error("缺少 RAGIC_API_KEY，請以 ?ragic_api_key=... 或 localStorage.RAGIC_API_KEY 提供金鑰");
+                throw new Error("缺少 RAGIC_API_KEY，請提供 ragic_api_key / ragic_key / APIKey（或 localStorage.RAGIC_API_KEY）");
             }
 
             const fullUrl = `${url}${queryChar}api=true&v=3&naming=EID&APIKey=${encodeURIComponent(apiKey)}`;
