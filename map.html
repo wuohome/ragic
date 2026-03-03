@@ -181,15 +181,32 @@
             DEV_PHONE: "1000252"
         };
 
-        const getRuntimeSecret = (keyName, queryKey = keyName.toLowerCase()) => {
-            const appConfigValue = window.__APP_CONFIG__?.[keyName];
-            const queryValue = new URLSearchParams(window.location.search).get(queryKey);
-            const localValue = window.localStorage.getItem(keyName);
-            return (appConfigValue || queryValue || localValue || "").trim();
+        const getRuntimeSecret = (keyName, queryKey = keyName.toLowerCase(), aliases = []) => {
+            const params = new URLSearchParams(window.location.search);
+            const appConfig = window.__APP_CONFIG__ || {};
+            const local = window.localStorage;
+
+            const queryCandidates = [queryKey, keyName, keyName.toLowerCase(), ...aliases, "APIKey", "apiKey"];
+            const storageCandidates = [keyName, queryKey, keyName.toLowerCase(), ...aliases, "API_KEY", "apiKey"];
+            const appCandidates = [keyName, queryKey, keyName.toLowerCase(), ...aliases, "API_KEY", "apiKey"];
+
+            const pick = (arr, getter) => {
+                for (const k of arr) {
+                    const v = getter(k);
+                    if (typeof v === "string" && v.trim()) return v.trim();
+                }
+                return "";
+            };
+
+            return (
+                pick(appCandidates, (k) => appConfig[k]) ||
+                pick(queryCandidates, (k) => params.get(k)) ||
+                pick(storageCandidates, (k) => local.getItem(k))
+            );
         };
 
-        const MAPS_KEY = getRuntimeSecret("MAPS_KEY", "maps_key");
-        const RAGIC_KEY = getRuntimeSecret("RAGIC_KEY", "ragic_key");
+        const MAPS_KEY = getRuntimeSecret("MAPS_KEY", "maps_key", ["GOOGLE_MAPS_KEY", "google_maps_key"]);
+        const RAGIC_KEY = getRuntimeSecret("RAGIC_KEY", "ragic_key", ["RAGIC_API_KEY", "ragic_api_key"]);
         const API_URL = "https://ap15.ragic.com/wuohome/property-data-kept/10";
 
         let map, geocoder;
@@ -202,7 +219,7 @@
         window.onload = () => {
             updateTimeDisplay();
             if (!MAPS_KEY) {
-                alert("缺少 MAPS_KEY，請以 ?maps_key=... 或 localStorage.MAPS_KEY 提供金鑰");
+                alert("缺少 MAPS_KEY。可用 ?maps_key=... / ?APIKey=... 或 localStorage.MAPS_KEY（也支援 GOOGLE_MAPS_KEY）");
                 document.getElementById('loading').style.display = 'none';
                 return;
             }
@@ -240,7 +257,7 @@
             loading.style.display = 'flex';
 
             if (!RAGIC_KEY) {
-                alert("缺少 RAGIC_KEY，請以 ?ragic_key=... 或 localStorage.RAGIC_KEY 提供金鑰");
+                alert("缺少 RAGIC_KEY。可用 ?ragic_key=... / ?ragic_api_key=... / ?APIKey=... 或 localStorage.RAGIC_KEY");
                 loading.style.display = 'none';
                 return;
             }
@@ -561,7 +578,7 @@
         // 修改: 增加 isAuto 參數，預設為 false (手動模式)
         async function syncAllToRagic(isAuto = false) {
             if (!RAGIC_KEY) {
-                if (!isAuto) alert("缺少 RAGIC_KEY，無法同步座標");
+                if (!isAuto) alert("缺少 RAGIC_KEY，無法同步座標（可用 ragic_key / ragic_api_key / APIKey）");
                 return;
             }
             // 修改: 如果是手動模式 (!isAuto) 才顯示 confirm，自動模式直接通過
