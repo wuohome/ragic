@@ -9,11 +9,11 @@
   <!-- 引入 PDF 產生套件 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  
+
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
     body { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; }
-    
+
     /* 預覽頁面表格樣式 - 手機版優化 */
     .receipt-table { border-collapse: collapse; width: 100%; border: 2.5px solid #000; }
     .receipt-table th, .receipt-table td { border: 1.5px solid #000; padding: 12px; vertical-align: middle; }
@@ -24,17 +24,17 @@
         .receipt-table th, .receipt-table td { padding: 8px 4px; font-size: 0.95rem; }
         .receipt-table th { width: 90px; font-size: 1rem; }
     }
-    
+
     /* PDF 專用樣式 (保持原樣，確保列印品質) */
-    .pdf-table th, .pdf-table td { 
-        vertical-align: middle !important; 
-        padding: 15px 20px !important; 
+    .pdf-table th, .pdf-table td {
+        vertical-align: middle !important;
+        padding: 15px 20px !important;
         line-height: 1.4 !important;
     }
-    
+
     .big-btn { transition: all 0.2s; cursor: pointer; }
     .big-btn:active { transform: scale(0.96); opacity: 0.9; }
-    
+
     /* 簽名板高度在手機上稍微縮小，避免佔據太多空間 */
     #signature-pad { background: #ffffff; border: 3px dashed #3b82f6; border-radius: 20px; width: 100%; height: 250px; touch-action: none; }
     @media (min-width: 768px) {
@@ -54,7 +54,7 @@
     .watermark-bg::before {
       content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       background-image: url('https://raw.githubusercontent.com/wuohome/ragic/refs/heads/main/logooo.png');
-      background-position: center center; background-repeat: no-repeat; background-size: 300px auto; 
+      background-position: center center; background-repeat: no-repeat; background-size: 300px auto;
       opacity: 0.15; pointer-events: none; z-index: -1;
     }
     @media (min-width: 768px) {
@@ -94,13 +94,13 @@
   <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
 
   <div class="max-w-4xl mx-auto p-3 md:p-8">
-    
+
     <!-- 第一步：核對資料 -->
     <div id="step-1" class="hidden bg-white rounded-3xl md:rounded-[3rem] shadow-2xl p-5 md:p-14 border-t-[10px] md:border-t-[16px] border-blue-600">
       <h1 class="text-2xl md:text-5xl font-black text-blue-700 mb-3 md:mb-6 text-center md:text-left">請核對房客資料</h1>
       <p class="text-slate-500 mb-6 md:mb-12 text-base md:text-2xl font-medium text-center md:text-left">房客您好，資料若有誤可直接修改。</p>
-      
-      <!-- 
+
+      <!--
         表單設定：
         1. target="hidden_iframe" -> 避免頁面跳轉
         2. enctype="multipart/form-data" -> 支援檔案上傳 (PDF)
@@ -121,16 +121,16 @@
           <!-- 寫入 ID：1000837 -->
           <input type="text" name="1000837" id="input_occ" class="grandpa-input w-full text-xl md:text-4xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-6 outline-none font-bold">
         </div>
-        
+
         <!-- 簽名欄位 (Hidden) 寫入 ID：1000816 (Base64字串) -->
         <input type="hidden" name="1000816" id="hidden_signature">
 
         <!-- 【新增】PDF 自動上傳欄位 (Hidden File Input) 寫入 ID：1001709 -->
         <input type="file" name="1001709" id="hidden_pdf_input" style="display:none;">
       </form>
-      
+
       <button id="btn-next" class="big-btn w-full mt-8 md:mt-14 bg-blue-600 hover:bg-blue-700 text-white text-xl md:text-4xl font-black py-4 md:py-9 rounded-2xl md:rounded-[2.5rem] shadow-2xl">資料正確，下一頁 👉</button>
-      
+
       <!-- 診斷按鈕 -->
       <div class="mt-6 md:mt-8 text-center">
         <button onclick="showFieldIds()" class="text-slate-300 text-xs md:text-sm underline">顯示所有欄位 ID (除錯用)</button>
@@ -142,7 +142,7 @@
       <div id="receipt-preview-container" class="watermark-bg">
         <div class="text-right mb-2 md:mb-4 font-bold text-lg md:text-2xl">編號：<span id="show_no">-</span></div>
         <h1 class="text-2xl md:text-4xl font-black text-center mb-5 md:mb-8 text-slate-900">不動產要約定金收據</h1>
-        
+
         <table class="receipt-table mb-6 md:mb-8 text-base md:text-lg">
           <tr>
             <th>房屋地址</th>
@@ -244,7 +244,7 @@
       <div class="text-6xl md:text-[120px] mb-6 md:mb-8">✅</div>
       <h1 class="text-3xl md:text-6xl font-black text-emerald-600 mb-4 md:mb-6">簽署完成！</h1>
       <p class="text-slate-500 text-lg md:text-2xl mb-8 md:mb-12">收據已傳回系統存檔。<br>PDF 也已自動上傳歸檔。</p>
-      
+
       <button onclick="downloadReceiptPDF()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 md:py-9 rounded-2xl md:rounded-[2.5rem] text-xl md:text-4xl shadow-xl big-btn flex items-center justify-center gap-2 md:gap-4 mb-4 md:mb-8">
         📥 下載備份 PDF
       </button>
@@ -255,14 +255,14 @@
   <!-- PDF 生成區域 (隱藏) -->
   <div id="pdf-export-area" style="position: relative; background: white;">
       <img id="pdf-watermark-img"
-           src="https://raw.githubusercontent.com/wuohome/ragic/refs/heads/main/logooo.png" 
+           src="https://raw.githubusercontent.com/wuohome/ragic/refs/heads/main/logooo.png"
            crossorigin="anonymous"
            style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px; opacity: 0.15; z-index: 0; pointer-events: none;">
 
       <div style="position: relative; z-index: 1;">
           <div class="pdf-header-info">編號：<span id="pdf_no">-</span></div>
           <div class="pdf-title">不動產要約定金收據</div>
-          
+
           <table class="receipt-table pdf-table" style="font-size: 19px; line-height: 1.5;">
               <tr>
                   <th style="height: 65px; vertical-align: middle;">房屋地址</th>
@@ -314,13 +314,13 @@
                 </td>
               </tr>
           </table>
-          
+
           <div style="background-color: #f1f5f9; border: 2px dashed #cbd5e1; border-radius: 12px; margin: 20px 0; display: table; width: 100%; height: 90px;">
               <div style="display: table-cell; vertical-align: middle; text-align: center; color: #334155; font-size: 18px; font-weight: bold;">
                 簽約請攜帶：定金收據、押租金、服務費尾款、印章、雙證件影本3份。
               </div>
           </div>
-          
+
           <div style="margin-top: 40px; padding-top: 25px;">
               <p style="font-weight: 900; font-size: 22px; margin-bottom: 15px;">重要約定：</p>
               <ul style="font-size: 12px; line-height: 1.6; list-style: none; padding: 0; margin: 0;">
@@ -348,7 +348,31 @@
   </div>
 
   <script>
-    const RAGIC_API_KEY = "VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==";
+    const getRuntimeSecret = (keyName, queryKey = keyName.toLowerCase(), aliases = []) => {
+      const params = new URLSearchParams(window.location.search);
+      const appConfig = window.__APP_CONFIG__ || {};
+      const local = window.localStorage;
+
+      const queryCandidates = [queryKey, keyName, keyName.toLowerCase(), ...aliases, "APIKey", "apiKey"];
+      const storageCandidates = [keyName, queryKey, keyName.toLowerCase(), ...aliases, "API_KEY", "apiKey"];
+      const appCandidates = [keyName, queryKey, keyName.toLowerCase(), ...aliases, "API_KEY", "apiKey"];
+
+      const pick = (arr, getter) => {
+        for (const k of arr) {
+          const v = getter(k);
+          if (typeof v === "string" && v.trim()) return v.trim();
+        }
+        return "";
+      };
+
+      return (
+        pick(appCandidates, (k) => appConfig[k]) ||
+        pick(queryCandidates, (k) => params.get(k)) ||
+        pick(storageCandidates, (k) => local.getItem(k))
+      );
+    };
+
+    const RAGIC_API_KEY = getRuntimeSecret("RAGIC_API_KEY", "ragic_api_key", ["RAGIC_KEY", "ragic_key"]);
     const RAGIC_BASE_URL = "https://ap15.ragic.com/wuohome/payments/1";
 
     const FIELDS = {
@@ -373,12 +397,12 @@
       agent: ["1000793", "經辦人員"],
       agent_phone: ["1000838", "經辦電話"],
       service_fee: ["1000839", "服務費"],
-      
+
       // 【修正】：讀取來源設定
-      cust_name: ["1000792", "1001091", "租客姓名"],   
-      cust_phone: ["1000808", "租客電話"], 
+      cust_name: ["1000792", "1001091", "租客姓名"],
+      cust_phone: ["1000808", "租客電話"],
       cust_occ: ["1000837", "租客職業"],
-      
+
       signature: "1000816",
       pdf_upload: "1001709" // 新增 PDF 欄位 ID
     };
@@ -457,22 +481,27 @@
     window.ragicCallback = function (data) {
       clearTimeout(loadTimer);
       currentRecord = findExactRecord(data, recordId);
-      
+
       if (!currentRecord) {
         $("loader-text").innerText = "找不到編號 " + recordId + " 的資料";
         return;
       }
-      
+
       if (currentRecord["_ragicId"]) {
           recordId = currentRecord["_ragicId"];
       }
-      
+
       renderData();
       $("loader").classList.add('hidden');
       $("step-1").classList.remove('hidden');
     };
 
     function executeLoad() {
+      if (!RAGIC_API_KEY) {
+        $("loader-text").innerText = "缺少 RAGIC_API_KEY，可用 ?ragic_api_key=... / ?ragic_key=... / ?APIKey=... 或 localStorage.RAGIC_API_KEY";
+        return;
+      }
+
       $("loader-text").innerText = "開啟中...";
       loadTimer = setTimeout(() => { if (!currentRecord) $("loader-text").innerText = "讀取逾時"; }, 10000);
       const script = document.createElement('script');
@@ -509,15 +538,15 @@
           { s: "show_service_fee", p: "pdf_service_fee", v: formatCurrency(getValue(currentRecord, FIELDS.service_fee)) }
       ];
 
-      mapping.forEach(m => { 
+      mapping.forEach(m => {
         if(m.s && $(m.s)) $(m.s).innerText = m.v;
         if(m.p && $(m.p)) $(m.p).innerText = m.v;
       });
-      
+
       const rawCond = getValue(currentRecord, FIELDS.conditions);
       const cond = parseBBCode(rawCond);
-      if($("show_cond")) $("show_cond").innerHTML = cond; 
-      if($("pdf_cond")) $("pdf_cond").innerHTML = cond; 
+      if($("show_cond")) $("show_cond").innerHTML = cond;
+      if($("pdf_cond")) $("pdf_cond").innerHTML = cond;
 
       const rCode = getValue(currentRecord, FIELDS.remit_code);
       const showCode = (rCode && rCode.trim() !== "");
@@ -544,7 +573,7 @@
       if($("show_final_name")) $("show_final_name").innerText = name;
       if($("show_final_phone")) $("show_final_phone").innerText = phone;
       if($("show_final_occ")) $("show_final_occ").innerText = occ;
-      
+
       if($("pdf_phone")) $("pdf_phone").innerText = phone;
       if($("pdf_occ")) $("pdf_occ").innerText = occ;
     }
@@ -563,9 +592,9 @@
         const element = $("pdf-export-area");
         // 使用較高的 scale 以確保列印品質
         const canvas = await html2canvas(element, { scale: 2, useCORS: true });
-        const imgWidth = 210; 
-        const imgHeight = (canvas.height * imgWidth) / canvas.width; 
-        const { jsPDF } = window.jspdf; 
+        const imgWidth = 210;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', [imgWidth, imgHeight]);
         pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgWidth, imgHeight);
         return pdf.output('blob'); // 回傳 Blob 物件
@@ -585,11 +614,11 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-        } catch (err) { 
+        } catch (err) {
             console.error(err);
-            alert("下載失敗，請先截圖存檔。"); 
-        } finally { 
-            btn.innerText = "📥 下載備份 PDF"; btn.disabled = false; 
+            alert("下載失敗，請先截圖存檔。");
+        } finally {
+            btn.innerText = "📥 下載備份 PDF"; btn.disabled = false;
         }
     }
 
@@ -598,10 +627,16 @@
       if (!signaturePad || signaturePad.isEmpty()) { alert("請先完成簽名喔！"); return; }
       if (!recordId) { alert("系統錯誤：無法取得單號 (Record ID)，無法存檔。請重新載入。"); return; }
 
-      $("loader").classList.remove('hidden'); 
+      $("loader").classList.remove('hidden');
       $("loader-text").innerText = "正在生成收據 PDF 並上傳...";
 
       try {
+          if (!RAGIC_API_KEY) {
+              alert("缺少 RAGIC_API_KEY，無法送出資料（可用 ragic_api_key / ragic_key / APIKey）");
+              $("loader").classList.add('hidden');
+              return;
+          }
+
           // 1. 同步簽名到 PDF 區域
           const sigData = signaturePad.toDataURL("image/png");
           if($("pdf_signature_img")) $("pdf_signature_img").src = sigData;
@@ -628,11 +663,11 @@
           form.submit();
 
           // 6. 顯示成功
-          setTimeout(() => { 
-              $("loader").classList.add('hidden'); 
-              $("step-2").classList.add('hidden'); 
-              $("step-success").classList.remove('hidden'); 
-              window.scrollTo(0, 0); 
+          setTimeout(() => {
+              $("loader").classList.add('hidden');
+              $("step-2").classList.add('hidden');
+              $("step-success").classList.remove('hidden');
+              window.scrollTo(0, 0);
           }, 4000); // 延長時間給檔案上傳
 
       } catch (e) {
