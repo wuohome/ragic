@@ -11,7 +11,7 @@
         #sidebar { width: 380px; background: #fff; box-shadow: 2px 0 10px rgba(0,0,0,0.05); z-index: 20; display: flex; flex-direction: column; transition: transform 0.3s ease; }
         #map-container { flex: 1; position: relative; }
         #map { height: 100%; width: 100%; }
-        
+
         .property-card { padding: 16px; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: all 0.2s; background: #fff; position: relative; }
         .property-card:hover { background: #f9fafb; padding-left: 20px; }
         .property-card.active { background: #eff6ff; border-left: 4px solid #2563eb; padding-left: 16px; }
@@ -26,22 +26,22 @@
         .btn-591 { display: inline-flex; align-items: center; gap: 4px; background-color: #ff8c00; color: white; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; text-decoration: none; transition: background 0.2s; }
         .btn-591:hover { background-color: #e07b00; }
         .btn-hidden { display: none; }
-        
+
         /* 聯絡人按鈕樣式 */
-        .agent-btn { 
-            display: inline-flex; align-items: center; gap: 4px; 
-            background-color: #10b981; color: white; 
-            padding: 4px 8px; border-radius: 9999px; 
-            font-size: 12px; font-weight: 500; 
-            text-decoration: none; transition: background 0.2s; 
+        .agent-btn {
+            display: inline-flex; align-items: center; gap: 4px;
+            background-color: #10b981; color: white;
+            padding: 4px 8px; border-radius: 9999px;
+            font-size: 12px; font-weight: 500;
+            text-decoration: none; transition: background 0.2s;
             margin-right: 4px; margin-bottom: 4px;
         }
         .agent-btn:hover { background-color: #059669; }
-        
+
         .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.98); display: flex; justify-content: center; align-items: center; z-index: 9999; flex-direction: column; }
-        
+
         #sync-progress-bar { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(31, 41, 55, 0.95); color: white; padding: 12px 24px; rounded: 9999px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 10000; display: none; align-items: center; gap: 12px; border-radius: 50px; font-size: 14px; font-weight: 500; white-space: nowrap; }
-        
+
         /* 同步日誌視窗樣式 */
         #sync-log-modal {
             display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -172,17 +172,24 @@
 
     <script>
         const EID = {
-            TITLE: "1000050", ADDR: "1000055", COORD: "1000759", 
+            TITLE: "1000050", ADDR: "1000055", COORD: "1000759",
             PRICE: "1000076", LAYOUT: "1000063", USAGE: "1000060", LINK_591: "1000113",
             STATUS: "1000707", // 新增: 狀態欄位 ID
             // 開發人員子表格相關 ID
-            SUB_DEV: "_subtable_1000254", 
-            DEV_NAME: "1000251", 
+            SUB_DEV: "_subtable_1000254",
+            DEV_NAME: "1000251",
             DEV_PHONE: "1000252"
         };
 
-        const MAPS_KEY = "AIzaSyALdVJlv7IBxnqeShEbzIIWnV7WSjtRtZw";
-        const RAGIC_KEY = "VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==";
+        const getRuntimeSecret = (keyName, queryKey = keyName.toLowerCase()) => {
+            const appConfigValue = window.__APP_CONFIG__?.[keyName];
+            const queryValue = new URLSearchParams(window.location.search).get(queryKey);
+            const localValue = window.localStorage.getItem(keyName);
+            return (appConfigValue || queryValue || localValue || "").trim();
+        };
+
+        const MAPS_KEY = getRuntimeSecret("MAPS_KEY", "maps_key");
+        const RAGIC_KEY = getRuntimeSecret("RAGIC_KEY", "ragic_key");
         const API_URL = "https://ap15.ragic.com/wuohome/property-data-kept/10";
 
         let map, geocoder;
@@ -194,6 +201,12 @@
 
         window.onload = () => {
             updateTimeDisplay();
+            if (!MAPS_KEY) {
+                alert("缺少 MAPS_KEY，請以 ?maps_key=... 或 localStorage.MAPS_KEY 提供金鑰");
+                document.getElementById('loading').style.display = 'none';
+                return;
+            }
+
             const script = document.createElement('script');
             // 載入 geometry 庫以計算距離
             script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&callback=initMap&libraries=geometry`;
@@ -225,20 +238,26 @@
         async function fetchData() {
             const loading = document.getElementById('loading');
             loading.style.display = 'flex';
-            
+
+            if (!RAGIC_KEY) {
+                alert("缺少 RAGIC_KEY，請以 ?ragic_key=... 或 localStorage.RAGIC_KEY 提供金鑰");
+                loading.style.display = 'none';
+                return;
+            }
+
             try {
                 const ts = new Date().getTime();
                 const fetchUrl = `${API_URL}?api&v=3&naming=EID&t=${ts}&filterId=103&APIKey=${encodeURIComponent(RAGIC_KEY)}`;
-                
-                const resp = await fetch(fetchUrl); 
-                
+
+                const resp = await fetch(fetchUrl);
+
                 if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
-                
+
                 const data = await resp.json();
                 fetchedRecords = Object.entries(data).map(([id, val]) => ({ id, ...val }));
-                
+
                 document.getElementById('total-count').innerText = fetchedRecords.length;
-                
+
                 saveCurrentTime();
                 applyFilters(true); // 初次載入自動定位
 
@@ -303,7 +322,7 @@
         function renderMarkers(autoZoom) {
             markers.forEach(m => m.setMap(null));
             markers = [];
-            
+
             let bounds = new google.maps.LatLngBounds();
             let hasCoords = false;
 
@@ -331,9 +350,9 @@
                 map.fitBounds(bounds);
                 // 如果只有一個點，縮放不要太近
                 if (markers.length === 1) {
-                    const listener = google.maps.event.addListener(map, "idle", () => { 
-                        if (map.getZoom() > 16) map.setZoom(16); 
-                        google.maps.event.removeListener(listener); 
+                    const listener = google.maps.event.addListener(map, "idle", () => {
+                        if (map.getZoom() > 16) map.setZoom(16);
+                        google.maps.event.removeListener(listener);
                     });
                 }
             }
@@ -375,7 +394,7 @@
                 countHtml += ` <span class="text-red-500 font-bold ml-1 text-xs" title="地址有錯誤抓不到地圖座標 可能是錯字或地址填寫有誤">(+${noCoordItems.length} 地址有錯誤抓不到地圖座標 可能是錯字或地址填寫有誤)</span>`;
             }
             document.getElementById('visible-count').innerHTML = countHtml;
-            
+
             list.innerHTML = '';
 
             if (visibleItems.length === 0 && noCoordItems.length === 0) {
@@ -402,17 +421,17 @@
         function getAgentsHtml(item) {
             const subData = item[EID.SUB_DEV];
             if (!subData) return '';
-            
+
             // Ragic 子表格為物件，嘗試轉為陣列並排序 (若無順序則直接使用)
-            const rows = Object.values(subData); 
-            
+            const rows = Object.values(subData);
+
             let html = '<div class="flex flex-wrap mt-2">';
             let hasAgent = false;
-            
+
             rows.forEach(row => {
                 const name = row[EID.DEV_NAME];
                 const phone = row[EID.DEV_PHONE];
-                
+
                 if (name && phone) {
                     hasAgent = true;
                     // 使用 stopPropagation 防止觸發卡片點擊事件
@@ -423,7 +442,7 @@
                     `;
                 }
             });
-            
+
             html += '</div>';
             return hasAgent ? html : '';
         }
@@ -446,7 +465,7 @@
                 if(e.target.tagName === 'A' || e.target.closest('a')) return;
                 focusOnMap(item.id, item[EID.COORD]);
             };
-            
+
             div.innerHTML = `
                 <div class="card-header"><div class="card-title">${item[EID.TITLE] || '(未命名)'}</div></div>
                 <div class="card-details">
@@ -541,12 +560,16 @@
 
         // 修改: 增加 isAuto 參數，預設為 false (手動模式)
         async function syncAllToRagic(isAuto = false) {
+            if (!RAGIC_KEY) {
+                if (!isAuto) alert("缺少 RAGIC_KEY，無法同步座標");
+                return;
+            }
             // 修改: 如果是手動模式 (!isAuto) 才顯示 confirm，自動模式直接通過
             if(!isAuto && !confirm("確定要執行同步？\n系統將自動解析缺座標的物件並寫回 Ragic。")) return;
-            
+
             const btn = document.querySelector('button[onclick="syncAllToRagic()"]');
             btn.disabled = true;
-            
+
             const modal = document.getElementById('sync-log-modal');
             const logBody = document.getElementById('sync-log-body');
             // 新增: 取得進度條元素
@@ -583,11 +606,11 @@
             for (let i = 0; i < toProcess.length; i++) {
                 // 新增: 自動模式下更新進度條文字
                 if (isAuto) progressText.innerText = `同步座標中: ${i+1} / ${toProcess.length}`;
-                
+
                 const item = toProcess[i];
                 const address = item[EID.ADDR];
                 const recordId = item.id;
-                
+
                 if (address) {
                     try {
                         // 1. 先從 Google Maps 抓座標
@@ -595,24 +618,24 @@
                             geocoder.geocode({ address }, (r, s) => s === 'OK' ? res(r[0]) : rej(s));
                         });
                         const coordStr = `${result.geometry.location.lat()},${result.geometry.location.lng()}`;
-                        
+
                         if (!isAuto) appendLog(`[${i+1}/${toProcess.length}] Google定位成功: ${address} -> ${coordStr}`, 'normal');
 
                         // 2. 準備寫回 Ragic
                         const formData = new URLSearchParams();
                         formData.append(EID.COORD, coordStr);
-                        
+
                         // 維持 URL 參數傳遞 (雙重確保)
                         const updateUrl = `${API_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_KEY)}`;
-                        
+
                         const updateResp = await fetch(updateUrl, {
                             method: 'POST',
-                            headers: { 
+                            headers: {
                                 "Content-Type": "application/x-www-form-urlencoded"
                             },
                             body: formData.toString()
                         });
-                        
+
                         // 嘗試解析 JSON，如果解析失敗則可能是網路錯誤或純文字錯誤
                         let json;
                         try {
@@ -620,7 +643,7 @@
                         } catch(e) {
                             throw new Error("API 回傳格式錯誤或網路中斷");
                         }
-                        
+
                         if (json.status === 'SUCCESS') {
                             success++;
                             if (!isAuto) appendLog(`<i class="fas fa-check"></i> Ragic 更新成功 (ID: ${recordId})`, 'success');
@@ -650,7 +673,7 @@
                     if (!isAuto) appendLog(`[${i+1}/${toProcess.length}] ID: ${recordId} 無地址，跳過`, 'warn');
                 }
             }
-            
+
             // 修改: 結束後的行為區分
             if (isAuto) {
                 // 自動模式: 隱藏進度條，靜默結束
@@ -660,7 +683,7 @@
                 // 手動模式: 顯示 Log 總結
                 appendLog(`<hr><b>同步結束！</b> 成功: ${success} 筆, 失敗: ${errors} 筆`, 'normal');
             }
-            
+
             btn.disabled = false;
         }
     </script>
