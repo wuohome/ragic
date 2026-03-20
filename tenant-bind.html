@@ -238,19 +238,14 @@
         console.log("正在傳送資料至 Ragic:", RAGIC_API_URL);
 
         try {
-            const response = await fetch(RAGIC_API_URL, {
+            // fire-and-forget（no-cors 模式，不讀回應）
+            await fetch(RAGIC_API_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(ragicData)
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams(ragicData).toString()
             });
-
-            const result = await response.json();
-
-            if (result.status === 'SUCCESS') {
-                showSuccessUI(name);
-            } else {
-                throw new Error(result.msg || "寫入失敗");
-            }
+            showSuccessUI(name);
 
         } catch (err) {
             console.error(err);
