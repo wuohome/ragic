@@ -201,20 +201,16 @@
             "1002021": timestamp
         };
 
+        // fire-and-forget（no-cors 模式，不讀回應）
         fetch(RAGIC_API, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(ragicData)
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams(ragicData).toString()
         })
-        .then(res => res.json())
-        .then(data => {
-            if(data.status === 'SUCCESS') {
-                document.getElementById('formArea').style.display = 'none';
-                document.getElementById('successArea').style.display = 'block';
-            } else {
-                status.innerText = "綁定失敗: " + (data.msg || "未知錯誤");
-                resetButton();
-            }
+        .then(() => {
+            document.getElementById('formArea').style.display = 'none';
+            document.getElementById('successArea').style.display = 'block';
         })
         .catch(err => {
             console.error(err);
