@@ -88,7 +88,7 @@
     <!-- 成功訊息區 -->
     <div class="card" id="successArea">
         <h2 style="color:#00B900;">✅ 綁定成功！</h2>
-        <p class="desc">資料已存入 Google Sheet。<br>請關閉視窗，再次點擊選單即可。</p>
+        <p class="desc">綁定完成！<br>請關閉視窗，再次點擊選單即可。</p>
         <button class="active" onclick="liff.closeWindow()">關閉視窗</button>
     </div>
 
@@ -96,8 +96,8 @@
     // ==========================================
     // 參數設定區
     // ==========================================
-    // ⚠️ 請填入部署後的新 GAS 網址
-    const GAS_URL = 'https://script.google.com/macros/s/AKfycbxzuBEoTqIfpb7itDhgHquuU5OqhN1BOzYuc7nZyMdZB7i39lqGLlCMTUs0za9OAESQ/exec';
+    // Ragic API 直連（取代 GAS）
+    const RAGIC_API = 'https://ap15.ragic.com/wuohome/operation/12?api&APIKey=VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==';
     
     const LIFF_ID = '2009040494-frTNmMZ7';
 
@@ -185,21 +185,30 @@
         btn.innerText = "資料傳送中...";
         status.innerText = "";
 
-        // 準備傳送資料 (POST 到 GAS)
-        const postData = {
-            action: 'register',
-            userId: userLineId,
-            name: name,
-            phone: phone
+        // 直接寫入 Ragic API
+        const now = new Date();
+        const timestamp = now.getFullYear() + '/' +
+            String(now.getMonth()+1).padStart(2,'0') + '/' +
+            String(now.getDate()).padStart(2,'0') + ' ' +
+            String(now.getHours()).padStart(2,'0') + ':' +
+            String(now.getMinutes()).padStart(2,'0') + ':' +
+            String(now.getSeconds()).padStart(2,'0');
+
+        const ragicData = {
+            "1002018": userLineId,
+            "1002019": name,
+            "1002020": phone,
+            "1002021": timestamp
         };
 
-        fetch(GAS_URL, {
+        fetch(RAGIC_API, {
             method: 'POST',
-            body: JSON.stringify(postData)
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(ragicData)
         })
         .then(res => res.json())
         .then(data => {
-            if(data.status === 'success') {
+            if(data.status === 'SUCCESS') {
                 document.getElementById('formArea').style.display = 'none';
                 document.getElementById('successArea').style.display = 'block';
             } else {
@@ -209,7 +218,7 @@
         })
         .catch(err => {
             console.error(err);
-            status.innerText = "連線失敗，請檢查網路或 GAS 設定";
+            status.innerText = "連線失敗，請稍後再試";
             resetButton();
         });
     }
