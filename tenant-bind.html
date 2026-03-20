@@ -118,9 +118,8 @@
     // 1. 請填入 LINE Developers 的 LIFF ID (已幫您更新為正確 ID)
     const LIFF_ID = "2009098181-8kGzQhuZ"; 
     
-    // 2. ⚠️ 重要：請填入 GAS 部署後的 Web App URL (以 /exec 結尾)
-    // (已保留您原本正確的網址)
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbx7sUL1-ho29u_cL7YNCAG1K32hiPxCDOuwQEajnMEY8d--5VF9tPjMkwsatn3P9i4H/exec"; 
+    // Ragic API 直連（取代 GAS）
+    const RAGIC_API_URL = "https://ap15.ragic.com/wuohome/lease-management/2?api&v=3&APIKey=VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw=="; 
     // ========================================================
 
     const els = {
@@ -209,21 +208,14 @@
     els.form.addEventListener('submit', async (e) => {
         e.preventDefault();
         
-        // 檢查 API URL 是否已設定
-        if (!GAS_API_URL || GAS_API_URL.includes("YOUR_GAS")) {
-            showStatus("❌ 設定錯誤：請先在程式碼中填入 GAS Web App URL", "error");
-            return;
-        }
-
         // 取得表單值
         const name = document.getElementById('name').value.trim();
         const phone = document.getElementById('phone').value.trim();
-        // 修改重點：取得新的地址與房號欄位
         const addressPart = document.getElementById('address_part').value.trim();
         const roomPart = document.getElementById('room_part').value.trim();
         const lineId = els.lineUserId.value;
 
-        // 前端驗證 (加入新欄位驗證)
+        // 前端驗證
         if (!name || !phone || !lineId || !addressPart || !roomPart) {
             showStatus("請完整填寫所有欄位 (含地址與房號)", "error");
             return;
@@ -232,46 +224,32 @@
         // 鎖定按鈕避免重複送出
         setSubmitting(true);
 
-        // 修改重點：將地址與房號合併，傳給後端
         const combinedRoomInfo = `${addressPart} (${roomPart})`;
 
-        // 準備要送出的資料
-        const payload = {
-            name: name,
-            phone: phone,
-            room: combinedRoomInfo, // 使用合併後的資訊
-            lineId: lineId
+        // 直接寫入 Ragic API（欄位 ID 對應 lease-management/2）
+        const ragicData = {
+            "1001382": name,
+            "1001379": phone,
+            "1001839": combinedRoomInfo,
+            "1001840": lineId,
+            "1001841": "已綁定"
         };
 
-        console.log("正在傳送資料至:", GAS_API_URL);
-        console.log("傳送內容:", payload);
+        console.log("正在傳送資料至 Ragic:", RAGIC_API_URL);
 
         try {
-            // 發送請求到 GAS
-            const response = await fetch(GAS_API_URL, {
+            const response = await fetch(RAGIC_API_URL, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'text/plain;charset=utf-8', 
-                },
-                body: JSON.stringify(payload)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(ragicData)
             });
 
-            // 先讀取文字回應，以便除錯
-            const textResult = await response.text();
-            console.log("GAS 回應原始內容:", textResult);
+            const result = await response.json();
 
-            let result;
-            try {
-                result = JSON.parse(textResult);
-            } catch (jsonErr) {
-                // 如果解析 JSON 失敗，通常代表回傳了 404, 403 或 HTML 錯誤頁面
-                throw new Error(`伺服器回應格式錯誤 (可能網址錯誤或權限不足)。回應片段: ${textResult.substring(0, 50)}...`);
-            }
-
-            if (result.status === 'success') {
+            if (result.status === 'SUCCESS') {
                 showSuccessUI(name);
             } else {
-                throw new Error(result.message || "後端回傳未知錯誤");
+                throw new Error(result.msg || "寫入失敗");
             }
 
         } catch (err) {
