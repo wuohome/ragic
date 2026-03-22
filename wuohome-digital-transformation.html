@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>窩的家集團 — 數位轉型現況摘要</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #3f5262;
+    --primary-hover: #56697a;
+    --primary-light: #f0f3f5;
+    --primary-border: #b8c4ce;
+    --primary-dark: #2c3a46;
+    --accent: #dd6650;
+    --accent-light: #fdf0ed;
+    --accent-border: #f0b8ad;
+    --yellow: #f2cf00;
+    --yellow-light: #fefbe8;
+    --surface: #ffffff;
+    --bg: #f8fafb;
+    --text: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --border: #e2e8f0;
+    --border-light: #f1f5f9;
+    --danger: #dc2626;
+    --danger-light: #fef2f2;
+    --danger-border: #fecaca;
+    --success: #16a34a;
+    --success-light: #f0fdf4;
+    --success-border: #bbf7d0;
+    --blue: #2563eb;
+    --blue-light: #eff6ff;
+    --blue-border: #bfdbfe;
+    --purple: #7c3aed;
+    --purple-light: #f5f3ff;
+    --radius: 10px;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.04), 0 2px 4px rgba(0,0,0,0.03);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Lexend', 'Noto Sans TC', -apple-system, sans-serif;
+    color: var(--text);
+    line-height: 1.75;
+    background: var(--bg);
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    background: var(--primary-dark);
+    color: white;
+    padding: 72px 32px 64px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%);
+    pointer-events: none;
+  }
+  .hero h1 {
+    font-size: 2.25rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+  .hero .subtitle {
+    font-size: 1.15rem;
+    font-weight: 300;
+    opacity: 0.8;
+  }
+  .hero .meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 24px;
+    font-size: 0.8rem;
+    font-weight: 400;
+    opacity: 0.6;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── Layout ── */
+  .page-wrapper { display: flex; min-height: 100vh; }
+  .container { max-width: 840px; margin: 0 auto; padding: 0 24px; }
+  .main-content { flex: 1; margin-left: 240px; }
+
+  /* ── Sidebar Nav ── */
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    width: 240px;
+    height: 100vh;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-brand {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-light);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .sidebar-brand img {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+  }
+  .sidebar-brand .brand-text {}
+  .sidebar-brand .brand-name {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--primary-dark);
+  }
+  .sidebar-brand .brand-sub {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+  .sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 0;
+  }
+  .sidebar-nav ul { list-style: none; padding: 0; margin: 0; }
+  .sidebar-nav a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 20px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.84rem;
+    font-weight: 400;
+    transition: all 0.15s;
+    border-left: 3px solid transparent;
+    cursor: pointer;
+  }
+  .sidebar-nav a:hover {
+    background: var(--primary-light);
+    color: var(--primary);
+  }
+  .sidebar-nav a.active {
+    background: var(--primary-light);
+    color: var(--primary);
+    font-weight: 600;
+    border-left-color: var(--primary);
+  }
+  .sidebar-nav .nav-num {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    min-width: 18px;
+  }
+  .sidebar-nav a.active .nav-num { color: var(--primary); }
+  .sidebar-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-light);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  /* Mobile hamburger */
+  .mobile-nav-toggle {
+    display: none;
+    position: fixed;
+    top: 12px; left: 12px;
+    z-index: 200;
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+  }
+  .mobile-nav-toggle svg { width: 20px; height: 20px; color: var(--text); }
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 99;
+  }
+
+  /* old TOC hidden (replaced by sidebar) */
+  .toc { display: none; }
+
+  /* ── Sections ── */
+  section {
+    padding: 56px 0;
+  }
+  .section-divider {
+    height: 1px;
+    background: var(--border);
+    max-width: 840px;
+    margin: 0 auto;
+  }
+  .section-tag {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--primary);
+    margin-bottom: 8px;
+  }
+  section h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+  }
+  .section-desc {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin-bottom: 32px;
+    max-width: 640px;
+  }
+  section h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 40px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border-light);
+  }
+
+  /* ── Info Cards ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+  }
+  .stat-card .label {
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .stat-card .value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.4;
+  }
+  .stat-card .value.pending {
+    color: var(--accent);
+    font-size: 0.85rem;
+  }
+
+  /* ── Org Chart ── */
+  .org {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    margin: 24px 0;
+    box-shadow: var(--shadow-sm);
+  }
+  .org-root {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .org-root .node {
+    display: inline-block;
+    background: var(--primary-dark);
+    color: white;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .org-line {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+    margin: 0 auto;
+  }
+  .org-children {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+  }
+  .org-child {
+    text-align: center;
+  }
+  .org-child .node {
+    display: block;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    border: 1px solid;
+  }
+  .org-child .node.active { background: var(--success-light); border-color: var(--success-border); color: #15803d; }
+  .org-child .node.pending { background: var(--accent-light); border-color: var(--accent-border); color: #92400e; }
+  .org-child .node.planned { background: var(--border-light); border-color: var(--border); color: var(--text-muted); }
+  .org-child .role {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  .org-legend {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 20px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+  .org-legend span { display: flex; align-items: center; gap: 6px; }
+  .legend-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+
+  /* ── Pain Points ── */
+  .compare-row {
+    display: grid;
+    grid-template-columns: 1fr 48px 1fr;
+    gap: 0;
+    align-items: center;
+    margin: 28px 0;
+  }
+  .compare-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 24px;
+    text-align: center;
+    box-shadow: var(--shadow-sm);
+  }
+  .compare-box.now { border-color: var(--primary-border); background: var(--primary-light); }
+  .compare-box .year {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+  .compare-box.now .year { color: var(--primary); }
+  .compare-box .big {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text);
+  }
+  .compare-box.now .big { color: var(--primary); }
+  .compare-box .unit {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+  }
+  .compare-arrow {
+    text-align: center;
+    font-size: 1.5rem;
+    color: var(--text-muted);
+  }
+  .compare-arrow svg { width: 24px; height: 24px; }
+
+  .pain-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin: 24px 0;
+  }
+  .pain-card {
+    border-left: 3px solid var(--danger);
+    background: var(--danger-light);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 16px 20px;
+  }
+  .pain-card .pain-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--danger);
+    margin-bottom: 4px;
+  }
+  .pain-card .pain-desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  /* ── System Cards ── */
+  .sys-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    margin: 16px 0;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.2s;
+  }
+  .sys-card:hover { box-shadow: var(--shadow-md); }
+  .sys-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .sys-icon {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .sys-icon svg { width: 20px; height: 20px; }
+  .sys-name { font-size: 1.05rem; font-weight: 600; }
+  .sys-subtitle { font-size: 0.82rem; color: var(--text-muted); margin-top: 2px; }
+
+  /* ── Flow Diagram ── */
+  .flow {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin: 20px 0;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .flow-step {
+    background: var(--border-light);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.8rem;
+    text-align: center;
+    flex: 1;
+    min-width: 90px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.45;
+  }
+  .flow-step.highlight {
+    background: var(--primary-light);
+    border-color: var(--primary-border);
+    color: var(--primary-dark);
+    font-weight: 500;
+  }
+  .flow-step.ai {
+    background: var(--purple-light);
+    border-color: #ddd6fe;
+    color: #5b21b6;
+    font-weight: 500;
+  }
+  .flow-step.warn {
+    background: #fffbeb;
+    border-color: var(--accent-border);
+    color: #92400e;
+  }
+  .flow-step.danger {
+    background: var(--danger-light);
+    border-color: var(--danger-border);
+    color: var(--danger);
+  }
+  .flow-step small {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 400;
+    margin-top: 4px;
+    opacity: 0.8;
+  }
+  .flow-arrow {
+    display: flex;
+    align-items: center;
+    padding: 0 4px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .flow-arrow svg { width: 16px; height: 16px; }
+
+  /* ── Before / After ── */
+  .ba {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    margin: 16px 0;
+  }
+  .ba-side { padding: 16px 20px; }
+  .ba-side.before { background: var(--danger-light); }
+  .ba-side.after { background: var(--success-light); }
+  .ba-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .ba-side.before .ba-label { color: var(--danger); }
+  .ba-side.after .ba-label { color: var(--success); }
+  .ba-side p { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; }
+
+  /* ── Tables ── */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.85rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .data-table.ragic-table { table-layout: fixed; }
+  .data-table th {
+    background: var(--primary-dark);
+    color: white;
+    padding: 12px 14px;
+    text-align: left;
+    font-weight: 500;
+    font-size: 0.8rem;
+  }
+  .data-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-light);
+    color: var(--text-secondary);
+    vertical-align: top;
+    line-height: 1.55;
+  }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table td:first-child { white-space: nowrap; font-weight: 600; color: var(--text); }
+  .data-table.ragic-table td:first-child { width: 120px; }
+  .data-table.ragic-table td:nth-child(2) { width: 45%; }
+  .data-table.ragic-table td:nth-child(3) { width: auto; }
+
+  /* ── Tool Links Grid ── */
+  .link-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    margin: 24px 0;
+  }
+  .link-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+  }
+  .link-card:hover {
+    border-color: var(--primary-border);
+    box-shadow: var(--shadow-md);
+  }
+  .link-card .lc-name { font-weight: 600; font-size: 0.92rem; color: var(--text); }
+  .link-card .lc-for { font-size: 0.75rem; color: var(--text-muted); }
+  .link-card .lc-desc { font-size: 0.84rem; color: var(--text-secondary); line-height: 1.5; }
+  .link-card .lc-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--primary);
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-top: auto;
+    padding-top: 8px;
+  }
+  .link-card .lc-link svg { width: 14px; height: 14px; }
+
+  /* ── Future Plans ── */
+  .plan {
+    background: var(--blue-light);
+    border: 1px solid var(--blue-border);
+    border-radius: var(--radius);
+    padding: 28px;
+    margin: 16px 0;
+  }
+  .plan h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--blue);
+    margin-bottom: 12px;
+  }
+  .plan p { font-size: 0.9rem; color: var(--text-secondary); }
+  .plan-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 0.85rem;
+  }
+  .plan-table th, .plan-table td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--blue-border);
+  }
+  .plan-table th { font-weight: 600; color: var(--blue); }
+  .plan-table td { color: var(--text-secondary); }
+
+  /* ── Architecture ── */
+  .arch {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    margin: 24px 0;
+    box-shadow: var(--shadow-sm);
+  }
+  .arch-row {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    margin: 8px 0;
+  }
+  .arch-label {
+    background: var(--primary-dark);
+    color: white;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    letter-spacing: 2px;
+  }
+  .arch-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    flex: 1;
+  }
+  .arch-chip {
+    background: var(--border-light);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+  .arch-chip.main {
+    background: var(--primary-light);
+    border-color: var(--primary-border);
+    color: var(--primary-dark);
+    font-weight: 600;
+  }
+  .arch-connector {
+    text-align: center;
+    padding: 4px 0;
+    color: var(--text-muted);
+  }
+  .arch-connector svg { width: 16px; height: 16px; }
+
+  /* ── Toolbox ── */
+  .toolbox {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin: 24px 0;
+  }
+  .tb-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+    box-shadow: var(--shadow-sm);
+  }
+  .tb-item .tb-name { font-weight: 600; font-size: 0.88rem; margin-bottom: 2px; }
+  .tb-item .tb-role { font-size: 0.75rem; color: var(--text-muted); }
+
+  /* ── Checklist ── */
+  .check-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    margin: 24px 0;
+  }
+  .check-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    box-shadow: var(--shadow-sm);
+  }
+  .check-box h4 {
+    font-size: 0.88rem;
+    font-weight: 600;
+    margin-bottom: 14px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .check-box h4 svg { width: 18px; height: 18px; color: var(--primary); flex-shrink: 0; }
+  .check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 7px 0;
+    font-size: 0.84rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .check-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--border);
+    margin-top: 7px;
+    flex-shrink: 0;
+  }
+
+  /* ── Usage Guide ── */
+  .usage-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+  }
+  .usage-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 16px 20px;
+    box-shadow: var(--shadow-sm);
+  }
+  .usage-card .uc-section { font-size: 0.72rem; color: var(--text-muted); font-weight: 500; }
+  .usage-card .uc-desc { font-size: 0.88rem; font-weight: 500; color: var(--text); margin-top: 4px; }
+
+  /* ── Callout ── */
+  .callout {
+    background: var(--accent-light);
+    border: 1px solid var(--accent-border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-size: 0.88rem;
+    color: #92400e;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 16px 0;
+  }
+  .callout svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+  /* ── Footer ── */
+  footer {
+    border-top: 1px solid var(--border);
+    text-align: center;
+    padding: 32px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 960px) {
+    .sidebar { transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: none; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 20px rgba(0,0,0,0.1); }
+    .sidebar-overlay.open { display: block; }
+    .mobile-nav-toggle { display: flex; }
+    .main-content { margin-left: 0; }
+  }
+  @media (max-width: 680px) {
+    .hero { padding: 48px 20px 40px; }
+    .hero h1 { font-size: 1.7rem; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .compare-row { grid-template-columns: 1fr; gap: 12px; }
+    .compare-arrow { transform: rotate(90deg); }
+    .pain-grid { grid-template-columns: 1fr; }
+    .ba { grid-template-columns: 1fr; }
+    .flow { flex-direction: column; align-items: stretch; }
+    .flow-arrow { justify-content: center; transform: rotate(90deg); padding: 2px 0; }
+    .arch-row { flex-direction: column; }
+    .arch-label { writing-mode: horizontal-tb; min-width: auto; padding: 6px 12px; }
+    .link-grid { grid-template-columns: 1fr; }
+  }
+
+  @media print {
+    .hero { padding: 32px; }
+    section { padding: 24px 0; }
+    .sys-card, .link-card, .plan { break-inside: avoid; }
+  }
+
+  /* ── Smooth Scroll ── */
+  html { scroll-behavior: smooth; }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ━━ Sidebar Nav ━━ -->
+<button class="mobile-nav-toggle" onclick="toggleSidebar()" aria-label="開啟導覽">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+</button>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <img src="https://wuohome.github.io/ragic/assets/wuohome-logo.png" alt="窩的家 Logo">
+    <div class="brand-text">
+      <div class="brand-name">窩的家集團</div>
+      <div class="brand-sub">數位轉型現況摘要</div>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <ul>
+      <li><a href="#about" class="active"><span class="nav-num">01</span>我們是誰</a></li>
+      <li><a href="#problems"><span class="nav-num">02</span>遇到的問題</a></li>
+      <li><a href="#done"><span class="nav-num">03</span>已完成的工作</a></li>
+      <li><a href="#future"><span class="nav-num">04</span>未來規劃</a></li>
+      <li><a href="#arch"><span class="nav-num">05</span>系統架構</a></li>
+      <li><a href="#todo"><span class="nav-num">06</span>待補資料</a></li>
+      <li><a href="#howto"><span class="nav-num">07</span>使用方式</a></li>
+    </ul>
+  </nav>
+  <div class="sidebar-footer">2026 年 3 月 &middot; 供顧問評估用</div>
+</aside>
+
+<div class="main-content">
+
+<!-- ━━ Hero ━━ -->
+<header class="hero">
+  <img src="https://wuohome.github.io/ragic/assets/wuohome-logo.png" alt="窩的家 Logo" style="width:72px;height:72px;object-fit:contain;margin-bottom:16px;border-radius:12px;background:rgba(255,255,255,0.95);padding:8px;">
+  <h1>窩的家集團</h1>
+  <div class="subtitle">數位轉型現況摘要</div>
+  <div class="meta">供政府補助案顧問評估 &middot; 2026 年 3 月</div>
+</header>
+
+<div class="container">
+
+<!-- ━━ 1. 公司基本 ━━ -->
+<section id="about">
+  <div class="section-tag">Section 1</div>
+  <h2>我們是誰</h2>
+  <p class="section-desc">窩的家集團做房地產相關服務：幫人租房子、管房子、設計裝修房子。</p>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="label">業務範圍</div>
+      <div class="value">租賃、代管<br>設計、裝修</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">旗下公司</div>
+      <div class="value">7 間法人</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">員工人數</div>
+      <div class="value">約 30 人</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">據點</div>
+      <div class="value">三重、蘆洲</div>
+    </div>
+  </div>
+
+  <h3>集團架構</h3>
+  <div class="org">
+    <div class="org-root">
+      <span class="node">窩的家投資控股有限公司（母公司）</span>
+    </div>
+    <div class="org-line"></div>
+    <div class="org-children">
+      <div class="org-child"><span class="node active">窩的家房屋租售</span><div class="role">租賃仲介</div></div>
+      <div class="org-child"><span class="node active">窩的家裝潢管理顧問</span><div class="role">包租代管 / 設計</div></div>
+      <div class="org-child"><span class="node pending">窩的家室內裝修</span><div class="role">裝修工程</div></div>
+      <div class="org-child"><span class="node planned">窩的家土木工程行</span><div class="role">土木</div></div>
+      <div class="org-child"><span class="node active">品客不動產</span><div class="role">蘆洲中信房屋</div></div>
+      <div class="org-child"><span class="node pending">品佳不動產</span><div class="role">住商不動產</div></div>
+    </div>
+    <div class="org-legend">
+      <span><span class="legend-dot" style="background:#dcfce7;border:1px solid #86efac"></span> 營運中</span>
+      <span><span class="legend-dot" style="background:#fef9c3;border:1px solid #fde68a"></span> 籌備中</span>
+      <span><span class="legend-dot" style="background:#f1f5f9;border:1px solid #e2e8f0"></span> 規劃中</span>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ━━ 2. 痛點 ━━ -->
+<section id="problems">
+  <div class="section-tag">Section 2</div>
+  <h2>我們遇到什麼問題</h2>
+  <p class="section-desc">公司快速成長，原有的紙本和人工管理方式已經到極限。</p>
+
+  <h3>公司長大了，舊方法管不住</h3>
+
+  <div class="compare-row">
+    <div class="compare-box">
+      <div class="year">2024 年</div>
+      <div class="big">3</div><div class="unit">間公司</div>
+      <div class="big">12</div><div class="unit">個人</div>
+      <div style="margin-top:8px;font-size:0.8rem;color:var(--text-muted)">口頭交代就能運作</div>
+    </div>
+    <div class="compare-arrow">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg>
+    </div>
+    <div class="compare-box now">
+      <div class="year">2026 年（現在）</div>
+      <div class="big">7</div><div class="unit">間公司</div>
+      <div class="big">30</div><div class="unit">個人</div>
+      <div style="margin-top:8px;font-size:0.8rem;color:var(--primary)">需要系統幫忙管理</div>
+    </div>
+  </div>
+
+  <div class="pain-grid">
+    <div class="pain-card">
+      <div class="pain-title">資料散落</div>
+      <div class="pain-desc">每間公司各自用 Excel / Google Sheet，跨公司查資料只能打電話問</div>
+    </div>
+    <div class="pain-card">
+      <div class="pain-title">人走資料就斷</div>
+      <div class="pain-desc">員工離職後，客戶、進度、聯絡紀錄全部消失</div>
+    </div>
+    <div class="pain-card">
+      <div class="pain-title">重複建檔</div>
+      <div class="pain-desc">同一個客戶在不同公司被建了好幾次，沒人知道重複了</div>
+    </div>
+    <div class="pain-card">
+      <div class="pain-title">老闆要看數字很慢</div>
+      <div class="pain-desc">問業績要等各部門人工彙整，通常要等兩天</div>
+    </div>
+  </div>
+
+  <h3>房地產業太傳統</h3>
+  <div class="pain-grid">
+    <div class="pain-card">
+      <div class="pain-title">核心文件都是紙本</div>
+      <div class="pain-desc">租約、契約、委託書鎖在檔案櫃，找一份要翻半天</div>
+    </div>
+    <div class="pain-card">
+      <div class="pain-title">催繳全靠人力</div>
+      <div class="pain-desc">一個人用手抄本管 300 間房、500 租客的催繳</div>
+    </div>
+    <div class="pain-card">
+      <div class="pain-title">報修靠口頭傳</div>
+      <div class="pain-desc">租客打電話 → LINE 轉發 → 容易漏掉沒紀錄</div>
+    </div>
+    <div class="pain-card">
+      <div class="pain-title">簽核靠紙本蓋章</div>
+      <div class="pain-desc">印出來蓋章再拍照傳 LINE，沒有數位紀錄</div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ━━ 3. 已完成 ━━ -->
+<section id="done">
+  <div class="section-tag">Section 3</div>
+  <h2>我們已經做了什麼</h2>
+  <p class="section-desc">已建立核心資料庫、6 套自動化機器人、6 個線上工具頁面，覆蓋招募、業務、管理等流程。</p>
+
+  <!-- Ragic -->
+  <h3>3.1 核心資料庫：Ragic</h3>
+  <p style="margin-bottom:12px;color:var(--text-secondary);font-size:0.9rem;">Ragic 是雲端資料庫平台，像<strong>進階版 Excel</strong>，可設定表單、權限、API 串接。我們依部門分頁籤，共建置 <strong>40+ 張表單</strong>，涵蓋公司所有核心業務。</p>
+
+  <div class="callout">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    可提供 Ragic 測試帳號，顧問可直接登入查看所有表單與資料。
+  </div>
+
+  <table class="data-table ragic-table">
+    <thead><tr><th style="width:110px">頁籤（部門）</th><th>主要表單</th><th>涵蓋業務</th></tr></thead>
+    <tbody>
+      <tr><td>秘書（租賃）</td><td>秘客需求、每日工作行程、租賃物件、下收物件、委託屋主、聯盟單位物件</td><td>客戶需求登記、業務行程、房源上下架、屋主經營、聯盟房源同步</td></tr>
+      <tr><td>行政</td><td>打卡紀錄、合作廠商、通訊錄、意見回饋</td><td>考勤管理、廠商資料庫、內部通訊</td></tr>
+      <tr><td>裝潢（設計）</td><td>潛在客戶、工程進度、報價單、輕裝修報價、工程標案</td><td>接案→報價→施工→驗收→請款全流程</td></tr>
+      <tr><td>管理</td><td>管理物件、公司案件、代管案件、分租案件</td><td>包租代管物件與合約管理</td></tr>
+      <tr><td>維修管理</td><td>工單管理、維修廠商、申報維修、代收垃圾</td><td>報修→派工→完工→驗收流程</td></tr>
+      <tr><td>財務</td><td>發票明細、銀行帳戶、採購/請款、零用金、零星支出</td><td>財務收支管理、採購簽核流程</td></tr>
+      <tr><td>人資</td><td>人事資料、排休紀錄、例假日與特休</td><td>員工全生命週期管理</td></tr>
+      <tr><td>投資</td><td>資產活化（591 物件 + 實價登錄估價）</td><td>投資物件篩選與自動估價</td></tr>
+      <tr><td>系統運營</td><td>物件總表、屋主、租客、收款帳戶、LINE 對秘</td><td>跨部門共用資料整合樞紐</td></tr>
+      <tr><td>收付款</td><td>定金/擲幣、租漏金/服務費</td><td>收定→簽約→催繳→收款</td></tr>
+      <tr><td>物件管理</td><td>物件（Building）、套房資訊、租約、電費表</td><td>代管租客、租約、水電費</td></tr>
+      <tr><td>租約管理</td><td>租客（含 LINE 綁定）</td><td>租客資料與 LINE OA 綁定</td></tr>
+      <tr><td>教學</td><td>租賃學院、系統教學</td><td>員工教育訓練教材</td></tr>
+      <tr><td>資產負債</td><td>貸款支出</td><td>公司貸款與還款追蹤</td></tr>
+    </tbody>
+  </table>
+
+  <p style="margin-top:16px;color:var(--text-secondary);font-size:0.85rem;">以上表單之間透過<strong>連結欄位（Link）與自動載入</strong>互相關聯，例如：物件表連結屋主表、工程進度連結潛在客戶、收付款連結物件總表等，形成完整的資料關聯網絡。</p>
+
+  <!-- 機器人 -->
+  <h3>3.2 六套自動化機器人</h3>
+
+  <!-- 591 -->
+  <div class="sys-card">
+    <div class="sys-header">
+      <div class="sys-icon" style="background:var(--blue-light);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </div>
+      <div>
+        <div class="sys-name">591 找房機器人</div>
+        <div class="sys-subtitle">每天自動找到好物件，估好價放進資料庫</div>
+      </div>
+    </div>
+    <div class="flow">
+      <div class="flow-step">591 售屋網</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step highlight">自動爬取 + 篩選</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step highlight">比對實價登錄估價<small>66 萬筆交易紀錄</small></div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step">寫入 Ragic</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step">業務查看結果</div>
+    </div>
+    <div class="ba">
+      <div class="ba-side before"><div class="ba-label">以前</div><p>業務每天花 1-2 小時自己滑 591 找物件，看到喜歡的再手動記下來</p></div>
+      <div class="ba-side after"><div class="ba-label">現在</div><p>系統每天自動找好、估好價、放進資料庫，業務只看結果</p></div>
+    </div>
+  </div>
+
+  <!-- 104 -->
+  <div class="sys-card">
+    <div class="sys-header">
+      <div class="sys-icon" style="background:var(--purple-light);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </div>
+      <div>
+        <div class="sys-name">104 招募機器人 + AI 篩選</div>
+        <div class="sys-subtitle">自動偵測新應徵、AI 判斷經驗與證照、通知 HR</div>
+      </div>
+    </div>
+    <div class="flow">
+      <div class="flow-step">有人應徵</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step highlight">自動偵測</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step ai">AI 判斷<small>房地產經驗？營業員證？適合哪個部門？</small></div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step">自動發意願訊息</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step">Telegram 通知 HR<small>附 AI 篩選結論</small></div>
+    </div>
+    <div class="ba">
+      <div class="ba-side before"><div class="ba-label">以前</div><p>HR 自己登入 104，逐份履歷打開判斷適不適合</p></div>
+      <div class="ba-side after"><div class="ba-label">現在</div><p>AI 自動篩選分類，HR 只看結論決定要不要約</p></div>
+    </div>
+  </div>
+
+  <!-- PULO -->
+  <div class="sys-card">
+    <div class="sys-header">
+      <div class="sys-icon" style="background:var(--accent-light);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      </div>
+      <div>
+        <div class="sys-name">PULO 搶案機器人</div>
+        <div class="sys-subtitle">自動搶設計平台案件，速度比人快</div>
+      </div>
+    </div>
+    <div class="flow">
+      <div class="flow-step">PULO 出現新案</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step highlight">手機機器人自動搶</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step">提取屋主聯絡方式</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step">寫入 Ragic → 設計部跟進</div>
+    </div>
+    <div class="ba">
+      <div class="ba-side before"><div class="ba-label">以前</div><p>設計師一直盯著 APP 等新案，手動搶常慢一步</p></div>
+      <div class="ba-side after"><div class="ba-label">現在</div><p>機器人 24 小時盯著，自動搶案，搶到率大幅提升</p></div>
+    </div>
+  </div>
+
+  <!-- 點名 -->
+  <div class="sys-card">
+    <div class="sys-header">
+      <div class="sys-icon" style="background:var(--success-light);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      </div>
+      <div>
+        <div class="sys-name">LINE 行程點名機器人</div>
+        <div class="sys-subtitle">群組打「點名」，1 秒看完誰填了行程</div>
+      </div>
+    </div>
+    <div class="flow">
+      <div class="flow-step">主管打「點名」</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step highlight">機器人查 Ragic</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step">1 秒回覆<small>已填 8 人 / 未填 3 人</small></div>
+    </div>
+    <div class="ba">
+      <div class="ba-side before"><div class="ba-label">以前</div><p>主管要一個一個問「你行程填了沒？」</p></div>
+      <div class="ba-side after"><div class="ba-label">現在</div><p>打兩個字「點名」，1 秒全部出來</p></div>
+    </div>
+  </div>
+
+  <!-- 聯盟同步 -->
+  <div class="sys-card">
+    <div class="sys-header">
+      <div class="sys-icon" style="background:var(--blue-light);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+      </div>
+      <div>
+        <div class="sys-name">聯盟房源同步</div>
+        <div class="sys-subtitle">合作友店房源自動同步，地圖統一顯示</div>
+      </div>
+    </div>
+    <div class="flow">
+      <div class="flow-step">友店更新房源</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step highlight">自動同步到我們的 Ragic</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step">地圖統一顯示<small>不同顏色區分來源</small></div>
+    </div>
+  </div>
+
+  <!-- 信封 -->
+  <div class="sys-card">
+    <div class="sys-header">
+      <div class="sys-icon" style="background:var(--danger-light);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+      </div>
+      <div>
+        <div class="sys-name">信封列印工具</div>
+        <div class="sys-subtitle">填地址、自動查郵遞區號、印直式信封</div>
+      </div>
+    </div>
+    <div class="flow">
+      <div class="flow-step">網頁填收件人</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step highlight">自動查郵遞區號</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step">列印直式信封<small>3 種尺寸</small></div>
+    </div>
+  </div>
+
+  <!-- 線上工具 -->
+  <h3>3.3 六個線上工具頁面</h3>
+  <p style="margin-bottom:16px;color:var(--text-secondary);font-size:0.9rem;">員工和客戶都能在手機或電腦上直接使用。點擊可開啟實際頁面。</p>
+
+  <div class="link-grid">
+    <a class="link-card" href="https://wuohome.github.io/ragic-map/map.html" target="_blank">
+      <div class="lc-name">智慧找房地圖</div>
+      <div class="lc-for">業務 + 客戶</div>
+      <div class="lc-desc">地圖搜尋所有房源，自家與聯盟友店不同顏色區分</div>
+      <div class="lc-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>開啟線上版</div>
+    </a>
+    <a class="link-card" href="https://wuohome.github.io/ragic/repair.html" target="_blank">
+      <div class="lc-name">線上報修</div>
+      <div class="lc-for">租客</div>
+      <div class="lc-desc">手機填報修單，不用打電話，資料自動進系統</div>
+      <div class="lc-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>開啟線上版</div>
+    </a>
+    <a class="link-card" href="https://wuohome.github.io/ragic/bind.html" target="_blank">
+      <div class="lc-name">房客 / 房東綁定</div>
+      <div class="lc-for">租客 / 房東</div>
+      <div class="lc-desc">LINE 綁定身份，未來接收催繳、合約到期等自動通知</div>
+      <div class="lc-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>開啟線上版</div>
+    </a>
+    <a class="link-card" href="https://wuohome.github.io/ragic/earnest.html" target="_blank">
+      <div class="lc-name">線上斡旋</div>
+      <div class="lc-for">業務 + 客戶</div>
+      <div class="lc-desc">買賣斡旋流程線上化，減少紙本往返</div>
+      <div class="lc-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>開啟線上版</div>
+    </a>
+    <a class="link-card" href="https://wuohome.github.io/ragic/2026LandlordTax.html" target="_blank">
+      <div class="lc-name">房東稅務資訊</div>
+      <div class="lc-for">房東</div>
+      <div class="lc-desc">報稅相關資訊與試算</div>
+      <div class="lc-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>開啟線上版</div>
+    </a>
+    <a class="link-card" href="https://wuohome.github.io/envelope-printer/" target="_blank">
+      <div class="lc-name">信封列印</div>
+      <div class="lc-for">行政</div>
+      <div class="lc-desc">填地址自動查郵遞區號，直接列印標準直式信封</div>
+      <div class="lc-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>開啟線上版</div>
+    </a>
+  </div>
+
+  <!-- 標準化 -->
+  <h3>3.4 已建立的標準化制度</h3>
+  <table class="data-table">
+    <thead><tr><th>項目</th><th>說明</th></tr></thead>
+    <tbody>
+      <tr><td>裝修報價標準</td><td>從實際案件拆解出 20+ 項工程單價基準（泥作、水電、木作、衛浴等），報價有依據</td></tr>
+      <tr><td>聯盟友店對接 SOP</td><td>完整技術手冊，新合作友店照著做就能串接系統</td></tr>
+      <tr><td>新人報到手冊</td><td>新人入職流程標準化</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ━━ 4. 未來規劃 ━━ -->
+<section id="future">
+  <div class="section-tag">Section 4</div>
+  <h2>接下來還想做什麼</h2>
+  <p class="section-desc">以下是規劃中的數位化項目，也是希望申請補助來加速實現的部分。</p>
+
+  <div class="plan">
+    <h4>1. 租金催繳自動化</h4>
+    <p style="margin-bottom:16px;">目前 1 人靠手抄本管 <strong>300 間房、500 租客、300 房東</strong>的催繳。需求規劃已完成，尚未實作。</p>
+    <div class="flow">
+      <div class="flow-step">系統自動產生帳單</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step highlight">繳費日 LINE 自動通知</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step warn">逾期 3 天自動提醒</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step danger">逾期 7 天人工介入</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step">繳費後自動確認</div>
+    </div>
+    <p style="margin-top:12px;font-size:0.85rem;color:var(--text-secondary);">另含合約到期提前 60 天通知、水電費自動分攤。<strong>預估效益：催繳工作量減少 70%。</strong></p>
+  </div>
+
+  <div class="plan">
+    <h4>2. 紙本流程全面數位化</h4>
+    <table class="plan-table">
+      <thead><tr><th>紙本現況</th><th>數位化目標</th></tr></thead>
+      <tbody>
+        <tr><td>租約、契約鎖在檔案櫃</td><td>掃描建檔，到期日 / 金額自動提醒</td></tr>
+        <tr><td>簽核蓋章 → 拍照傳 LINE</td><td>線上簽核，有紀錄可追溯</td></tr>
+        <tr><td>裝修驗收手寫填寫</td><td>表單化 + 手機拍照上傳</td></tr>
+        <tr><td>對帳單人工核對</td><td>系統自動比對</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="plan">
+    <h4>3. 自建管理介面</h4>
+    <p>Ragic 當資料庫好用但操作介面不夠友善，計畫自建操作介面：業務用物件管理、管理層用營運儀表板（一頁看完 7 間公司業績）、客戶用自助頁面（報修進度、繳費紀錄、合約查詢）。</p>
+  </div>
+
+  <div class="plan">
+    <h4>4. 跨公司數據整合</h4>
+    <p>7 間法人營運數據目前各自獨立。目標：一張報表看完所有公司業績、同一客戶跨公司紀錄自動關聯、財務報表自動彙整。</p>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ━━ 5. 架構 ━━ -->
+<section id="arch">
+  <div class="section-tag">Section 5</div>
+  <h2>系統架構全貌</h2>
+  <p class="section-desc">所有系統如何串在一起運作。</p>
+
+  <div class="arch">
+    <div class="arch-row">
+      <div class="arch-label">外部平台</div>
+      <div class="arch-items">
+        <div class="arch-chip">591 售屋網</div>
+        <div class="arch-chip">104 人力銀行</div>
+        <div class="arch-chip">PULO 設計平台</div>
+        <div class="arch-chip">聯盟友店</div>
+      </div>
+    </div>
+    <div class="arch-connector"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-4-4 4 4 4-4"/></svg></div>
+    <div class="arch-row">
+      <div class="arch-label">自動化</div>
+      <div class="arch-items">
+        <div class="arch-chip">591 機器人</div>
+        <div class="arch-chip">104 機器人 + AI</div>
+        <div class="arch-chip">PULO 機器人</div>
+        <div class="arch-chip">房源同步</div>
+        <div class="arch-chip">LINE 點名</div>
+      </div>
+    </div>
+    <div class="arch-connector"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-4-4 4 4 4-4"/></svg></div>
+    <div class="arch-row">
+      <div class="arch-label">資料庫</div>
+      <div class="arch-items">
+        <div class="arch-chip main">Ragic 雲端資料庫（所有資料的集中存放處）</div>
+      </div>
+    </div>
+    <div class="arch-connector"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-4-4 4 4 4-4"/></svg></div>
+    <div class="arch-row">
+      <div class="arch-label">網頁工具</div>
+      <div class="arch-items">
+        <div class="arch-chip">找房地圖</div>
+        <div class="arch-chip">線上報修</div>
+        <div class="arch-chip">綁定頁面</div>
+        <div class="arch-chip">線上斡旋</div>
+        <div class="arch-chip">信封列印</div>
+      </div>
+    </div>
+    <div class="arch-connector"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-4-4 4 4 4-4"/></svg></div>
+    <div class="arch-row">
+      <div class="arch-label">通知管道</div>
+      <div class="arch-items">
+        <div class="arch-chip">LINE（員工 + 客戶通知）</div>
+        <div class="arch-chip">Telegram（HR 日報、系統警報）</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>使用的工具</h3>
+  <div class="toolbox">
+    <div class="tb-item"><div class="tb-name">Ragic</div><div class="tb-role">資料庫</div></div>
+    <div class="tb-item"><div class="tb-name">n8n</div><div class="tb-role">自動化引擎</div></div>
+    <div class="tb-item"><div class="tb-name">Google Apps Script</div><div class="tb-role">自動化小工具</div></div>
+    <div class="tb-item"><div class="tb-name">Python</div><div class="tb-role">爬蟲 / 機器人</div></div>
+    <div class="tb-item"><div class="tb-name">GitHub Pages</div><div class="tb-role">網頁託管</div></div>
+    <div class="tb-item"><div class="tb-name">LINE API</div><div class="tb-role">客戶通知</div></div>
+    <div class="tb-item"><div class="tb-name">Telegram Bot</div><div class="tb-role">內部通知</div></div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ━━ 6. 待補 ━━ -->
+<section id="todo">
+  <div class="section-tag">Section 6</div>
+  <h2>待補資料清單</h2>
+  <p class="section-desc">以下資料補齊後即可提供顧問進行方案評估。</p>
+
+  <div class="check-grid">
+    <div class="check-box">
+      <h4>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2"/></svg>
+        公司基本資料
+      </h4>
+      <div class="check-item"><div class="check-dot"></div>要用哪間法人名義申請</div>
+      <div class="check-item"><div class="check-dot"></div>該法人的統一編號</div>
+      <div class="check-item"><div class="check-dot"></div>近三年（或近一年）營收</div>
+      <div class="check-item"><div class="check-dot"></div>公司登記文件影本</div>
+    </div>
+    <div class="check-box">
+      <h4>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+        紙本現況照片
+      </h4>
+      <div class="check-item"><div class="check-dot"></div>辦公室檔案櫃 / 紙本資料夾全景</div>
+      <div class="check-item"><div class="check-dot"></div>紙本合約或契據（1-2 張即可）</div>
+      <div class="check-item"><div class="check-dot"></div>手抄本 / Google Sheet 畫面</div>
+      <div class="check-item"><div class="check-dot"></div>紙本簽核單據</div>
+    </div>
+    <div class="check-box">
+      <h4>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        系統通知截圖
+      </h4>
+      <div class="check-item"><div class="check-dot"></div>LINE 點名機器人回覆畫面</div>
+      <div class="check-item"><div class="check-dot"></div>Telegram 104 招募日報</div>
+      <div class="check-item"><div class="check-dot"></div>任何系統自動通知截圖</div>
+    </div>
+    <div class="check-box">
+      <h4>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4a2 2 0 0 1 2-2h8.5L20 7.5V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3"/><polyline points="14 2 14 8 20 8"/><line x1="2" y1="15" x2="12" y2="15"/><path d="m9 18 3-3-3-3"/></svg>
+        Ragic 系統
+      </h4>
+      <div class="check-item"><div class="check-dot"></div>開通測試帳號給顧問操作截圖</div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ━━ 7. 使用說明 ━━ -->
+<section id="howto">
+  <div class="section-tag">Section 7</div>
+  <h2>這份文件怎麼用</h2>
+
+  <div class="usage-grid">
+    <div class="usage-card">
+      <div class="uc-section">Section 2 — 問題</div>
+      <div class="uc-desc">計畫書的「為什麼要做」</div>
+    </div>
+    <div class="usage-card">
+      <div class="uc-section">Section 3 — 已做的</div>
+      <div class="uc-desc">證明我們有能力執行</div>
+    </div>
+    <div class="usage-card" style="border-left-color:var(--accent);">
+      <div class="uc-section">Section 4 — 想做的</div>
+      <div class="uc-desc">申請補助的核心標的</div>
+    </div>
+    <div class="usage-card" style="border-left-color:var(--text-muted);">
+      <div class="uc-section">Section 6 — 待補</div>
+      <div class="uc-desc">照清單補齊即可</div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  窩的家集團 Wuohome &middot; 數位轉型現況摘要 &middot; 2026 年 3 月
+</footer>
+
+</div><!-- /main-content -->
+
+<script>
+// Sidebar toggle for mobile
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+}
+
+// Close sidebar when clicking a link (mobile)
+document.querySelectorAll('.sidebar-nav a').forEach(function(a) {
+  a.addEventListener('click', function() {
+    if (window.innerWidth <= 960) {
+      document.getElementById('sidebar').classList.remove('open');
+      document.getElementById('sidebarOverlay').classList.remove('open');
+    }
+  });
+});
+
+// Scroll spy: highlight active section in sidebar
+(function() {
+  var sections = document.querySelectorAll('section[id]');
+  var navLinks = document.querySelectorAll('.sidebar-nav a');
+
+  function onScroll() {
+    var scrollY = window.scrollY + 120;
+    var current = '';
+    sections.forEach(function(s) {
+      if (s.offsetTop <= scrollY) current = s.id;
+    });
+    navLinks.forEach(function(a) {
+      a.classList.remove('active');
+      if (a.getAttribute('href') === '#' + current) a.classList.add('active');
+    });
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
+</script>
+
+</body>
+</html>
