@@ -26,7 +26,7 @@ const CONFIG = {
     KEY: "VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==",
     EMP_PATH: "/wuohome/ragicforms4/20004",
     LEAVE_PATH: "/wuohome/ragicforms4/2",
-    F_EMP: { NAME:"3000933", DISPLAY:"1000848", DEPT:"3000937", STATUS:"3000945", HIRE:"3000955" },
+    F_EMP: { NAME:"3000933", DISPLAY:"1000848", DEPT:"3000937", STATUS:"3000945", HIRE:"3000955", HIRE_DATE:"3000943" },
     F_LEAVE: { EMP:"1000961", DATE:"1000963", YEAR:"1000964", MONTH:"1000965", TYPE:"1002025", DEPT:"1002026" }
 };
 
@@ -67,10 +67,11 @@ const App = () => {
                     display: f[CONFIG.F_EMP.DISPLAY] || f[CONFIG.F_EMP.NAME] || "",
                     dept: f[CONFIG.F_EMP.DEPT] || "",
                     status: f[CONFIG.F_EMP.STATUS] || "",
-                    hire: f[CONFIG.F_EMP.HIRE] || ""
+                    hire: f[CONFIG.F_EMP.HIRE] || "",
+                    hireDate: f[CONFIG.F_EMP.HIRE_DATE] || "9999/12/31"
                 }))
                 .filter(e => e.status === "在職" && e.dept !== "經營階層" && e.hire === "承攬")
-                .sort((a,b) => a.dept.localeCompare(b.dept) || a.display.localeCompare(b.display));
+                .sort((a,b) => a.dept.localeCompare(b.dept) || a.hireDate.localeCompare(b.hireDate));
             setEmployees(emps);
 
             const leaveJson = await apiFetch(CONFIG.LEAVE_PATH);
