@@ -15,7 +15,7 @@
         table { border-collapse: collapse; }
         th, td { border: 1px solid #e2e8f0; }
         tbody td { height: 32px; }
-        .emp-cell { width: 60px !important; min-width: 60px !important; max-width: 60px !important; box-sizing: border-box; }
+        .emp-cell { min-width: 48px; box-sizing: border-box; }
         .sticky-left { position: sticky; left: 0; z-index: 2; }
     </style>
 </head>
@@ -449,7 +449,7 @@ const App = () => {
                 </div>
             ) : (
                 <div className="overflow-x-auto bg-white rounded-xl shadow-sm">
-                    <table className="text-sm">
+                    <table className="w-full text-sm" style={{tableLayout:"fixed"}}>
                         <thead>
                             <tr>
                                 <th className="sticky-left bg-white p-2 min-w-[80px]" rowSpan={2}>
