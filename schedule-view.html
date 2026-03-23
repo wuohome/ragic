@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>窩的家 — 排班表（閱覽）</title>
+  <title>窩的家 — 排班表（檢視）</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -13,60 +13,57 @@
     body { font-family: "Microsoft JhengHei","Noto Sans TC",sans-serif; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinner { animation: spin 0.8s linear infinite; }
-    .sched-table {
-      border-collapse: separate;
-      border-spacing: 0;
-      table-layout: fixed;
-      width: 100%;
-    }
-    .sched-table thead th {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-    }
+    .sched-table { border-collapse: separate; border-spacing: 0; }
+    .sched-table thead th { position: sticky; top: 0; z-index: 20; }
     .sched-table td.col-date,
-    .sched-table th.col-date {
-      position: sticky;
-      left: 0;
-      z-index: 10;
-    }
+    .sched-table th.col-date { position: sticky; left: 0; z-index: 10; }
     .sched-table thead th.col-date { z-index: 30; }
-    .emp-cell { min-width: 48px; }
-    @media (max-width: 640px) {
-      .sched-table { font-size: 12px; }
-      .emp-cell { min-width: 44px; }
-      .cell-inner { min-height: 30px; font-size: 12px; }
-      .date-col { min-width: 60px; font-size: 11px; }
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+    .cal-cell {
+      min-height: 72px;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      background: #fff;
+      padding: 4px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .cal-cell.today { border-color: #f59e0b; background: #fffbeb; }
+    .cal-cell.weekend { background: #eff6ff; }
+    @media (max-width: 480px) {
+      .cal-cell { min-height: 56px; padding: 2px 4px; }
     }
   </style>
 </head>
-<body style="margin:0;background:#f8f9fa;min-height:100vh">
+<body style="margin:0;background:#f8fafc;min-height:100vh">
 <div id="root"></div>
 <script type="text/babel">
-/* ── Constants ── */
-const API_KEY  = 'VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==';
-const BASE_URL = 'https://ap15.ragic.com';
-const API_P    = `api=true&v=3&naming=EID&APIKey=${API_KEY}`;
-const EMP_FORM   = '/wuohome/ragicforms4/20004';
-const LEAVE_FORM = '/wuohome/ragicforms4/2';
-const DUTY_FORM  = '/wuohome/ragicforms4/3';
 
-/* Employee fields */
+/* ── Constants ─────────────────────────────────────────────── */
+const API_KEY   = 'VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==';
+const BASE_URL  = 'https://ap15.ragic.com';
+const API_P     = `api=true&v=3&naming=EID&APIKey=${API_KEY}`;
+const EMP_FORM  = '/wuohome/ragicforms4/20004';
+const LEAVE_FORM= '/wuohome/ragicforms4/2';
+const DUTY_FORM = '/wuohome/ragicforms4/3';
+
+// Employee fields
 const F_NAME    = '3000933';
-const F_DISPLAY = '1000848';
 const F_DEPT    = '3000937';
-const F_HIRE_D  = '3000943'; /* 到職日期 */
 const F_STATUS  = '3000945';
-const F_HIRE    = '3000955'; /* 聘雇類別 */
-
-/* Leave fields */
+const F_HIRE    = '3000955';
+// Leave fields
 const F_L_EMP   = '1000961';
 const F_L_DATE  = '1000963';
 const F_L_YEAR  = '1000964';
 const F_L_MONTH = '1000965';
 const F_L_TYPE  = '1002025';
-
-/* Duty fields */
+// Duty fields
 const F_D_DATE  = '1000971';
 const F_D_EMP   = '1000972';
 const F_D_YEAR  = '1000973';
@@ -74,440 +71,647 @@ const F_D_MONTH = '1000974';
 
 const DAYS_TW = ['日','一','二','三','四','五','六'];
 
-/* 見紅休 — names that follow public holidays (excluding 韓珊珊) */
-const GOV_HOLIDAY_NAMES = new Set(['張瓊安', '沈郁雯', '呂鴻墀']);
-
-/* 2026 Taiwan national holidays (non-weekend dates only) */
-const TW_HOLIDAYS_2026 = new Set([
+// 見紅休 applies to these names
+const JIAN_HONG_NAMES = new Set(['張瓊安','沈郁雯','呂鴻墀']);
+// 2026 public holidays
+const PUBLIC_HOLIDAYS_2026 = new Set([
   '2026/01/01','2026/02/16','2026/02/17','2026/02/18','2026/02/19','2026/02/20',
   '2026/02/27','2026/04/03','2026/04/06','2026/05/01','2026/06/19',
   '2026/09/25','2026/09/28','2026/10/09','2026/10/26','2026/12/25',
 ]);
 
-/* Department header colours */
+// Department display overrides
+const DEPT_DISPLAY = { '韓珊珊':'管理部/秘書', '張瓊安':'管理部/特助' };
+
+// Department header colors
 const DEPT_COLORS = {
   '管理部/秘書': { bg:'#ede9fe', border:'#c4b5fd', text:'#5b21b6', header:'#8b5cf6' },
   '管理部/特助': { bg:'#ede9fe', border:'#c4b5fd', text:'#5b21b6', header:'#8b5cf6' },
   '設計部':      { bg:'#d1fae5', border:'#6ee7b7', text:'#065f46', header:'#10b981' },
   '租賃部':      { bg:'#ffedd5', border:'#fdba74', text:'#9a3412', header:'#f97316' },
 };
-
-/* Fallback colour */
-const DEFAULT_COLOR = { bg:'#e2e8f0', border:'#94a3b8', text:'#475569', header:'#64748b' };
-
-function deptColor(dept) { return DEPT_COLORS[dept] || DEFAULT_COLOR; }
-
-/* ── Helpers ── */
-function daysInMonth(y, m)  { return new Date(y, m, 0).getDate(); }
-function getDOW(y, m, d)    { return new Date(y, m-1, d).getDay(); }
-function fmtDate(y, m, d)   {
-  return y+'/'+String(m).padStart(2,'0')+'/'+String(d).padStart(2,'0');
+function getDeptColor(dept) {
+  return DEPT_COLORS[dept] || { bg:'#f1f5f9', border:'#cbd5e1', text:'#475569', header:'#64748b' };
 }
 
-function isGovHoliday(y, m, d) {
-  const date = fmtDate(y, m, d);
-  return TW_HOLIDAYS_2026.has(date);
+// Status display config
+const STATUS_CONFIG = {
+  '排休': { bg:'#16a34a', text:'#fff', label:'休' },
+  '請假': { bg:'#dc2626', text:'#fff', label:'假' },
+  '值班': { bg:'#f97316', text:'#fff', label:'班' },
+  '值日': { bg:'#3b82f6', text:'#fff', label:'值' },
+  '見紅休':{ bg:'#9ca3af', text:'#fff', label:'休' },
+};
+
+/* ── Helpers ────────────────────────────────────────────────── */
+function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); }
+function getDOW(y, m, d)   { return new Date(y, m-1, d).getDay(); }
+function fmtDate(y, m, d)  {
+  return y + '/' + String(m).padStart(2,'0') + '/' + String(d).padStart(2,'0');
+}
+function isRedHoliday(y, m, d) {
+  const dow = getDOW(y, m, d);
+  if (dow === 0 || dow === 6) return true;
+  return PUBLIC_HOLIDAYS_2026.has(fmtDate(y, m, d));
 }
 
-/* ── API ── */
+// Ordering: 韓珊珊=0, 張瓊安=1, 設計部=2, else=3
+function getOrder(emp) {
+  if (emp.name === '韓珊珊') return 0;
+  if (emp.name === '張瓊安') return 1;
+  if (emp.rawDept === '設計部' || emp.dept === '設計部') return 2;
+  return 3;
+}
+
+/* ── API ────────────────────────────────────────────────────── */
 async function loadEmployees() {
-  const res = await fetch(BASE_URL+EMP_FORM+'?'+API_P);
-  if (!res.ok) throw new Error('員工資料載入失敗 ('+res.status+')');
+  const res = await fetch(BASE_URL + EMP_FORM + '?' + API_P);
+  if (!res.ok) throw new Error('員工資料載入失敗 (' + res.status + ')');
   const data = await res.json();
-
-  const OVERRIDES = {
-    '韓珊珊': { deptDisplay: '管理部/秘書', order: 0 },
-    '張瓊安': { deptDisplay: '管理部/特助', order: 1 },
-  };
-
-  const emps = [];
-  for (const [rid, r] of Object.entries(data)) {
-    if (!r || typeof r !== 'object' || !r[F_NAME]) continue;
-    const name = r[F_NAME];
-    const dept = r[F_DEPT] || '';
-    const status = r[F_STATUS] || '';
-    const hire  = r[F_HIRE]  || '';
-
-    if (status !== '在職') continue;
-    if (dept === '經營階層') continue;
-
-    const isKhan  = name === '韓珊珊';
-    const isJoan  = name === '張瓊安';
-    const isDesign = dept === '設計部';
-    const isContract = hire === '承攬';
-
-    if (!isKhan && !isJoan && !isDesign && !isContract) continue;
-
-    const ov = OVERRIDES[name];
-    const deptDisplay = ov ? ov.deptDisplay : dept;
-
-    /* Group sort key: 韓(0) Joan(1) 設計(2) 租賃(3) others(4) */
-    let groupOrder = 4;
-    if (isKhan) groupOrder = 0;
-    else if (isJoan) groupOrder = 1;
-    else if (isDesign) groupOrder = 2;
-    else groupOrder = 3;
-
-    emps.push({
-      id: rid,
-      name,
-      dept: deptDisplay,
-      hireDate: r[F_HIRE_D] || '',
-      groupOrder,
+  const raw = Object.entries(data)
+    .filter(([, r]) => r && typeof r === 'object' && r[F_NAME])
+    .filter(([, r]) => {
+      const name = r[F_NAME];
+      const dept = r[F_DEPT];
+      const status = r[F_STATUS];
+      const hire = r[F_HIRE];
+      if (status !== '在職') return false;
+      if (dept === '經營階層') return false;
+      if (hire === '承攬') return true;
+      if (name === '韓珊珊') return true;
+      if (dept === '設計部') return true;
+      if (name === '張瓊安') return true;
+      return false;
+    })
+    .map(([rid, r]) => {
+      const name = r[F_NAME];
+      const rawDept = r[F_DEPT];
+      const dept = DEPT_DISPLAY[name] || rawDept;
+      return { id: rid, name, dept, rawDept };
     });
-  }
-
-  /* Sort: group asc, then hireDate asc within same group */
-  emps.sort((a, b) => {
-    if (a.groupOrder !== b.groupOrder) return a.groupOrder - b.groupOrder;
-    return a.hireDate.localeCompare(b.hireDate);
-  });
-
-  return emps;
+  raw.sort((a, b) => getOrder(a) - getOrder(b));
+  return raw;
 }
 
 async function loadLeaves(year, month) {
-  const url = BASE_URL+LEAVE_FORM+'?'+API_P
-    +'&where='+F_L_YEAR+',eq,'+year
-    +'&and='+F_L_MONTH+',eq,'+month;
+  const url = BASE_URL + LEAVE_FORM + '?' + API_P
+    + '&where=' + F_L_YEAR + ',eq,' + year
+    + '&and=' + F_L_MONTH + ',eq,' + month;
   const res = await fetch(url);
-  if (!res.ok) throw new Error('排班資料載入失敗 ('+res.status+')');
+  if (!res.ok) throw new Error('排班資料載入失敗 (' + res.status + ')');
   const data = await res.json();
+  // map: empName__date -> array of records (support multiple per cell)
   const map = {};
-  for (const [, r] of Object.entries(data)) {
+  for (const [rid, r] of Object.entries(data)) {
     if (!r || typeof r !== 'object' || !r[F_L_DATE]) continue;
-    const key = r[F_L_EMP]+'__'+r[F_L_DATE];
-    map[key] = { type: r[F_L_TYPE], empName: r[F_L_EMP], date: r[F_L_DATE] };
+    const key = r[F_L_EMP] + '__' + r[F_L_DATE];
+    if (!map[key]) map[key] = [];
+    map[key].push({ ragicId: rid, type: r[F_L_TYPE], empName: r[F_L_EMP], date: r[F_L_DATE] });
   }
   return map;
 }
 
 async function loadDuties(year, month) {
-  const url = BASE_URL+DUTY_FORM+'?'+API_P
-    +'&where='+F_D_YEAR+',eq,'+year
-    +'&and='+F_D_MONTH+',eq,'+month;
+  const url = BASE_URL + DUTY_FORM + '?' + API_P
+    + '&where=' + F_D_YEAR + ',eq,' + year
+    + '&and=' + F_D_MONTH + ',eq,' + month;
   const res = await fetch(url);
-  if (!res.ok) throw new Error('值日資料載入失敗 ('+res.status+')');
+  if (!res.ok) throw new Error('值日資料載入失敗 (' + res.status + ')');
   const data = await res.json();
-  /* key: empName__date */
   const map = {};
   for (const [, r] of Object.entries(data)) {
     if (!r || typeof r !== 'object' || !r[F_D_DATE]) continue;
-    const empName = r[F_D_EMP] || '';
-    if (!empName) continue;
-    const key = empName+'__'+r[F_D_DATE];
-    map[key] = { empName, date: r[F_D_DATE] };
+    const key = r[F_D_EMP] + '__' + r[F_D_DATE];
+    map[key] = true;
   }
   return map;
 }
 
-/* ── Sub-components ── */
+/* ── Shared logic: get statuses for a cell ─────────────────── */
+function getCellStatuses(emp, y, m, d, leaves, duties) {
+  const date = fmtDate(y, m, d);
+  const result = [];
+  // 值日
+  if (duties[emp.name + '__' + date]) result.push('值日');
+  // Leave types from leave records
+  const recs = leaves[emp.name + '__' + date] || [];
+  for (const r of recs) {
+    if (r.type && !result.includes(r.type)) result.push(r.type);
+  }
+  // 見紅休: only if no other status AND employee qualifies
+  if (result.length === 0 && JIAN_HONG_NAMES.has(emp.name) && isRedHoliday(y, m, d)) {
+    result.push('見紅休');
+  }
+  return result;
+}
+
+/* ── Sub-components ─────────────────────────────────────────── */
 function Spinner({ small }) {
-  const s = small ? 12 : 16;
+  const s = small ? 14 : 18;
   return (
     <svg className="spinner" width={s} height={s} viewBox="0 0 24 24" fill="none"
-      style={{display:'inline-block',verticalAlign:'middle',color:small?'#fff':'#3f5262'}}>
-      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"
-        style={{opacity:0.2}}/>
-      <path fill="currentColor" style={{opacity:0.8}}
-        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+      style={{ display:'inline-block', color: small ? '#fff' : '#3f5262' }}>
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" style={{ opacity:0.2 }}/>
+      <path fill="currentColor" style={{ opacity:0.8 }} d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
     </svg>
   );
 }
 
-/* Render one cell — read-only, no interaction */
-function Cell({ year, month, day, emp, leaves, duties, rowBg }) {
-  const date  = fmtDate(year, month, day);
-  const lKey  = emp.name+'__'+date;
-  const dKey  = emp.name+'__'+date;
-  const leave = leaves[lKey];
-  const duty  = duties[dKey];
-  const dow   = getDOW(year, month, day);
-  const isWeekend = dow === 0 || dow === 6;
-  const isHol = isGovHoliday(year, month, day);
-  const hasGovRest = GOV_HOLIDAY_NAMES.has(emp.name) && (isWeekend || isHol);
+function StatusBadge({ type }) {
+  const cfg = STATUS_CONFIG[type];
+  if (!cfg) return null;
+  return (
+    <span style={{
+      background: cfg.bg, color: cfg.text,
+      borderRadius: 4, padding: '1px 5px',
+      fontSize: 11, fontWeight: 700,
+      display: 'inline-block', marginTop: 2, marginRight: 2,
+    }}>{type === '見紅休' ? '休' : cfg.label}</span>
+  );
+}
 
-  /* Decide what to show */
-  let label = null;
-  let bg    = 'transparent';
-  let color = '#475569';
-  let isDual = false;
-  let dualLeft = '';
-  let dualRight = '';
-  let dualBgL = '';
-  let dualBgR = '';
-
-  if (leave && duty) {
-    /* Split cell: left = leave, right = duty (blue) */
-    isDual = true;
-    dualBgL = leave.type==='排休' ? '#16a34a' : leave.type==='請假' ? '#dc2626' : '#f97316';
-    dualBgR = '#2563eb';
-    dualLeft  = leave.type==='排休' ? '休' : leave.type==='請假' ? '假' : leave.type==='值班' ? '班' : leave.type;
-    dualRight = '值';
-  } else if (leave) {
-    if (leave.type === '排休') { bg = '#16a34a'; color = '#fff'; label = '休'; }
-    else if (leave.type === '請假') { bg = '#dc2626'; color = '#fff'; label = '假'; }
-    else if (leave.type === '值班') { bg = '#f97316'; color = '#fff'; label = '班'; }
-    else { bg = '#f97316'; color = '#fff'; label = leave.type; }
-  } else if (duty) {
-    bg = '#2563eb'; color = '#fff'; label = '值';
-  } else if (hasGovRest) {
-    bg = '#d1d5db'; color = '#6b7280'; label = '休';
-  }
-
-  const cellStyle = {
-    borderRight: '1px solid #f1f5f9',
-    padding: 2,
-    textAlign: 'center',
-  };
-
-  const innerBase = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    minHeight: 28,
-    borderRadius: 4,
-    fontSize: 11,
-    fontWeight: 700,
-    userSelect: 'none',
-  };
-
-  if (isDual) {
-    return (
-      <td className="emp-cell" style={cellStyle}>
-        <div style={{...innerBase, overflow:'hidden', padding: 0}}>
-          <div style={{flex:1,height:'100%',minHeight:28,background:dualBgL,
-            color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',
-            borderRadius:'4px 0 0 4px',fontSize:11,fontWeight:700}}>
-            {dualLeft}
-          </div>
-          <div style={{flex:1,height:'100%',minHeight:28,background:dualBgR,
-            color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',
-            borderRadius:'0 4px 4px 0',fontSize:11,fontWeight:700}}>
-            {dualRight}
-          </div>
+/* ── Entry Screen ───────────────────────────────────────────── */
+function EntryScreen({ onPersonal, onTeam }) {
+  return (
+    <div style={{
+      minHeight: '100vh', background: '#f8fafc',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      fontFamily: '"Microsoft JhengHei","Noto Sans TC",sans-serif',
+      padding: '24px 16px',
+    }}>
+      {/* Brand block */}
+      <div style={{
+        background: '#3f5262', borderRadius: 16, padding: '24px 48px',
+        marginBottom: 44, boxShadow: '0 8px 32px rgba(63,82,98,0.28)',
+        textAlign: 'center',
+      }}>
+        <div style={{ color: '#fff', fontSize: 24, fontWeight: 900, letterSpacing: 3 }}>
+          窩的家
         </div>
-      </td>
+        <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 13, marginTop: 5, letterSpacing: 2 }}>
+          排班表
+        </div>
+      </div>
+
+      <div style={{ fontSize: 14, color: '#64748b', marginBottom: 32, textAlign: 'center' }}>
+        請選擇檢視模式
+      </div>
+
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {/* Personal view button */}
+        <button onClick={onPersonal} style={{
+          background: '#fff', border: '2px solid #8b5cf6',
+          borderRadius: 16, padding: '28px 36px',
+          cursor: 'pointer', textAlign: 'center',
+          boxShadow: '0 4px 20px rgba(139,92,246,0.15)',
+          transition: 'transform 0.15s, box-shadow 0.15s',
+          minWidth: 180,
+        }}
+          onMouseEnter={e => {
+            e.currentTarget.style.transform = 'translateY(-3px)';
+            e.currentTarget.style.boxShadow = '0 8px 28px rgba(139,92,246,0.28)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.transform = '';
+            e.currentTarget.style.boxShadow = '0 4px 20px rgba(139,92,246,0.15)';
+          }}
+        >
+          <div style={{ fontSize: 40, marginBottom: 10 }}>👤</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: '#5b21b6' }}>我的排班</div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 6 }}>個人月曆檢視</div>
+        </button>
+
+        {/* Team view button */}
+        <button onClick={onTeam} style={{
+          background: '#fff', border: '2px solid #3f5262',
+          borderRadius: 16, padding: '28px 36px',
+          cursor: 'pointer', textAlign: 'center',
+          boxShadow: '0 4px 20px rgba(63,82,98,0.12)',
+          transition: 'transform 0.15s, box-shadow 0.15s',
+          minWidth: 180,
+        }}
+          onMouseEnter={e => {
+            e.currentTarget.style.transform = 'translateY(-3px)';
+            e.currentTarget.style.boxShadow = '0 8px 28px rgba(63,82,98,0.24)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.transform = '';
+            e.currentTarget.style.boxShadow = '0 4px 20px rgba(63,82,98,0.12)';
+          }}
+        >
+          <div style={{ fontSize: 40, marginBottom: 10 }}>👥</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: '#3f5262' }}>全體排班</div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 6 }}>白板總覽（唯讀）</div>
+        </button>
+      </div>
+
+      <div style={{ marginTop: 48, fontSize: 11, color: '#cbd5e1' }}>
+        唯讀模式 · 資料來源：Ragic
+      </div>
+    </div>
+  );
+}
+
+/* ── Name Selection ─────────────────────────────────────────── */
+function NameSelect({ emps, onSelect, onBack }) {
+  // Group by dept (preserving order)
+  const groups = React.useMemo(() => {
+    const m = {};
+    for (const e of emps) {
+      if (!m[e.dept]) m[e.dept] = [];
+      m[e.dept].push(e);
+    }
+    return m;
+  }, [emps]);
+
+  const navBtn = {
+    background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 6,
+    color: '#fff', padding: '5px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 700,
+  };
+
+  return (
+    <div style={{
+      minHeight: '100vh', background: '#f8fafc',
+      fontFamily: '"Microsoft JhengHei","Noto Sans TC",sans-serif',
+    }}>
+      <header style={{
+        background: '#3f5262', color: '#fff', padding: '12px 16px',
+        display: 'flex', alignItems: 'center', gap: 12,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.25)', position: 'sticky', top: 0, zIndex: 40,
+      }}>
+        <button onClick={onBack} style={navBtn}>← 返回</button>
+        <span style={{ fontSize: 16, fontWeight: 800 }}>👤 選擇姓名</span>
+      </header>
+
+      <div style={{ padding: '28px 16px', maxWidth: 600, margin: '0 auto' }}>
+        <div style={{ fontSize: 14, color: '#64748b', marginBottom: 24, textAlign: 'center' }}>
+          請選擇您的名字以查看個人排班月曆
+        </div>
+        {Object.entries(groups).map(([dept, members]) => {
+          const dc = getDeptColor(dept);
+          return (
+            <div key={dept} style={{ marginBottom: 24 }}>
+              <div style={{
+                fontSize: 12, fontWeight: 800, color: dc.text,
+                background: dc.bg, border: '1px solid ' + dc.border,
+                borderRadius: 6, padding: '4px 14px', marginBottom: 10, display: 'inline-block',
+              }}>{dept}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                {members.map(emp => (
+                  <button key={emp.name} onClick={() => onSelect(emp)} style={{
+                    background: '#fff', border: '2px solid ' + dc.border,
+                    borderRadius: 10, padding: '12px 22px',
+                    cursor: 'pointer', fontSize: 15, fontWeight: 700, color: dc.text,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
+                    transition: 'transform 0.12s, background 0.12s',
+                  }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.background = dc.bg;
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.transform = '';
+                      e.currentTarget.style.background = '#fff';
+                    }}
+                  >
+                    {emp.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── Personal Calendar View ─────────────────────────────────── */
+function PersonalView({ emp, allEmps, onBack }) {
+  const today = new Date();
+  const [year,    setYear]    = React.useState(today.getFullYear());
+  const [month,   setMonth]   = React.useState(today.getMonth() + 1);
+  const [leaves,  setLeaves]  = React.useState({});
+  const [duties,  setDuties]  = React.useState({});
+  const [loading, setLoading] = React.useState(true);
+  const [err,     setErr]     = React.useState(null);
+
+  // 張忠豪 sees 蕭眞儀 too
+  const isZhang = emp.name === '張忠豪';
+  const xiaoEmp = React.useMemo(() => {
+    if (!isZhang) return null;
+    return allEmps.find(e => e.name === '蕭眞儀') || null;
+  }, [isZhang, allEmps]);
+
+  const targets = React.useMemo(() => {
+    if (isZhang && xiaoEmp) return [emp, xiaoEmp];
+    return [emp];
+  }, [emp, isZhang, xiaoEmp]);
+
+  React.useEffect(() => {
+    setLoading(true);
+    setErr(null);
+    Promise.all([loadLeaves(year, month), loadDuties(year, month)])
+      .then(([lv, du]) => { setLeaves(lv); setDuties(du); setLoading(false); })
+      .catch(e => { setErr(e.message); setLoading(false); });
+  }, [year, month]);
+
+  const prevMonth = () => { if (month===1){setYear(y=>y-1);setMonth(12);}else setMonth(m=>m-1); };
+  const nextMonth = () => { if (month===12){setYear(y=>y+1);setMonth(1);}else setMonth(m=>m+1); };
+
+  const navBtn = {
+    padding: '5px 14px', background: 'rgba(255,255,255,0.15)', color: '#fff',
+    border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: 13, fontWeight: 700,
+  };
+
+  function renderCalendar(empObj) {
+    const totalDays = daysInMonth(year, month);
+    const firstDOW  = getDOW(year, month, 1);
+    const dc = getDeptColor(empObj.dept);
+
+    const cells = [];
+    for (let i = 0; i < firstDOW; i++) cells.push({ blank: true, key: 'b' + i });
+    for (let d = 1; d <= totalDays; d++) {
+      const dow       = getDOW(year, month, d);
+      const isToday   = today.getFullYear()===year && today.getMonth()+1===month && today.getDate()===d;
+      const isWeekend = dow===0||dow===6;
+      const statuses  = getCellStatuses(empObj, year, month, d, leaves, duties);
+      cells.push({ blank: false, key: 'd'+d, d, dow, isToday, isWeekend, statuses });
+    }
+
+    return (
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Name/dept tag */}
+        <div style={{
+          textAlign: 'center', marginBottom: 10, padding: '6px 0',
+          background: dc.bg, border: '1px solid ' + dc.border,
+          borderRadius: 8, fontSize: 14, fontWeight: 800, color: dc.text,
+        }}>
+          {empObj.name}{' '}
+          <span style={{ fontWeight: 400, fontSize: 12 }}>({empObj.dept})</span>
+        </div>
+
+        {/* Weekday header */}
+        <div className="cal-grid" style={{ marginBottom: 4 }}>
+          {DAYS_TW.map((d, i) => (
+            <div key={d} style={{
+              textAlign: 'center', fontSize: 12, fontWeight: 700, padding: '4px 0',
+              color: i===0 ? '#dc2626' : i===6 ? '#3b82f6' : '#64748b',
+            }}>{d}</div>
+          ))}
+        </div>
+
+        {/* Day cells */}
+        <div className="cal-grid">
+          {cells.map(cell => {
+            if (cell.blank) return <div key={cell.key} style={{ minHeight: 72 }}></div>;
+            let extraClass = '';
+            if (cell.isToday) extraClass = ' today';
+            else if (cell.isWeekend) extraClass = ' weekend';
+            return (
+              <div key={cell.key} className={'cal-cell' + extraClass}>
+                <span style={{
+                  fontSize: 12, fontWeight: cell.isToday ? 800 : 500,
+                  color: cell.isToday ? '#d97706'
+                       : cell.dow===0 ? '#dc2626'
+                       : cell.dow===6 ? '#3b82f6'
+                       : '#475569',
+                }}>{cell.d}</span>
+                <div style={{ marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  {cell.statuses.map(s => <StatusBadge key={s} type={s}/>)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     );
   }
 
   return (
-    <td className="emp-cell" style={cellStyle}>
-      <div className="cell-inner" style={{...innerBase, background: bg, color}}>
-        {label}
+    <div style={{ minHeight: '100vh', background: '#f8fafc',
+      fontFamily: '"Microsoft JhengHei","Noto Sans TC",sans-serif' }}>
+      <header style={{
+        background: '#3f5262', color: '#fff', padding: '10px 16px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.25)', position: 'sticky', top: 0, zIndex: 40,
+        flexWrap: 'wrap', gap: 8,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={onBack} style={navBtn}>← 返回</button>
+          <span style={{ fontSize: 15, fontWeight: 800 }}>
+            {emp.name}{isZhang && xiaoEmp ? ' & 蕭眞儀' : ''} 的排班
+          </span>
+          {loading && <Spinner/>}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button style={navBtn} onClick={prevMonth}>‹ 上月</button>
+          <span style={{ minWidth: 104, textAlign: 'center', fontWeight: 700, fontSize: 14 }}>
+            {year} 年 {month} 月
+          </span>
+          <button style={navBtn} onClick={nextMonth}>下月 ›</button>
+        </div>
+      </header>
+
+      {/* Legend bar */}
+      <div style={{
+        background: '#fff', borderBottom: '1px solid #e2e8f0',
+        padding: '8px 16px', display: 'flex', flexWrap: 'wrap', gap: 14, fontSize: 12,
+      }}>
+        {Object.entries(STATUS_CONFIG).map(([type, cfg]) => (
+          <span key={type} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 13, height: 13, borderRadius: 3, background: cfg.bg, display: 'inline-block' }}></span>
+            <span style={{ color: '#475569' }}>{type}</span>
+          </span>
+        ))}
       </div>
-    </td>
+
+      <div style={{ padding: '16px', maxWidth: 960, margin: '0 auto' }}>
+        {err ? (
+          <div style={{ textAlign: 'center', color: '#dc2626', padding: '40px 0', fontSize: 14 }}>
+            ⚠️ {err}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+            {targets.map(t => (
+              <React.Fragment key={t.name}>
+                {renderCalendar(t)}
+              </React.Fragment>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ textAlign: 'center', fontSize: 11, color: '#94a3b8', padding: '12px 0 28px' }}>
+        唯讀檢視 · 資料來源：Ragic
+      </div>
+    </div>
   );
 }
 
-/* ── App ── */
-function App() {
+/* ── Team View (whiteboard, read-only) ──────────────────────── */
+function TeamView({ emps, onBack }) {
   const today = new Date();
-  const [year,   setYear]   = React.useState(today.getFullYear());
-  const [month,  setMonth]  = React.useState(today.getMonth()+1);
-  const [emps,   setEmps]   = React.useState([]);
-  const [leaves, setLeaves] = React.useState({});
-  const [duties, setDuties] = React.useState({});
-  const [loading,  setLoading]  = React.useState(true);
-  const [loadLv,   setLoadLv]   = React.useState(false);
-  const [err,      setErr]      = React.useState(null);
-
-  /* Initial employee load */
-  React.useEffect(() => {
-    loadEmployees()
-      .then(rows => { setEmps(rows); setLoading(false); })
-      .catch(e   => { setErr(e.message); setLoading(false); });
-  }, []);
-
-  /* Load leaves + duties when month/year changes */
-  const reloadData = React.useCallback((y, m) => {
-    setLoadLv(true);
-    Promise.all([loadLeaves(y, m), loadDuties(y, m)])
-      .then(([lv, dt]) => { setLeaves(lv); setDuties(dt); setLoadLv(false); })
-      .catch(e => { setErr(e.message); setLoadLv(false); });
-  }, []);
+  const [year,    setYear]    = React.useState(today.getFullYear());
+  const [month,   setMonth]   = React.useState(today.getMonth() + 1);
+  const [leaves,  setLeaves]  = React.useState({});
+  const [duties,  setDuties]  = React.useState({});
+  const [loading, setLoading] = React.useState(true);
+  const [err,     setErr]     = React.useState(null);
 
   React.useEffect(() => {
-    if (emps.length === 0) return;
-    reloadData(year, month);
-  }, [year, month, emps.length]);
+    setLoading(true);
+    setErr(null);
+    Promise.all([loadLeaves(year, month), loadDuties(year, month)])
+      .then(([lv, du]) => { setLeaves(lv); setDuties(du); setLoading(false); })
+      .catch(e => { setErr(e.message); setLoading(false); });
+  }, [year, month]);
 
-  const prevMonth = () => {
-    if (month===1) { setYear(y=>y-1); setMonth(12); } else setMonth(m=>m-1);
-  };
-  const nextMonth = () => {
-    if (month===12) { setYear(y=>y+1); setMonth(1); } else setMonth(m=>m+1);
-  };
+  const prevMonth = () => { if (month===1){setYear(y=>y-1);setMonth(12);}else setMonth(m=>m-1); };
+  const nextMonth = () => { if (month===12){setYear(y=>y+1);setMonth(1);}else setMonth(m=>m+1); };
 
-  /* Group emps by dept for header colspan */
+  // Group emps by dept (already ordered)
   const deptGroups = React.useMemo(() => {
-    const groups = [];
-    let cur = null;
-    for (const emp of emps) {
-      if (!cur || cur.dept !== emp.dept) {
-        cur = { dept: emp.dept, emps: [emp] };
-        groups.push(cur);
-      } else {
-        cur.emps.push(emp);
-      }
+    const m = {};
+    for (const e of emps) {
+      if (!m[e.dept]) m[e.dept] = [];
+      m[e.dept].push(e);
     }
-    return groups;
+    return m;
   }, [emps]);
+  const depts = Object.keys(deptGroups);
 
-  /* Per-employee summary counts */
+  // Footer summary counts
   const summary = React.useMemo(() => {
     const s = {};
-    for (const e of emps) s[e.name] = { '排休':0,'請假':0,'值班':0,'值日':0 };
-    for (const r of Object.values(leaves)) {
-      if (!s[r.empName]) continue;
-      if (r.type==='排休') s[r.empName]['排休']++;
-      else if (r.type==='請假') s[r.empName]['請假']++;
-      else if (r.type==='值班') s[r.empName]['值班']++;
+    for (const e of emps) {
+      s[e.name] = { '排休':0, '請假':0, '值班':0, '值日':0, '見紅休':0 };
     }
-    for (const r of Object.values(duties)) {
-      if (!s[r.empName]) continue;
-      s[r.empName]['值日']++;
-    }
-    /* Also count 見紅休 */
-    const totalDays = daysInMonth(year, month);
-    for (const emp of emps) {
-      if (!GOV_HOLIDAY_NAMES.has(emp.name)) continue;
-      for (let d = 1; d <= totalDays; d++) {
-        const dow = getDOW(year, month, d);
-        const isWeekend = dow===0||dow===6;
-        const isHol = isGovHoliday(year, month, d);
-        if ((isWeekend||isHol) && !leaves[emp.name+'__'+fmtDate(year,month,d)] && !duties[emp.name+'__'+fmtDate(year,month,d)]) {
-          if (!s[emp.name]) s[emp.name] = {};
-          s[emp.name]['見紅休'] = (s[emp.name]['見紅休']||0)+1;
+    // Count leaves
+    for (const recs of Object.values(leaves)) {
+      for (const r of recs) {
+        if (s[r.empName] && r.type) {
+          s[r.empName][r.type] = (s[r.empName][r.type] || 0) + 1;
         }
       }
+    }
+    // Count duties
+    for (const key of Object.keys(duties)) {
+      const empName = key.split('__')[0];
+      if (s[empName]) s[empName]['值日'] = (s[empName]['值日'] || 0) + 1;
+    }
+    // Count 見紅休 days for qualified employees
+    const totalDays = daysInMonth(year, month);
+    for (const e of emps) {
+      if (!JIAN_HONG_NAMES.has(e.name)) continue;
+      let cnt = 0;
+      for (let d = 1; d <= totalDays; d++) {
+        if (isRedHoliday(year, month, d)) cnt++;
+      }
+      s[e.name]['見紅休'] = cnt;
     }
     return s;
   }, [leaves, duties, emps, year, month]);
 
+  const navBtn = {
+    padding: '4px 14px', background: 'rgba(255,255,255,0.15)', color: '#fff',
+    border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: 13, fontWeight: 700,
+  };
+
   if (err) return (
-    <div style={{display:'flex',alignItems:'center',justifyContent:'center',
-      height:'100vh',flexDirection:'column',gap:16,color:'#dc2626',
-      fontFamily:'"Microsoft JhengHei",sans-serif'}}>
-      <div style={{fontSize:48}}>⚠</div>
-      <div style={{fontSize:16,maxWidth:400,textAlign:'center'}}>{err}</div>
-      <button onClick={()=>window.location.reload()}
-        style={{padding:'8px 24px',background:'#3f5262',color:'#fff',
-          border:'none',borderRadius:6,cursor:'pointer',fontSize:14}}>
-        重新載入
-      </button>
+    <div style={{
+      minHeight: '100vh', background: '#f8fafc',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexDirection: 'column', gap: 16, color: '#dc2626',
+      fontFamily: '"Microsoft JhengHei",sans-serif',
+    }}>
+      <div style={{ fontSize: 40 }}>⚠️</div>
+      <div style={{ fontSize: 15 }}>{err}</div>
+      <button onClick={() => window.location.reload()} style={{
+        padding: '8px 24px', background: '#3f5262', color: '#fff',
+        border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14,
+      }}>重新載入</button>
     </div>
   );
 
-  const totalDays  = daysInMonth(year, month);
-  const isSpinning = loading || loadLv;
-
-  const navBtn = {
-    padding:'5px 14px', background:'rgba(255,255,255,0.15)', color:'#fff',
-    border:'1px solid rgba(255,255,255,0.3)', borderRadius:5, cursor:'pointer',
-    fontSize:13, fontWeight:700, letterSpacing:0.5,
-    transition:'background 0.15s',
-  };
-
-  const reloadBtn = {
-    padding:'5px 12px', background:'rgba(255,255,255,0.12)', color:'rgba(255,255,255,0.85)',
-    border:'1px solid rgba(255,255,255,0.25)', borderRadius:5, cursor:'pointer',
-    fontSize:12, fontWeight:600,
-    transition:'background 0.15s',
-  };
+  const totalDays = daysInMonth(year, month);
 
   return (
-    <div style={{minHeight:'100vh', background:'#f8f9fa',
-      fontFamily:'"Microsoft JhengHei","Noto Sans TC",sans-serif'}}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc',
+      fontFamily: '"Microsoft JhengHei","Noto Sans TC",sans-serif' }}>
 
-      {/* ── Header ── */}
       <header style={{
-        background:'#3f5262', color:'#fff', padding:'10px 14px',
-        display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8,
-        boxShadow:'0 2px 8px rgba(0,0,0,0.3)', position:'sticky', top:0, zIndex:40,
+        background: '#3f5262', color: '#fff', padding: '10px 16px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.3)', position: 'sticky', top: 0, zIndex: 40,
+        flexWrap: 'wrap', gap: 8,
       }}>
-        {/* Title */}
-        <div style={{display:'flex',alignItems:'center',gap:10,minWidth:0}}>
-          <span style={{fontSize:16,fontWeight:800,letterSpacing:1,whiteSpace:'nowrap'}}>
-            窩的家 — 排班表（閱覽）
-          </span>
-          {isSpinning && <Spinner/>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={onBack} style={navBtn}>← 返回</button>
+          <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: 1 }}>👥 全體排班</span>
+          {loading && <Spinner/>}
         </div>
-
-        {/* Month nav */}
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button style={navBtn} onClick={prevMonth}>‹ 上月</button>
-          <span style={{minWidth:100,textAlign:'center',fontWeight:700,fontSize:15}}>
+          <span style={{ minWidth: 104, textAlign: 'center', fontWeight: 700, fontSize: 14 }}>
             {year} 年 {month} 月
           </span>
           <button style={navBtn} onClick={nextMonth}>下月 ›</button>
-          <button style={reloadBtn} onClick={()=>reloadData(year,month)} title="重新載入資料">
-            {loadLv ? <Spinner small/> : '↻ 重整'}
-          </button>
         </div>
-
         {/* Legend */}
-        <div style={{display:'flex',gap:10,fontSize:11,color:'rgba(255,255,255,0.82)',flexWrap:'wrap'}}>
-          {[
-            {c:'#16a34a',l:'排休'},
-            {c:'#dc2626',l:'請假'},
-            {c:'#f97316',l:'值班'},
-            {c:'#2563eb',l:'值日'},
-            {c:'#d1d5db',l:'見紅休',tc:'#6b7280'},
-          ].map(({c,l,tc})=>(
-            <span key={l} style={{display:'flex',alignItems:'center',gap:4}}>
-              <span style={{width:11,height:11,borderRadius:2,background:c,
-                display:'inline-block',flexShrink:0}}></span>
-              <span style={{color:tc||'inherit'}}>{l}</span>
+        <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'rgba(255,255,255,0.8)', flexWrap: 'wrap' }}>
+          {Object.entries(STATUS_CONFIG).map(([type, cfg]) => (
+            <span key={type} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{
+                width: 11, height: 11, borderRadius: 2, background: cfg.bg, display: 'inline-block',
+              }}></span>
+              {type}
             </span>
           ))}
         </div>
       </header>
 
-      {/* ── Table ── */}
-      <div style={{overflowX:'auto',padding:'8px 4px 0'}}>
-        {!loading && emps.length===0 ? (
-          <div style={{textAlign:'center',color:'#9ca3af',padding:'80px 0',fontSize:16}}>
+      <div style={{ overflowX: 'auto', padding: '8px 4px' }}>
+        {!loading && emps.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#9ca3af', padding: '80px 0', fontSize: 16 }}>
             無員工資料
           </div>
         ) : (
-          <table className="sched-table" style={{minWidth:'max-content',fontSize:13}}>
+          <table className="sched-table"
+            style={{ tableLayout: 'fixed', width: '100%', fontSize: 12 }}>
             <thead>
-              {/* Dept row */}
-              <tr style={{background:'#f1f5f9',borderBottom:'1px solid #cbd5e1'}}>
-                <th className="col-date date-col" style={{
-                  minWidth:72,padding:'4px 8px',borderRight:'1px solid #cbd5e1',
-                  background:'#f1f5f9',textAlign:'left',fontSize:11,color:'#64748b',fontWeight:700,
+              {/* Department header row */}
+              <tr style={{ background: '#f1f5f9', borderBottom: '1px solid #cbd5e1' }}>
+                <th className="col-date" style={{
+                  minWidth: 76, padding: '4px 8px', borderRight: '1px solid #cbd5e1',
+                  background: '#f1f5f9', textAlign: 'left', fontSize: 11, color: '#64748b', fontWeight: 700,
                 }}></th>
-                {deptGroups.map(grp => {
-                  const dc = deptColor(grp.dept);
+                {depts.map(dept => {
+                  const dc = getDeptColor(dept);
                   return (
-                    <th key={grp.dept} colSpan={grp.emps.length} style={{
-                      padding:'4px 8px', borderRight:'1px solid #cbd5e1', textAlign:'center',
-                      fontSize:11, fontWeight:800,
-                      background: dc.bg,
-                      color: dc.text,
-                      borderTop: '2px solid '+dc.header,
-                    }}>{grp.dept}</th>
+                    <th key={dept} colSpan={deptGroups[dept].length} style={{
+                      padding: '4px 8px', borderRight: '1px solid #cbd5e1', textAlign: 'center',
+                      fontSize: 11, fontWeight: 800,
+                      background: dc.bg, color: dc.text,
+                      borderTop: '2px solid ' + dc.border,
+                    }}>{dept}</th>
                   );
                 })}
               </tr>
-              {/* Employee name row */}
-              <tr style={{background:'#f1f5f9',borderBottom:'2px solid #94a3b8'}}>
-                <th className="col-date date-col" style={{
-                  minWidth:72,padding:'6px 8px',borderRight:'1px solid #cbd5e1',
-                  background:'#f1f5f9',textAlign:'left',fontSize:11,color:'#64748b',fontWeight:700,
+              {/* Name row */}
+              <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #94a3b8' }}>
+                <th className="col-date" style={{
+                  minWidth: 76, padding: '6px 8px', borderRight: '1px solid #cbd5e1',
+                  background: '#f1f5f9', textAlign: 'left', fontSize: 11, color: '#64748b', fontWeight: 700,
                 }}>日期</th>
                 {emps.map(emp => {
-                  const dc = deptColor(emp.dept);
+                  const dc = getDeptColor(emp.dept);
                   return (
-                    <th key={emp.name} className="emp-cell" style={{
-                      padding:'6px 6px',
-                      borderRight:'1px solid #e2e8f0', textAlign:'center',
-                      fontWeight:700, fontSize:12,
-                      background: dc.bg,
-                      color: dc.text,
+                    <th key={emp.name} style={{
+                      minWidth: 48, padding: '6px 6px',
+                      borderRight: '1px solid #e2e8f0', textAlign: 'center',
+                      fontWeight: 700, fontSize: 12,
+                      background: dc.bg, color: dc.text,
                     }}>{emp.name}</th>
                   );
                 })}
@@ -515,8 +719,8 @@ function App() {
             </thead>
 
             <tbody>
-              {Array.from({length:totalDays},(_,i)=>i+1).map(day => {
-                const dow       = getDOW(year,month,day);
+              {Array.from({ length: totalDays }, (_, i) => i+1).map(day => {
+                const dow       = getDOW(year, month, day);
                 const isWeekend = dow===0||dow===6;
                 const isToday   = today.getFullYear()===year &&
                                   today.getMonth()+1===month &&
@@ -525,57 +729,65 @@ function App() {
                 const dtColor = isToday ? '#dd6650' : isWeekend ? '#3b82f6' : '#475569';
 
                 return (
-                  <tr key={day} style={{background:rowBg,borderBottom:'1px solid #f1f5f9'}}>
-                    <td className="col-date date-col" style={{
-                      padding:'2px 8px', borderRight:'1px solid #e2e8f0',
-                      background:rowBg, fontSize:12, fontWeight:isToday?800:500,
-                      color:dtColor, whiteSpace:'nowrap', minWidth:72,
+                  <tr key={day} style={{ background: rowBg, borderBottom: '1px solid #f1f5f9' }}>
+                    <td className="col-date" style={{
+                      padding: '2px 8px', borderRight: '1px solid #e2e8f0',
+                      background: rowBg, fontSize: 12, fontWeight: isToday ? 800 : 500,
+                      color: dtColor, whiteSpace: 'nowrap',
                     }}>
-                      {month}/{day}&nbsp;
-                      <span style={{color:'#94a3b8',fontSize:10}}>({DAYS_TW[dow]})</span>
+                      {month}/{day}{' '}
+                      <span style={{ color: '#94a3b8', fontSize: 11 }}>({DAYS_TW[dow]})</span>
                     </td>
-                    {emps.map(emp => (
-                      <Cell
-                        key={emp.name}
-                        year={year} month={month} day={day}
-                        emp={emp}
-                        leaves={leaves}
-                        duties={duties}
-                        rowBg={rowBg}
-                      />
-                    ))}
+                    {emps.map(emp => {
+                      const statuses = getCellStatuses(emp, year, month, day, leaves, duties);
+                      return (
+                        <td key={emp.name} style={{
+                          borderRight: '1px solid #f1f5f9',
+                          padding: '2px 1px', textAlign: 'center', verticalAlign: 'middle',
+                        }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                            {statuses.map(s => {
+                              const cfg = STATUS_CONFIG[s];
+                              if (!cfg) return null;
+                              return (
+                                <span key={s} style={{
+                                  display: 'inline-block',
+                                  background: cfg.bg, color: cfg.text,
+                                  borderRadius: 4, padding: '1px 4px',
+                                  fontSize: 11, fontWeight: 700, minWidth: 22,
+                                }}>{cfg.label}</span>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}
             </tbody>
 
             <tfoot>
-              <tr style={{background:'#f1f5f9',borderTop:'2px solid #94a3b8'}}>
-                <td className="col-date date-col" style={{
-                  padding:'6px 8px',borderRight:'1px solid #cbd5e1',
-                  background:'#f1f5f9',fontSize:12,fontWeight:700,color:'#475569',
-                  minWidth:72,
+              <tr style={{ background: '#f1f5f9', borderTop: '2px solid #94a3b8' }}>
+                <td className="col-date" style={{
+                  padding: '6px 8px', borderRight: '1px solid #cbd5e1',
+                  background: '#f1f5f9', fontSize: 12, fontWeight: 700, color: '#475569',
                 }}>小計</td>
                 {emps.map(emp => {
-                  const s = summary[emp.name]||{};
-                  const items = [
-                    s['排休']  > 0 && { label:'排'+s['排休'],  color:'#16a34a' },
-                    s['請假']  > 0 && { label:'假'+s['請假'],  color:'#dc2626' },
-                    s['值班']  > 0 && { label:'班'+s['值班'],  color:'#f97316' },
-                    s['值日']  > 0 && { label:'值'+s['值日'],  color:'#2563eb' },
-                    s['見紅休']> 0 && { label:'紅'+s['見紅休'],color:'#9ca3af' },
-                  ].filter(Boolean);
+                  const s = summary[emp.name] || {};
+                  const items = Object.entries(STATUS_CONFIG)
+                    .map(([type, cfg]) => ({ type, cfg, cnt: s[type] || 0 }))
+                    .filter(x => x.cnt > 0);
                   return (
-                    <td key={emp.name} className="emp-cell" style={{
-                      padding:'4px 4px',borderRight:'1px solid #e2e8f0',
-                      textAlign:'center',verticalAlign:'top',
+                    <td key={emp.name} style={{
+                      padding: '4px 4px', borderRight: '1px solid #e2e8f0', textAlign: 'center',
                     }}>
-                      {items.length===0
-                        ? <div style={{fontSize:11,color:'#cbd5e1'}}>—</div>
-                        : items.map(it=>(
-                          <div key={it.label} style={{fontSize:11,fontWeight:700,color:it.color,lineHeight:1.5}}>
-                            {it.label}
-                          </div>
+                      {items.length === 0
+                        ? <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>
+                        : items.map(({ type, cfg, cnt }) => (
+                          <div key={type} style={{
+                            fontSize: 11, fontWeight: 700, color: cfg.bg, lineHeight: 1.5,
+                          }}>{cfg.label}{cnt}</div>
                         ))
                       }
                     </td>
@@ -587,12 +799,88 @@ function App() {
         )}
       </div>
 
-      {/* ── Footer ── */}
-      <div style={{textAlign:'center',fontSize:11,color:'#94a3b8',padding:'14px 0 28px',marginTop:4}}>
-        閱覽模式 — 資料唯讀，如需修改請開啟排班表編輯版
+      <div style={{ textAlign: 'center', fontSize: 11, color: '#94a3b8', padding: '14px 0 28px' }}>
+        唯讀模式 · 僅供查閱，不可編輯 · 資料來源：Ragic
       </div>
     </div>
   );
+}
+
+/* ── Root App ───────────────────────────────────────────────── */
+function App() {
+  // Screens: 'entry' | 'name-select' | 'personal' | 'team'
+  const [mode,        setMode]        = React.useState('entry');
+  const [emps,        setEmps]        = React.useState([]);
+  const [selectedEmp, setSelectedEmp] = React.useState(null);
+  const [empLoading,  setEmpLoading]  = React.useState(false);
+  const [empErr,      setEmpErr]      = React.useState(null);
+
+  // Load employees once, shared between both modes
+  const ensureEmps = React.useCallback(() => {
+    if (emps.length > 0) return Promise.resolve(emps);
+    setEmpLoading(true);
+    setEmpErr(null);
+    return loadEmployees()
+      .then(rows => { setEmps(rows); setEmpLoading(false); return rows; })
+      .catch(e   => { setEmpErr(e.message); setEmpLoading(false); throw e; });
+  }, [emps]);
+
+  const goPersonal = () => { ensureEmps().then(() => setMode('name-select')).catch(() => {}); };
+  const goTeam     = () => { ensureEmps().then(() => setMode('team')).catch(() => {}); };
+
+  if (empLoading) return (
+    <div style={{
+      minHeight: '100vh', background: '#f8fafc',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexDirection: 'column', gap: 16,
+      fontFamily: '"Microsoft JhengHei","Noto Sans TC",sans-serif',
+    }}>
+      <Spinner/>
+      <div style={{ fontSize: 14, color: '#64748b' }}>載入員工資料中…</div>
+    </div>
+  );
+
+  if (empErr) return (
+    <div style={{
+      minHeight: '100vh', background: '#f8fafc',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexDirection: 'column', gap: 16, color: '#dc2626',
+      fontFamily: '"Microsoft JhengHei",sans-serif',
+    }}>
+      <div style={{ fontSize: 40 }}>⚠️</div>
+      <div style={{ fontSize: 15, maxWidth: 360, textAlign: 'center' }}>{empErr}</div>
+      <button onClick={() => { setEmpErr(null); setMode('entry'); }} style={{
+        padding: '8px 24px', background: '#3f5262', color: '#fff',
+        border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14,
+      }}>返回</button>
+    </div>
+  );
+
+  if (mode === 'entry') {
+    return <EntryScreen onPersonal={goPersonal} onTeam={goTeam}/>;
+  }
+  if (mode === 'name-select') {
+    return (
+      <NameSelect
+        emps={emps}
+        onSelect={emp => { setSelectedEmp(emp); setMode('personal'); }}
+        onBack={() => setMode('entry')}
+      />
+    );
+  }
+  if (mode === 'personal' && selectedEmp) {
+    return (
+      <PersonalView
+        emp={selectedEmp}
+        allEmps={emps}
+        onBack={() => setMode('name-select')}
+      />
+    );
+  }
+  if (mode === 'team') {
+    return <TeamView emps={emps} onBack={() => setMode('entry')}/>;
+  }
+  return null;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
