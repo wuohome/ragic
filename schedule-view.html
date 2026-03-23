@@ -35,6 +35,13 @@
     }
     .cal-cell.today { border-color: #f59e0b; background: #fffbeb; }
     .cal-cell.weekend { background: #eff6ff; }
+    .cal-cell.clickable { cursor: pointer; transition: box-shadow 0.12s, border-color 0.12s; }
+    .cal-cell.clickable:hover { box-shadow: 0 2px 10px rgba(139,92,246,0.25); border-color: #a78bfa; }
+    .cal-cell.saving { opacity: 0.7; pointer-events: none; }
+    @keyframes toastIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes toastOut { from { opacity:1; } to { opacity:0; } }
+    .toast-in  { animation: toastIn 0.22s ease; }
+    .toast-out { animation: toastOut 0.3s ease forwards; }
     @media (max-width: 480px) {
       .cal-cell { min-height: 56px; padding: 2px 4px; }
     }
@@ -68,6 +75,8 @@ const F_D_DATE  = '1000971';
 const F_D_EMP   = '1000972';
 const F_D_YEAR  = '1000973';
 const F_D_MONTH = '1000974';
+const F_D_NO    = '1000975';
+const F_D_CHANGE= '1000976';
 
 const DAYS_TW = ['日','一','二','三','四','五','六'];
 
@@ -102,6 +111,9 @@ const STATUS_CONFIG = {
   '值日': { bg:'#3b82f6', text:'#fff', label:'值' },
   '見紅休':{ bg:'#9ca3af', text:'#fff', label:'休' },
 };
+
+const MANAGER_NAME = '韓珊珊';
+const MANAGER_PASS = '0718';
 
 /* ── Helpers ────────────────────────────────────────────────── */
 function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); }
@@ -179,12 +191,77 @@ async function loadDuties(year, month) {
   if (!res.ok) throw new Error('值日資料載入失敗 (' + res.status + ')');
   const data = await res.json();
   const map = {};
-  for (const [, r] of Object.entries(data)) {
+  for (const [rid, r] of Object.entries(data)) {
     if (!r || typeof r !== 'object' || !r[F_D_DATE]) continue;
-    const key = r[F_D_EMP] + '__' + r[F_D_DATE];
-    map[key] = true;
+    const empName = r[F_D_EMP];
+    const date    = r[F_D_DATE];
+    const key = empName + '__' + date;
+    map[key] = { ragicId: rid, empName, date };
   }
   return map;
+}
+
+/* ── Write API helpers ──────────────────────────────────────── */
+async function apiCreateLeave(empName, date, year, month, type) {
+  const url = `${BASE_URL}${LEAVE_FORM}?${API_P}`;
+  const body = new URLSearchParams({
+    [F_L_EMP]:   empName,
+    [F_L_DATE]:  date,
+    [F_L_YEAR]:  String(year),
+    [F_L_MONTH]: String(month),
+    [F_L_TYPE]:  type,
+  }).toString();
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  if (!res.ok) throw new Error('建立失敗 (' + res.status + ')');
+  const data = await res.json();
+  return data.ragicId || data._ragicId || Object.keys(data)[0];
+}
+
+async function apiDeleteLeave(ragicId) {
+  const url = `${BASE_URL}${LEAVE_FORM}/${ragicId}?${API_P}`;
+  const res = await fetch(url, { method: 'DELETE' });
+  if (!res.ok) throw new Error('刪除失敗 (' + res.status + ')');
+}
+
+async function apiUpdateLeaveType(ragicId, newType) {
+  const url = `${BASE_URL}${LEAVE_FORM}/${ragicId}?${API_P}`;
+  const body = new URLSearchParams({ [F_L_TYPE]: newType }).toString();
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  if (!res.ok) throw new Error('更新失敗 (' + res.status + ')');
+}
+
+async function apiCreateDuty(empName, date, year, month) {
+  const url = `${BASE_URL}${DUTY_FORM}?${API_P}`;
+  const body = new URLSearchParams({
+    [F_D_DATE]:   date,
+    [F_D_EMP]:    empName,
+    [F_D_YEAR]:   String(year),
+    [F_D_MONTH]:  String(month),
+    [F_D_NO]:     'No',
+    [F_D_CHANGE]: '手動變更',
+  }).toString();
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  if (!res.ok) throw new Error('建立值日失敗 (' + res.status + ')');
+  const data = await res.json();
+  return data.ragicId || data._ragicId || Object.keys(data)[0];
+}
+
+async function apiDeleteDuty(ragicId) {
+  const url = `${BASE_URL}${DUTY_FORM}/${ragicId}?${API_P}`;
+  const res = await fetch(url, { method: 'DELETE' });
+  if (!res.ok) throw new Error('刪除值日失敗 (' + res.status + ')');
 }
 
 /* ── Shared logic: get statuses for a cell ─────────────────── */
@@ -227,6 +304,90 @@ function StatusBadge({ type }) {
       fontSize: 11, fontWeight: 700,
       display: 'inline-block', marginTop: 2, marginRight: 2,
     }}>{type === '見紅休' ? '休' : cfg.label}</span>
+  );
+}
+
+/* ── Toast notification ─────────────────────────────────────── */
+function Toast({ toasts }) {
+  return (
+    <div style={{
+      position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+      zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+      pointerEvents: 'none',
+    }}>
+      {toasts.map(t => (
+        <div key={t.id} className={t.leaving ? 'toast-out' : 'toast-in'} style={{
+          background: t.type === 'error' ? '#dc2626' : '#16a34a',
+          color: '#fff', borderRadius: 8, padding: '9px 22px',
+          fontSize: 14, fontWeight: 700,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.22)',
+          whiteSpace: 'nowrap',
+        }}>{t.msg}</div>
+      ))}
+    </div>
+  );
+}
+
+function useToast() {
+  const [toasts, setToasts] = React.useState([]);
+  const show = React.useCallback((msg, type = 'success') => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev, { id, msg, type, leaving: false }]);
+    setTimeout(() => {
+      setToasts(prev => prev.map(t => t.id === id ? { ...t, leaving: true } : t));
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 320);
+    }, 2000);
+  }, []);
+  return { toasts, show };
+}
+
+/* ── Password Prompt Modal ──────────────────────────────────── */
+function PasswordModal({ onConfirm, onCancel }) {
+  const [val, setVal] = React.useState('');
+  const [err, setErr] = React.useState(false);
+  const handleSubmit = () => {
+    if (val === MANAGER_PASS) { onConfirm(); }
+    else { setErr(true); setVal(''); setTimeout(() => setErr(false), 1500); }
+  };
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9000,
+    }}>
+      <div style={{
+        background: '#fff', borderRadius: 14, padding: '32px 28px', minWidth: 300,
+        boxShadow: '0 8px 40px rgba(0,0,0,0.22)', textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 28, marginBottom: 10 }}>🔑</div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: '#3f5262', marginBottom: 6 }}>管理模式</div>
+        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>請輸入管理員密碼</div>
+        <input
+          type="password"
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+          placeholder="密碼"
+          autoFocus
+          style={{
+            width: '100%', padding: '10px 14px', borderRadius: 8, fontSize: 15,
+            border: err ? '2px solid #dc2626' : '2px solid #e2e8f0',
+            outline: 'none', marginBottom: 16,
+            transition: 'border-color 0.15s',
+          }}
+        />
+        {err && <div style={{ color: '#dc2626', fontSize: 12, marginTop: -12, marginBottom: 12 }}>密碼錯誤</div>}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onCancel} style={{
+            flex: 1, padding: '9px 0', borderRadius: 8, border: '2px solid #e2e8f0',
+            background: '#fff', color: '#64748b', cursor: 'pointer', fontWeight: 700, fontSize: 14,
+          }}>取消</button>
+          <button onClick={handleSubmit} style={{
+            flex: 1, padding: '9px 0', borderRadius: 8, border: 'none',
+            background: '#3f5262', color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 14,
+          }}>確認</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -278,7 +439,7 @@ function EntryScreen({ onPersonal, onTeam }) {
         >
           <div style={{ fontSize: 40, marginBottom: 10 }}>👤</div>
           <div style={{ fontSize: 17, fontWeight: 800, color: '#5b21b6' }}>我的排班</div>
-          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 6 }}>個人月曆檢視</div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 6 }}>個人月曆 · 可編輯排休</div>
         </button>
 
         {/* Team view button */}
@@ -306,7 +467,7 @@ function EntryScreen({ onPersonal, onTeam }) {
       </div>
 
       <div style={{ marginTop: 48, fontSize: 11, color: '#cbd5e1' }}>
-        唯讀模式 · 資料來源：Ragic
+        資料來源：Ragic
       </div>
     </div>
   );
@@ -314,6 +475,9 @@ function EntryScreen({ onPersonal, onTeam }) {
 
 /* ── Name Selection ─────────────────────────────────────────── */
 function NameSelect({ emps, onSelect, onBack }) {
+  const [pendingEmp,   setPendingEmp]   = React.useState(null);
+  const [showPassModal,setShowPassModal]= React.useState(false);
+
   // Group by dept (preserving order)
   const groups = React.useMemo(() => {
     const m = {};
@@ -327,6 +491,15 @@ function NameSelect({ emps, onSelect, onBack }) {
   const navBtn = {
     background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 6,
     color: '#fff', padding: '5px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 700,
+  };
+
+  const handleSelect = (emp) => {
+    if (emp.name === MANAGER_NAME) {
+      setPendingEmp(emp);
+      setShowPassModal(true);
+    } else {
+      onSelect(emp, false);
+    }
   };
 
   return (
@@ -343,6 +516,19 @@ function NameSelect({ emps, onSelect, onBack }) {
         <span style={{ fontSize: 16, fontWeight: 800 }}>👤 選擇姓名</span>
       </header>
 
+      {showPassModal && pendingEmp && (
+        <PasswordModal
+          onConfirm={() => {
+            setShowPassModal(false);
+            onSelect(pendingEmp, true); // isManager=true
+          }}
+          onCancel={() => {
+            setShowPassModal(false);
+            onSelect(pendingEmp, false); // normal mode, wrong pass
+          }}
+        />
+      )}
+
       <div style={{ padding: '28px 16px', maxWidth: 600, margin: '0 auto' }}>
         <div style={{ fontSize: 14, color: '#64748b', marginBottom: 24, textAlign: 'center' }}>
           請選擇您的名字以查看個人排班月曆
@@ -358,7 +544,7 @@ function NameSelect({ emps, onSelect, onBack }) {
               }}>{dept}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                 {members.map(emp => (
-                  <button key={emp.name} onClick={() => onSelect(emp)} style={{
+                  <button key={emp.name} onClick={() => handleSelect(emp)} style={{
                     background: '#fff', border: '2px solid ' + dc.border,
                     borderRadius: 10, padding: '12px 22px',
                     cursor: 'pointer', fontSize: 15, fontWeight: 700, color: dc.text,
@@ -375,6 +561,9 @@ function NameSelect({ emps, onSelect, onBack }) {
                     }}
                   >
                     {emp.name}
+                    {emp.name === MANAGER_NAME && (
+                      <span style={{ fontSize: 10, marginLeft: 5, opacity: 0.6 }}>🔑</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -387,26 +576,35 @@ function NameSelect({ emps, onSelect, onBack }) {
 }
 
 /* ── Personal Calendar View ─────────────────────────────────── */
-function PersonalView({ emp, allEmps, onBack }) {
+function PersonalView({ emp, allEmps, isManager, onBack }) {
   const today = new Date();
-  const [year,    setYear]    = React.useState(today.getFullYear());
-  const [month,   setMonth]   = React.useState(today.getMonth() + 1);
-  const [leaves,  setLeaves]  = React.useState({});
-  const [duties,  setDuties]  = React.useState({});
-  const [loading, setLoading] = React.useState(true);
-  const [err,     setErr]     = React.useState(null);
+  const [year,        setYear]        = React.useState(today.getFullYear());
+  const [month,       setMonth]       = React.useState(today.getMonth() + 1);
+  const [leaves,      setLeaves]      = React.useState({});
+  const [duties,      setDuties]      = React.useState({});
+  const [loading,     setLoading]     = React.useState(true);
+  const [err,         setErr]         = React.useState(null);
+  const [savingCells, setSavingCells] = React.useState({}); // key -> true
+  const [editMode,    setEditMode]    = React.useState('排休'); // '排休'|'請假'|'值班'|'值日'
+  // Manager: which employee is currently being edited
+  const [editTarget,  setEditTarget]  = React.useState(emp);
 
-  // 張忠豪 sees 蕭眞儀 too
-  const isZhang = emp.name === '張忠豪';
+  const { toasts, show: showToast } = useToast();
+
+  // 張忠豪 sees 蕭眞儀 too (only in normal non-manager mode)
+  const isZhang = !isManager && emp.name === '張忠豪';
   const xiaoEmp = React.useMemo(() => {
     if (!isZhang) return null;
     return allEmps.find(e => e.name === '蕭眞儀') || null;
   }, [isZhang, allEmps]);
 
+  // In normal mode, targets is emp (and maybe xiaoEmp).
+  // In manager mode, we only render editTarget's calendar (and they pick from dropdown).
   const targets = React.useMemo(() => {
+    if (isManager) return [editTarget];
     if (isZhang && xiaoEmp) return [emp, xiaoEmp];
     return [emp];
-  }, [emp, isZhang, xiaoEmp]);
+  }, [emp, isZhang, xiaoEmp, isManager, editTarget]);
 
   React.useEffect(() => {
     setLoading(true);
@@ -423,6 +621,82 @@ function PersonalView({ emp, allEmps, onBack }) {
     padding: '5px 14px', background: 'rgba(255,255,255,0.15)', color: '#fff',
     border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: 13, fontWeight: 700,
   };
+
+  // ── Cell click handler ──────────────────────────────────────
+  const handleCellClick = async (empObj, d) => {
+    const date = fmtDate(year, month, d);
+    const cellKey = empObj.name + '__' + date;
+
+    // Determine what mode we're in
+    const mode = isManager ? editMode : '排休';
+
+    if (mode === '值日') {
+      // Manager 值日 mode: toggle duty for this person on this date
+      const existing = duties[cellKey];
+      setSavingCells(prev => ({ ...prev, [cellKey]: true }));
+      try {
+        if (existing) {
+          await apiDeleteDuty(existing.ragicId);
+          setDuties(prev => {
+            const next = { ...prev };
+            delete next[cellKey];
+            return next;
+          });
+          showToast(`已移除 ${empObj.name} ${month}/${d} 值日`);
+        } else {
+          const ragicId = await apiCreateDuty(empObj.name, date, year, month);
+          setDuties(prev => ({ ...prev, [cellKey]: { ragicId, empName: empObj.name, date } }));
+          showToast(`已設定 ${empObj.name} ${month}/${d} 值日`);
+        }
+      } catch (e) {
+        showToast(e.message, 'error');
+      } finally {
+        setSavingCells(prev => { const n = { ...prev }; delete n[cellKey]; return n; });
+      }
+      return;
+    }
+
+    // Leave types: 排休 / 請假 / 值班
+    const existingRecs = leaves[cellKey] || [];
+    const existingForMode = existingRecs.find(r => r.type === mode);
+
+    setSavingCells(prev => ({ ...prev, [cellKey]: true }));
+    try {
+      if (existingForMode) {
+        // Delete this record
+        await apiDeleteLeave(existingForMode.ragicId);
+        setLeaves(prev => {
+          const next = { ...prev };
+          const filtered = (next[cellKey] || []).filter(r => r.ragicId !== existingForMode.ragicId);
+          if (filtered.length === 0) delete next[cellKey];
+          else next[cellKey] = filtered;
+          return next;
+        });
+        showToast(`已移除 ${month}/${d} ${mode}`);
+      } else {
+        // Create record
+        const ragicId = await apiCreateLeave(empObj.name, date, year, month, mode);
+        const newRec = { ragicId: String(ragicId), type: mode, empName: empObj.name, date };
+        setLeaves(prev => ({
+          ...prev,
+          [cellKey]: [...(prev[cellKey] || []), newRec],
+        }));
+        showToast(`已新增 ${month}/${d} ${mode}`);
+      }
+    } catch (e) {
+      showToast(e.message, 'error');
+    } finally {
+      setSavingCells(prev => { const n = { ...prev }; delete n[cellKey]; return n; });
+    }
+  };
+
+  // Can this cell be clicked? (Normal: only emp's own cells, non-見紅休)
+  // Manager: any cell except 見紅休
+  function isCellEditable(empObj, d) {
+    // 見紅休 dates: block
+    if (JIAN_HONG_NAMES.has(empObj.name) && isRedHoliday(year, month, d)) return false;
+    return true;
+  }
 
   function renderCalendar(empObj) {
     const totalDays = daysInMonth(year, month);
@@ -465,11 +739,23 @@ function PersonalView({ emp, allEmps, onBack }) {
         <div className="cal-grid">
           {cells.map(cell => {
             if (cell.blank) return <div key={cell.key} style={{ minHeight: 72 }}></div>;
+            const date = fmtDate(year, month, cell.d);
+            const cellKey = empObj.name + '__' + date;
+            const isSaving = !!savingCells[cellKey];
+            const canEdit = isCellEditable(empObj, cell.d);
             let extraClass = '';
             if (cell.isToday) extraClass = ' today';
             else if (cell.isWeekend) extraClass = ' weekend';
+            if (canEdit) extraClass += ' clickable';
+            if (isSaving) extraClass += ' saving';
+
             return (
-              <div key={cell.key} className={'cal-cell' + extraClass}>
+              <div
+                key={cell.key}
+                className={'cal-cell' + extraClass}
+                onClick={canEdit && !isSaving ? () => handleCellClick(empObj, cell.d) : undefined}
+                title={canEdit ? (isManager ? `點擊切換${editMode}` : '點擊切換排休') : undefined}
+              >
                 <span style={{
                   fontSize: 12, fontWeight: cell.isToday ? 800 : 500,
                   color: cell.isToday ? '#d97706'
@@ -477,9 +763,13 @@ function PersonalView({ emp, allEmps, onBack }) {
                        : cell.dow===6 ? '#3b82f6'
                        : '#475569',
                 }}>{cell.d}</span>
-                <div style={{ marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  {cell.statuses.map(s => <StatusBadge key={s} type={s}/>)}
-                </div>
+                {isSaving ? (
+                  <div style={{ marginTop: 4 }}><Spinner small /></div>
+                ) : (
+                  <div style={{ marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {cell.statuses.map(s => <StatusBadge key={s} type={s}/>)}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -500,7 +790,18 @@ function PersonalView({ emp, allEmps, onBack }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={onBack} style={navBtn}>← 返回</button>
           <span style={{ fontSize: 15, fontWeight: 800 }}>
-            {emp.name}{isZhang && xiaoEmp ? ' & 蕭眞儀' : ''} 的排班
+            {isManager ? (
+              <>
+                {editTarget.name} 的排班
+                <span style={{
+                  background: '#f59e0b', color: '#92400e',
+                  borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 800,
+                  marginLeft: 8, verticalAlign: 'middle',
+                }}>🔑 管理模式</span>
+              </>
+            ) : (
+              <>{emp.name}{isZhang && xiaoEmp ? ' & 蕭眞儀' : ''} 的排班</>
+            )}
           </span>
           {loading && <Spinner/>}
         </div>
@@ -512,6 +813,60 @@ function PersonalView({ emp, allEmps, onBack }) {
           <button style={navBtn} onClick={nextMonth}>下月 ›</button>
         </div>
       </header>
+
+      {/* Manager toolbar: person picker + mode buttons */}
+      {isManager && (
+        <div style={{
+          background: '#fefce8', borderBottom: '2px solid #fde68a',
+          padding: '10px 16px', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>編輯對象：</span>
+          <select
+            value={editTarget.name}
+            onChange={e => {
+              const found = allEmps.find(x => x.name === e.target.value);
+              if (found) setEditTarget(found);
+            }}
+            style={{
+              padding: '5px 10px', borderRadius: 6, border: '2px solid #fde68a',
+              fontSize: 13, fontWeight: 700, color: '#78350f', background: '#fffbeb',
+              cursor: 'pointer',
+            }}
+          >
+            {allEmps.map(e => (
+              <option key={e.name} value={e.name}>{e.name}</option>
+            ))}
+          </select>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e', marginLeft: 8 }}>模式：</span>
+          {['排休','請假','值班','值日'].map(m => (
+            <button
+              key={m}
+              onClick={() => setEditMode(m)}
+              style={{
+                padding: '5px 14px', borderRadius: 6, fontSize: 13, fontWeight: 700,
+                border: editMode === m ? '2px solid ' + (STATUS_CONFIG[m]?.bg || '#3f5262') : '2px solid #e2e8f0',
+                background: editMode === m ? (STATUS_CONFIG[m]?.bg || '#3f5262') : '#fff',
+                color: editMode === m ? (STATUS_CONFIG[m]?.text || '#fff') : '#475569',
+                cursor: 'pointer',
+                transition: 'all 0.12s',
+              }}
+            >{m}</button>
+          ))}
+        </div>
+      )}
+
+      {/* Normal employee hint bar */}
+      {!isManager && (
+        <div style={{
+          background: '#f0fdf4', borderBottom: '1px solid #bbf7d0',
+          padding: '7px 16px', fontSize: 12, color: '#15803d',
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          <span>點擊日期格子可新增／移除</span>
+          <StatusBadge type="排休"/>
+          <span style={{ color: '#64748b', marginLeft: 4 }}>灰色格（見紅休）無法編輯</span>
+        </div>
+      )}
 
       {/* Legend bar */}
       <div style={{
@@ -543,8 +898,10 @@ function PersonalView({ emp, allEmps, onBack }) {
       </div>
 
       <div style={{ textAlign: 'center', fontSize: 11, color: '#94a3b8', padding: '12px 0 28px' }}>
-        唯讀檢視 · 資料來源：Ragic
+        {isManager ? '管理模式 · 可編輯所有員工' : '可編輯排休 · 其他狀態請聯絡管理員'} · 資料來源：Ragic
       </div>
+
+      <Toast toasts={toasts}/>
     </div>
   );
 }
@@ -812,6 +1169,7 @@ function App() {
   const [mode,        setMode]        = React.useState('entry');
   const [emps,        setEmps]        = React.useState([]);
   const [selectedEmp, setSelectedEmp] = React.useState(null);
+  const [isManager,   setIsManager]   = React.useState(false);
   const [empLoading,  setEmpLoading]  = React.useState(false);
   const [empErr,      setEmpErr]      = React.useState(null);
 
@@ -863,7 +1221,11 @@ function App() {
     return (
       <NameSelect
         emps={emps}
-        onSelect={emp => { setSelectedEmp(emp); setMode('personal'); }}
+        onSelect={(emp, managerMode) => {
+          setSelectedEmp(emp);
+          setIsManager(managerMode);
+          setMode('personal');
+        }}
         onBack={() => setMode('entry')}
       />
     );
@@ -873,6 +1235,7 @@ function App() {
       <PersonalView
         emp={selectedEmp}
         allEmps={emps}
+        isManager={isManager}
         onBack={() => setMode('name-select')}
       />
     );
