@@ -284,15 +284,23 @@ const App = () => {
                 const dd = String(day).padStart(2,"0");
                 const dateStr = `${year}/${mm}/${dd}`;
 
-                // Sort employees by duty count (ascending), avoid same as yesterday
+                // 找出當天排休/請假的人
+                const onLeaveToday = new Set();
+                Object.entries(leaves).forEach(([k,v]) => {
+                    if (k.endsWith("|" + dateStr)) onLeaveToday.add(k.split("|")[0]);
+                });
+
+                // Sort employees by duty count (ascending), avoid same as yesterday, avoid on leave
                 const candidates = allEmployees
                     .map(e => ({ name: e.name, count: countMap[e.name] || 0 }))
-                    .filter(e => e.name !== lastAssigned)
+                    .filter(e => e.name !== lastAssigned && !onLeaveToday.has(e.name))
                     .sort((a,b) => a.count - b.count);
 
-                // If all employees are the same as lastAssigned (only 1 employee), fallback
-                const pool = candidates.length > 0 ? candidates : allEmployees.map(e => ({ name: e.name, count: countMap[e.name] || 0 })).sort((a,b) => a.count - b.count);
-                const chosen = pool[0].name;
+                // Fallback: if all are on leave or same as last, relax constraints
+                const pool = candidates.length > 0 ? candidates : allEmployees.map(e => ({ name: e.name, count: countMap[e.name] || 0 })).filter(e => !onLeaveToday.has(e.name)).sort((a,b) => a.count - b.count);
+                // Final fallback: if literally everyone is on leave
+                const finalPool = pool.length > 0 ? pool : allEmployees.map(e => ({ name: e.name, count: countMap[e.name] || 0 })).sort((a,b) => a.count - b.count);
+                const chosen = finalPool[0].name;
                 countMap[chosen] = (countMap[chosen] || 0) + 1;
                 lastAssigned = chosen;
                 newDuties[dateStr] = chosen;
