@@ -27,7 +27,9 @@ const CONFIG = {
     EMP_PATH: "/wuohome/ragicforms4/20004",
     LEAVE_PATH: "/wuohome/ragicforms4/2",
     F_EMP: { NAME:"3000933", DISPLAY:"1000848", DEPT:"3000937", STATUS:"3000945", HIRE:"3000955", HIRE_DATE:"3000943" },
-    F_LEAVE: { EMP:"1000961", DATE:"1000963", YEAR:"1000964", MONTH:"1000965", TYPE:"1002025", DEPT:"1002026" }
+    F_LEAVE: { EMP:"1000961", DATE:"1000963", YEAR:"1000964", MONTH:"1000965", TYPE:"1002025", DEPT:"1002026" },
+    DUTY_PATH: "/wuohome/ragicforms4/3",
+    F_DUTY: { DATE:"1000971", EMP:"1000972", YEAR:"1000973", MONTH:"1000974", IS_AUTO:"1000975", NOTE:"1000976" }
 };
 
 const apiFetch = async (path, opts={}) => {
@@ -50,7 +52,9 @@ const App = () => {
     const [leaves, setLeaves] = React.useState({});
     const [loading, setLoading] = React.useState(true);
     const [saving, setSaving] = React.useState({});
+    const [duties, setDuties] = React.useState({});  // key: "YYYY/MM/DD" → {ragicId, empName, isAuto}
     const [toast, setToast] = React.useState(null);
+    const [autoScheduling, setAutoScheduling] = React.useState(false);
 
     const showToast = (msg, ok=true) => {
         setToast({msg, ok});
@@ -92,6 +96,25 @@ const App = () => {
                     }
                 });
             setLeaves(lmap);
+
+            // Fetch duties for current month
+            const dutyJson = await apiFetch(CONFIG.DUTY_PATH);
+            const dmap = {};
+            Object.entries(dutyJson)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([id, f]) => {
+                    const date = f[CONFIG.F_DUTY.DATE] || "";
+                    const empName = f[CONFIG.F_DUTY.EMP] || "";
+                    const isAuto = f[CONFIG.F_DUTY.IS_AUTO] || "";
+                    const note = f[CONFIG.F_DUTY.NOTE] || "";
+                    if (!date || !empName) return;
+                    const parts = date.replace(/\//g,"-").split("-");
+                    const y = parseInt(parts[0]), m = parseInt(parts[1]);
+                    if (y === year && m === month) {
+                        dmap[date] = { ragicId: id, empName, isAuto, note };
+                    }
+                });
+            setDuties(dmap);
         } catch(e) {
             console.error(e);
             showToast("載入失敗: " + e.message, false);
@@ -150,6 +173,180 @@ const App = () => {
         setSaving(s => { const n = {...s}; delete n[key]; return n; });
     };
 
+    const handleDutyClick = async (dateStr) => {
+        const dutyKey = `duty|${dateStr}`;
+        if (saving[dutyKey]) return;
+
+        const empNames = employees.map(e => e.name);
+        if (empNames.length === 0) return;
+
+        const current = duties[dateStr];
+        const currentName = current ? current.empName : "";
+
+        // Build prompt with options
+        const options = ["（清除）", ...empNames];
+        const promptMsg = `選擇 ${dateStr} 的值日生：\n` +
+            options.map((n, i) => `${i}. ${n}`).join("\n") +
+            `\n\n目前：${currentName || "（無）"}\n請輸入編號：`;
+        const input = window.prompt(promptMsg);
+        if (input === null) return; // cancelled
+
+        const idx = parseInt(input);
+        if (isNaN(idx) || idx < 0 || idx >= options.length) {
+            showToast("無效的選擇", false);
+            return;
+        }
+
+        setSaving(s => ({...s, [dutyKey]: true}));
+        try {
+            if (idx === 0) {
+                // Clear duty
+                if (current && current.ragicId) {
+                    await apiFetch(`${CONFIG.DUTY_PATH}/${current.ragicId}`, { method: "DELETE" });
+                }
+                setDuties(d => { const n = {...d}; delete n[dateStr]; return n; });
+                showToast(`${dateStr} 值日生已清除`);
+            } else {
+                const selectedName = empNames[idx - 1];
+                const params = new URLSearchParams();
+                params.append(CONFIG.F_DUTY.DATE, dateStr);
+                params.append(CONFIG.F_DUTY.EMP, selectedName);
+                params.append(CONFIG.F_DUTY.YEAR, String(year));
+                params.append(CONFIG.F_DUTY.MONTH, String(month));
+                params.append(CONFIG.F_DUTY.IS_AUTO, "No");
+                params.append(CONFIG.F_DUTY.NOTE, "手動變更");
+
+                if (current && current.ragicId) {
+                    // Update existing record
+                    await apiFetch(`${CONFIG.DUTY_PATH}/${current.ragicId}`, {
+                        method: "POST",
+                        headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                        body: params.toString()
+                    });
+                    setDuties(d => ({...d, [dateStr]: {...current, empName: selectedName, isAuto: "No", note: "手動變更"}}));
+                } else {
+                    // Create new record
+                    const res = await apiFetch(CONFIG.DUTY_PATH, {
+                        method: "POST",
+                        headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                        body: params.toString()
+                    });
+                    setDuties(d => ({...d, [dateStr]: {ragicId: String(res.ragicId), empName: selectedName, isAuto: "No", note: "手動變更"}}));
+                }
+                showToast(`${dateStr} 值日生：${selectedName}`);
+            }
+        } catch(e) {
+            console.error(e);
+            showToast("儲存失敗: " + e.message, false);
+        }
+        setSaving(s => { const n = {...s}; delete n[dutyKey]; return n; });
+    };
+
+    const handleAutoSchedule = async () => {
+        if (employees.length === 0) { showToast("尚未載入員工資料", false); return; }
+        if (!window.confirm(`確定要自動預排 ${year} 年 ${month} 月的值日生？\n現有的自動排班紀錄會被覆蓋。`)) return;
+
+        setAutoScheduling(true);
+        try {
+            // Fetch previous month's duties to get counts
+            const prevMonth = month === 1 ? 12 : month - 1;
+            const prevYear = month === 1 ? year - 1 : year;
+            const prevDutyJson = await apiFetch(CONFIG.DUTY_PATH);
+            const countMap = {};
+            employees.forEach(e => { countMap[e.name] = 0; });
+
+            Object.entries(prevDutyJson)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([id, f]) => {
+                    const date = f[CONFIG.F_DUTY.DATE] || "";
+                    const empName = f[CONFIG.F_DUTY.EMP] || "";
+                    if (!date || !empName) return;
+                    const parts = date.replace(/\//g,"-").split("-");
+                    const y = parseInt(parts[0]), m = parseInt(parts[1]);
+                    if (y === prevYear && m === prevMonth && countMap.hasOwnProperty(empName)) {
+                        countMap[empName]++;
+                    }
+                });
+
+            // Generate schedule for each day of the month
+            const daysInMonth = new Date(year, month, 0).getDate();
+            const newDuties = {};
+            let lastAssigned = "";
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const mm = String(month).padStart(2,"0");
+                const dd = String(day).padStart(2,"0");
+                const dateStr = `${year}/${mm}/${dd}`;
+
+                // Sort employees by duty count (ascending), avoid same as yesterday
+                const candidates = employees
+                    .map(e => ({ name: e.name, count: countMap[e.name] || 0 }))
+                    .filter(e => e.name !== lastAssigned)
+                    .sort((a,b) => a.count - b.count);
+
+                // If all employees are the same as lastAssigned (only 1 employee), fallback
+                const pool = candidates.length > 0 ? candidates : employees.map(e => ({ name: e.name, count: countMap[e.name] || 0 })).sort((a,b) => a.count - b.count);
+                const chosen = pool[0].name;
+                countMap[chosen] = (countMap[chosen] || 0) + 1;
+                lastAssigned = chosen;
+                newDuties[dateStr] = chosen;
+            }
+
+            // Write all records to Ragic (delete existing auto records first, then create)
+            // Delete existing auto-scheduled records for this month
+            const existingDutyJson = await apiFetch(CONFIG.DUTY_PATH);
+            const deletePromises = [];
+            Object.entries(existingDutyJson)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([id, f]) => {
+                    const date = f[CONFIG.F_DUTY.DATE] || "";
+                    const isAuto = f[CONFIG.F_DUTY.IS_AUTO] || "";
+                    if (!date) return;
+                    const parts = date.replace(/\//g,"-").split("-");
+                    const y = parseInt(parts[0]), m = parseInt(parts[1]);
+                    if (y === year && m === month && isAuto !== "No") {
+                        deletePromises.push(apiFetch(`${CONFIG.DUTY_PATH}/${id}`, { method: "DELETE" }));
+                    }
+                });
+            await Promise.all(deletePromises);
+
+            // Create new records
+            const createPromises = Object.entries(newDuties).map(async ([dateStr, empName]) => {
+                const params = new URLSearchParams();
+                params.append(CONFIG.F_DUTY.DATE, dateStr);
+                params.append(CONFIG.F_DUTY.EMP, empName);
+                params.append(CONFIG.F_DUTY.YEAR, String(year));
+                params.append(CONFIG.F_DUTY.MONTH, String(month));
+                params.append(CONFIG.F_DUTY.IS_AUTO, "Yes");
+                params.append(CONFIG.F_DUTY.NOTE, "系統預排");
+                const res = await apiFetch(CONFIG.DUTY_PATH, {
+                    method: "POST",
+                    headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                    body: params.toString()
+                });
+                return { dateStr, empName, ragicId: String(res.ragicId) };
+            });
+
+            const results = await Promise.all(createPromises);
+            const dmap = {};
+            // Keep manually-changed duties
+            Object.entries(duties).forEach(([dateStr, d]) => {
+                if (d.isAuto === "No") dmap[dateStr] = d;
+            });
+            results.forEach(({ dateStr, empName, ragicId }) => {
+                if (!dmap[dateStr]) {
+                    dmap[dateStr] = { ragicId, empName, isAuto: "Yes", note: "系統預排" };
+                }
+            });
+            setDuties(dmap);
+            showToast(`已完成自動預排 ${Object.keys(newDuties).length} 天`);
+        } catch(e) {
+            console.error(e);
+            showToast("自動預排失敗: " + e.message, false);
+        }
+        setAutoScheduling(false);
+    };
+
     const daysInMonth = new Date(year, month, 0).getDate();
     const dates = Array.from({length: daysInMonth}, (_, i) => {
         const d = new Date(year, month-1, i+1);
@@ -184,12 +381,19 @@ const App = () => {
                     <span className="text-lg font-bold min-w-[140px] text-center">{year} 年 {month} 月</span>
                     <button onClick={() => changeMonth(1)} className="px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 font-bold">▶</button>
                     <button onClick={load} className="ml-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 text-sm">重新載入</button>
+                    <button
+                        onClick={handleAutoSchedule}
+                        disabled={autoScheduling || loading}
+                        className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                        {autoScheduling ? "預排中..." : "一鍵預排值日生"}
+                    </button>
                 </div>
             </div>
 
             <div className="flex gap-4 mb-3 text-sm">
                 <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-green-500 inline-block"></span> 排休</span>
                 <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-red-500 inline-block"></span> 請假</span>
+                <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-blue-500 inline-block"></span> 值日生</span>
                 <span className="text-gray-400">點格子循環：空 → 排休 → 請假 → 空</span>
             </div>
 
@@ -205,6 +409,9 @@ const App = () => {
                             <tr>
                                 <th className="sticky-left bg-white p-2 min-w-[80px]" rowSpan={2}>
                                     <span className="text-gray-500 text-xs">日期</span>
+                                </th>
+                                <th className="p-1 text-white text-xs font-medium" style={{backgroundColor:"#3b82f6", minWidth:"56px"}} rowSpan={2}>
+                                    值日
                                 </th>
                                 {(() => {
                                     const result = [];
@@ -239,11 +446,31 @@ const App = () => {
                                 const dateStr = `${year}/${mm}/${dd}`;
                                 const isToday = dateStr === todayStr;
                                 const rowBg = isToday ? "bg-yellow-50" : isWeekend ? "bg-blue-50/40" : "";
+                                const duty = duties[dateStr];
+                                const dutyKey = `duty|${dateStr}`;
+                                const isDutySaving = saving[dutyKey];
+
+                                // Check if duty person is also on leave
+                                const dutyOnLeave = duty && leaves[`${duty.empName}|${dateStr}`];
+
                                 return (
                                     <tr key={day} className={rowBg}>
                                         <td className={`sticky-left p-2 text-center font-medium whitespace-nowrap ${isToday ? "bg-yellow-50" : isWeekend ? "bg-blue-50" : "bg-white"} ${isWeekend ? "text-red-500" : "text-gray-700"}`}>
                                             <span className="text-sm">{day}</span>
                                             <span className="text-xs ml-1 text-gray-400">({dow})</span>
+                                        </td>
+                                        <td
+                                            onClick={() => handleDutyClick(dateStr)}
+                                            className={`p-0 text-center cursor-pointer hover:opacity-80 transition-opacity select-none ${isDutySaving ? "opacity-50" : ""}`}
+                                            style={{minWidth:"56px", height:"32px", backgroundColor: duty ? "#3b82f6" : "#f1f5f9"}}>
+                                            {isDutySaving ? (
+                                                <span className="cell-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full"></span>
+                                            ) : duty ? (
+                                                <span className="inline-block w-full leading-[32px] text-xs font-bold" style={{color: dutyOnLeave ? "#fca5a5" : "white"}}>
+                                                    {dutyOnLeave && "⚠️"}
+                                                    {duty.empName.slice(0, 3)}
+                                                </span>
+                                            ) : null}
                                         </td>
                                         {employees.map(emp => {
                                             const key = `${emp.name}|${dateStr}`;
@@ -271,6 +498,9 @@ const App = () => {
                         <tfoot>
                             <tr className="bg-gray-50 font-medium">
                                 <td className="sticky-left bg-gray-50 p-2 text-center text-xs text-gray-500">合計</td>
+                                <td className="p-1 text-center text-xs text-gray-400">
+                                    {Object.keys(duties).length > 0 ? <span className="text-blue-500">{Object.keys(duties).length}日</span> : <span className="text-gray-300">-</span>}
+                                </td>
                                 {employees.map(emp => {
                                     const s = getStats(emp.name);
                                     return (
