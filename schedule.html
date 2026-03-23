@@ -45,6 +45,31 @@ const DAYS = ["日","一","二","三","四","五","六"];
 const DEPT_COLORS = { "租賃部":"#f97316", "設計部":"#10b981", "管理部/特助":"#8b5cf6", "管理部/秘書":"#8b5cf6" };
 const DEPT_ORDER = { "租賃部":0, "設計部":1, "管理部/特助":2, "管理部/秘書":3 };
 
+// 見紅休人員（設計部 + 瓊安）
+const GOV_REST_EMPLOYEES = new Set(["張瓊安", "沈郁雯", "呂鴻墀", "韓珊珊"]);
+
+// 2026 台灣國定假日（非週末的放假日）
+const GOV_HOLIDAYS_2026 = new Set([
+    "2026/01/01", // 元旦
+    "2026/02/16", // 除夕
+    "2026/02/17", // 初一
+    "2026/02/18", // 初二
+    "2026/02/19", // 初三
+    "2026/02/20", // 初四
+    "2026/02/27", // 228補假（228是週六，補週五）
+    "2026/04/03", // 兒童節補假（4/4週六，補週五）
+    "2026/04/06", // 清明節補假（4/5週日，補週一）
+    "2026/05/01", // 勞動節
+    "2026/06/19", // 端午節
+    "2026/09/25", // 中秋節
+    "2026/09/28", // 教師節補假
+    "2026/10/09", // 國慶日補假（10/10週六，補週五）
+    "2026/10/26", // 光復節補假（10/25週日，補週一）
+    "2026/12/25", // 行憲紀念日
+]);
+
+const isGovHoliday = (dateStr, isWeekend) => isWeekend || GOV_HOLIDAYS_2026.has(dateStr);
+
 const App = () => {
     const [year, setYear] = React.useState(new Date().getFullYear());
     const [month, setMonth] = React.useState(new Date().getMonth() + 1);
@@ -284,11 +309,17 @@ const App = () => {
                 const dd = String(day).padStart(2,"0");
                 const dateStr = `${year}/${mm}/${dd}`;
 
-                // 找出當天排休/請假的人
+                // 找出當天排休/請假的人 + 見紅休的人
+                const d = new Date(year, month-1, day);
+                const isWknd = d.getDay()===0||d.getDay()===6;
                 const onLeaveToday = new Set();
                 Object.entries(leaves).forEach(([k,v]) => {
                     if (k.endsWith("|" + dateStr)) onLeaveToday.add(k.split("|")[0]);
                 });
+                // 見紅休人員在假日也算休假
+                if (isGovHoliday(dateStr, isWknd)) {
+                    GOV_REST_EMPLOYEES.forEach(name => onLeaveToday.add(name));
+                }
 
                 // Sort employees by duty count (ascending), avoid same as yesterday, avoid on leave
                 const candidates = allEmployees
@@ -411,6 +442,7 @@ const App = () => {
                 <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-green-500 inline-block"></span> 排休</span>
                 <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-red-500 inline-block"></span> 請假</span>
                 <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-blue-500 inline-block"></span> 值日生</span>
+                <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-gray-200 inline-block"></span> 見紅休（自動）</span>
                 <span className="text-gray-400">點格子循環：空 → 排休 → 請假 → 空</span>
             </div>
 
@@ -495,13 +527,16 @@ const App = () => {
                                             const isSaving = saving[key];
                                             const duty = duties[dateStr];
                                             const isOnDuty = duty && duty.empName === emp.name;
+                                            const isGovRest = GOV_REST_EMPLOYEES.has(emp.name) && isGovHoliday(dateStr, isWeekend);
                                             return (
                                                 <td key={key}
-                                                    onClick={() => handleClick(emp.name, dateStr)}
-                                                    className={`p-0 text-center cursor-pointer hover:bg-gray-100 transition-colors select-none ${isSaving ? "opacity-50" : ""}`}
+                                                    onClick={() => !isGovRest && handleClick(emp.name, dateStr)}
+                                                    className={`p-0 text-center transition-colors select-none ${isGovRest ? "cursor-default" : "cursor-pointer hover:bg-gray-100"} ${isSaving ? "opacity-50" : ""}`}
                                                     style={{minWidth:"56px", height:"32px"}}>
                                                     {isSaving ? (
                                                         <span className="cell-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full"></span>
+                                                    ) : isGovRest ? (
+                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-gray-400 bg-gray-100">休</span>
                                                     ) : leave && isOnDuty ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-white bg-red-500">⚠️值</span>
                                                     ) : leave ? (
