@@ -452,8 +452,11 @@ const App = () => {
                     <table className="w-full text-sm" style={{tableLayout:"fixed"}}>
                         <thead>
                             <tr>
-                                <th className="sticky-left bg-white p-2 min-w-[80px]" rowSpan={2}>
+                                <th className="sticky-left bg-white p-2" style={{width:"60px"}} rowSpan={2}>
                                     <span className="text-gray-500 text-xs">日期</span>
+                                </th>
+                                <th className="bg-gray-50 p-1" style={{width:"36px"}} rowSpan={2}>
+                                    <span className="text-gray-500 text-xs">在班</span>
                                 </th>
                                 {(() => {
                                     const result = [];
@@ -501,6 +504,23 @@ const App = () => {
                                             <span className="text-sm">{day}</span>
                                             <span className="text-xs ml-1 text-gray-400">({dow})</span>
                                         </td>
+                                        {(() => {
+                                            // 計算在班人數 = 總人數 - 排休/請假/見紅休人數
+                                            let offCount = 0;
+                                            employees.forEach(emp => {
+                                                const k = `${emp.name}|${dateStr}`;
+                                                const lv = leaves[k];
+                                                const govRest = GOV_REST_EMPLOYEES.has(emp.name) && isGovHoliday(dateStr, isWeekend);
+                                                if (govRest || (lv && (lv.type === "排休" || lv.type === "請假"))) offCount++;
+                                            });
+                                            const onCount = employees.length - offCount;
+                                            const low = onCount <= 5;
+                                            return (
+                                                <td className={`p-1 text-center text-xs font-bold ${low ? "text-red-600 bg-red-50" : "text-gray-600"}`}>
+                                                    {onCount}
+                                                </td>
+                                            );
+                                        })()}
                                         {employees.map(emp => {
                                             const key = `${emp.name}|${dateStr}`;
                                             const leave = leaves[key];
@@ -539,6 +559,7 @@ const App = () => {
                         <tfoot>
                             <tr className="bg-gray-50 font-medium">
                                 <td className="sticky-left bg-gray-50 p-2 text-center text-xs text-gray-500">合計</td>
+                                <td className="bg-gray-50 p-1 text-center text-xs text-gray-400">—</td>
                                 {employees.map(emp => {
                                     const s = getStats(emp.name);
                                     return (
