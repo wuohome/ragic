@@ -81,6 +81,7 @@ const App = () => {
     const [duties, setDuties] = React.useState({});  // key: "YYYY/MM/DD" → {ragicId, empName, isAuto}
     const [toast, setToast] = React.useState(null);
     const [autoScheduling, setAutoScheduling] = React.useState(false);
+    const [mode, setMode] = React.useState("排休"); // 排休 / 請假 / 值班 / 值日
 
     const showToast = (msg, ok=true) => {
         setToast({msg, ok});
@@ -162,6 +163,54 @@ const App = () => {
     React.useEffect(() => { load(); }, [year, month]);
 
     const handleClick = async (empName, dateStr) => {
+        if (mode === "值日") {
+            // 值日模式：寫入/清除值日生表
+            const dutyKey = `duty|${dateStr}`;
+            if (saving[dutyKey]) return;
+            const current = duties[dateStr];
+
+            setSaving(s => ({...s, [dutyKey]: true}));
+            try {
+                if (current && current.empName === empName) {
+                    // 同一人再點 = 清除
+                    await apiFetch(`${CONFIG.DUTY_PATH}/${current.ragicId}`, { method: "DELETE" });
+                    setDuties(d => { const n = {...d}; delete n[dateStr]; return n; });
+                    showToast(`${dateStr} 值日生已清除`);
+                } else {
+                    // 設定值日生
+                    const params = new URLSearchParams();
+                    params.append(CONFIG.F_DUTY.DATE, dateStr);
+                    params.append(CONFIG.F_DUTY.EMP, empName);
+                    params.append(CONFIG.F_DUTY.YEAR, String(year));
+                    params.append(CONFIG.F_DUTY.MONTH, String(month));
+                    params.append(CONFIG.F_DUTY.IS_AUTO, "No");
+                    params.append(CONFIG.F_DUTY.NOTE, "手動變更");
+                    if (current && current.ragicId) {
+                        await apiFetch(`${CONFIG.DUTY_PATH}/${current.ragicId}`, {
+                            method: "POST",
+                            headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                            body: params.toString()
+                        });
+                        setDuties(d => ({...d, [dateStr]: {...current, empName, isAuto: "No", note: "手動變更"}}));
+                    } else {
+                        const res = await apiFetch(CONFIG.DUTY_PATH, {
+                            method: "POST",
+                            headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                            body: params.toString()
+                        });
+                        setDuties(d => ({...d, [dateStr]: {ragicId: String(res.ragicId), empName, isAuto: "No", note: "手動變更"}}));
+                    }
+                    showToast(`${dateStr} 值日生：${empName}`);
+                }
+            } catch(e) {
+                console.error(e);
+                showToast("儲存失敗: " + e.message, false);
+            }
+            setSaving(s => { const n = {...s}; delete n[dutyKey]; return n; });
+            return;
+        }
+
+        // 排休/請假/值班模式
         const key = `${empName}|${dateStr}`;
         if (saving[key]) return;
 
@@ -169,14 +218,13 @@ const App = () => {
         try {
             const existing = leaves[key];
             if (!existing) {
-                // Empty -> 排休
+                // 空格 → 寫入當前模式
                 const params = new URLSearchParams();
                 params.append(CONFIG.F_LEAVE.EMP, empName);
                 params.append(CONFIG.F_LEAVE.DATE, dateStr);
                 params.append(CONFIG.F_LEAVE.YEAR, String(year));
                 params.append(CONFIG.F_LEAVE.MONTH, String(month));
-                params.append(CONFIG.F_LEAVE.TYPE, "排休");
-                // 找到員工的部門，一起寫入
+                params.append(CONFIG.F_LEAVE.TYPE, mode);
                 const empObj = employees.find(e => e.name === empName);
                 if (empObj && empObj.dept) params.append(CONFIG.F_LEAVE.DEPT, empObj.dept);
                 const res = await apiFetch(CONFIG.LEAVE_PATH, {
@@ -184,118 +232,30 @@ const App = () => {
                     headers: {"Content-Type":"application/x-www-form-urlencoded"},
                     body: params.toString()
                 });
-                setLeaves(l => ({...l, [key]: {ragicId: String(res.ragicId), type:"排休"}}));
-                showToast(`${empName} ${dateStr} 排休`);
-            } else if (existing.type === "排休") {
-                // 排休 -> 請假
+                setLeaves(l => ({...l, [key]: {ragicId: String(res.ragicId), type: mode}}));
+                showToast(`${empName} ${dateStr} ${mode}`);
+            } else if (existing.type === mode) {
+                // 同模式再點 = 清除
+                await apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, { method:"DELETE" });
+                setLeaves(l => { const n = {...l}; delete n[key]; return n; });
+                showToast(`${empName} ${dateStr} 已清除`);
+            } else {
+                // 不同模式 → 更新
                 const params = new URLSearchParams();
-                params.append(CONFIG.F_LEAVE.TYPE, "請假");
+                params.append(CONFIG.F_LEAVE.TYPE, mode);
                 await apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, {
                     method: "POST",
                     headers: {"Content-Type":"application/x-www-form-urlencoded"},
                     body: params.toString()
                 });
-                setLeaves(l => ({...l, [key]: {...existing, type:"請假"}}));
-                showToast(`${empName} ${dateStr} 請假`);
-            } else if (existing.type === "請假") {
-                // 請假 -> 值班（只有承攬）或刪除（見紅休人員）
-                const empObj = employees.find(e => e.name === empName);
-                if (empObj && empObj.hire === "承攬") {
-                    const params = new URLSearchParams();
-                    params.append(CONFIG.F_LEAVE.TYPE, "值班");
-                    await apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, {
-                        method: "POST",
-                        headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                        body: params.toString()
-                    });
-                    setLeaves(l => ({...l, [key]: {...existing, type:"值班"}}));
-                    showToast(`${empName} ${dateStr} 值班`);
-                } else {
-                    // 非承攬 → 直接刪除
-                    await apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, { method:"DELETE" });
-                    setLeaves(l => { const n = {...l}; delete n[key]; return n; });
-                    showToast(`${empName} ${dateStr} 已清除`);
-                }
-            } else {
-                // 值班 -> 刪除
-                await apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, { method:"DELETE" });
-                setLeaves(l => { const n = {...l}; delete n[key]; return n; });
-                showToast(`${empName} ${dateStr} 已清除`);
+                setLeaves(l => ({...l, [key]: {...existing, type: mode}}));
+                showToast(`${empName} ${dateStr} ${mode}`);
             }
         } catch(e) {
             console.error(e);
             showToast("儲存失敗: " + e.message, false);
         }
         setSaving(s => { const n = {...s}; delete n[key]; return n; });
-    };
-
-    const handleDutyClick = async (dateStr) => {
-        const dutyKey = `duty|${dateStr}`;
-        if (saving[dutyKey]) return;
-
-        const empNames = allEmployees.map(e => e.name);
-        if (empNames.length === 0) return;
-
-        const current = duties[dateStr];
-        const currentName = current ? current.empName : "";
-
-        // Build prompt with options
-        const options = ["（清除）", ...empNames];
-        const promptMsg = `選擇 ${dateStr} 的值日生：\n` +
-            options.map((n, i) => `${i}. ${n}`).join("\n") +
-            `\n\n目前：${currentName || "（無）"}\n請輸入編號：`;
-        const input = window.prompt(promptMsg);
-        if (input === null) return; // cancelled
-
-        const idx = parseInt(input);
-        if (isNaN(idx) || idx < 0 || idx >= options.length) {
-            showToast("無效的選擇", false);
-            return;
-        }
-
-        setSaving(s => ({...s, [dutyKey]: true}));
-        try {
-            if (idx === 0) {
-                // Clear duty
-                if (current && current.ragicId) {
-                    await apiFetch(`${CONFIG.DUTY_PATH}/${current.ragicId}`, { method: "DELETE" });
-                }
-                setDuties(d => { const n = {...d}; delete n[dateStr]; return n; });
-                showToast(`${dateStr} 值日生已清除`);
-            } else {
-                const selectedName = empNames[idx - 1];
-                const params = new URLSearchParams();
-                params.append(CONFIG.F_DUTY.DATE, dateStr);
-                params.append(CONFIG.F_DUTY.EMP, selectedName);
-                params.append(CONFIG.F_DUTY.YEAR, String(year));
-                params.append(CONFIG.F_DUTY.MONTH, String(month));
-                params.append(CONFIG.F_DUTY.IS_AUTO, "No");
-                params.append(CONFIG.F_DUTY.NOTE, "手動變更");
-
-                if (current && current.ragicId) {
-                    // Update existing record
-                    await apiFetch(`${CONFIG.DUTY_PATH}/${current.ragicId}`, {
-                        method: "POST",
-                        headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                        body: params.toString()
-                    });
-                    setDuties(d => ({...d, [dateStr]: {...current, empName: selectedName, isAuto: "No", note: "手動變更"}}));
-                } else {
-                    // Create new record
-                    const res = await apiFetch(CONFIG.DUTY_PATH, {
-                        method: "POST",
-                        headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                        body: params.toString()
-                    });
-                    setDuties(d => ({...d, [dateStr]: {ragicId: String(res.ragicId), empName: selectedName, isAuto: "No", note: "手動變更"}}));
-                }
-                showToast(`${dateStr} 值日生：${selectedName}`);
-            }
-        } catch(e) {
-            console.error(e);
-            showToast("儲存失敗: " + e.message, false);
-        }
-        setSaving(s => { const n = {...s}; delete n[dutyKey]; return n; });
     };
 
     const handleAutoSchedule = async () => {
@@ -463,13 +423,21 @@ const App = () => {
                 </div>
             </div>
 
-            <div className="flex gap-4 mb-3 text-sm">
-                <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-green-500 inline-block"></span> 排休</span>
-                <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-red-500 inline-block"></span> 請假</span>
-                <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-orange-500 inline-block"></span> 值班</span>
-                <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-blue-500 inline-block"></span> 值日生</span>
-                <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-gray-200 inline-block"></span> 見紅休（自動）</span>
-                <span className="text-gray-400">承攬：空 → 排休 → 請假 → 值班 → 空 ｜ 見紅休：空 → 排休 → 請假 → 空</span>
+            <div className="flex items-center gap-2 mb-3">
+                <span className="text-sm text-gray-500 mr-1">模式：</span>
+                {[
+                    {id:"排休", color:"bg-green-500", label:"排休"},
+                    {id:"請假", color:"bg-red-500", label:"請假"},
+                    {id:"值班", color:"bg-orange-500", label:"值班"},
+                    {id:"值日", color:"bg-blue-500", label:"值日生"},
+                ].map(m => (
+                    <button key={m.id} onClick={() => setMode(m.id)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${mode === m.id ? m.color + " text-white shadow-md scale-105" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                        {m.label}
+                    </button>
+                ))}
+                <span className="ml-3 flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-gray-200 inline-block"></span> 見紅休（自動）</span>
+                <span className="ml-2 text-gray-400 text-sm">點格子={mode}，再點=清除</span>
             </div>
 
             {loading ? (
@@ -484,9 +452,6 @@ const App = () => {
                             <tr>
                                 <th className="sticky-left bg-white p-2 min-w-[80px]" rowSpan={2}>
                                     <span className="text-gray-500 text-xs">日期</span>
-                                </th>
-                                <th className="p-1 text-white text-xs font-medium" style={{backgroundColor:"#3b82f6", minWidth:"56px"}} rowSpan={2}>
-                                    值日
                                 </th>
                                 {(() => {
                                     const result = [];
@@ -534,19 +499,6 @@ const App = () => {
                                             <span className="text-sm">{day}</span>
                                             <span className="text-xs ml-1 text-gray-400">({dow})</span>
                                         </td>
-                                        <td
-                                            onClick={() => handleDutyClick(dateStr)}
-                                            className={`p-0 text-center cursor-pointer hover:opacity-80 transition-opacity select-none ${isDutySaving ? "opacity-50" : ""}`}
-                                            style={{minWidth:"56px", height:"32px", backgroundColor: duty ? "#3b82f6" : "#f1f5f9"}}>
-                                            {isDutySaving ? (
-                                                <span className="cell-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full"></span>
-                                            ) : duty ? (
-                                                <span className="inline-block w-full leading-[32px] text-xs font-bold" style={{color: dutyOnLeave ? "#fca5a5" : "white"}}>
-                                                    {dutyOnLeave && "⚠️"}
-                                                    {duty.empName.slice(0, 3)}
-                                                </span>
-                                            ) : null}
-                                        </td>
                                         {employees.map(emp => {
                                             const key = `${emp.name}|${dateStr}`;
                                             const leave = leaves[key];
@@ -554,19 +506,21 @@ const App = () => {
                                             const duty = duties[dateStr];
                                             const isOnDuty = duty && duty.empName === emp.name;
                                             const isGovRest = GOV_REST_EMPLOYEES.has(emp.name) && isGovHoliday(dateStr, isWeekend);
+                                            const savingKey = mode === "值日" ? `duty|${dateStr}` : key;
+                                            const cellSaving = saving[savingKey];
                                             return (
                                                 <td key={key}
                                                     onClick={() => !isGovRest && handleClick(emp.name, dateStr)}
-                                                    className={`p-0 text-center transition-colors select-none ${isGovRest ? "cursor-default" : "cursor-pointer hover:bg-gray-100"} ${isSaving ? "opacity-50" : ""}`}
+                                                    className={`p-0 text-center transition-colors select-none ${isGovRest ? "cursor-default" : "cursor-pointer hover:bg-gray-100"} ${cellSaving ? "opacity-50" : ""}`}
                                                     style={{minWidth:"56px", height:"32px"}}>
-                                                    {isSaving ? (
+                                                    {cellSaving ? (
                                                         <span className="cell-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full"></span>
                                                     ) : isGovRest ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-gray-400 bg-gray-100">休</span>
-                                                    ) : leave && isOnDuty && (leave.type === "排休" || leave.type === "請假") ? (
-                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white bg-red-500">⚠️</span>
-                                                    ) : leave && isOnDuty && leave.type === "值班" ? (
-                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white bg-orange-500">班值</span>
+                                                    ) : leave && isOnDuty ? (
+                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background:"linear-gradient(135deg, " + (leave.type === "排休" ? "#22c55e" : leave.type === "值班" ? "#f97316" : "#dc2626") + " 50%, #3b82f6 50%)"}}>
+                                                            {leave.type === "排休" ? "休" : leave.type === "值班" ? "班" : "假"}值
+                                                        </span>
                                                     ) : leave ? (
                                                         <span className={`inline-block w-full leading-[32px] text-xs font-bold text-white ${leave.type === "排休" ? "bg-green-500" : leave.type === "值班" ? "bg-orange-500" : "bg-red-500"}`}>
                                                             {leave.type === "排休" ? "休" : leave.type === "值班" ? "班" : "假"}
@@ -584,9 +538,6 @@ const App = () => {
                         <tfoot>
                             <tr className="bg-gray-50 font-medium">
                                 <td className="sticky-left bg-gray-50 p-2 text-center text-xs text-gray-500">合計</td>
-                                <td className="p-1 text-center text-xs text-gray-400">
-                                    {Object.keys(duties).length > 0 ? <span className="text-blue-500">{Object.keys(duties).length}日</span> : <span className="text-gray-300">-</span>}
-                                </td>
                                 {employees.map(emp => {
                                     const s = getStats(emp.name);
                                     return (
