@@ -15,6 +15,7 @@
         table { border-collapse: collapse; }
         th, td { border: 1px solid #e2e8f0; }
         tbody td { height: 32px; }
+        .emp-cell { width: 60px !important; min-width: 60px !important; max-width: 60px !important; box-sizing: border-box; }
         .sticky-left { position: sticky; left: 0; z-index: 2; }
     </style>
 </head>
@@ -474,7 +475,7 @@ const App = () => {
                             </tr>
                             <tr className="bg-gray-50">
                                 {employees.map(emp => (
-                                    <th key={emp.name} className="p-2 text-center font-medium text-gray-700 min-w-[56px] text-xs whitespace-nowrap">
+                                    <th key={emp.name} className="emp-cell p-1 text-center font-medium text-gray-700 text-xs whitespace-nowrap">
                                         {emp.display}
                                     </th>
                                 ))}
@@ -512,8 +513,7 @@ const App = () => {
                                             return (
                                                 <td key={key}
                                                     onClick={() => !isGovRest && handleClick(emp.name, dateStr)}
-                                                    className={`p-0 text-center transition-colors select-none ${isGovRest ? "cursor-default" : "cursor-pointer hover:bg-gray-100"} ${cellSaving ? "opacity-50" : ""}`}
-                                                    style={{minWidth:"56px", height:"32px"}}>
+                                                    className={`emp-cell p-0 text-center transition-colors select-none ${isGovRest ? "cursor-default" : "cursor-pointer hover:bg-gray-100"} ${cellSaving ? "opacity-50" : ""}`}>
                                                     {cellSaving ? (
                                                         <span className="cell-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full"></span>
                                                     ) : isGovRest ? (
@@ -542,7 +542,7 @@ const App = () => {
                                 {employees.map(emp => {
                                     const s = getStats(emp.name);
                                     return (
-                                        <td key={emp.name} className="p-1 text-center text-xs">
+                                        <td key={emp.name} className="emp-cell p-1 text-center text-xs">
                                             {s.paixiu > 0 && <span className="text-green-600">{s.paixiu}休</span>}
                                             {s.qingjia > 0 && <span className="text-red-600"> {s.qingjia}假</span>}
                                             {s.zhiban > 0 && <span className="text-orange-600"> {s.zhiban}班</span>}
