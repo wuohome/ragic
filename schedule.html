@@ -14,7 +14,9 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         table { border-collapse: collapse; }
         th, td { border: 1px solid #e2e8f0; }
-        tbody td { width: 56px; min-width: 56px; max-width: 56px; height: 32px; }
+        thead th:not(.sticky-left), tbody td:not(.sticky-left) { width: 56px; min-width: 56px; max-width: 56px; }
+        tbody td { height: 32px; }
+        table { table-layout: fixed; }
         .sticky-left { position: sticky; left: 0; z-index: 2; }
     </style>
 </head>
