@@ -49,6 +49,7 @@ const App = () => {
     const [year, setYear] = React.useState(new Date().getFullYear());
     const [month, setMonth] = React.useState(new Date().getMonth() + 1);
     const [employees, setEmployees] = React.useState([]);
+    const [allEmployees, setAllEmployees] = React.useState([]);
     const [leaves, setLeaves] = React.useState({});
     const [loading, setLoading] = React.useState(true);
     const [saving, setSaving] = React.useState({});
@@ -65,7 +66,7 @@ const App = () => {
         setLoading(true);
         try {
             const empJson = await apiFetch(CONFIG.EMP_PATH);
-            const emps = Object.entries(empJson)
+            const allEmps = Object.entries(empJson)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
                 .map(([id, f]) => ({
                     name: f[CONFIG.F_EMP.NAME] || "",
@@ -75,7 +76,12 @@ const App = () => {
                     hire: f[CONFIG.F_EMP.HIRE] || "",
                     hireDate: f[CONFIG.F_EMP.HIRE_DATE] || "9999/12/31"
                 }))
-                .filter(e => e.status === "在職" && e.dept !== "經營階層" && (e.hire === "承攬" || e.name === "韓珊珊"))
+                .filter(e => e.status === "在職" && e.dept !== "經營階層");
+            setAllEmployees(allEmps.sort((a,b) => a.dept.localeCompare(b.dept) || a.name.localeCompare(b.name)));
+
+            // 排休用：只有承攬 + 韓珊珊
+            const emps = allEmps
+                .filter(e => e.hire === "承攬" || e.name === "韓珊珊")
                 .map(e => e.name === "韓珊珊" ? {...e, dept: "管理部/秘書"} : e)
                 .sort((a,b) => (DEPT_ORDER[a.dept]||99) - (DEPT_ORDER[b.dept]||99) || a.hireDate.localeCompare(b.hireDate));
             setEmployees(emps);
@@ -177,7 +183,7 @@ const App = () => {
         const dutyKey = `duty|${dateStr}`;
         if (saving[dutyKey]) return;
 
-        const empNames = employees.map(e => e.name);
+        const empNames = allEmployees.map(e => e.name);
         if (empNames.length === 0) return;
 
         const current = duties[dateStr];
@@ -253,7 +259,7 @@ const App = () => {
             const prevYear = month === 1 ? year - 1 : year;
             const prevDutyJson = await apiFetch(CONFIG.DUTY_PATH);
             const countMap = {};
-            employees.forEach(e => { countMap[e.name] = 0; });
+            allEmployees.forEach(e => { countMap[e.name] = 0; });
 
             Object.entries(prevDutyJson)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
@@ -279,13 +285,13 @@ const App = () => {
                 const dateStr = `${year}/${mm}/${dd}`;
 
                 // Sort employees by duty count (ascending), avoid same as yesterday
-                const candidates = employees
+                const candidates = allEmployees
                     .map(e => ({ name: e.name, count: countMap[e.name] || 0 }))
                     .filter(e => e.name !== lastAssigned)
                     .sort((a,b) => a.count - b.count);
 
                 // If all employees are the same as lastAssigned (only 1 employee), fallback
-                const pool = candidates.length > 0 ? candidates : employees.map(e => ({ name: e.name, count: countMap[e.name] || 0 })).sort((a,b) => a.count - b.count);
+                const pool = candidates.length > 0 ? candidates : allEmployees.map(e => ({ name: e.name, count: countMap[e.name] || 0 })).sort((a,b) => a.count - b.count);
                 const chosen = pool[0].name;
                 countMap[chosen] = (countMap[chosen] || 0) + 1;
                 lastAssigned = chosen;
