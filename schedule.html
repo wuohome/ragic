@@ -70,7 +70,7 @@ const App = () => {
                     hire: f[CONFIG.F_EMP.HIRE] || "",
                     hireDate: f[CONFIG.F_EMP.HIRE_DATE] || "9999/12/31"
                 }))
-                .filter(e => e.status === "在職" && e.dept !== "經營階層" && e.hire === "承攬")
+                .filter(e => e.status === "在職" && e.dept !== "經營階層" && (e.hire === "承攬" || e.name === "韓珊珊"))
                 .sort((a,b) => a.dept.localeCompare(b.dept) || a.hireDate.localeCompare(b.hireDate));
             setEmployees(emps);
 
