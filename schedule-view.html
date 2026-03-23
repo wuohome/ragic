@@ -113,7 +113,7 @@ const STATUS_CONFIG = {
 };
 
 // Returns true if today is in the open editing period (20th–31st)
-function isOpenPeriod() { return new Date().getDate() >= 20; }
+function isOpenPeriod() { return new Date().getDate() >= 25; }
 
 // Compute the display month: during open period, show next month
 function getInitialMonth() {
@@ -574,7 +574,7 @@ function PersonalView({ emp, onBack }) {
   // ── Cell click handler ──────────────────────────────────────
   const handleCellClick = (d) => {
     if (!open) {
-      showToast('每月 20 號後開放排班', 'error');
+      showToast('每月 25 號後開放排班', 'error');
       return;
     }
     doToggleCell(d);
@@ -710,7 +710,7 @@ function PersonalView({ emp, onBack }) {
       }}>
         {open
           ? <><span>開放排班期間（每月 20–31 日）</span><span>· 點擊日期格子可新增／移除</span><StatusBadge type="排休"/></>
-          : <span>排班鎖定中（每月 1–19 日）· 每月 20 號後開放排班</span>
+          : <span>排班鎖定中（每月 1–24 日）· 每月 25 號後開放排班</span>
         }
         <span style={{ color: '#64748b', marginLeft: 4 }}>灰色格（見紅休）無法編輯</span>
       </div>
