@@ -377,13 +377,16 @@ const App = () => {
     };
 
     const getStats = (empName) => {
-        let paixiu = 0, qingjia = 0;
+        let paixiu = 0, qingjia = 0, dutyCount = 0;
         Object.entries(leaves).forEach(([k,v]) => {
             if (k.startsWith(empName + "|")) {
                 if (v.type === "排休") paixiu++; else qingjia++;
             }
         });
-        return { paixiu, qingjia };
+        Object.values(duties).forEach(d => {
+            if (d.empName === empName) dutyCount++;
+        });
+        return { paixiu, qingjia, dutyCount };
     };
 
     return (
@@ -490,6 +493,8 @@ const App = () => {
                                             const key = `${emp.name}|${dateStr}`;
                                             const leave = leaves[key];
                                             const isSaving = saving[key];
+                                            const duty = duties[dateStr];
+                                            const isOnDuty = duty && duty.empName === emp.name;
                                             return (
                                                 <td key={key}
                                                     onClick={() => handleClick(emp.name, dateStr)}
@@ -497,10 +502,14 @@ const App = () => {
                                                     style={{minWidth:"56px", height:"32px"}}>
                                                     {isSaving ? (
                                                         <span className="cell-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full"></span>
+                                                    ) : leave && isOnDuty ? (
+                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white bg-red-500">⚠️值</span>
                                                     ) : leave ? (
                                                         <span className={`inline-block w-full leading-[32px] text-xs font-bold text-white ${leave.type === "排休" ? "bg-green-500" : "bg-red-500"}`}>
                                                             {leave.type === "排休" ? "休" : "假"}
                                                         </span>
+                                                    ) : isOnDuty ? (
+                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white bg-blue-500">值</span>
                                                     ) : null}
                                                 </td>
                                             );
@@ -520,9 +529,11 @@ const App = () => {
                                     return (
                                         <td key={emp.name} className="p-1 text-center text-xs">
                                             {s.paixiu > 0 && <span className="text-green-600">{s.paixiu}休</span>}
-                                            {s.paixiu > 0 && s.qingjia > 0 && " "}
+                                            {s.paixiu > 0 && (s.qingjia > 0 || s.dutyCount > 0) && " "}
                                             {s.qingjia > 0 && <span className="text-red-600">{s.qingjia}假</span>}
-                                            {s.paixiu === 0 && s.qingjia === 0 && <span className="text-gray-300">-</span>}
+                                            {s.qingjia > 0 && s.dutyCount > 0 && " "}
+                                            {s.dutyCount > 0 && <span className="text-blue-600">{s.dutyCount}值</span>}
+                                            {s.paixiu === 0 && s.qingjia === 0 && s.dutyCount === 0 && <span className="text-gray-300">-</span>}
                                         </td>
                                     );
                                 })}
