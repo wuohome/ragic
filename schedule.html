@@ -64,7 +64,7 @@ const App = () => {
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
                 .map(([id, f]) => ({
                     name: f[CONFIG.F_EMP.NAME] || "",
-                    display: f[CONFIG.F_EMP.DISPLAY] || f[CONFIG.F_EMP.NAME] || "",
+                    display: f[CONFIG.F_EMP.NAME] || "",
                     dept: f[CONFIG.F_EMP.DEPT] || "",
                     status: f[CONFIG.F_EMP.STATUS] || "",
                     hire: f[CONFIG.F_EMP.HIRE] || "",
