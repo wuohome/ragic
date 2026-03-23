@@ -112,8 +112,6 @@ const STATUS_CONFIG = {
   '見紅休':{ bg:'#9ca3af', text:'#fff', label:'休' },
 };
 
-const EDIT_PASSWORD = '0718';
-
 // Returns true if today is in the open editing period (20th–31st)
 function isOpenPeriod() { return new Date().getDate() >= 20; }
 
@@ -351,56 +349,6 @@ function useToast() {
   return { toasts, show };
 }
 
-/* ── Password Prompt Modal ──────────────────────────────────── */
-function PasswordModal({ onConfirm, onCancel }) {
-  const [val, setVal] = React.useState('');
-  const [err, setErr] = React.useState(false);
-  const handleSubmit = () => {
-    if (val === EDIT_PASSWORD) { onConfirm(); }
-    else { setErr(true); setVal(''); setTimeout(() => setErr(false), 1500); }
-  };
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9000,
-    }}>
-      <div style={{
-        background: '#fff', borderRadius: 14, padding: '32px 28px', minWidth: 300,
-        boxShadow: '0 8px 40px rgba(0,0,0,0.22)', textAlign: 'center',
-      }}>
-        <div style={{ fontSize: 28, marginBottom: 10 }}>🔒</div>
-        <div style={{ fontSize: 16, fontWeight: 800, color: '#3f5262', marginBottom: 6 }}>排班鎖定中</div>
-        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>每月 1–19 日需輸入密碼才能編輯</div>
-        <input
-          type="password"
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-          placeholder="密碼"
-          autoFocus
-          style={{
-            width: '100%', padding: '10px 14px', borderRadius: 8, fontSize: 15,
-            border: err ? '2px solid #dc2626' : '2px solid #e2e8f0',
-            outline: 'none', marginBottom: 16,
-            transition: 'border-color 0.15s',
-          }}
-        />
-        {err && <div style={{ color: '#dc2626', fontSize: 12, marginTop: -12, marginBottom: 12 }}>密碼錯誤</div>}
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onCancel} style={{
-            flex: 1, padding: '9px 0', borderRadius: 8, border: '2px solid #e2e8f0',
-            background: '#fff', color: '#64748b', cursor: 'pointer', fontWeight: 700, fontSize: 14,
-          }}>取消</button>
-          <button onClick={handleSubmit} style={{
-            flex: 1, padding: '9px 0', borderRadius: 8, border: 'none',
-            background: '#3f5262', color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 14,
-          }}>確認</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ── Entry Screen ───────────────────────────────────────────── */
 function EntryScreen({ onPersonal, onTeam }) {
   return (
@@ -569,11 +517,6 @@ function PersonalView({ emp, onBack }) {
   const [loading,     setLoading]     = React.useState(true);
   const [err,         setErr]         = React.useState(null);
   const [savingCells, setSavingCells] = React.useState({}); // key -> true
-  // Unlock state: open period = already unlocked; locked period = need password
-  const [unlocked,    setUnlocked]    = React.useState(open);
-  const [showPassModal, setShowPassModal] = React.useState(false);
-  // Pending cell click waiting for password unlock
-  const [pendingCell, setPendingCell] = React.useState(null);
 
   const { toasts, show: showToast } = useToast();
 
@@ -630,10 +573,8 @@ function PersonalView({ emp, onBack }) {
 
   // ── Cell click handler ──────────────────────────────────────
   const handleCellClick = (d) => {
-    if (!unlocked) {
-      // Save the pending cell and show password modal
-      setPendingCell(d);
-      setShowPassModal(true);
+    if (!open) {
+      showToast('每月 20 號後開放排班', 'error');
       return;
     }
     doToggleCell(d);
@@ -641,6 +582,7 @@ function PersonalView({ emp, onBack }) {
 
   // Can this cell be edited?
   function isCellEditable(d) {
+    if (!open) return false;
     if (JIAN_HONG_NAMES.has(emp.name) && isRedHoliday(year, month, d)) return false;
     return true;
   }
@@ -729,24 +671,6 @@ function PersonalView({ emp, onBack }) {
     <div style={{ minHeight: '100vh', background: '#f8fafc',
       fontFamily: '"Microsoft JhengHei","Noto Sans TC",sans-serif' }}>
 
-      {/* Password modal (shown when locked period user tries to edit) */}
-      {showPassModal && (
-        <PasswordModal
-          onConfirm={() => {
-            setUnlocked(true);
-            setShowPassModal(false);
-            if (pendingCell !== null) {
-              doToggleCell(pendingCell);
-              setPendingCell(null);
-            }
-          }}
-          onCancel={() => {
-            setShowPassModal(false);
-            setPendingCell(null);
-          }}
-        />
-      )}
-
       <header style={{
         background: '#3f5262', color: '#fff', padding: '10px 16px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -757,19 +681,12 @@ function PersonalView({ emp, onBack }) {
           <button onClick={onBack} style={navBtn}>← 返回</button>
           <span style={{ fontSize: 15, fontWeight: 800 }}>
             {emp.name} 的排班
-            {!open && !unlocked && (
+            {!open && (
               <span style={{
                 background: '#dc2626', color: '#fff',
                 borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 800,
                 marginLeft: 8, verticalAlign: 'middle',
               }}>🔒 鎖定中</span>
-            )}
-            {(!open && unlocked) && (
-              <span style={{
-                background: '#16a34a', color: '#fff',
-                borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 800,
-                marginLeft: 8, verticalAlign: 'middle',
-              }}>🔓 已解鎖</span>
             )}
           </span>
           {loading && <Spinner/>}
@@ -785,17 +702,15 @@ function PersonalView({ emp, onBack }) {
 
       {/* Status hint bar */}
       <div style={{
-        background: open ? '#f0fdf4' : (unlocked ? '#f0fdf4' : '#fef2f2'),
-        borderBottom: '1px solid ' + (open || unlocked ? '#bbf7d0' : '#fecaca'),
+        background: open ? '#f0fdf4' : '#fef2f2',
+        borderBottom: '1px solid ' + (open ? '#bbf7d0' : '#fecaca'),
         padding: '7px 16px', fontSize: 12,
-        color: open || unlocked ? '#15803d' : '#dc2626',
+        color: open ? '#15803d' : '#dc2626',
         display: 'flex', alignItems: 'center', gap: 6,
       }}>
         {open
           ? <><span>開放排班期間（每月 20–31 日）</span><span>· 點擊日期格子可新增／移除</span><StatusBadge type="排休"/></>
-          : unlocked
-            ? <><span>已解鎖（密碼驗證通過）</span><span>· 點擊日期格子可新增／移除</span><StatusBadge type="排休"/></>
-            : <span>排班鎖定中（每月 1–19 日）· 點擊日期格子會要求輸入密碼</span>
+          : <span>排班鎖定中（每月 1–19 日）· 每月 20 號後開放排班</span>
         }
         <span style={{ color: '#64748b', marginLeft: 4 }}>灰色格（見紅休）無法編輯</span>
       </div>
