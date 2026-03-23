@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>窩的家 — 排班表（排班模式）</title>
+    <script>
+        if (/iPhone|iPad|Android/i.test(navigator.userAgent)) {
+            if (confirm("排班模式建議使用電腦操作。\n\n要切換到閱覽模式嗎？")) {
+                window.location.href = "schedule-view.html";
+            }
+        }
+    </script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
