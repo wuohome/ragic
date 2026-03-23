@@ -42,8 +42,8 @@ const apiFetch = async (path, opts={}) => {
 };
 
 const DAYS = ["日","一","二","三","四","五","六"];
-const DEPT_COLORS = { "租賃部":"#f97316", "設計部":"#10b981", "管理部/特助":"#8b5cf6", "管理部/秘書":"#8b5cf6" };
-const DEPT_ORDER = { "租賃部":0, "設計部":1, "管理部/特助":2, "管理部/秘書":3 };
+const DEPT_COLORS = { "管理部/秘書":"#8b5cf6", "租賃部":"#f97316", "設計部":"#10b981", "管理部/特助":"#8b5cf6" };
+const DEPT_ORDER = { "管理部/秘書":0, "租賃部":1, "設計部":2, "管理部/特助":3 };
 
 // 見紅休人員（設計部 + 瓊安）
 const GOV_REST_EMPLOYEES = new Set(["張瓊安", "沈郁雯", "呂鴻墀", "韓珊珊"]);
@@ -465,7 +465,7 @@ const App = () => {
                 <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-orange-500 inline-block"></span> 值班</span>
                 <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-blue-500 inline-block"></span> 值日生</span>
                 <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-gray-200 inline-block"></span> 見紅休（自動）</span>
-                <span className="text-gray-400">點格子循環：空 → 排休 → 請假 → 空</span>
+                <span className="text-gray-400">承攬：空 → 排休 → 請假 → 值班 → 空 ｜ 見紅休：空 → 排休 → 請假 → 空</span>
             </div>
 
             {loading ? (
