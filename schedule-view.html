@@ -1080,7 +1080,24 @@ function App() {
     );
   }
   if (mode === 'team') {
-    return <TeamView emps={emps} onBack={() => setMode('entry')}/>;
+    return (
+      <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: '"Microsoft JhengHei","Noto Sans TC",sans-serif' }}>
+        <header style={{
+          background: '#3f5262', color: '#fff', padding: '10px 16px',
+          display: 'flex', alignItems: 'center', gap: 10,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.3)', position: 'sticky', top: 0, zIndex: 40,
+        }}>
+          <button onClick={() => setMode('entry')} style={{
+            padding: '4px 14px', background: 'rgba(255,255,255,0.15)', color: '#fff',
+            border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: 13, fontWeight: 700,
+          }}>← 返回</button>
+          <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: 1 }}>👥 全體排班</span>
+        </header>
+        <iframe src="schedule.html?readonly=1" style={{
+          width: '100%', height: 'calc(100vh - 48px)', border: 'none',
+        }}/>
+      </div>
+    );
   }
   return null;
 }
