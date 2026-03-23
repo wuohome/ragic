@@ -59,7 +59,7 @@
             BASE_URL: "https://ap15.ragic.com",
             
             // 您的 API Key
-            API_KEY: "Nm5QVzFtZ1pGYzZIT1REUnBhY3A0bDVKY0luaEh3d2lrSmMzTHNSVjh3N1VHc1JadWJjQk9yZDQ3UlpZZnFubQ==", 
+            API_KEY: "VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==", 
 
             // 表單路徑
             PATHS: {
@@ -82,7 +82,8 @@
                     EMP_ID: "1000961", // 員工 (連結欄位)
                     DATE:   "1000963", // 日期
                     YEAR:   "1000964", // 年
-                    MONTH:  "1000965"  // 月
+                    MONTH:  "1000965", // 月
+                    TYPE:   "1002025"  // 類型（排休/請假）
                 },
                 DUTY: {
                     DATE:      "1000971", // 日期
@@ -223,6 +224,7 @@
                 params.append(RAGIC_CONFIG.FIELDS.LEAVE.DATE, leaveData.DATE);
                 params.append(RAGIC_CONFIG.FIELDS.LEAVE.YEAR, leaveData.YEAR);
                 params.append(RAGIC_CONFIG.FIELDS.LEAVE.MONTH, leaveData.MONTH);
+                params.append(RAGIC_CONFIG.FIELDS.LEAVE.TYPE, leaveData.TYPE || "排休");
 
                 const json = await ragicFetch(RAGIC_CONFIG.PATHS.LEAVE, {
                     method: 'POST',
@@ -427,7 +429,8 @@
                             EMP_ID: emp.NAME, 
                             DATE: dateStr,
                             YEAR: year,
-                            MONTH: month
+                            MONTH: month,
+                            TYPE: "排休"
                         };
                         const res = await apiService.createLeave(payload);
                         
