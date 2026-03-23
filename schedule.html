@@ -42,8 +42,8 @@ const apiFetch = async (path, opts={}) => {
 };
 
 const DAYS = ["日","一","二","三","四","五","六"];
-const DEPT_COLORS = { "租賃部":"#f97316", "設計部":"#10b981", "管理部":"#8b5cf6", "管理部/秘書":"#8b5cf6" };
-const DEPT_ORDER = { "租賃部":0, "設計部":1, "管理部":2, "管理部/秘書":3 };
+const DEPT_COLORS = { "租賃部":"#f97316", "設計部":"#10b981", "管理部/特助":"#8b5cf6", "管理部/秘書":"#8b5cf6" };
+const DEPT_ORDER = { "租賃部":0, "設計部":1, "管理部/特助":2, "管理部/秘書":3 };
 
 const App = () => {
     const [year, setYear] = React.useState(new Date().getFullYear());
@@ -81,8 +81,8 @@ const App = () => {
 
             // 排休用：只有承攬 + 韓珊珊
             const emps = allEmps
-                .filter(e => e.hire === "承攬" || e.name === "韓珊珊")
-                .map(e => e.name === "韓珊珊" ? {...e, dept: "管理部/秘書"} : e)
+                .filter(e => e.hire === "承攬" || e.name === "韓珊珊" || e.dept === "設計部" || e.name === "張瓊安")
+                .map(e => e.name === "韓珊珊" ? {...e, dept: "管理部/秘書"} : e.name === "張瓊安" ? {...e, dept: "管理部/特助"} : e)
                 .sort((a,b) => (DEPT_ORDER[a.dept]||99) - (DEPT_ORDER[b.dept]||99) || a.hireDate.localeCompare(b.hireDate));
             setEmployees(emps);
 
