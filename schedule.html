@@ -27,7 +27,7 @@ const CONFIG = {
     EMP_PATH: "/wuohome/ragicforms4/20004",
     LEAVE_PATH: "/wuohome/ragicforms4/2",
     F_EMP: { NAME:"3000933", DISPLAY:"1000848", DEPT:"3000937", STATUS:"3000945", HIRE:"3000955" },
-    F_LEAVE: { EMP:"1000961", DATE:"1000963", YEAR:"1000964", MONTH:"1000965", TYPE:"1002025" }
+    F_LEAVE: { EMP:"1000961", DATE:"1000963", YEAR:"1000964", MONTH:"1000965", TYPE:"1002025", DEPT:"1002026" }
 };
 
 const apiFetch = async (path, opts={}) => {
@@ -113,6 +113,9 @@ const App = () => {
                 params.append(CONFIG.F_LEAVE.YEAR, String(year));
                 params.append(CONFIG.F_LEAVE.MONTH, String(month));
                 params.append(CONFIG.F_LEAVE.TYPE, "排休");
+                // 找到員工的部門，一起寫入
+                const empObj = employees.find(e => e.name === empName);
+                if (empObj && empObj.dept) params.append(CONFIG.F_LEAVE.DEPT, empObj.dept);
                 const res = await apiFetch(CONFIG.LEAVE_PATH, {
                     method: "POST",
                     headers: {"Content-Type":"application/x-www-form-urlencoded"},
