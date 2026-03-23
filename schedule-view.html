@@ -112,8 +112,18 @@ const STATUS_CONFIG = {
   '見紅休':{ bg:'#9ca3af', text:'#fff', label:'休' },
 };
 
-const MANAGER_NAME = '韓珊珊';
-const MANAGER_PASS = '0718';
+const EDIT_PASSWORD = '0718';
+
+// Returns true if today is in the open editing period (20th–31st)
+function isOpenPeriod() { return new Date().getDate() >= 20; }
+
+// Compute the display month: during open period, show next month
+function getInitialMonth() {
+  const now = new Date();
+  let y = now.getFullYear(), m = now.getMonth() + 1;
+  if (isOpenPeriod()) { m++; if (m > 12) { m = 1; y++; } }
+  return { y, m };
+}
 
 /* ── Helpers ────────────────────────────────────────────────── */
 function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); }
@@ -346,7 +356,7 @@ function PasswordModal({ onConfirm, onCancel }) {
   const [val, setVal] = React.useState('');
   const [err, setErr] = React.useState(false);
   const handleSubmit = () => {
-    if (val === MANAGER_PASS) { onConfirm(); }
+    if (val === EDIT_PASSWORD) { onConfirm(); }
     else { setErr(true); setVal(''); setTimeout(() => setErr(false), 1500); }
   };
   return (
@@ -358,9 +368,9 @@ function PasswordModal({ onConfirm, onCancel }) {
         background: '#fff', borderRadius: 14, padding: '32px 28px', minWidth: 300,
         boxShadow: '0 8px 40px rgba(0,0,0,0.22)', textAlign: 'center',
       }}>
-        <div style={{ fontSize: 28, marginBottom: 10 }}>🔑</div>
-        <div style={{ fontSize: 16, fontWeight: 800, color: '#3f5262', marginBottom: 6 }}>管理模式</div>
-        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>請輸入管理員密碼</div>
+        <div style={{ fontSize: 28, marginBottom: 10 }}>🔒</div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: '#3f5262', marginBottom: 6 }}>排班鎖定中</div>
+        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>每月 1–19 日需輸入密碼才能編輯</div>
         <input
           type="password"
           value={val}
@@ -475,9 +485,6 @@ function EntryScreen({ onPersonal, onTeam }) {
 
 /* ── Name Selection ─────────────────────────────────────────── */
 function NameSelect({ emps, onSelect, onBack }) {
-  const [pendingEmp,   setPendingEmp]   = React.useState(null);
-  const [showPassModal,setShowPassModal]= React.useState(false);
-
   // Group by dept (preserving order)
   const groups = React.useMemo(() => {
     const m = {};
@@ -491,15 +498,6 @@ function NameSelect({ emps, onSelect, onBack }) {
   const navBtn = {
     background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 6,
     color: '#fff', padding: '5px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 700,
-  };
-
-  const handleSelect = (emp) => {
-    if (emp.name === MANAGER_NAME) {
-      setPendingEmp(emp);
-      setShowPassModal(true);
-    } else {
-      onSelect(emp, false);
-    }
   };
 
   return (
@@ -516,19 +514,6 @@ function NameSelect({ emps, onSelect, onBack }) {
         <span style={{ fontSize: 16, fontWeight: 800 }}>👤 選擇姓名</span>
       </header>
 
-      {showPassModal && pendingEmp && (
-        <PasswordModal
-          onConfirm={() => {
-            setShowPassModal(false);
-            onSelect(pendingEmp, true); // isManager=true
-          }}
-          onCancel={() => {
-            setShowPassModal(false);
-            onSelect(pendingEmp, false); // normal mode, wrong pass
-          }}
-        />
-      )}
-
       <div style={{ padding: '28px 16px', maxWidth: 600, margin: '0 auto' }}>
         <div style={{ fontSize: 14, color: '#64748b', marginBottom: 24, textAlign: 'center' }}>
           請選擇您的名字以查看個人排班月曆
@@ -544,7 +529,7 @@ function NameSelect({ emps, onSelect, onBack }) {
               }}>{dept}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                 {members.map(emp => (
-                  <button key={emp.name} onClick={() => handleSelect(emp)} style={{
+                  <button key={emp.name} onClick={() => onSelect(emp)} style={{
                     background: '#fff', border: '2px solid ' + dc.border,
                     borderRadius: 10, padding: '12px 22px',
                     cursor: 'pointer', fontSize: 15, fontWeight: 700, color: dc.text,
@@ -561,9 +546,6 @@ function NameSelect({ emps, onSelect, onBack }) {
                     }}
                   >
                     {emp.name}
-                    {emp.name === MANAGER_NAME && (
-                      <span style={{ fontSize: 10, marginLeft: 5, opacity: 0.6 }}>🔑</span>
-                    )}
                   </button>
                 ))}
               </div>
@@ -576,35 +558,24 @@ function NameSelect({ emps, onSelect, onBack }) {
 }
 
 /* ── Personal Calendar View ─────────────────────────────────── */
-function PersonalView({ emp, allEmps, isManager, onBack }) {
+function PersonalView({ emp, onBack }) {
   const today = new Date();
-  const [year,        setYear]        = React.useState(today.getFullYear());
-  const [month,       setMonth]       = React.useState(today.getMonth() + 1);
+  const open = isOpenPeriod();
+  const initDate = getInitialMonth();
+  const [year,        setYear]        = React.useState(initDate.y);
+  const [month,       setMonth]       = React.useState(initDate.m);
   const [leaves,      setLeaves]      = React.useState({});
   const [duties,      setDuties]      = React.useState({});
   const [loading,     setLoading]     = React.useState(true);
   const [err,         setErr]         = React.useState(null);
   const [savingCells, setSavingCells] = React.useState({}); // key -> true
-  const [editMode,    setEditMode]    = React.useState('排休'); // '排休'|'請假'|'值班'|'值日'
-  // Manager: which employee is currently being edited
-  const [editTarget,  setEditTarget]  = React.useState(emp);
+  // Unlock state: open period = already unlocked; locked period = need password
+  const [unlocked,    setUnlocked]    = React.useState(open);
+  const [showPassModal, setShowPassModal] = React.useState(false);
+  // Pending cell click waiting for password unlock
+  const [pendingCell, setPendingCell] = React.useState(null);
 
   const { toasts, show: showToast } = useToast();
-
-  // 張忠豪 sees 蕭眞儀 too (only in normal non-manager mode)
-  const isZhang = !isManager && emp.name === '張忠豪';
-  const xiaoEmp = React.useMemo(() => {
-    if (!isZhang) return null;
-    return allEmps.find(e => e.name === '蕭眞儀') || null;
-  }, [isZhang, allEmps]);
-
-  // In normal mode, targets is emp (and maybe xiaoEmp).
-  // In manager mode, we only render editTarget's calendar (and they pick from dropdown).
-  const targets = React.useMemo(() => {
-    if (isManager) return [editTarget];
-    if (isZhang && xiaoEmp) return [emp, xiaoEmp];
-    return [emp];
-  }, [emp, isZhang, xiaoEmp, isManager, editTarget]);
 
   React.useEffect(() => {
     setLoading(true);
@@ -622,48 +593,16 @@ function PersonalView({ emp, allEmps, isManager, onBack }) {
     border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: 13, fontWeight: 700,
   };
 
-  // ── Cell click handler ──────────────────────────────────────
-  const handleCellClick = async (empObj, d) => {
+  // ── Actual cell toggle (called after unlock confirmed) ──────
+  const doToggleCell = async (d) => {
     const date = fmtDate(year, month, d);
-    const cellKey = empObj.name + '__' + date;
-
-    // Determine what mode we're in
-    const mode = isManager ? editMode : '排休';
-
-    if (mode === '值日') {
-      // Manager 值日 mode: toggle duty for this person on this date
-      const existing = duties[cellKey];
-      setSavingCells(prev => ({ ...prev, [cellKey]: true }));
-      try {
-        if (existing) {
-          await apiDeleteDuty(existing.ragicId);
-          setDuties(prev => {
-            const next = { ...prev };
-            delete next[cellKey];
-            return next;
-          });
-          showToast(`已移除 ${empObj.name} ${month}/${d} 值日`);
-        } else {
-          const ragicId = await apiCreateDuty(empObj.name, date, year, month);
-          setDuties(prev => ({ ...prev, [cellKey]: { ragicId, empName: empObj.name, date } }));
-          showToast(`已設定 ${empObj.name} ${month}/${d} 值日`);
-        }
-      } catch (e) {
-        showToast(e.message, 'error');
-      } finally {
-        setSavingCells(prev => { const n = { ...prev }; delete n[cellKey]; return n; });
-      }
-      return;
-    }
-
-    // Leave types: 排休 / 請假 / 值班
+    const cellKey = emp.name + '__' + date;
     const existingRecs = leaves[cellKey] || [];
-    const existingForMode = existingRecs.find(r => r.type === mode);
+    const existingForMode = existingRecs.find(r => r.type === '排休');
 
     setSavingCells(prev => ({ ...prev, [cellKey]: true }));
     try {
       if (existingForMode) {
-        // Delete this record
         await apiDeleteLeave(existingForMode.ragicId);
         setLeaves(prev => {
           const next = { ...prev };
@@ -672,16 +611,15 @@ function PersonalView({ emp, allEmps, isManager, onBack }) {
           else next[cellKey] = filtered;
           return next;
         });
-        showToast(`已移除 ${month}/${d} ${mode}`);
+        showToast(`已移除 ${month}/${d} 排休`);
       } else {
-        // Create record
-        const ragicId = await apiCreateLeave(empObj.name, date, year, month, mode);
-        const newRec = { ragicId: String(ragicId), type: mode, empName: empObj.name, date };
+        const ragicId = await apiCreateLeave(emp.name, date, year, month, '排休');
+        const newRec = { ragicId: String(ragicId), type: '排休', empName: emp.name, date };
         setLeaves(prev => ({
           ...prev,
           [cellKey]: [...(prev[cellKey] || []), newRec],
         }));
-        showToast(`已新增 ${month}/${d} ${mode}`);
+        showToast(`已新增 ${month}/${d} 排休`);
       }
     } catch (e) {
       showToast(e.message, 'error');
@@ -690,18 +628,27 @@ function PersonalView({ emp, allEmps, isManager, onBack }) {
     }
   };
 
-  // Can this cell be clicked? (Normal: only emp's own cells, non-見紅休)
-  // Manager: any cell except 見紅休
-  function isCellEditable(empObj, d) {
-    // 見紅休 dates: block
-    if (JIAN_HONG_NAMES.has(empObj.name) && isRedHoliday(year, month, d)) return false;
+  // ── Cell click handler ──────────────────────────────────────
+  const handleCellClick = (d) => {
+    if (!unlocked) {
+      // Save the pending cell and show password modal
+      setPendingCell(d);
+      setShowPassModal(true);
+      return;
+    }
+    doToggleCell(d);
+  };
+
+  // Can this cell be edited?
+  function isCellEditable(d) {
+    if (JIAN_HONG_NAMES.has(emp.name) && isRedHoliday(year, month, d)) return false;
     return true;
   }
 
-  function renderCalendar(empObj) {
+  function renderCalendar() {
     const totalDays = daysInMonth(year, month);
     const firstDOW  = getDOW(year, month, 1);
-    const dc = getDeptColor(empObj.dept);
+    const dc = getDeptColor(emp.dept);
 
     const cells = [];
     for (let i = 0; i < firstDOW; i++) cells.push({ blank: true, key: 'b' + i });
@@ -709,7 +656,7 @@ function PersonalView({ emp, allEmps, isManager, onBack }) {
       const dow       = getDOW(year, month, d);
       const isToday   = today.getFullYear()===year && today.getMonth()+1===month && today.getDate()===d;
       const isWeekend = dow===0||dow===6;
-      const statuses  = getCellStatuses(empObj, year, month, d, leaves, duties);
+      const statuses  = getCellStatuses(emp, year, month, d, leaves, duties);
       cells.push({ blank: false, key: 'd'+d, d, dow, isToday, isWeekend, statuses });
     }
 
@@ -721,8 +668,8 @@ function PersonalView({ emp, allEmps, isManager, onBack }) {
           background: dc.bg, border: '1px solid ' + dc.border,
           borderRadius: 8, fontSize: 14, fontWeight: 800, color: dc.text,
         }}>
-          {empObj.name}{' '}
-          <span style={{ fontWeight: 400, fontSize: 12 }}>({empObj.dept})</span>
+          {emp.name}{' '}
+          <span style={{ fontWeight: 400, fontSize: 12 }}>({emp.dept})</span>
         </div>
 
         {/* Weekday header */}
@@ -740,9 +687,9 @@ function PersonalView({ emp, allEmps, isManager, onBack }) {
           {cells.map(cell => {
             if (cell.blank) return <div key={cell.key} style={{ minHeight: 72 }}></div>;
             const date = fmtDate(year, month, cell.d);
-            const cellKey = empObj.name + '__' + date;
+            const cellKey = emp.name + '__' + date;
             const isSaving = !!savingCells[cellKey];
-            const canEdit = isCellEditable(empObj, cell.d);
+            const canEdit = isCellEditable(cell.d);
             let extraClass = '';
             if (cell.isToday) extraClass = ' today';
             else if (cell.isWeekend) extraClass = ' weekend';
@@ -753,8 +700,8 @@ function PersonalView({ emp, allEmps, isManager, onBack }) {
               <div
                 key={cell.key}
                 className={'cal-cell' + extraClass}
-                onClick={canEdit && !isSaving ? () => handleCellClick(empObj, cell.d) : undefined}
-                title={canEdit ? (isManager ? `點擊切換${editMode}` : '點擊切換排休') : undefined}
+                onClick={canEdit && !isSaving ? () => handleCellClick(cell.d) : undefined}
+                title={canEdit ? '點擊切換排休' : undefined}
               >
                 <span style={{
                   fontSize: 12, fontWeight: cell.isToday ? 800 : 500,
@@ -781,6 +728,25 @@ function PersonalView({ emp, allEmps, isManager, onBack }) {
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc',
       fontFamily: '"Microsoft JhengHei","Noto Sans TC",sans-serif' }}>
+
+      {/* Password modal (shown when locked period user tries to edit) */}
+      {showPassModal && (
+        <PasswordModal
+          onConfirm={() => {
+            setUnlocked(true);
+            setShowPassModal(false);
+            if (pendingCell !== null) {
+              doToggleCell(pendingCell);
+              setPendingCell(null);
+            }
+          }}
+          onCancel={() => {
+            setShowPassModal(false);
+            setPendingCell(null);
+          }}
+        />
+      )}
+
       <header style={{
         background: '#3f5262', color: '#fff', padding: '10px 16px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -790,17 +756,20 @@ function PersonalView({ emp, allEmps, isManager, onBack }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={onBack} style={navBtn}>← 返回</button>
           <span style={{ fontSize: 15, fontWeight: 800 }}>
-            {isManager ? (
-              <>
-                {editTarget.name} 的排班
-                <span style={{
-                  background: '#f59e0b', color: '#92400e',
-                  borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 800,
-                  marginLeft: 8, verticalAlign: 'middle',
-                }}>🔑 管理模式</span>
-              </>
-            ) : (
-              <>{emp.name}{isZhang && xiaoEmp ? ' & 蕭眞儀' : ''} 的排班</>
+            {emp.name} 的排班
+            {!open && !unlocked && (
+              <span style={{
+                background: '#dc2626', color: '#fff',
+                borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 800,
+                marginLeft: 8, verticalAlign: 'middle',
+              }}>🔒 鎖定中</span>
+            )}
+            {(!open && unlocked) && (
+              <span style={{
+                background: '#16a34a', color: '#fff',
+                borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 800,
+                marginLeft: 8, verticalAlign: 'middle',
+              }}>🔓 已解鎖</span>
             )}
           </span>
           {loading && <Spinner/>}
@@ -814,59 +783,22 @@ function PersonalView({ emp, allEmps, isManager, onBack }) {
         </div>
       </header>
 
-      {/* Manager toolbar: person picker + mode buttons */}
-      {isManager && (
-        <div style={{
-          background: '#fefce8', borderBottom: '2px solid #fde68a',
-          padding: '10px 16px', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
-        }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>編輯對象：</span>
-          <select
-            value={editTarget.name}
-            onChange={e => {
-              const found = allEmps.find(x => x.name === e.target.value);
-              if (found) setEditTarget(found);
-            }}
-            style={{
-              padding: '5px 10px', borderRadius: 6, border: '2px solid #fde68a',
-              fontSize: 13, fontWeight: 700, color: '#78350f', background: '#fffbeb',
-              cursor: 'pointer',
-            }}
-          >
-            {allEmps.map(e => (
-              <option key={e.name} value={e.name}>{e.name}</option>
-            ))}
-          </select>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e', marginLeft: 8 }}>模式：</span>
-          {['排休','請假','值班','值日'].map(m => (
-            <button
-              key={m}
-              onClick={() => setEditMode(m)}
-              style={{
-                padding: '5px 14px', borderRadius: 6, fontSize: 13, fontWeight: 700,
-                border: editMode === m ? '2px solid ' + (STATUS_CONFIG[m]?.bg || '#3f5262') : '2px solid #e2e8f0',
-                background: editMode === m ? (STATUS_CONFIG[m]?.bg || '#3f5262') : '#fff',
-                color: editMode === m ? (STATUS_CONFIG[m]?.text || '#fff') : '#475569',
-                cursor: 'pointer',
-                transition: 'all 0.12s',
-              }}
-            >{m}</button>
-          ))}
-        </div>
-      )}
-
-      {/* Normal employee hint bar */}
-      {!isManager && (
-        <div style={{
-          background: '#f0fdf4', borderBottom: '1px solid #bbf7d0',
-          padding: '7px 16px', fontSize: 12, color: '#15803d',
-          display: 'flex', alignItems: 'center', gap: 6,
-        }}>
-          <span>點擊日期格子可新增／移除</span>
-          <StatusBadge type="排休"/>
-          <span style={{ color: '#64748b', marginLeft: 4 }}>灰色格（見紅休）無法編輯</span>
-        </div>
-      )}
+      {/* Status hint bar */}
+      <div style={{
+        background: open ? '#f0fdf4' : (unlocked ? '#f0fdf4' : '#fef2f2'),
+        borderBottom: '1px solid ' + (open || unlocked ? '#bbf7d0' : '#fecaca'),
+        padding: '7px 16px', fontSize: 12,
+        color: open || unlocked ? '#15803d' : '#dc2626',
+        display: 'flex', alignItems: 'center', gap: 6,
+      }}>
+        {open
+          ? <><span>開放排班期間（每月 20–31 日）</span><span>· 點擊日期格子可新增／移除</span><StatusBadge type="排休"/></>
+          : unlocked
+            ? <><span>已解鎖（密碼驗證通過）</span><span>· 點擊日期格子可新增／移除</span><StatusBadge type="排休"/></>
+            : <span>排班鎖定中（每月 1–19 日）· 點擊日期格子會要求輸入密碼</span>
+        }
+        <span style={{ color: '#64748b', marginLeft: 4 }}>灰色格（見紅休）無法編輯</span>
+      </div>
 
       {/* Legend bar */}
       <div style={{
@@ -888,17 +820,13 @@ function PersonalView({ emp, allEmps, isManager, onBack }) {
           </div>
         ) : (
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-            {targets.map(t => (
-              <React.Fragment key={t.name}>
-                {renderCalendar(t)}
-              </React.Fragment>
-            ))}
+            {renderCalendar()}
           </div>
         )}
       </div>
 
       <div style={{ textAlign: 'center', fontSize: 11, color: '#94a3b8', padding: '12px 0 28px' }}>
-        {isManager ? '管理模式 · 可編輯所有員工' : '可編輯排休 · 其他狀態請聯絡管理員'} · 資料來源：Ragic
+        可編輯排休 · 其他狀態請聯絡管理員 · 資料來源：Ragic
       </div>
 
       <Toast toasts={toasts}/>
@@ -1169,7 +1097,6 @@ function App() {
   const [mode,        setMode]        = React.useState('entry');
   const [emps,        setEmps]        = React.useState([]);
   const [selectedEmp, setSelectedEmp] = React.useState(null);
-  const [isManager,   setIsManager]   = React.useState(false);
   const [empLoading,  setEmpLoading]  = React.useState(false);
   const [empErr,      setEmpErr]      = React.useState(null);
 
@@ -1221,9 +1148,8 @@ function App() {
     return (
       <NameSelect
         emps={emps}
-        onSelect={(emp, managerMode) => {
+        onSelect={(emp) => {
           setSelectedEmp(emp);
-          setIsManager(managerMode);
           setMode('personal');
         }}
         onBack={() => setMode('entry')}
@@ -1234,8 +1160,6 @@ function App() {
     return (
       <PersonalView
         emp={selectedEmp}
-        allEmps={emps}
-        isManager={isManager}
         onBack={() => setMode('name-select')}
       />
     );
