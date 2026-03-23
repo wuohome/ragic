@@ -191,8 +191,27 @@ const App = () => {
                 });
                 setLeaves(l => ({...l, [key]: {...existing, type:"請假"}}));
                 showToast(`${empName} ${dateStr} 請假`);
+            } else if (existing.type === "請假") {
+                // 請假 -> 值班（只有承攬）或刪除（見紅休人員）
+                const empObj = employees.find(e => e.name === empName);
+                if (empObj && empObj.hire === "承攬") {
+                    const params = new URLSearchParams();
+                    params.append(CONFIG.F_LEAVE.TYPE, "值班");
+                    await apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, {
+                        method: "POST",
+                        headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                        body: params.toString()
+                    });
+                    setLeaves(l => ({...l, [key]: {...existing, type:"值班"}}));
+                    showToast(`${empName} ${dateStr} 值班`);
+                } else {
+                    // 非承攬 → 直接刪除
+                    await apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, { method:"DELETE" });
+                    setLeaves(l => { const n = {...l}; delete n[key]; return n; });
+                    showToast(`${empName} ${dateStr} 已清除`);
+                }
             } else {
-                // 請假 -> 刪除
+                // 值班 -> 刪除
                 await apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, { method:"DELETE" });
                 setLeaves(l => { const n = {...l}; delete n[key]; return n; });
                 showToast(`${empName} ${dateStr} 已清除`);
@@ -408,16 +427,18 @@ const App = () => {
     };
 
     const getStats = (empName) => {
-        let paixiu = 0, qingjia = 0, dutyCount = 0;
+        let paixiu = 0, qingjia = 0, zhiban = 0, dutyCount = 0;
         Object.entries(leaves).forEach(([k,v]) => {
             if (k.startsWith(empName + "|")) {
-                if (v.type === "排休") paixiu++; else qingjia++;
+                if (v.type === "排休") paixiu++;
+                else if (v.type === "值班") zhiban++;
+                else qingjia++;
             }
         });
         Object.values(duties).forEach(d => {
             if (d.empName === empName) dutyCount++;
         });
-        return { paixiu, qingjia, dutyCount };
+        return { paixiu, qingjia, zhiban, dutyCount };
     };
 
     return (
@@ -441,6 +462,7 @@ const App = () => {
             <div className="flex gap-4 mb-3 text-sm">
                 <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-green-500 inline-block"></span> 排休</span>
                 <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-red-500 inline-block"></span> 請假</span>
+                <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-orange-500 inline-block"></span> 值班</span>
                 <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-blue-500 inline-block"></span> 值日生</span>
                 <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-gray-200 inline-block"></span> 見紅休（自動）</span>
                 <span className="text-gray-400">點格子循環：空 → 排休 → 請假 → 空</span>
@@ -537,11 +559,13 @@ const App = () => {
                                                         <span className="cell-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full"></span>
                                                     ) : isGovRest ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-gray-400 bg-gray-100">休</span>
-                                                    ) : leave && isOnDuty ? (
-                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white bg-red-500">⚠️值</span>
+                                                    ) : leave && isOnDuty && (leave.type === "排休" || leave.type === "請假") ? (
+                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white bg-red-500">⚠️</span>
+                                                    ) : leave && isOnDuty && leave.type === "值班" ? (
+                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white bg-orange-500">班值</span>
                                                     ) : leave ? (
-                                                        <span className={`inline-block w-full leading-[32px] text-xs font-bold text-white ${leave.type === "排休" ? "bg-green-500" : "bg-red-500"}`}>
-                                                            {leave.type === "排休" ? "休" : "假"}
+                                                        <span className={`inline-block w-full leading-[32px] text-xs font-bold text-white ${leave.type === "排休" ? "bg-green-500" : leave.type === "值班" ? "bg-orange-500" : "bg-red-500"}`}>
+                                                            {leave.type === "排休" ? "休" : leave.type === "值班" ? "班" : "假"}
                                                         </span>
                                                     ) : isOnDuty ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-white bg-blue-500">值</span>
@@ -564,11 +588,10 @@ const App = () => {
                                     return (
                                         <td key={emp.name} className="p-1 text-center text-xs">
                                             {s.paixiu > 0 && <span className="text-green-600">{s.paixiu}休</span>}
-                                            {s.paixiu > 0 && (s.qingjia > 0 || s.dutyCount > 0) && " "}
-                                            {s.qingjia > 0 && <span className="text-red-600">{s.qingjia}假</span>}
-                                            {s.qingjia > 0 && s.dutyCount > 0 && " "}
-                                            {s.dutyCount > 0 && <span className="text-blue-600">{s.dutyCount}值</span>}
-                                            {s.paixiu === 0 && s.qingjia === 0 && s.dutyCount === 0 && <span className="text-gray-300">-</span>}
+                                            {s.qingjia > 0 && <span className="text-red-600"> {s.qingjia}假</span>}
+                                            {s.zhiban > 0 && <span className="text-orange-600"> {s.zhiban}班</span>}
+                                            {s.dutyCount > 0 && <span className="text-blue-600"> {s.dutyCount}值</span>}
+                                            {s.paixiu === 0 && s.qingjia === 0 && s.zhiban === 0 && s.dutyCount === 0 && <span className="text-gray-300">-</span>}
                                         </td>
                                     );
                                 })}
