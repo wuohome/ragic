@@ -359,23 +359,23 @@ const App = () => {
             // Write all records to Ragic (delete existing auto records first, then create)
             // Delete existing auto-scheduled records for this month
             const existingDutyJson = await apiFetch(CONFIG.DUTY_PATH);
-            const deletePromises = [];
-            Object.entries(existingDutyJson)
+            const toDelete = Object.entries(existingDutyJson)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
-                .forEach(([id, f]) => {
+                .filter(([id, f]) => {
                     const date = f[CONFIG.F_DUTY.DATE] || "";
                     const isAuto = f[CONFIG.F_DUTY.IS_AUTO] || "";
-                    if (!date) return;
+                    if (!date) return false;
                     const parts = date.replace(/\//g,"-").split("-");
                     const y = parseInt(parts[0]), m = parseInt(parts[1]);
-                    if (y === year && m === month && isAuto !== "No") {
-                        deletePromises.push(apiFetch(`${CONFIG.DUTY_PATH}/${id}`, { method: "DELETE" }));
-                    }
+                    return y === year && m === month && isAuto !== "No";
                 });
-            await Promise.all(deletePromises);
+            for (const [id] of toDelete) {
+                await apiFetch(`${CONFIG.DUTY_PATH}/${id}`, { method: "DELETE" });
+            }
 
-            // Create new records
-            const createPromises = Object.entries(newDuties).map(async ([dateStr, empName]) => {
+            // Create new records (逐筆發送，避免 rate limit)
+            const results = [];
+            for (const [dateStr, empName] of Object.entries(newDuties)) {
                 const params = new URLSearchParams();
                 params.append(CONFIG.F_DUTY.DATE, dateStr);
                 params.append(CONFIG.F_DUTY.EMP, empName);
@@ -388,10 +388,8 @@ const App = () => {
                     headers: {"Content-Type":"application/x-www-form-urlencoded"},
                     body: params.toString()
                 });
-                return { dateStr, empName, ragicId: String(res.ragicId) };
-            });
-
-            const results = await Promise.all(createPromises);
+                results.push({ dateStr, empName, ragicId: String(res.ragicId) });
+            }
             const dmap = {};
             // Keep manually-changed duties
             Object.entries(duties).forEach(([dateStr, d]) => {
