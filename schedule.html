@@ -57,6 +57,23 @@ const apiFetch = async (path, opts={}, retries=3) => {
 };
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// Ragic batch POST：一次送多筆，回傳 [{ragicId, ...}, ...]
+const apiBatchCreate = async (path, records) => {
+    const sep = path.includes("?") ? "&" : "?";
+    const url = `${CONFIG.BASE}${path}${sep}api=true&v=3&naming=EID&APIKey=${encodeURIComponent(CONFIG.KEY)}`;
+    const body = {};
+    records.forEach((fields, i) => { body[`_new_${i}`] = fields; });
+    const res = await fetch(url, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error(`Batch API ${res.status}`);
+    const data = await res.json();
+    // data 回傳 { "_new_0": ragicId, "_new_1": ragicId, ... }
+    return records.map((_, i) => ({ ragicId: String(data[`_new_${i}`] || data[`_new_${i}`]?.ragicId || "") }));
+};
 const DAYS = ["日","一","二","三","四","五","六"];
 const DEPT_COLORS = { "管理部/秘書":"#8b5cf6", "管理部/特助":"#8b5cf6", "設計部":"#10b981", "租賃部":"#f97316" };
 const DEPT_ORDER = { "管理部/秘書":0, "管理部/特助":1, "設計部":2, "租賃部":3 };
@@ -467,44 +484,46 @@ const App = () => {
                 newDuties[dateStr] = assignments;
             }
 
-            // Create new duty records
-            const results = [];
+            // Batch create duty records（一次送完）
+            const batchRecords = [];
+            const batchMeta = []; // 記錄順序對照
             for (const [dateStr, assignments] of Object.entries(newDuties)) {
                 for (const { empName, floor } of assignments) {
-                    const params = new URLSearchParams();
-                    params.append(CONFIG.F_DUTY.DATE, dateStr);
-                    params.append(CONFIG.F_DUTY.EMP, empName);
-                    params.append(CONFIG.F_DUTY.YEAR, String(year));
-                    params.append(CONFIG.F_DUTY.MONTH, String(month));
-                    params.append(CONFIG.F_DUTY.IS_AUTO, "Yes");
-                    params.append(CONFIG.F_DUTY.NOTE, floor);
-                    const res = await apiFetch(CONFIG.DUTY_PATH, {
-                        method: "POST",
-                        headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                        body: params.toString()
+                    batchRecords.push({
+                        [CONFIG.F_DUTY.DATE]: dateStr,
+                        [CONFIG.F_DUTY.EMP]: empName,
+                        [CONFIG.F_DUTY.YEAR]: String(year),
+                        [CONFIG.F_DUTY.MONTH]: String(month),
+                        [CONFIG.F_DUTY.IS_AUTO]: "Yes",
+                        [CONFIG.F_DUTY.NOTE]: floor
                     });
-                    results.push({ dateStr, empName, floor, ragicId: String(res.ragicId) });
-                    await sleep(200);
+                    batchMeta.push({ dateStr, empName, floor });
                 }
             }
+            const batchRes = await apiBatchCreate(CONFIG.DUTY_PATH, batchRecords);
+            const results = batchMeta.map((m, i) => ({ ...m, ragicId: batchRes[i]?.ragicId || "" }));
 
-            // 寫回員工表的累計樓層打掃次數
+            // Batch 寫回員工表的累計樓層打掃次數
             const changedEmps = new Set();
             Object.values(newDuties).forEach(arr => arr.forEach(a => changedEmps.add(a.empName)));
+            const empBatch = {};
             for (const name of changedEmps) {
                 const rid = empRagicIds[name];
                 if (!rid) continue;
                 const fc = fcMap[name];
-                const params = new URLSearchParams();
-                params.append(CONFIG.F_EMP.FL1, String(fc["1F"] || 0));
-                params.append(CONFIG.F_EMP.FL2, String(fc["2F"] || 0));
-                params.append(CONFIG.F_EMP.FL3, String(fc["3F"] || 0));
+                empBatch[rid] = {
+                    [CONFIG.F_EMP.FL1]: String(fc["1F"] || 0),
+                    [CONFIG.F_EMP.FL2]: String(fc["2F"] || 0),
+                    [CONFIG.F_EMP.FL3]: String(fc["3F"] || 0)
+                };
+            }
+            // 員工表用逐筆更新（每人不同 record ID）
+            for (const [rid, fields] of Object.entries(empBatch)) {
                 await apiFetch(`${CONFIG.EMP_PATH}/${rid}`, {
                     method: "POST",
                     headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                    body: params.toString()
+                    body: new URLSearchParams(fields).toString()
                 });
-                await sleep(200);
             }
 
             const dmap = {};
@@ -596,24 +615,25 @@ const App = () => {
                 newZhiban[dateStr] = chosen;
             }
 
-            // 寫入 Ragic（dept 欄標記 "系統預排值班" 以便日後識別）
-            const newLeaves = {};
+            // Batch 寫入 Ragic（一次送完）
+            const zBatchRecords = [];
+            const zBatchMeta = [];
             for (const [dateStr, empName] of Object.entries(newZhiban)) {
-                const params = new URLSearchParams();
-                params.append(CONFIG.F_LEAVE.EMP, empName);
-                params.append(CONFIG.F_LEAVE.DATE, dateStr);
-                params.append(CONFIG.F_LEAVE.YEAR, String(year));
-                params.append(CONFIG.F_LEAVE.MONTH, String(month));
-                params.append(CONFIG.F_LEAVE.TYPE, "值班");
-                params.append(CONFIG.F_LEAVE.DEPT, "系統預排值班");
-                const res = await apiFetch(CONFIG.LEAVE_PATH, {
-                    method: "POST",
-                    headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                    body: params.toString()
+                zBatchRecords.push({
+                    [CONFIG.F_LEAVE.EMP]: empName,
+                    [CONFIG.F_LEAVE.DATE]: dateStr,
+                    [CONFIG.F_LEAVE.YEAR]: String(year),
+                    [CONFIG.F_LEAVE.MONTH]: String(month),
+                    [CONFIG.F_LEAVE.TYPE]: "值班",
+                    [CONFIG.F_LEAVE.DEPT]: "系統預排值班"
                 });
-                newLeaves[`${empName}|${dateStr}`] = { ragicId: String(res.ragicId), type: "值班" };
-                await sleep(200);
+                zBatchMeta.push({ empName, dateStr });
             }
+            const zBatchRes = await apiBatchCreate(CONFIG.LEAVE_PATH, zBatchRecords);
+            const newLeaves = {};
+            zBatchMeta.forEach((m, i) => {
+                newLeaves[`${m.empName}|${m.dateStr}`] = { ragicId: zBatchRes[i]?.ragicId || "", type: "值班" };
+            });
             // 更新 state
             setLeaves(prev => {
                 const next = {...prev};
