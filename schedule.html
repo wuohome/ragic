@@ -59,6 +59,7 @@ const GOV_REST_EMPLOYEES = new Set(["張瓊安", "沈郁雯", "呂鴻墀"]);
 
 // 2026/03/30 起搬到平安街，每天 3 位值日生（1F/2F/3F）
 const FLOORS = ["1F", "2F", "3F"];
+const FLOOR_COLORS = { "1F": "#3b82f6", "2F": "#8b5cf6", "3F": "#0891b2" };
 
 // 2026 台灣國定假日（非週末的放假日）
 const GOV_HOLIDAYS_2026 = new Set([
@@ -506,7 +507,9 @@ const App = () => {
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-green-500 inline-block"></span> 排休</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-red-500 inline-block"></span> 請假</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-orange-500 inline-block"></span> 值班</span>
-                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-blue-500 inline-block"></span> 值日(1F/2F/3F)</span>
+                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#3b82f6"}}></span> 1F</span>
+                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#8b5cf6"}}></span> 2F</span>
+                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#0891b2"}}></span> 3F</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-gray-200 inline-block"></span> 見紅休</span>
                 {!IS_READONLY && <span className="ml-2 text-gray-400 text-sm">點格子={mode}，再點=清除</span>}
             </div>
@@ -584,7 +587,7 @@ const App = () => {
                                                     ) : isGovRest ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-gray-400 bg-gray-100">休</span>
                                                     ) : leave && myDuty ? (
-                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background:"linear-gradient(135deg, " + (leave.type === "排休" ? "#22c55e" : leave.type === "值班" ? "#f97316" : "#dc2626") + " 50%, #3b82f6 50%)"}}>
+                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background:"linear-gradient(135deg, " + (leave.type === "排休" ? "#22c55e" : leave.type === "值班" ? "#f97316" : "#dc2626") + " 50%, " + (FLOOR_COLORS[myDuty.floor] || "#3b82f6") + " 50%)"}}>
                                                             {leave.type === "排休" ? "休" : leave.type === "值班" ? "班" : "假"}{floorLabel}
                                                         </span>
                                                     ) : leave ? (
@@ -592,7 +595,7 @@ const App = () => {
                                                             {leave.type === "排休" ? "休" : leave.type === "值班" ? "班" : "假"}
                                                         </span>
                                                     ) : myDuty ? (
-                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white bg-blue-500">{floorLabel}</span>
+                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background: FLOOR_COLORS[myDuty.floor] || "#3b82f6"}}>{floorLabel}</span>
                                                     ) : null}
                                                 </td>
                                             );
