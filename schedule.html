@@ -427,7 +427,21 @@ const App = () => {
                         .filter(e => !onLeaveToday.has(e.name)).sort((a,b) => a.count - b.count);
                 const finalPool = pool.length >= 3 ? pool
                     : allEmployees.map(e => ({ name: e.name, count: countMap[e.name] || 0 })).sort((a,b) => a.count - b.count);
-                const chosen = finalPool.slice(0, 3).map(c => c.name);
+                let chosen = finalPool.slice(0, 3).map(c => c.name);
+
+                // 夫妻同排：張忠豪 & 蕭眞儀 盡量排同一天
+                const COUPLES = [["張忠豪", "蕭眞儀"]];
+                for (const [a, b] of COUPLES) {
+                    const hasA = chosen.includes(a), hasB = chosen.includes(b);
+                    if (hasA && !hasB && !onLeaveToday.has(b)) {
+                        // A 在但 B 不在，把第3人換成 B
+                        const swap = chosen.findLast(n => n !== a);
+                        if (swap) chosen = chosen.map(n => n === swap ? b : n);
+                    } else if (hasB && !hasA && !onLeaveToday.has(a)) {
+                        const swap = chosen.findLast(n => n !== b);
+                        if (swap) chosen = chosen.map(n => n === swap ? a : n);
+                    }
+                }
 
                 // 分配樓層：難易度 1F>3F>2F（1F 人流最多最難），次數最少的人掃該層
                 const remaining = [...chosen];
