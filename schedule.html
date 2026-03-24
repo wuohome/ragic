@@ -457,7 +457,7 @@ const App = () => {
     };
 
     const getStats = (empName) => {
-        let paixiu = 0, qingjia = 0, zhiban = 0, dutyCount = 0;
+        let paixiu = 0, qingjia = 0, zhiban = 0, f1 = 0, f2 = 0, f3 = 0, dutyOther = 0;
         Object.entries(leaves).forEach(([k,v]) => {
             if (k.startsWith(empName + "|")) {
                 if (v.type === "排休") paixiu++;
@@ -466,9 +466,15 @@ const App = () => {
             }
         });
         Object.values(duties).forEach(arr => {
-            (arr||[]).forEach(d => { if (d.empName === empName) dutyCount++; });
+            (arr||[]).forEach(d => {
+                if (d.empName !== empName) return;
+                if (d.floor === "1F") f1++;
+                else if (d.floor === "2F") f2++;
+                else if (d.floor === "3F") f3++;
+                else dutyOther++;
+            });
         });
-        return { paixiu, qingjia, zhiban, dutyCount };
+        return { paixiu, qingjia, zhiban, f1, f2, f3, dutyOther };
     };
 
     return (
@@ -614,8 +620,11 @@ const App = () => {
                                             {s.paixiu > 0 && <span className="text-green-600">{s.paixiu}休</span>}
                                             {s.qingjia > 0 && <span className="text-red-600"> {s.qingjia}假</span>}
                                             {s.zhiban > 0 && <span className="text-orange-600"> {s.zhiban}班</span>}
-                                            {s.dutyCount > 0 && <span className="text-blue-600"> {s.dutyCount}值</span>}
-                                            {s.paixiu === 0 && s.qingjia === 0 && s.zhiban === 0 && s.dutyCount === 0 && <span className="text-gray-300">-</span>}
+                                            {s.f1 > 0 && <span style={{color:"#3b82f6"}}> {s.f1}<small>F1</small></span>}
+                                            {s.f2 > 0 && <span style={{color:"#8b5cf6"}}> {s.f2}<small>F2</small></span>}
+                                            {s.f3 > 0 && <span style={{color:"#0891b2"}}> {s.f3}<small>F3</small></span>}
+                                            {s.dutyOther > 0 && <span className="text-blue-600"> {s.dutyOther}值</span>}
+                                            {s.paixiu === 0 && s.qingjia === 0 && s.zhiban === 0 && s.f1 === 0 && s.f2 === 0 && s.f3 === 0 && s.dutyOther === 0 && <span className="text-gray-300">-</span>}
                                         </td>
                                     );
                                 })}
