@@ -109,6 +109,9 @@ const STATUS_CONFIG = {
   '請假': { bg:'#dc2626', text:'#fff', label:'假' },
   '值班': { bg:'#f97316', text:'#fff', label:'班' },
   '值日': { bg:'#3b82f6', text:'#fff', label:'值' },
+  '1F':   { bg:'#3b82f6', text:'#fff', label:'1F' },
+  '2F':   { bg:'#3b82f6', text:'#fff', label:'2F' },
+  '3F':   { bg:'#3b82f6', text:'#fff', label:'3F' },
   '見紅休':{ bg:'#9ca3af', text:'#fff', label:'休' },
 };
 
@@ -204,7 +207,9 @@ async function loadDuties(year, month) {
     const empName = r[F_D_EMP];
     const date    = r[F_D_DATE];
     const key = empName + '__' + date;
-    map[key] = { ragicId: rid, empName, date };
+    const note = r[F_D_CHANGE] || '';
+    const floor = /^(1F|2F|3F)$/.test(note) ? note : '';
+    map[key] = { ragicId: rid, empName, date, floor };
   }
   return map;
 }
@@ -276,8 +281,9 @@ async function apiDeleteDuty(ragicId) {
 function getCellStatuses(emp, y, m, d, leaves, duties) {
   const date = fmtDate(y, m, d);
   const result = [];
-  // 值日
-  if (duties[emp.name + '__' + date]) result.push('值日');
+  // 值日（有樓層顯示樓層，無樓層顯示「值」）
+  const dutyRec = duties[emp.name + '__' + date];
+  if (dutyRec) result.push(dutyRec.floor || '值日');
   // Leave types from leave records
   const recs = leaves[emp.name + '__' + date] || [];
   for (const r of recs) {
