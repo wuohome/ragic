@@ -41,15 +41,22 @@ const CONFIG = {
     F_DUTY: { DATE:"1000971", EMP:"1000972", YEAR:"1000973", MONTH:"1000974", IS_AUTO:"1000975", NOTE:"1000976" }
 };
 
-const apiFetch = async (path, opts={}) => {
+const apiFetch = async (path, opts={}, retries=3) => {
     const sep = path.includes("?") ? "&" : "?";
     const url = `${CONFIG.BASE}${path}${sep}api=true&v=3&naming=EID&APIKey=${encodeURIComponent(CONFIG.KEY)}`;
-    const res = await fetch(url, opts);
-    if (!res.ok) throw new Error(`API ${res.status}`);
-    if (opts.method === "DELETE") return {};
-    return res.json();
+    for (let i = 0; i < retries; i++) {
+        const res = await fetch(url, opts);
+        if (res.status === 403 && i < retries - 1) {
+            await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+            continue;
+        }
+        if (!res.ok) throw new Error(`API ${res.status}`);
+        if (opts.method === "DELETE") return {};
+        return res.json();
+    }
 };
 
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const DAYS = ["日","一","二","三","四","五","六"];
 const DEPT_COLORS = { "管理部/秘書":"#8b5cf6", "管理部/特助":"#8b5cf6", "設計部":"#10b981", "租賃部":"#f97316" };
 const DEPT_ORDER = { "管理部/秘書":0, "管理部/特助":1, "設計部":2, "租賃部":3 };
@@ -395,6 +402,7 @@ const App = () => {
                     fcMap[empName][floor] = Math.max(0, (fcMap[empName][floor] || 0) - 1);
                 }
                 await apiFetch(`${CONFIG.DUTY_PATH}/${id}`, { method: "DELETE" });
+                await sleep(200);
             }
 
             // Generate schedule — 每天 3 位值日生，樓層按累計次數公平分配
@@ -476,6 +484,7 @@ const App = () => {
                         body: params.toString()
                     });
                     results.push({ dateStr, empName, floor, ragicId: String(res.ragicId) });
+                    await sleep(200);
                 }
             }
 
@@ -495,6 +504,7 @@ const App = () => {
                     headers: {"Content-Type":"application/x-www-form-urlencoded"},
                     body: params.toString()
                 });
+                await sleep(200);
             }
 
             const dmap = {};
@@ -550,6 +560,7 @@ const App = () => {
                 });
             for (const [id] of toDelete) {
                 await apiFetch(`${CONFIG.LEAVE_PATH}/${id}`, { method: "DELETE" });
+                await sleep(200);
             }
 
             // 每天排 1 人
@@ -601,6 +612,7 @@ const App = () => {
                     body: params.toString()
                 });
                 newLeaves[`${empName}|${dateStr}`] = { ragicId: String(res.ragicId), type: "值班" };
+                await sleep(200);
             }
             // 更新 state
             setLeaves(prev => {
