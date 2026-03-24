@@ -159,19 +159,18 @@ const App = () => {
                     fc: { "1F": parseInt(f[CONFIG.F_EMP.FL1])||0, "2F": parseInt(f[CONFIG.F_EMP.FL2])||0, "3F": parseInt(f[CONFIG.F_EMP.FL3])||0 }
                 }))
                 .filter(e => e.status === "在職" && e.dept !== "經營階層");
-            setAllEmployees(allEmps.filter(e => e.hire !== "兼職").sort((a,b) => a.dept.localeCompare(b.dept) || a.name.localeCompare(b.name)));
+            setAllEmployees(allEmps.filter(e => e.hire !== "兼職").sort((a,b) => a.dept.localeCompare(b.dept) || a.hireDate.localeCompare(b.hireDate)));
 
             // 排休用：只有承攬 + 韓珊珊 + 設計部 + 瓊安
-            const getOrder = (e) => {
-                if (e.name === "韓珊珊") return 0;
-                if (e.name === "張瓊安") return 1;
-                if (e.dept === "設計部") return 2;
-                return 3; // 租賃部
+            const getDeptOrder = (dept) => {
+                if (dept.startsWith("管理部")) return 0;
+                if (dept === "設計部") return 1;
+                return 2; // 租賃部
             };
             const emps = allEmps
                 .filter(e => e.hire === "承攬" || e.name === "韓珊珊" || e.dept === "設計部" || e.name === "張瓊安")
                 .map(e => e.name === "韓珊珊" ? {...e, dept: "管理部/秘書"} : e.name === "張瓊安" ? {...e, dept: "管理部/特助"} : e)
-                .sort((a,b) => getOrder(a) - getOrder(b) || a.hireDate.localeCompare(b.hireDate));
+                .sort((a,b) => getDeptOrder(a.dept) - getDeptOrder(b.dept) || a.hireDate.localeCompare(b.hireDate));
             setEmployees(emps);
 
             const leaveJson = await apiFetch(CONFIG.LEAVE_PATH);
