@@ -429,10 +429,10 @@ const App = () => {
                     : allEmployees.map(e => ({ name: e.name, count: countMap[e.name] || 0 })).sort((a,b) => a.count - b.count);
                 const chosen = finalPool.slice(0, 3).map(c => c.name);
 
-                // 分配樓層：3F 面積最大優先分配，次數最少的人掃該層
+                // 分配樓層：難易度 1F>3F>2F（1F 人流最多最難），次數最少的人掃該層
                 const remaining = [...chosen];
                 const assignments = [];
-                for (const floor of ["3F", "2F", "1F"]) {
+                for (const floor of ["1F", "3F", "2F"]) {
                     remaining.sort((a, b) => (fcMap[a][floor]||0) - (fcMap[b][floor]||0));
                     const pick = remaining.shift();
                     assignments.push({ empName: pick, floor });
