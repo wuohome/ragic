@@ -106,6 +106,7 @@ function getDeptColor(dept) {
 // Status display config
 const STATUS_CONFIG = {
   '排休': { bg:'#16a34a', text:'#fff', label:'休' },
+  '特休': { bg:'#eab308', text:'#fff', label:'特' },
   '請假': { bg:'#dc2626', text:'#fff', label:'假' },
   '值班': { bg:'#f97316', text:'#fff', label:'班' },
   '值日': { bg:'#3b82f6', text:'#fff', label:'值' },
@@ -791,7 +792,7 @@ function TeamView({ emps, onBack }) {
   const summary = React.useMemo(() => {
     const s = {};
     for (const e of emps) {
-      s[e.name] = { '排休':0, '請假':0, '值班':0, '1F':0, '2F':0, '3F':0, '值日':0, '見紅休':0 };
+      s[e.name] = { '排休':0, '特休':0, '請假':0, '值班':0, '1F':0, '2F':0, '3F':0, '值日':0, '見紅休':0 };
     }
     // Count leaves
     for (const recs of Object.values(leaves)) {
