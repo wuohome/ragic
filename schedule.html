@@ -57,6 +57,9 @@ const DEPT_ORDER = { "管理部/秘書":0, "管理部/特助":1, "設計部":2, 
 // 見紅休人員（設計部 + 瓊安）
 const GOV_REST_EMPLOYEES = new Set(["張瓊安", "沈郁雯", "呂鴻墀"]);
 
+// 2026/03/30 起搬到平安街，每天 3 位值日生（1F/2F/3F）
+const FLOORS = ["1F", "2F", "3F"];
+
 // 2026 台灣國定假日（非週末的放假日）
 const GOV_HOLIDAYS_2026 = new Set([
     "2026/01/01", // 元旦
@@ -185,7 +188,7 @@ const App = () => {
                 });
             setLeaves(lmap);
 
-            // Fetch duties for current month
+            // Fetch duties for current month（每天可能有多位值日生）
             const dutyJson = await apiFetch(CONFIG.DUTY_PATH);
             const dmap = {};
             Object.entries(dutyJson)
@@ -199,7 +202,9 @@ const App = () => {
                     const parts = date.replace(/\//g,"-").split("-");
                     const y = parseInt(parts[0]), m = parseInt(parts[1]);
                     if (y === year && m === month) {
-                        dmap[date] = { ragicId: id, empName, isAuto, note };
+                        if (!dmap[date]) dmap[date] = [];
+                        const floor = (note.match(/^(1F|2F|3F)$/) || [""])[0];
+                        dmap[date].push({ ragicId: id, empName, isAuto, note, floor });
                     }
                 });
             setDuties(dmap);
@@ -214,43 +219,43 @@ const App = () => {
 
     const handleClick = async (empName, dateStr) => {
         if (mode === "值日") {
-            // 值日模式：寫入/清除值日生表
+            // 值日模式：寫入/清除值日生表（支援多樓層）
             const dutyKey = `duty|${dateStr}`;
             if (saving[dutyKey]) return;
-            const current = duties[dateStr];
+            const current = duties[dateStr] || [];
+            const myDuty = current.find(d => d.empName === empName);
 
             setSaving(s => ({...s, [dutyKey]: true}));
             try {
-                if (current && current.empName === empName) {
-                    // 同一人再點 = 清除
-                    await apiFetch(`${CONFIG.DUTY_PATH}/${current.ragicId}`, { method: "DELETE" });
-                    setDuties(d => { const n = {...d}; delete n[dateStr]; return n; });
-                    showToast(`${dateStr} 值日生已清除`);
+                if (myDuty) {
+                    // 同一人再點 = 清除該筆
+                    await apiFetch(`${CONFIG.DUTY_PATH}/${myDuty.ragicId}`, { method: "DELETE" });
+                    setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => x.ragicId !== myDuty.ragicId)}));
+                    showToast(`${empName} ${dateStr} ${myDuty.floor || "值日"}已清除`);
                 } else {
-                    // 設定值日生
+                    // 自動分配下一個空樓層
+                    const usedFloors = current.map(d => d.floor);
+                    const nextFloor = FLOORS.find(f => !usedFloors.includes(f));
+                    if (!nextFloor && current.length >= 3) {
+                        showToast(`${dateStr} 已有 3 位值日生`, false);
+                        setSaving(s => { const n = {...s}; delete n[dutyKey]; return n; });
+                        return;
+                    }
+                    const floor = nextFloor || "";
                     const params = new URLSearchParams();
                     params.append(CONFIG.F_DUTY.DATE, dateStr);
                     params.append(CONFIG.F_DUTY.EMP, empName);
                     params.append(CONFIG.F_DUTY.YEAR, String(year));
                     params.append(CONFIG.F_DUTY.MONTH, String(month));
                     params.append(CONFIG.F_DUTY.IS_AUTO, "No");
-                    params.append(CONFIG.F_DUTY.NOTE, "手動變更");
-                    if (current && current.ragicId) {
-                        await apiFetch(`${CONFIG.DUTY_PATH}/${current.ragicId}`, {
-                            method: "POST",
-                            headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                            body: params.toString()
-                        });
-                        setDuties(d => ({...d, [dateStr]: {...current, empName, isAuto: "No", note: "手動變更"}}));
-                    } else {
-                        const res = await apiFetch(CONFIG.DUTY_PATH, {
-                            method: "POST",
-                            headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                            body: params.toString()
-                        });
-                        setDuties(d => ({...d, [dateStr]: {ragicId: String(res.ragicId), empName, isAuto: "No", note: "手動變更"}}));
-                    }
-                    showToast(`${dateStr} 值日生：${empName}`);
+                    params.append(CONFIG.F_DUTY.NOTE, floor || "手動變更");
+                    const res = await apiFetch(CONFIG.DUTY_PATH, {
+                        method: "POST",
+                        headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                        body: params.toString()
+                    });
+                    setDuties(d => ({...d, [dateStr]: [...(d[dateStr]||[]), {ragicId: String(res.ragicId), empName, isAuto: "No", note: floor || "手動變更", floor}]}));
+                    showToast(`${dateStr} 值日生：${empName}${floor ? " ("+floor+")" : ""}`);
                 }
             } catch(e) {
                 console.error(e);
@@ -310,7 +315,7 @@ const App = () => {
 
     const handleAutoSchedule = async () => {
         if (employees.length === 0) { showToast("尚未載入員工資料", false); return; }
-        if (!window.confirm(`確定要自動預排 ${year} 年 ${month} 月的值日生？\n現有的自動排班紀錄會被覆蓋。`)) return;
+        if (!window.confirm(`確定要自動預排 ${year} 年 ${month} 月的值日生？\n每天 3 位（1F/2F/3F），現有的自動排班紀錄會被覆蓋。`)) return;
 
         setAutoScheduling(true);
         try {
@@ -334,10 +339,11 @@ const App = () => {
                     }
                 });
 
-            // Generate schedule for each day of the month
+            // Generate schedule — 每天 3 位值日生 × 3 樓層
             const daysInMonth = new Date(year, month, 0).getDate();
             const newDuties = {};
-            let lastAssigned = "";
+            const lastAssigned = new Set();
+            let floorOffset = 0;
 
             for (let day = 1; day <= daysInMonth; day++) {
                 const mm = String(month).padStart(2,"0");
@@ -351,29 +357,35 @@ const App = () => {
                 Object.entries(leaves).forEach(([k,v]) => {
                     if (k.endsWith("|" + dateStr)) onLeaveToday.add(k.split("|")[0]);
                 });
-                // 見紅休人員在假日也算休假
                 if (isGovHoliday(dateStr, isWknd)) {
                     GOV_REST_EMPLOYEES.forEach(name => onLeaveToday.add(name));
                 }
 
-                // Sort employees by duty count (ascending), avoid same as yesterday, avoid on leave
+                // 排除昨天已排的人 + 休假的人，按次數少優先
                 const candidates = allEmployees
                     .map(e => ({ name: e.name, count: countMap[e.name] || 0 }))
-                    .filter(e => e.name !== lastAssigned && !onLeaveToday.has(e.name))
+                    .filter(e => !lastAssigned.has(e.name) && !onLeaveToday.has(e.name))
                     .sort((a,b) => a.count - b.count);
+                // Fallback: 放寬「不連續」限制
+                const pool = candidates.length >= 3 ? candidates
+                    : allEmployees.map(e => ({ name: e.name, count: countMap[e.name] || 0 }))
+                        .filter(e => !onLeaveToday.has(e.name)).sort((a,b) => a.count - b.count);
+                const finalPool = pool.length >= 3 ? pool
+                    : allEmployees.map(e => ({ name: e.name, count: countMap[e.name] || 0 })).sort((a,b) => a.count - b.count);
 
-                // Fallback: if all are on leave or same as last, relax constraints
-                const pool = candidates.length > 0 ? candidates : allEmployees.map(e => ({ name: e.name, count: countMap[e.name] || 0 })).filter(e => !onLeaveToday.has(e.name)).sort((a,b) => a.count - b.count);
-                // Final fallback: if literally everyone is on leave
-                const finalPool = pool.length > 0 ? pool : allEmployees.map(e => ({ name: e.name, count: countMap[e.name] || 0 })).sort((a,b) => a.count - b.count);
-                const chosen = finalPool[0].name;
-                countMap[chosen] = (countMap[chosen] || 0) + 1;
-                lastAssigned = chosen;
-                newDuties[dateStr] = chosen;
+                // 選 3 人，分配樓層（每天 offset+1 輪轉，確保不會一直掃同層）
+                const chosen = finalPool.slice(0, 3);
+                lastAssigned.clear();
+                newDuties[dateStr] = chosen.map((c, i) => {
+                    const floor = FLOORS[(i + floorOffset) % 3];
+                    countMap[c.name] = (countMap[c.name] || 0) + 1;
+                    lastAssigned.add(c.name);
+                    return { empName: c.name, floor };
+                });
+                floorOffset++;
             }
 
             // Write all records to Ragic (delete existing auto records first, then create)
-            // Delete existing auto-scheduled records for this month
             const existingDutyJson = await apiFetch(CONFIG.DUTY_PATH);
             const toDelete = Object.entries(existingDutyJson)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
@@ -389,35 +401,38 @@ const App = () => {
                 await apiFetch(`${CONFIG.DUTY_PATH}/${id}`, { method: "DELETE" });
             }
 
-            // Create new records (逐筆發送，避免 rate limit)
+            // Create new records — 每天 3 筆（逐筆發送避免 rate limit）
             const results = [];
-            for (const [dateStr, empName] of Object.entries(newDuties)) {
-                const params = new URLSearchParams();
-                params.append(CONFIG.F_DUTY.DATE, dateStr);
-                params.append(CONFIG.F_DUTY.EMP, empName);
-                params.append(CONFIG.F_DUTY.YEAR, String(year));
-                params.append(CONFIG.F_DUTY.MONTH, String(month));
-                params.append(CONFIG.F_DUTY.IS_AUTO, "Yes");
-                params.append(CONFIG.F_DUTY.NOTE, "系統預排");
-                const res = await apiFetch(CONFIG.DUTY_PATH, {
-                    method: "POST",
-                    headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                    body: params.toString()
-                });
-                results.push({ dateStr, empName, ragicId: String(res.ragicId) });
+            for (const [dateStr, assignments] of Object.entries(newDuties)) {
+                for (const { empName, floor } of assignments) {
+                    const params = new URLSearchParams();
+                    params.append(CONFIG.F_DUTY.DATE, dateStr);
+                    params.append(CONFIG.F_DUTY.EMP, empName);
+                    params.append(CONFIG.F_DUTY.YEAR, String(year));
+                    params.append(CONFIG.F_DUTY.MONTH, String(month));
+                    params.append(CONFIG.F_DUTY.IS_AUTO, "Yes");
+                    params.append(CONFIG.F_DUTY.NOTE, floor);
+                    const res = await apiFetch(CONFIG.DUTY_PATH, {
+                        method: "POST",
+                        headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                        body: params.toString()
+                    });
+                    results.push({ dateStr, empName, floor, ragicId: String(res.ragicId) });
+                }
             }
             const dmap = {};
             // Keep manually-changed duties
-            Object.entries(duties).forEach(([dateStr, d]) => {
-                if (d.isAuto === "No") dmap[dateStr] = d;
+            Object.entries(duties).forEach(([dateStr, arr]) => {
+                const manual = (arr||[]).filter(d => d.isAuto === "No");
+                if (manual.length) dmap[dateStr] = manual;
             });
-            results.forEach(({ dateStr, empName, ragicId }) => {
-                if (!dmap[dateStr]) {
-                    dmap[dateStr] = { ragicId, empName, isAuto: "Yes", note: "系統預排" };
-                }
+            results.forEach(({ dateStr, empName, floor, ragicId }) => {
+                if (!dmap[dateStr]) dmap[dateStr] = [];
+                dmap[dateStr].push({ ragicId, empName, isAuto: "Yes", note: floor, floor });
             });
             setDuties(dmap);
-            showToast(`已完成自動預排 ${Object.keys(newDuties).length} 天`);
+            const totalRecords = Object.values(newDuties).reduce((s, a) => s + a.length, 0);
+            showToast(`已完成自動預排 ${Object.keys(newDuties).length} 天 × 3 樓 = ${totalRecords} 筆`);
         } catch(e) {
             console.error(e);
             showToast("自動預排失敗: " + e.message, false);
@@ -449,8 +464,8 @@ const App = () => {
                 else qingjia++;
             }
         });
-        Object.values(duties).forEach(d => {
-            if (d.empName === empName) dutyCount++;
+        Object.values(duties).forEach(arr => {
+            (arr||[]).forEach(d => { if (d.empName === empName) dutyCount++; });
         });
         return { paixiu, qingjia, zhiban, dutyCount };
     };
@@ -491,7 +506,7 @@ const App = () => {
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-green-500 inline-block"></span> 排休</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-red-500 inline-block"></span> 請假</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-orange-500 inline-block"></span> 值班</span>
-                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-blue-500 inline-block"></span> 值日</span>
+                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-blue-500 inline-block"></span> 值日(1F/2F/3F)</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-gray-200 inline-block"></span> 見紅休</span>
                 {!IS_READONLY && <span className="ml-2 text-gray-400 text-sm">點格子={mode}，再點=清除</span>}
             </div>
@@ -542,12 +557,9 @@ const App = () => {
                                 const dateStr = `${year}/${mm}/${dd}`;
                                 const isToday = dateStr === todayStr;
                                 const rowBg = isToday ? "bg-yellow-50" : isWeekend ? "bg-blue-50/40" : "";
-                                const duty = duties[dateStr];
+                                const dutyList = duties[dateStr] || [];
                                 const dutyKey = `duty|${dateStr}`;
                                 const isDutySaving = saving[dutyKey];
-
-                                // Check if duty person is also on leave
-                                const dutyOnLeave = duty && leaves[`${duty.empName}|${dateStr}`];
 
                                 return (
                                     <tr key={day} className={rowBg}>
@@ -558,12 +570,11 @@ const App = () => {
                                         {employees.map(emp => {
                                             const key = `${emp.name}|${dateStr}`;
                                             const leave = leaves[key];
-                                            const isSaving = saving[key];
-                                            const duty = duties[dateStr];
-                                            const isOnDuty = duty && duty.empName === emp.name;
+                                            const myDuty = dutyList.find(d => d.empName === emp.name);
                                             const isGovRest = GOV_REST_EMPLOYEES.has(emp.name) && isGovHoliday(dateStr, isWeekend);
                                             const savingKey = mode === "值日" ? `duty|${dateStr}` : key;
                                             const cellSaving = saving[savingKey];
+                                            const floorLabel = myDuty ? (myDuty.floor || "值") : "";
                                             return (
                                                 <td key={key}
                                                     onClick={() => !IS_READONLY && !isGovRest && handleClick(emp.name, dateStr)}
@@ -572,16 +583,16 @@ const App = () => {
                                                         <span className="cell-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full"></span>
                                                     ) : isGovRest ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-gray-400 bg-gray-100">休</span>
-                                                    ) : leave && isOnDuty ? (
+                                                    ) : leave && myDuty ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background:"linear-gradient(135deg, " + (leave.type === "排休" ? "#22c55e" : leave.type === "值班" ? "#f97316" : "#dc2626") + " 50%, #3b82f6 50%)"}}>
-                                                            {leave.type === "排休" ? "休" : leave.type === "值班" ? "班" : "假"}值
+                                                            {leave.type === "排休" ? "休" : leave.type === "值班" ? "班" : "假"}{floorLabel}
                                                         </span>
                                                     ) : leave ? (
                                                         <span className={`inline-block w-full leading-[32px] text-xs font-bold text-white ${leave.type === "排休" ? "bg-green-500" : leave.type === "值班" ? "bg-orange-500" : "bg-red-500"}`}>
                                                             {leave.type === "排休" ? "休" : leave.type === "值班" ? "班" : "假"}
                                                         </span>
-                                                    ) : isOnDuty ? (
-                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white bg-blue-500">值</span>
+                                                    ) : myDuty ? (
+                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white bg-blue-500">{floorLabel}</span>
                                                     ) : null}
                                                 </td>
                                             );
