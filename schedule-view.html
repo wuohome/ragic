@@ -791,7 +791,7 @@ function TeamView({ emps, onBack }) {
   const summary = React.useMemo(() => {
     const s = {};
     for (const e of emps) {
-      s[e.name] = { '排休':0, '請假':0, '值班':0, '值日':0, '見紅休':0 };
+      s[e.name] = { '排休':0, '請假':0, '值班':0, '1F':0, '2F':0, '3F':0, '值日':0, '見紅休':0 };
     }
     // Count leaves
     for (const recs of Object.values(leaves)) {
@@ -801,10 +801,12 @@ function TeamView({ emps, onBack }) {
         }
       }
     }
-    // Count duties
-    for (const key of Object.keys(duties)) {
+    // Count duties per floor
+    for (const [key, rec] of Object.entries(duties)) {
       const empName = key.split('__')[0];
-      if (s[empName]) s[empName]['值日'] = (s[empName]['值日'] || 0) + 1;
+      if (!s[empName]) continue;
+      const floorKey = rec.floor || '值日';
+      s[empName][floorKey] = (s[empName][floorKey] || 0) + 1;
     }
     // Count 見紅休 days for qualified employees
     const totalDays = daysInMonth(year, month);
