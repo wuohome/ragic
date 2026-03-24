@@ -35,7 +35,7 @@ const CONFIG = {
     KEY: "VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==",
     EMP_PATH: "/wuohome/ragicforms4/20004",
     LEAVE_PATH: "/wuohome/ragicforms4/2",
-    F_EMP: { NAME:"3000933", DISPLAY:"1000848", DEPT:"3000937", STATUS:"3000945", HIRE:"3000955", HIRE_DATE:"3000943" },
+    F_EMP: { NAME:"3000933", DISPLAY:"1000848", DEPT:"3000937", STATUS:"3000945", HIRE:"3000955", HIRE_DATE:"3000943", FL1:"1002028", FL2:"1002029", FL3:"1002030" },
     F_LEAVE: { EMP:"1000961", DATE:"1000963", YEAR:"1000964", MONTH:"1000965", TYPE:"1002025", DEPT:"1002026" },
     DUTY_PATH: "/wuohome/ragicforms4/3",
     F_DUTY: { DATE:"1000971", EMP:"1000972", YEAR:"1000973", MONTH:"1000974", IS_AUTO:"1000975", NOTE:"1000976" }
@@ -149,12 +149,14 @@ const App = () => {
             const allEmps = Object.entries(empJson)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
                 .map(([id, f]) => ({
+                    ragicId: id,
                     name: f[CONFIG.F_EMP.NAME] || "",
                     display: f[CONFIG.F_EMP.NAME] || "",
                     dept: f[CONFIG.F_EMP.DEPT] || "",
                     status: f[CONFIG.F_EMP.STATUS] || "",
                     hire: f[CONFIG.F_EMP.HIRE] || "",
-                    hireDate: f[CONFIG.F_EMP.HIRE_DATE] || "9999/12/31"
+                    hireDate: f[CONFIG.F_EMP.HIRE_DATE] || "9999/12/31",
+                    fc: { "1F": parseInt(f[CONFIG.F_EMP.FL1])||0, "2F": parseInt(f[CONFIG.F_EMP.FL2])||0, "3F": parseInt(f[CONFIG.F_EMP.FL3])||0 }
                 }))
                 .filter(e => e.status === "在職" && e.dept !== "經營階層");
             setAllEmployees(allEmps.filter(e => e.hire !== "兼職").sort((a,b) => a.dept.localeCompare(b.dept) || a.name.localeCompare(b.name)));
@@ -226,23 +228,38 @@ const App = () => {
             const current = duties[dateStr] || [];
             const myDuty = current.find(d => d.empName === empName);
 
+            const empObj = allEmployees.find(e => e.name === empName);
             setSaving(s => ({...s, [dutyKey]: true}));
             try {
                 if (myDuty) {
-                    // 同一人再點 = 清除該筆
+                    // 同一人再點 = 清除該筆 + 扣回樓層次數
                     await apiFetch(`${CONFIG.DUTY_PATH}/${myDuty.ragicId}`, { method: "DELETE" });
+                    if (myDuty.floor && empObj) {
+                        const newCount = Math.max(0, (empObj.fc[myDuty.floor] || 0) - 1);
+                        const flField = myDuty.floor === "1F" ? CONFIG.F_EMP.FL1 : myDuty.floor === "2F" ? CONFIG.F_EMP.FL2 : CONFIG.F_EMP.FL3;
+                        await apiFetch(`${CONFIG.EMP_PATH}/${empObj.ragicId}`, {
+                            method: "POST",
+                            headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                            body: new URLSearchParams({ [flField]: String(newCount) }).toString()
+                        });
+                        empObj.fc[myDuty.floor] = newCount;
+                    }
                     setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => x.ragicId !== myDuty.ragicId)}));
                     showToast(`${empName} ${dateStr} ${myDuty.floor || "值日"}已清除`);
                 } else {
-                    // 自動分配下一個空樓層
+                    // 分配空樓層中此人次數最少的
                     const usedFloors = current.map(d => d.floor);
-                    const nextFloor = FLOORS.find(f => !usedFloors.includes(f));
-                    if (!nextFloor && current.length >= 3) {
+                    const availFloors = FLOORS.filter(f => !usedFloors.includes(f));
+                    if (availFloors.length === 0 && current.length >= 3) {
                         showToast(`${dateStr} 已有 3 位值日生`, false);
                         setSaving(s => { const n = {...s}; delete n[dutyKey]; return n; });
                         return;
                     }
-                    const floor = nextFloor || "";
+                    // 此人累計次數最少的樓層優先
+                    const fc = empObj ? empObj.fc : {};
+                    const floor = availFloors.length > 0
+                        ? availFloors.sort((a, b) => (fc[a]||0) - (fc[b]||0))[0]
+                        : "";
                     const params = new URLSearchParams();
                     params.append(CONFIG.F_DUTY.DATE, dateStr);
                     params.append(CONFIG.F_DUTY.EMP, empName);
@@ -255,6 +272,17 @@ const App = () => {
                         headers: {"Content-Type":"application/x-www-form-urlencoded"},
                         body: params.toString()
                     });
+                    // 更新員工表樓層次數
+                    if (floor && empObj) {
+                        const newCount = (empObj.fc[floor] || 0) + 1;
+                        const flField = floor === "1F" ? CONFIG.F_EMP.FL1 : floor === "2F" ? CONFIG.F_EMP.FL2 : CONFIG.F_EMP.FL3;
+                        await apiFetch(`${CONFIG.EMP_PATH}/${empObj.ragicId}`, {
+                            method: "POST",
+                            headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                            body: new URLSearchParams({ [flField]: String(newCount) }).toString()
+                        });
+                        empObj.fc[floor] = newCount;
+                    }
                     setDuties(d => ({...d, [dateStr]: [...(d[dateStr]||[]), {ragicId: String(res.ragicId), empName, isAuto: "No", note: floor || "手動變更", floor}]}));
                     showToast(`${dateStr} 值日生：${empName}${floor ? " ("+floor+")" : ""}`);
                 }
@@ -320,13 +348,20 @@ const App = () => {
 
         setAutoScheduling(true);
         try {
-            // Fetch previous month's duties to get counts
+            // 讀取累計樓層打掃次數（從員工表）
+            const fcMap = {}; // fcMap[name] = { "1F":n, "2F":n, "3F":n }
+            const empRagicIds = {}; // empRagicIds[name] = ragicId
+            allEmployees.forEach(e => {
+                fcMap[e.name] = { ...e.fc };
+                empRagicIds[e.name] = e.ragicId;
+            });
+
+            // 讀上月值日次數（決定誰被選中）
             const prevMonth = month === 1 ? 12 : month - 1;
             const prevYear = month === 1 ? year - 1 : year;
             const prevDutyJson = await apiFetch(CONFIG.DUTY_PATH);
             const countMap = {};
             allEmployees.forEach(e => { countMap[e.name] = 0; });
-
             Object.entries(prevDutyJson)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
                 .forEach(([id, f]) => {
@@ -340,53 +375,7 @@ const App = () => {
                     }
                 });
 
-            // Generate schedule — 每天 3 位值日生 × 3 樓層
-            const daysInMonth = new Date(year, month, 0).getDate();
-            const newDuties = {};
-            const lastAssigned = new Set();
-            let floorOffset = 0;
-
-            for (let day = 1; day <= daysInMonth; day++) {
-                const mm = String(month).padStart(2,"0");
-                const dd = String(day).padStart(2,"0");
-                const dateStr = `${year}/${mm}/${dd}`;
-
-                // 找出當天排休/請假的人 + 見紅休的人
-                const d = new Date(year, month-1, day);
-                const isWknd = d.getDay()===0||d.getDay()===6;
-                const onLeaveToday = new Set();
-                Object.entries(leaves).forEach(([k,v]) => {
-                    if (k.endsWith("|" + dateStr)) onLeaveToday.add(k.split("|")[0]);
-                });
-                if (isGovHoliday(dateStr, isWknd)) {
-                    GOV_REST_EMPLOYEES.forEach(name => onLeaveToday.add(name));
-                }
-
-                // 排除昨天已排的人 + 休假的人，按次數少優先
-                const candidates = allEmployees
-                    .map(e => ({ name: e.name, count: countMap[e.name] || 0 }))
-                    .filter(e => !lastAssigned.has(e.name) && !onLeaveToday.has(e.name))
-                    .sort((a,b) => a.count - b.count);
-                // Fallback: 放寬「不連續」限制
-                const pool = candidates.length >= 3 ? candidates
-                    : allEmployees.map(e => ({ name: e.name, count: countMap[e.name] || 0 }))
-                        .filter(e => !onLeaveToday.has(e.name)).sort((a,b) => a.count - b.count);
-                const finalPool = pool.length >= 3 ? pool
-                    : allEmployees.map(e => ({ name: e.name, count: countMap[e.name] || 0 })).sort((a,b) => a.count - b.count);
-
-                // 選 3 人，分配樓層（每天 offset+1 輪轉，確保不會一直掃同層）
-                const chosen = finalPool.slice(0, 3);
-                lastAssigned.clear();
-                newDuties[dateStr] = chosen.map((c, i) => {
-                    const floor = FLOORS[(i + floorOffset) % 3];
-                    countMap[c.name] = (countMap[c.name] || 0) + 1;
-                    lastAssigned.add(c.name);
-                    return { empName: c.name, floor };
-                });
-                floorOffset++;
-            }
-
-            // Write all records to Ragic (delete existing auto records first, then create)
+            // 先扣除本月舊的自動排班紀錄的樓層次數
             const existingDutyJson = await apiFetch(CONFIG.DUTY_PATH);
             const toDelete = Object.entries(existingDutyJson)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
@@ -398,11 +387,65 @@ const App = () => {
                     const y = parseInt(parts[0]), m = parseInt(parts[1]);
                     return y === year && m === month && isAuto !== "No";
                 });
-            for (const [id] of toDelete) {
+            for (const [id, f] of toDelete) {
+                const empName = f[CONFIG.F_DUTY.EMP] || "";
+                const note = f[CONFIG.F_DUTY.NOTE] || "";
+                const floor = /^(1F|2F|3F)$/.test(note) ? note : "";
+                if (floor && fcMap[empName]) {
+                    fcMap[empName][floor] = Math.max(0, (fcMap[empName][floor] || 0) - 1);
+                }
                 await apiFetch(`${CONFIG.DUTY_PATH}/${id}`, { method: "DELETE" });
             }
 
-            // Create new records — 每天 3 筆（逐筆發送避免 rate limit）
+            // Generate schedule — 每天 3 位值日生，樓層按累計次數公平分配
+            const daysInMonth = new Date(year, month, 0).getDate();
+            const newDuties = {};
+            const lastAssigned = new Set();
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const mm = String(month).padStart(2,"0");
+                const dd = String(day).padStart(2,"0");
+                const dateStr = `${year}/${mm}/${dd}`;
+
+                const d = new Date(year, month-1, day);
+                const isWknd = d.getDay()===0||d.getDay()===6;
+                const onLeaveToday = new Set();
+                Object.entries(leaves).forEach(([k,v]) => {
+                    if (k.endsWith("|" + dateStr)) onLeaveToday.add(k.split("|")[0]);
+                });
+                if (isGovHoliday(dateStr, isWknd)) {
+                    GOV_REST_EMPLOYEES.forEach(name => onLeaveToday.add(name));
+                }
+
+                // 選人：排除昨天已排 + 休假，按上月次數少優先
+                const candidates = allEmployees
+                    .map(e => ({ name: e.name, count: countMap[e.name] || 0 }))
+                    .filter(e => !lastAssigned.has(e.name) && !onLeaveToday.has(e.name))
+                    .sort((a,b) => a.count - b.count);
+                const pool = candidates.length >= 3 ? candidates
+                    : allEmployees.map(e => ({ name: e.name, count: countMap[e.name] || 0 }))
+                        .filter(e => !onLeaveToday.has(e.name)).sort((a,b) => a.count - b.count);
+                const finalPool = pool.length >= 3 ? pool
+                    : allEmployees.map(e => ({ name: e.name, count: countMap[e.name] || 0 })).sort((a,b) => a.count - b.count);
+                const chosen = finalPool.slice(0, 3).map(c => c.name);
+
+                // 分配樓層：3F 面積最大優先分配，次數最少的人掃該層
+                const remaining = [...chosen];
+                const assignments = [];
+                for (const floor of ["3F", "2F", "1F"]) {
+                    remaining.sort((a, b) => (fcMap[a][floor]||0) - (fcMap[b][floor]||0));
+                    const pick = remaining.shift();
+                    assignments.push({ empName: pick, floor });
+                    fcMap[pick][floor] = (fcMap[pick][floor] || 0) + 1;
+                    countMap[pick] = (countMap[pick] || 0) + 1;
+                }
+
+                lastAssigned.clear();
+                assignments.forEach(a => lastAssigned.add(a.empName));
+                newDuties[dateStr] = assignments;
+            }
+
+            // Create new duty records
             const results = [];
             for (const [dateStr, assignments] of Object.entries(newDuties)) {
                 for (const { empName, floor } of assignments) {
@@ -421,8 +464,26 @@ const App = () => {
                     results.push({ dateStr, empName, floor, ragicId: String(res.ragicId) });
                 }
             }
+
+            // 寫回員工表的累計樓層打掃次數
+            const changedEmps = new Set();
+            Object.values(newDuties).forEach(arr => arr.forEach(a => changedEmps.add(a.empName)));
+            for (const name of changedEmps) {
+                const rid = empRagicIds[name];
+                if (!rid) continue;
+                const fc = fcMap[name];
+                const params = new URLSearchParams();
+                params.append(CONFIG.F_EMP.FL1, String(fc["1F"] || 0));
+                params.append(CONFIG.F_EMP.FL2, String(fc["2F"] || 0));
+                params.append(CONFIG.F_EMP.FL3, String(fc["3F"] || 0));
+                await apiFetch(`${CONFIG.EMP_PATH}/${rid}`, {
+                    method: "POST",
+                    headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                    body: params.toString()
+                });
+            }
+
             const dmap = {};
-            // Keep manually-changed duties
             Object.entries(duties).forEach(([dateStr, arr]) => {
                 const manual = (arr||[]).filter(d => d.isAuto === "No");
                 if (manual.length) dmap[dateStr] = manual;
@@ -432,6 +493,8 @@ const App = () => {
                 dmap[dateStr].push({ ragicId, empName, isAuto: "Yes", note: floor, floor });
             });
             setDuties(dmap);
+            // 更新本地員工樓層次數
+            setAllEmployees(prev => prev.map(e => changedEmps.has(e.name) ? {...e, fc: {...fcMap[e.name]}} : e));
             const totalRecords = Object.values(newDuties).reduce((s, a) => s + a.length, 0);
             showToast(`已完成自動預排 ${Object.keys(newDuties).length} 天 × 3 樓 = ${totalRecords} 筆`);
         } catch(e) {
