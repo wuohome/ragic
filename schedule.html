@@ -519,7 +519,7 @@ const App = () => {
     };
 
     const handleAutoZhiban = async () => {
-        if (!window.confirm(`確定要自動預排 ${year} 年 ${month} 月的值班？\n每天 1 人（承攬滿 3 個月），現有的系統預排值班會被覆蓋。`)) return;
+        if (!window.confirm(`確定要自動預排 ${year} 年 ${month} 月的值班？\n每天 1 人（承攬滿 3 個月），本月所有值班紀錄會被清除重排。`)) return;
         setAutoZhiban(true);
         try {
             // 承攬 + 到職滿 3 個月
@@ -533,31 +533,18 @@ const App = () => {
             });
             if (eligible.length === 0) { showToast("沒有符合條件的值班人員", false); setAutoZhiban(false); return; }
 
-            // 讀上月值班次數
+            // 當月從零開始均勻分配
             const allLeaveJson = await apiFetch(CONFIG.LEAVE_PATH);
-            const prevMonth = month === 1 ? 12 : month - 1;
-            const prevYear = month === 1 ? year - 1 : year;
             const zCount = {};
             eligible.forEach(e => { zCount[e.name] = 0; });
-            Object.entries(allLeaveJson)
-                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
-                .forEach(([id, f]) => {
-                    const emp = f[CONFIG.F_LEAVE.EMP] || "";
-                    const type = f[CONFIG.F_LEAVE.TYPE] || "";
-                    const date = f[CONFIG.F_LEAVE.DATE] || "";
-                    if (type !== "值班" || !zCount.hasOwnProperty(emp)) return;
-                    const p = date.replace(/\//g,"-").split("-");
-                    if (parseInt(p[0]) === prevYear && parseInt(p[1]) === prevMonth) zCount[emp]++;
-                });
 
-            // 刪除本月系統預排的值班（dept 欄標記 "系統預排值班"）
+            // 刪除本月所有值班紀錄（系統預排 + 手動）
             const toDelete = Object.entries(allLeaveJson)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
                 .filter(([id, f]) => {
                     const type = f[CONFIG.F_LEAVE.TYPE] || "";
-                    const dept = f[CONFIG.F_LEAVE.DEPT] || "";
                     const date = f[CONFIG.F_LEAVE.DATE] || "";
-                    if (type !== "值班" || dept !== "系統預排值班") return false;
+                    if (type !== "值班") return false;
                     const p = date.replace(/\//g,"-").split("-");
                     return parseInt(p[0]) === year && parseInt(p[1]) === month;
                 });
