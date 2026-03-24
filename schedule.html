@@ -58,21 +58,24 @@ const apiFetch = async (path, opts={}, retries=3) => {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// Ragic batch POST：一次送多筆，回傳 [{ragicId, ...}, ...]
-const apiBatchCreate = async (path, records) => {
-    const sep = path.includes("?") ? "&" : "?";
-    const url = `${CONFIG.BASE}${path}${sep}api=true&v=3&naming=EID&APIKey=${encodeURIComponent(CONFIG.KEY)}`;
-    const body = {};
-    records.forEach((fields, i) => { body[`_new_${i}`] = fields; });
-    const res = await fetch(url, {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify(body)
-    });
-    if (!res.ok) throw new Error(`Batch API ${res.status}`);
-    const data = await res.json();
-    // data 回傳 { "_new_0": ragicId, "_new_1": ragicId, ... }
-    return records.map((_, i) => ({ ragicId: String(data[`_new_${i}`] || data[`_new_${i}`]?.ragicId || "") }));
+// 逐筆 POST（Ragic batch JSON API 在此表單會建空白紀錄，改逐筆送）
+const apiBatchCreate = async (path, records, onProgress) => {
+    const results = [];
+    for (let i = 0; i < records.length; i++) {
+        if (onProgress) onProgress(i + 1, records.length);
+        const params = new URLSearchParams();
+        for (const [k, v] of Object.entries(records[i])) {
+            params.append(k, v);
+        }
+        const res = await apiFetch(path, {
+            method: "POST",
+            headers: {"Content-Type":"application/x-www-form-urlencoded"},
+            body: params.toString()
+        });
+        results.push({ ragicId: String(res.ragicId || "") });
+        if (i < records.length - 1) await sleep(150);
+    }
+    return results;
 };
 const DAYS = ["日","一","二","三","四","五","六"];
 const DEPT_COLORS = { "管理部/秘書":"#8b5cf6", "管理部/特助":"#8b5cf6", "設計部":"#10b981", "租賃部":"#f97316" };
@@ -489,7 +492,7 @@ const App = () => {
                 newDuties[dateStr] = assignments;
             }
 
-            // Batch create duty records（一次送完）
+            // 逐筆寫入值日紀錄
             setProgress({ text: "寫入值日紀錄...", current: 0, total: 0 });
             const batchRecords = [];
             const batchMeta = []; // 記錄順序對照
@@ -506,7 +509,9 @@ const App = () => {
                     batchMeta.push({ dateStr, empName, floor });
                 }
             }
-            const batchRes = await apiBatchCreate(CONFIG.DUTY_PATH, batchRecords);
+            const batchRes = await apiBatchCreate(CONFIG.DUTY_PATH, batchRecords, (cur, tot) => {
+                setProgress({ text: "寫入值日紀錄...", current: cur, total: tot });
+            });
             const results = batchMeta.map((m, i) => ({ ...m, ragicId: batchRes[i]?.ragicId || "" }));
 
             setProgress({ text: "更新員工樓層統計...", current: 0, total: 0 });
@@ -627,7 +632,7 @@ const App = () => {
             }
 
             setProgress({ text: "寫入值班紀錄...", current: 0, total: 0 });
-            // Batch 寫入 Ragic（一次送完）
+            // 逐筆寫入 Ragic
             const zBatchRecords = [];
             const zBatchMeta = [];
             for (const [dateStr, empName] of Object.entries(newZhiban)) {
@@ -641,7 +646,9 @@ const App = () => {
                 });
                 zBatchMeta.push({ empName, dateStr });
             }
-            const zBatchRes = await apiBatchCreate(CONFIG.LEAVE_PATH, zBatchRecords);
+            const zBatchRes = await apiBatchCreate(CONFIG.LEAVE_PATH, zBatchRecords, (cur, tot) => {
+                setProgress({ text: "寫入值班紀錄...", current: cur, total: tot });
+            });
             const newLeaves = {};
             zBatchMeta.forEach((m, i) => {
                 newLeaves[`${m.empName}|${m.dateStr}`] = { ragicId: zBatchRes[i]?.ragicId || "", type: "值班" };
