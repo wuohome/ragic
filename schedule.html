@@ -108,6 +108,7 @@ const App = () => {
     const [duties, setDuties] = React.useState({});
     const [toast, setToast] = React.useState(null);
     const [autoScheduling, setAutoScheduling] = React.useState(false);
+    const [autoZhiban, setAutoZhiban] = React.useState(false);
     const [mode, setMode] = React.useState("排休");
 
     const handleUnlock = () => {
@@ -503,6 +504,121 @@ const App = () => {
         setAutoScheduling(false);
     };
 
+    const handleAutoZhiban = async () => {
+        if (!window.confirm(`確定要自動預排 ${year} 年 ${month} 月的值班？\n每天 1 人（承攬滿 3 個月），現有的系統預排值班會被覆蓋。`)) return;
+        setAutoZhiban(true);
+        try {
+            // 承攬 + 到職滿 3 個月
+            const schedStart = new Date(year, month - 1, 1);
+            const eligible = employees.filter(e => {
+                if (e.hire !== "承攬") return false;
+                if (!e.hireDate || e.hireDate === "9999/12/31") return false;
+                const p = e.hireDate.split("/");
+                const hired = new Date(+p[0], +p[1]-1, +p[2]);
+                return (schedStart - hired) / (1000*60*60*24) >= 90;
+            });
+            if (eligible.length === 0) { showToast("沒有符合條件的值班人員", false); setAutoZhiban(false); return; }
+
+            // 讀上月值班次數
+            const allLeaveJson = await apiFetch(CONFIG.LEAVE_PATH);
+            const prevMonth = month === 1 ? 12 : month - 1;
+            const prevYear = month === 1 ? year - 1 : year;
+            const zCount = {};
+            eligible.forEach(e => { zCount[e.name] = 0; });
+            Object.entries(allLeaveJson)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([id, f]) => {
+                    const emp = f[CONFIG.F_LEAVE.EMP] || "";
+                    const type = f[CONFIG.F_LEAVE.TYPE] || "";
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    if (type !== "值班" || !zCount.hasOwnProperty(emp)) return;
+                    const p = date.replace(/\//g,"-").split("-");
+                    if (parseInt(p[0]) === prevYear && parseInt(p[1]) === prevMonth) zCount[emp]++;
+                });
+
+            // 刪除本月系統預排的值班（dept 欄標記 "系統預排值班"）
+            const toDelete = Object.entries(allLeaveJson)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .filter(([id, f]) => {
+                    const type = f[CONFIG.F_LEAVE.TYPE] || "";
+                    const dept = f[CONFIG.F_LEAVE.DEPT] || "";
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    if (type !== "值班" || dept !== "系統預排值班") return false;
+                    const p = date.replace(/\//g,"-").split("-");
+                    return parseInt(p[0]) === year && parseInt(p[1]) === month;
+                });
+            for (const [id] of toDelete) {
+                await apiFetch(`${CONFIG.LEAVE_PATH}/${id}`, { method: "DELETE" });
+            }
+
+            // 每天排 1 人
+            const totalDays = new Date(year, month, 0).getDate();
+            const newZhiban = {};
+            let lastPick = "";
+            for (let day = 1; day <= totalDays; day++) {
+                const mm = String(month).padStart(2,"0");
+                const dd = String(day).padStart(2,"0");
+                const dateStr = `${year}/${mm}/${dd}`;
+                const d = new Date(year, month-1, day);
+                const isWknd = d.getDay()===0||d.getDay()===6;
+                // 排除當天已有排休/請假/特休的人
+                const onLeave = new Set();
+                Object.entries(leaves).forEach(([k,v]) => {
+                    if (k.endsWith("|" + dateStr) && v.type !== "值班") onLeave.add(k.split("|")[0]);
+                });
+                if (isGovHoliday(dateStr, isWknd)) {
+                    GOV_REST_EMPLOYEES.forEach(n => onLeave.add(n));
+                }
+                const cands = eligible
+                    .map(e => ({ name: e.name, count: zCount[e.name] || 0 }))
+                    .filter(e => e.name !== lastPick && !onLeave.has(e.name))
+                    .sort((a,b) => a.count - b.count);
+                const pool = cands.length > 0 ? cands
+                    : eligible.map(e => ({ name: e.name, count: zCount[e.name] || 0 }))
+                        .filter(e => !onLeave.has(e.name)).sort((a,b) => a.count - b.count);
+                const final = pool.length > 0 ? pool
+                    : eligible.map(e => ({ name: e.name, count: zCount[e.name] || 0 })).sort((a,b) => a.count - b.count);
+                const chosen = final[0].name;
+                zCount[chosen] = (zCount[chosen] || 0) + 1;
+                lastPick = chosen;
+                newZhiban[dateStr] = chosen;
+            }
+
+            // 寫入 Ragic（dept 欄標記 "系統預排值班" 以便日後識別）
+            const newLeaves = {};
+            for (const [dateStr, empName] of Object.entries(newZhiban)) {
+                const params = new URLSearchParams();
+                params.append(CONFIG.F_LEAVE.EMP, empName);
+                params.append(CONFIG.F_LEAVE.DATE, dateStr);
+                params.append(CONFIG.F_LEAVE.YEAR, String(year));
+                params.append(CONFIG.F_LEAVE.MONTH, String(month));
+                params.append(CONFIG.F_LEAVE.TYPE, "值班");
+                params.append(CONFIG.F_LEAVE.DEPT, "系統預排值班");
+                const res = await apiFetch(CONFIG.LEAVE_PATH, {
+                    method: "POST",
+                    headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                    body: params.toString()
+                });
+                newLeaves[`${empName}|${dateStr}`] = { ragicId: String(res.ragicId), type: "值班" };
+            }
+            // 更新 state
+            setLeaves(prev => {
+                const next = {...prev};
+                for (const [id] of toDelete) {
+                    for (const [k, v] of Object.entries(next)) {
+                        if (v.ragicId === id) { delete next[k]; break; }
+                    }
+                }
+                return {...next, ...newLeaves};
+            });
+            showToast(`已完成自動預排值班 ${Object.keys(newZhiban).length} 天`);
+        } catch(e) {
+            console.error(e);
+            showToast("自動預排值班失敗: " + e.message, false);
+        }
+        setAutoZhiban(false);
+    };
+
     const daysInMonth = new Date(year, month, 0).getDate();
     const dates = Array.from({length: daysInMonth}, (_, i) => {
         const d = new Date(year, month-1, i+1);
@@ -554,6 +670,12 @@ const App = () => {
                         disabled={autoScheduling || loading}
                         className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
                         {autoScheduling ? "預排中..." : "一鍵預排值日生"}
+                    </button>}
+                    {!IS_READONLY && <button
+                        onClick={handleAutoZhiban}
+                        disabled={autoZhiban || loading}
+                        className="px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                        {autoZhiban ? "預排中..." : "一鍵排值班"}
                     </button>}
                 </div>
             </div>
