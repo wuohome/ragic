@@ -583,12 +583,19 @@ function PersonalView({ emp, onBack }) {
       return;
     }
     const date = fmtDate(year, month, d);
-    const nrInfo = noRest[date];
-    if (nrInfo) {
-      const existing = leaves[emp.name + '__' + date] || [];
-      if (existing.length === 0) {
-        if (!window.confirm(`${date} 為禁休日${nrInfo.reason ? '（' + nrInfo.reason + '）' : ''}，確定要排休？`)) return;
+    const cellKey = emp.name + '__' + date;
+    const existing = leaves[cellKey] || [];
+    // 排休上限 8 天警告
+    if (existing.length === 0) {
+      const count = Object.values(leaves).reduce((n, recs) => n + recs.filter(r => r.empName === emp.name && r.type === '排休').length, 0);
+      if (count >= 8) {
+        if (!window.confirm(`您本月已排休 ${count} 天，超過 8 天上限，確定要繼續？`)) return;
       }
+    }
+    // 禁休日警告
+    const nrInfo = noRest[date];
+    if (nrInfo && existing.length === 0) {
+      if (!window.confirm(`${date} 為禁休日${nrInfo.reason ? '（' + nrInfo.reason + '）' : ''}，確定要排休？`)) return;
     }
     doToggleCell(d);
   };
