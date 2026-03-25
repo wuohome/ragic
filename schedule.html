@@ -539,29 +539,31 @@ const App = () => {
                     GOV_REST_EMPLOYEES.forEach(name => onLeaveToday.add(name));
                 }
 
-                // 當天值班的人（優先排值日，這樣只需留一天）
+                // 當天值班的人 → 直接保留一個值日名額（值班+值日同天）
                 const todayZhiban = zhibanByDate[dateStr] || "";
+                const zhibanAvailable = todayZhiban && !onLeaveToday.has(todayZhiban) && !lastAssigned.has(todayZhiban);
 
                 // 選人：排除昨天已排 + 休假，按 score 排序
-                // score = 上月次數 + 本週已排過加 5 分（盡量一週一次）- 當天有值班減 3 分（盡量同天）
+                // score = 上月次數 + 本週已排過加 5 分（盡量一週一次）
                 const scoreFn = (name) => {
                     let s = countMap[name] || 0;
                     const wk = weeklyAssigned[name];
                     if (wk && wk.has(weekNum)) s += 5; // 本週已排過，降低優先
-                    if (name === todayZhiban) s -= 3;   // 當天值班，提高優先
                     return s;
                 };
 
+                const needCount = zhibanAvailable ? 2 : 3; // 值班的人佔一個名額
                 const candidates = allEmployees
                     .map(e => ({ name: e.name, score: scoreFn(e.name) }))
-                    .filter(e => !lastAssigned.has(e.name) && !onLeaveToday.has(e.name))
+                    .filter(e => !lastAssigned.has(e.name) && !onLeaveToday.has(e.name) && e.name !== todayZhiban)
                     .sort((a,b) => a.score - b.score);
-                const pool = candidates.length >= 3 ? candidates
+                const pool = candidates.length >= needCount ? candidates
                     : allEmployees.map(e => ({ name: e.name, score: scoreFn(e.name) }))
-                        .filter(e => !onLeaveToday.has(e.name)).sort((a,b) => a.score - b.score);
-                const finalPool = pool.length >= 3 ? pool
-                    : allEmployees.map(e => ({ name: e.name, score: scoreFn(e.name) })).sort((a,b) => a.score - b.score);
-                let chosen = finalPool.slice(0, 3).map(c => c.name);
+                        .filter(e => !onLeaveToday.has(e.name) && e.name !== todayZhiban).sort((a,b) => a.score - b.score);
+                const finalPool = pool.length >= needCount ? pool
+                    : allEmployees.map(e => ({ name: e.name, score: scoreFn(e.name) })).filter(e => e.name !== todayZhiban).sort((a,b) => a.score - b.score);
+                let chosen = finalPool.slice(0, needCount).map(c => c.name);
+                if (zhibanAvailable) chosen.unshift(todayZhiban); // 值班的人排第一個
 
                 // 夫妻同排：張忠豪 & 蕭眞儀 盡量排同一天
                 const COUPLES = [["張忠豪", "蕭眞儀"]];
