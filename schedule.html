@@ -361,6 +361,14 @@ const App = () => {
         const key = `${empName}|${dateStr}`;
         if (saving[key]) return;
 
+        // 排休上限 8 天警告
+        if (mode === "排休" && !leaves[key]) {
+            const count = Object.entries(leaves).filter(([k,v]) => k.startsWith(empName + "|") && v.type === "排休").length;
+            if (count >= 8) {
+                if (!window.confirm(`${empName} 本月已排休 ${count} 天，超過 8 天上限，確定要繼續？`)) return;
+            }
+        }
+
         // 禁休日排休/特休需確認（請假不擋）
         const nrInfo = noRest[dateStr];
         if (nrInfo && (mode === "排休" || mode === "特休")) {
