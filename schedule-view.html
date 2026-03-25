@@ -57,7 +57,6 @@ const BASE_URL  = 'https://ap15.ragic.com';
 const API_P     = `api=true&v=3&naming=EID&APIKey=${API_KEY}`;
 const EMP_FORM  = '/wuohome/ragicforms4/20004';
 const LEAVE_FORM= '/wuohome/ragicforms4/2';
-const DUTY_FORM = '/wuohome/ragicforms4/3';
 
 // Employee fields
 const F_NAME    = '3000933';
@@ -70,13 +69,8 @@ const F_L_DATE  = '1000963';
 const F_L_YEAR  = '1000964';
 const F_L_MONTH = '1000965';
 const F_L_TYPE  = '1002025';
-// Duty fields
-const F_D_DATE  = '1000971';
-const F_D_EMP   = '1000972';
-const F_D_YEAR  = '1000973';
-const F_D_MONTH = '1000974';
-const F_D_NO    = '1000975';
-const F_D_CHANGE= '1000976';
+const F_L_NOTE  = '1000967';
+const F_L_AUTO  = '1000966';
 
 const DAYS_TW = ['日','一','二','三','四','五','六'];
 
@@ -97,6 +91,7 @@ const DEPT_COLORS = {
   '管理部/秘書': { bg:'#ede9fe', border:'#c4b5fd', text:'#5b21b6', header:'#8b5cf6' },
   '管理部/特助': { bg:'#ede9fe', border:'#c4b5fd', text:'#5b21b6', header:'#8b5cf6' },
   '設計部':      { bg:'#d1fae5', border:'#6ee7b7', text:'#065f46', header:'#10b981' },
+  '社宅部':      { bg:'#e0f2fe', border:'#7dd3fc', text:'#0c4a6e', header:'#0ea5e9' },
   '租賃部':      { bg:'#ffedd5', border:'#fdba74', text:'#9a3412', header:'#f97316' },
 };
 function getDeptColor(dept) {
@@ -114,6 +109,7 @@ const STATUS_CONFIG = {
   '2F':   { bg:'#8b5cf6', text:'#fff', label:'2F' },
   '3F':   { bg:'#0891b2', text:'#fff', label:'3F' },
   '見紅休':{ bg:'#9ca3af', text:'#fff', label:'休' },
+  '禁休':  { bg:'#be123c', text:'#fff', label:'\u{1F6AB}' },
 };
 
 // Returns true if today is in the open editing period (20th–31st)
@@ -139,11 +135,12 @@ function isRedHoliday(y, m, d) {
   return PUBLIC_HOLIDAYS_2026.has(fmtDate(y, m, d));
 }
 
-// Ordering: 韓珊珊=0, 張瓊安=1, 設計部=2, else=3
+// Ordering: 韓珊珊=0, 張瓊安=1, 設計部=2, 租賃部=3, 社宅部=4
 function getOrder(emp) {
   if (emp.name === '韓珊珊') return 0;
   if (emp.name === '張瓊安') return 1;
   if (emp.rawDept === '設計部' || emp.dept === '設計部') return 2;
+  if (emp.rawDept === '社宅部' || emp.dept === '社宅部') return 4;
   return 3;
 }
 
@@ -164,6 +161,7 @@ async function loadEmployees() {
       if (hire === '承攬') return true;
       if (name === '韓珊珊') return true;
       if (dept === '設計部') return true;
+      if (dept === '社宅部') return true;
       if (name === '張瓊安') return true;
       return false;
     })
@@ -195,24 +193,32 @@ async function loadLeaves(year, month) {
   return map;
 }
 
-async function loadDuties(year, month) {
-  const url = BASE_URL + DUTY_FORM + '?' + API_P
-    + '&where=' + F_D_YEAR + ',eq,' + year
-    + '&and=' + F_D_MONTH + ',eq,' + month;
+async function loadDutiesAndNoRest(year, month) {
+  const url = BASE_URL + LEAVE_FORM + '?' + API_P
+    + '&where=' + F_L_YEAR + ',eq,' + year
+    + '&and=' + F_L_MONTH + ',eq,' + month;
   const res = await fetch(url);
   if (!res.ok) throw new Error('值日資料載入失敗 (' + res.status + ')');
   const data = await res.json();
-  const map = {};
+  const duties = {};
+  const noRest = {};
   for (const [rid, r] of Object.entries(data)) {
-    if (!r || typeof r !== 'object' || !r[F_D_DATE]) continue;
-    const empName = r[F_D_EMP];
-    const date    = r[F_D_DATE];
-    const key = empName + '__' + date;
-    const note = r[F_D_CHANGE] || '';
-    const floor = /^(1F|2F|3F)$/.test(note) ? note : '';
-    map[key] = { ragicId: rid, empName, date, floor };
+    if (!r || typeof r !== 'object' || !r[F_L_DATE]) continue;
+    const type = r[F_L_TYPE] || '';
+    if (type === '值日') {
+      const empName = r[F_L_EMP];
+      const date = r[F_L_DATE];
+      const key = empName + '__' + date;
+      const note = r[F_L_NOTE] || '';
+      const floor = /^(1F|2F|3F)$/.test(note) ? note : '';
+      duties[key] = { ragicId: rid, empName, date, floor };
+    } else if (type === '禁休') {
+      const date = r[F_L_DATE];
+      const reason = r[F_L_NOTE] || '';
+      noRest[date] = { ragicId: rid, reason };
+    }
   }
-  return map;
+  return { duties, noRest };
 }
 
 /* ── Write API helpers ──────────────────────────────────────── */
@@ -252,34 +258,8 @@ async function apiUpdateLeaveType(ragicId, newType) {
   if (!res.ok) throw new Error('更新失敗 (' + res.status + ')');
 }
 
-async function apiCreateDuty(empName, date, year, month) {
-  const url = `${BASE_URL}${DUTY_FORM}?${API_P}`;
-  const body = new URLSearchParams({
-    [F_D_DATE]:   date,
-    [F_D_EMP]:    empName,
-    [F_D_YEAR]:   String(year),
-    [F_D_MONTH]:  String(month),
-    [F_D_NO]:     'No',
-    [F_D_CHANGE]: '手動變更',
-  }).toString();
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-  if (!res.ok) throw new Error('建立值日失敗 (' + res.status + ')');
-  const data = await res.json();
-  return data.ragicId || data._ragicId || Object.keys(data)[0];
-}
-
-async function apiDeleteDuty(ragicId) {
-  const url = `${BASE_URL}${DUTY_FORM}/${ragicId}?${API_P}`;
-  const res = await fetch(url, { method: 'DELETE' });
-  if (!res.ok) throw new Error('刪除值日失敗 (' + res.status + ')');
-}
-
 /* ── Shared logic: get statuses for a cell ─────────────────── */
-function getCellStatuses(emp, y, m, d, leaves, duties) {
+function getCellStatuses(emp, y, m, d, leaves, duties, noRest) {
   const date = fmtDate(y, m, d);
   const result = [];
   // 值日（有樓層顯示樓層，無樓層顯示「值」）
@@ -290,8 +270,8 @@ function getCellStatuses(emp, y, m, d, leaves, duties) {
   for (const r of recs) {
     if (r.type && !result.includes(r.type)) result.push(r.type);
   }
-  // 見紅休: only if no other status AND employee qualifies
-  if (result.length === 0 && JIAN_HONG_NAMES.has(emp.name) && isRedHoliday(y, m, d)) {
+  // 見紅休: only if NOT 禁休 day AND no other status AND employee qualifies
+  if (result.length === 0 && !noRest[date] && JIAN_HONG_NAMES.has(emp.name) && isRedHoliday(y, m, d)) {
     result.push('見紅休');
   }
   return result;
@@ -521,6 +501,7 @@ function PersonalView({ emp, onBack }) {
   const [month,       setMonth]       = React.useState(initDate.m);
   const [leaves,      setLeaves]      = React.useState({});
   const [duties,      setDuties]      = React.useState({});
+  const [noRest,      setNoRest]      = React.useState({});
   const [loading,     setLoading]     = React.useState(true);
   const [err,         setErr]         = React.useState(null);
   const [savingCells, setSavingCells] = React.useState({}); // key -> true
@@ -530,8 +511,8 @@ function PersonalView({ emp, onBack }) {
   React.useEffect(() => {
     setLoading(true);
     setErr(null);
-    Promise.all([loadLeaves(year, month), loadDuties(year, month)])
-      .then(([lv, du]) => { setLeaves(lv); setDuties(du); setLoading(false); })
+    Promise.all([loadLeaves(year, month), loadDutiesAndNoRest(year, month)])
+      .then(([lv, du]) => { setLeaves(lv); setDuties(du.duties); setNoRest(du.noRest); setLoading(false); })
       .catch(e => { setErr(e.message); setLoading(false); });
   }, [year, month]);
 
@@ -584,6 +565,14 @@ function PersonalView({ emp, onBack }) {
       showToast('每月 20 號後開放排班', 'error');
       return;
     }
+    const date = fmtDate(year, month, d);
+    const nrInfo = noRest[date];
+    if (nrInfo) {
+      const existing = leaves[emp.name + '__' + date] || [];
+      if (existing.length === 0) {
+        if (!window.confirm(`${date} 為禁休日${nrInfo.reason ? '（' + nrInfo.reason + '）' : ''}，確定要排休？`)) return;
+      }
+    }
     doToggleCell(d);
   };
 
@@ -605,7 +594,7 @@ function PersonalView({ emp, onBack }) {
       const dow       = getDOW(year, month, d);
       const isToday   = today.getFullYear()===year && today.getMonth()+1===month && today.getDate()===d;
       const isWeekend = dow===0||dow===6;
-      const statuses  = getCellStatuses(emp, year, month, d, leaves, duties);
+      const statuses  = getCellStatuses(emp, year, month, d, leaves, duties, noRest);
       cells.push({ blank: false, key: 'd'+d, d, dow, isToday, isWeekend, statuses });
     }
 
@@ -639,18 +628,23 @@ function PersonalView({ emp, onBack }) {
             const cellKey = emp.name + '__' + date;
             const isSaving = !!savingCells[cellKey];
             const canEdit = isCellEditable(cell.d);
+            const cellDate = fmtDate(year, month, cell.d);
+            const nrInfo = noRest[cellDate];
             let extraClass = '';
             if (cell.isToday) extraClass = ' today';
             else if (cell.isWeekend) extraClass = ' weekend';
             if (canEdit) extraClass += ' clickable';
             if (isSaving) extraClass += ' saving';
 
+            const cellStyle = nrInfo ? { background: '#fff1f2', borderColor: '#fda4af' } : {};
+
             return (
               <div
                 key={cell.key}
                 className={'cal-cell' + extraClass}
+                style={cellStyle}
                 onClick={canEdit && !isSaving ? () => handleCellClick(cell.d) : undefined}
-                title={canEdit ? '點擊切換排休' : undefined}
+                title={canEdit ? (nrInfo ? '禁休日' + (nrInfo.reason ? '（' + nrInfo.reason + '）' : '') + ' — 點擊仍可排休' : '點擊切換排休') : undefined}
               >
                 <span style={{
                   fontSize: 12, fontWeight: cell.isToday ? 800 : 500,
@@ -659,6 +653,12 @@ function PersonalView({ emp, onBack }) {
                        : cell.dow===6 ? '#3b82f6'
                        : '#475569',
                 }}>{cell.d}</span>
+                {nrInfo && (
+                  <span style={{
+                    fontSize: 9, color: '#be123c', fontWeight: 700,
+                    lineHeight: 1, marginTop: 1,
+                  }}>禁休{nrInfo.reason ? ' ' + nrInfo.reason : ''}</span>
+                )}
                 {isSaving ? (
                   <div style={{ marginTop: 4 }}><Spinner small /></div>
                 ) : (
@@ -763,14 +763,15 @@ function TeamView({ emps, onBack }) {
   const [month,   setMonth]   = React.useState(today.getMonth() + 1);
   const [leaves,  setLeaves]  = React.useState({});
   const [duties,  setDuties]  = React.useState({});
+  const [noRest,  setNoRest]  = React.useState({});
   const [loading, setLoading] = React.useState(true);
   const [err,     setErr]     = React.useState(null);
 
   React.useEffect(() => {
     setLoading(true);
     setErr(null);
-    Promise.all([loadLeaves(year, month), loadDuties(year, month)])
-      .then(([lv, du]) => { setLeaves(lv); setDuties(du); setLoading(false); })
+    Promise.all([loadLeaves(year, month), loadDutiesAndNoRest(year, month)])
+      .then(([lv, du]) => { setLeaves(lv); setDuties(du.duties); setNoRest(du.noRest); setLoading(false); })
       .catch(e => { setErr(e.message); setLoading(false); });
   }, [year, month]);
 
@@ -809,18 +810,19 @@ function TeamView({ emps, onBack }) {
       const floorKey = rec.floor || '值日';
       s[empName][floorKey] = (s[empName][floorKey] || 0) + 1;
     }
-    // Count 見紅休 days for qualified employees
+    // Count 見紅休 days for qualified employees (exclude 禁休 days)
     const totalDays = daysInMonth(year, month);
     for (const e of emps) {
       if (!JIAN_HONG_NAMES.has(e.name)) continue;
       let cnt = 0;
       for (let d = 1; d <= totalDays; d++) {
-        if (isRedHoliday(year, month, d)) cnt++;
+        const date = fmtDate(year, month, d);
+        if (isRedHoliday(year, month, d) && !noRest[date]) cnt++;
       }
       s[e.name]['見紅休'] = cnt;
     }
     return s;
-  }, [leaves, duties, emps, year, month]);
+  }, [leaves, duties, noRest, emps, year, month]);
 
   const navBtn = {
     padding: '4px 14px', background: 'rgba(255,255,255,0.15)', color: '#fff',
@@ -948,7 +950,7 @@ function TeamView({ emps, onBack }) {
                       <span style={{ color: '#94a3b8', fontSize: 11 }}>({DAYS_TW[dow]})</span>
                     </td>
                     {emps.map(emp => {
-                      const statuses = getCellStatuses(emp, year, month, day, leaves, duties);
+                      const statuses = getCellStatuses(emp, year, month, day, leaves, duties, noRest);
                       return (
                         <td key={emp.name} style={{
                           borderRight: '1px solid #f1f5f9',
