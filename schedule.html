@@ -992,6 +992,18 @@ const App = () => {
                                     <li>值班的人同天順便掃地（佔 1 個值日名額）</li>
                                     <li>禁休日全員打掃，不排值日生</li>
                                 </ul>
+                                <div className="mt-3 p-3 bg-blue-50 rounded-lg text-xs text-blue-800">
+                                    <p className="font-bold mb-1">💡 追債怎麼算？（舉例）</p>
+                                    <p>假設上個月大家平均打掃 2 次：</p>
+                                    <table className="w-full mt-1 text-xs">
+                                        <thead><tr className="text-left"><th className="pr-2">人</th><th className="pr-2">上月實際</th><th className="pr-2">跟平均的差</th><th>本月結果</th></tr></thead>
+                                        <tbody>
+                                            <tr><td>瓊安</td><td>2 次</td><td>剛好</td><td>排 ~4 次（正常）</td></tr>
+                                            <tr><td>瓊安（如果上月 0 次）</td><td>0 次</td><td>欠 2 次</td><td>排 ~6 次（補 2 次債）</td></tr>
+                                        </tbody>
+                                    </table>
+                                    <p className="mt-1.5 text-blue-600">系統看的是「你上月實際打掃幾次 vs 大家平均」，不只是未掃的那次。被排比較少的人，下個月也會被多排來拉平。每位員工名字下方的 🧹 數字就是上月打掃次數，可以對照確認。</p>
+                                </div>
                             </div>
                             <hr className="border-gray-200" />
                             <div>
