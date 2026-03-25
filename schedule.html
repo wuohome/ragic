@@ -486,6 +486,13 @@ const App = () => {
                 newNames.forEach(n => { countMap[n] = Math.round(avg); });
             }
 
+            // === DEBUG: 值日排班診斷 ===
+            console.log("=== 值日排班診斷 ===");
+            console.log("排班月份:", year, "/", month);
+            console.log("上月 countMap (排序):", Object.entries(countMap).sort((a,b) => a[1]-b[1]).map(([n,c]) => `${n}:${c}`).join(", "));
+            console.log("新人(用平均):", newNames?.join(", ") || "無");
+            console.log("老員工數:", veteranNames?.length || "N/A");
+
             // 先扣除本月舊的自動排班紀錄的樓層次數
             setProgress({ text: "清除舊紀錄...", current: 0, total: 0 });
             const toDelete = Object.entries(allLeaveForDuty)
@@ -636,6 +643,19 @@ const App = () => {
                 });
                 newDuties[dateStr] = assignments;
             }
+
+            // === DEBUG: 排班結果統計 ===
+            const dutyCounts = {};
+            Object.values(newDuties).forEach(arr => arr.forEach(a => {
+                dutyCounts[a.empName] = (dutyCounts[a.empName] || 0) + 1;
+            }));
+            console.log("=== 排班結果 ===");
+            console.log("總天數:", Object.keys(newDuties).length, "天 ×3 =", Object.keys(newDuties).length * 3, "slots");
+            console.log("分配結果 (排序):", Object.entries(dutyCounts).sort((a,b) => b[1]-a[1]).map(([n,c]) => `${n}:${c}`).join(", "));
+            console.log("夫妻 Plan A 選中天數:", Object.entries(newDuties).filter(([d, arr]) => {
+                const names = arr.map(a => a.empName);
+                return names.includes("張忠豪") || names.includes("蕭眞儀");
+            }).length);
 
             // 逐筆寫入值日紀錄
             setProgress({ text: "寫入值日紀錄...", current: 0, total: 0 });
