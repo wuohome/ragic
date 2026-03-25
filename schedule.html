@@ -692,10 +692,34 @@ const App = () => {
             });
             if (eligible.length === 0) { showToast("沒有符合條件的值班人員", false); setAutoZhiban(false); return; }
 
-            // 當月從零開始均勻分配
+            // 讀上月值班次數，補回差額
             const allLeaveJson = await apiFetch(CONFIG.LEAVE_PATH);
+            const prevMonth = month === 1 ? 12 : month - 1;
+            const prevYear = month === 1 ? year - 1 : year;
+            const prevZCount = {};
+            eligible.forEach(e => { prevZCount[e.name] = 0; });
+            Object.entries(allLeaveJson)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([id, f]) => {
+                    const type = f[CONFIG.F_LEAVE.TYPE] || "";
+                    if (type !== "值班") return;
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    const emp = f[CONFIG.F_LEAVE.EMP] || "";
+                    if (!date || !emp) return;
+                    const parts = date.replace(/\//g,"-").split("-");
+                    const y = parseInt(parts[0]), m = parseInt(parts[1]);
+                    if (y === prevYear && m === prevMonth && prevZCount.hasOwnProperty(emp)) {
+                        prevZCount[emp]++;
+                    }
+                });
+            // 上月平均次數（新人用平均，不吃虧也不佔便宜）
+            const prevValues = Object.values(prevZCount);
+            const prevAvg = prevValues.length > 0 ? prevValues.reduce((a,b) => a+b, 0) / prevValues.length : 0;
+            // 本月起始次數 = 上月次數（有紀錄的沿用，新人用平均）
             const zCount = {};
-            eligible.forEach(e => { zCount[e.name] = 0; });
+            eligible.forEach(e => {
+                zCount[e.name] = prevZCount.hasOwnProperty(e.name) ? prevZCount[e.name] : Math.round(prevAvg);
+            });
 
             // 刪除本月所有值班紀錄（系統預排 + 手動）
             const toDelete = Object.entries(allLeaveJson)
