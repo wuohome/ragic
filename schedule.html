@@ -567,8 +567,17 @@ const App = () => {
 
                 // 選人：排除昨天已排 + 休假，按 score 排序
                 // score = 上月次數 + 本週已排過加 5 分（盡量一週一次）
+                // 夫妻同排：score 用 max(自己, 配偶)，確保「兩人都該排」才會被選
+                const COUPLES = [["張忠豪", "蕭眞儀"]];
                 const scoreFn = (name) => {
                     let s = countMap[name] || 0;
+                    // 夫妻 score 連動：配偶今天也可用時，取 max 避免一人拉另一人
+                    for (const [a, b] of COUPLES) {
+                        const spouse = name === a ? b : (name === b ? a : null);
+                        if (spouse && !onLeaveToday.has(spouse) && !lastAssigned.has(spouse)) {
+                            s = Math.max(s, countMap[spouse] || 0);
+                        }
+                    }
                     const wk = weeklyAssigned[name];
                     if (wk && wk.has(weekNum)) s += 5; // 本週已排過，降低優先
                     return s;
@@ -587,8 +596,7 @@ const App = () => {
                 let chosen = finalPool.slice(0, needCount).map(c => c.name);
                 if (zhibanAvailable) chosen.unshift(todayZhiban); // 值班的人排第一個
 
-                // 夫妻同排：張忠豪 & 蕭眞儀 盡量排同一天
-                const COUPLES = [["張忠豪", "蕭眞儀"]];
+                // 夫妻同排：張忠豪 & 蕭眞儀 盡量排同一天（COUPLES 已在 scoreFn 上方宣告）
                 for (const [a, b] of COUPLES) {
                     const hasA = chosen.includes(a), hasB = chosen.includes(b);
                     if (hasA && !hasB && !onLeaveToday.has(b)) {
