@@ -176,7 +176,8 @@ async function loadEmployees() {
       const name = r[F_NAME];
       const rawDept = r[F_DEPT];
       const dept = DEPT_DISPLAY[name] || rawDept;
-      return { id: rid, name, dept, rawDept };
+      const hire = r[F_HIRE] || '';
+      return { id: rid, name, dept, rawDept, hire };
     });
   raw.sort((a, b) => getOrder(a) - getOrder(b));
   return raw;
@@ -228,6 +229,32 @@ async function loadDutiesAndNoRest(year, month) {
     }
   }
   return { duties, noRest };
+}
+
+async function loadPrevStats(year, month) {
+  const pm = month === 1 ? 12 : month - 1;
+  const py = month === 1 ? year - 1 : year;
+  const url = BASE_URL + LEAVE_FORM + '?' + API_P
+    + '&where=' + F_L_YEAR + ',eq,' + py
+    + '&and=' + F_L_MONTH + ',eq,' + pm;
+  const res = await fetch(url);
+  if (!res.ok) return {};
+  const data = await res.json();
+  const stats = {};
+  for (const [rid, r] of Object.entries(data)) {
+    if (!r || typeof r !== 'object' || !r[F_L_DATE]) continue;
+    const emp = r[F_L_EMP] || '';
+    const type = r[F_L_TYPE] || '';
+    if (!emp) continue;
+    if (!stats[emp]) stats[emp] = { duty: 0, zhiban: 0 };
+    if (type === '值日') {
+      const isAuto = r[F_L_AUTO] || '';
+      if (isAuto !== '未掃') stats[emp].duty++;
+    } else if (type === '值班') {
+      stats[emp].zhiban++;
+    }
+  }
+  return stats;
 }
 
 /* ── Write API helpers ──────────────────────────────────────── */
@@ -794,17 +821,19 @@ function TeamView({ emps, onBack }) {
   const [noRest,  setNoRest]  = React.useState({});
   const [loading, setLoading] = React.useState(true);
   const [err,     setErr]     = React.useState(null);
+  const [prevStatsData, setPrevStatsData] = React.useState({});
+  const [showRules, setShowRules] = React.useState(false);
 
   React.useEffect(() => {
     setLoading(true);
     setErr(null);
-    Promise.all([loadLeaves(year, month), loadDutiesAndNoRest(year, month)])
-      .then(([lv, du]) => { setLeaves(lv); setDuties(du.duties); setNoRest(du.noRest); setLoading(false); })
+    Promise.all([loadLeaves(year, month), loadDutiesAndNoRest(year, month), loadPrevStats(year, month)])
+      .then(([lv, du, ps]) => { setLeaves(lv); setDuties(du.duties); setNoRest(du.noRest); setPrevStatsData(ps); setLoading(false); })
       .catch(e => { setErr(e.message); setLoading(false); });
   }, [year, month]);
 
-  const prevMonth = () => { if (month===1){setYear(y=>y-1);setMonth(12);}else setMonth(m=>m-1); };
-  const nextMonth = () => { if (month===12){setYear(y=>y+1);setMonth(1);}else setMonth(m=>m+1); };
+  const goPrevMonth = () => { if (month===1){setYear(y=>y-1);setMonth(12);}else setMonth(m=>m-1); };
+  const goNextMonth = () => { if (month===12){setYear(y=>y+1);setMonth(1);}else setMonth(m=>m+1); };
 
   // Group emps by dept (already ordered)
   const deptGroups = React.useMemo(() => {
@@ -891,11 +920,15 @@ function TeamView({ emps, onBack }) {
           {loading && <Spinner/>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button style={navBtn} onClick={prevMonth}>‹ 上月</button>
+          <button style={navBtn} onClick={goPrevMonth}>‹ 上月</button>
           <span style={{ minWidth: 104, textAlign: 'center', fontWeight: 700, fontSize: 14 }}>
             {year} 年 {month} 月
           </span>
-          <button style={navBtn} onClick={nextMonth}>下月 ›</button>
+          <button style={navBtn} onClick={goNextMonth}>下月 ›</button>
+          <button onClick={() => setShowRules(true)} style={{
+            width: 24, height: 24, borderRadius: '50%', background: 'rgba(255,255,255,0.2)',
+            color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
+          }} title="排班規則說明">?</button>
         </div>
         {/* Legend */}
         <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'rgba(255,255,255,0.8)', flexWrap: 'wrap' }}>
@@ -909,6 +942,50 @@ function TeamView({ emps, onBack }) {
           ))}
         </div>
       </header>
+
+      {showRules && (
+        <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:50,padding:16 }} onClick={() => setShowRules(false)}>
+          <div style={{ background:'#fff',borderRadius:16,boxShadow:'0 8px 32px rgba(0,0,0,0.2)',maxWidth:480,width:'100%',maxHeight:'80vh',overflowY:'auto',padding:24 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16 }}>
+              <h2 style={{ fontSize:18,fontWeight:700,color:'#3f5262',margin:0 }}>排班規則說明</h2>
+              <button onClick={() => setShowRules(false)} style={{ background:'none',border:'none',fontSize:20,color:'#9ca3af',cursor:'pointer' }}>✕</button>
+            </div>
+            <div style={{ fontSize:13,color:'#374151',lineHeight:1.7 }}>
+              <p><b>📋 狀態</b></p>
+              <p>排休（綠）= 月休、特休（黃）= 特別休假、請假（紅）= 事病假<br/>值班（橘）= 19:00-20:00 多留、值日（藍）= 打掃 1F/2F/3F<br/>休假（灰）= 見紅休（設計部＋瓊安，週末/國定假日自動標記）</p>
+              <hr style={{ border:'none',borderTop:'1px solid #e5e7eb',margin:'12px 0' }}/>
+              <p><b>⚡ 值班規則</b></p>
+              <ul style={{ paddingLeft:20,margin:'4px 0' }}>
+                <li>資格：承攬＋到職滿 3 個月（社宅部除外）</li>
+                <li>每月從零開始，當月均勻分配，不追歷史</li>
+                <li>新人入池不用補前人的值班次數</li>
+              </ul>
+              <hr style={{ border:'none',borderTop:'1px solid #e5e7eb',margin:'12px 0' }}/>
+              <p><b>🧹 值日生規則</b></p>
+              <ul style={{ paddingLeft:20,margin:'4px 0' }}>
+                <li>資格：全部在職（不含經營階層、兼職）</li>
+                <li>追債制：上月次數少的人優先排</li>
+                <li>新人起始次數 = 老員工平均值（不追入池前的債）</li>
+                <li>每天 3 位（1F/2F/3F），盡量一週排一次</li>
+                <li>值班的人同天順便掃地</li>
+              </ul>
+              <div style={{ background:'#eff6ff',borderRadius:8,padding:10,margin:'8px 0',fontSize:12,color:'#1e40af' }}>
+                <p style={{ fontWeight:700,margin:'0 0 4px' }}>💡 追債怎麼算？</p>
+                <p style={{ margin:0 }}>假設上月大家平均打掃 2 次：瓊安打掃 2 次 → 本月正常排 ~4 次。<br/>如果瓊安上月只打掃 0 次 → 欠 2 次 → 本月排 ~6 次來補。<br/>系統看的是「實際打掃幾次 vs 大家平均」。名字下方的 🧹 數字就是上月次數。</p>
+              </div>
+              <hr style={{ border:'none',borderTop:'1px solid #e5e7eb',margin:'12px 0' }}/>
+              <p><b>💑 夫妻同排（張忠豪 &amp; 蕭眞儀）</b></p>
+              <ul style={{ paddingLeft:20,margin:'4px 0' }}>
+                <li>值日生必須一起排，作為一組跟個人公平競爭</li>
+                <li>值班各自獨立，不受夫妻規則影響</li>
+              </ul>
+              <hr style={{ border:'none',borderTop:'1px solid #e5e7eb',margin:'12px 0' }}/>
+              <p><b>📅 權限</b>：每月 20 號後自動開放排下個月的休</p>
+            </div>
+            <button onClick={() => setShowRules(false)} style={{ marginTop:16,width:'100%',padding:'10px 0',background:'#f1f5f9',border:'none',borderRadius:8,fontWeight:700,color:'#64748b',cursor:'pointer',fontSize:14 }}>關閉</button>
+          </div>
+        </div>
+      )}
 
       <div style={{ overflowX: 'auto', padding: '8px 4px' }}>
         {!loading && emps.length === 0 ? (
@@ -945,13 +1022,21 @@ function TeamView({ emps, onBack }) {
                 }}>日期</th>
                 {emps.map(emp => {
                   const dc = getDeptColor(emp.dept);
+                  const ps = prevStatsData[emp.name];
+                  const pm = month === 1 ? 12 : month - 1;
+                  const showZhiban = emp.hire === '承攬' && emp.rawDept !== '社宅部';
                   return (
                     <th key={emp.name} style={{
-                      minWidth: 48, padding: '6px 6px',
+                      minWidth: 48, padding: '4px 4px',
                       borderRight: '1px solid #e2e8f0', textAlign: 'center',
                       fontWeight: 700, fontSize: 12,
                       background: dc.bg, color: dc.text,
-                    }}>{emp.name}</th>
+                    }}>
+                      <div>{emp.name}</div>
+                      {ps && <div style={{ fontWeight: 400, color: '#9ca3af', fontSize: 9, lineHeight: '1.2' }}>
+                        {pm}月 🧹{ps.duty}{showZhiban ? ` 🕗${ps.zhiban}` : ''}
+                      </div>}
+                    </th>
                   );
                 })}
               </tr>
