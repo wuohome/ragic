@@ -39,6 +39,14 @@ const CONFIG = {
     F_LEAVE: { EMP:"1000961", DATE:"1000963", YEAR:"1000964", MONTH:"1000965", TYPE:"1002025", DEPT:"1002026", NOTE:"1000967", IS_AUTO:"1000966" }
 };
 
+// 建立日期範圍 where 條件（只拉需要的月份，不拉全表）
+const leaveWhere = (fromY, fromM, toY, toM) => {
+    const from = `${fromY}/${String(fromM).padStart(2,"0")}/01`;
+    const lastDay = new Date(toY, toM, 0).getDate();
+    const to = `${toY}/${String(toM).padStart(2,"0")}/${String(lastDay).padStart(2,"0")}`;
+    return `?where=${CONFIG.F_LEAVE.DATE},gte,${from}&where=${CONFIG.F_LEAVE.DATE},lte,${to}`;
+};
+
 const apiFetch = async (path, opts={}, retries=3) => {
     const sep = path.includes("?") ? "&" : "?";
     const url = `${CONFIG.BASE}${path}${sep}api=true&v=3&naming=EID&APIKey=${encodeURIComponent(CONFIG.KEY)}`;
@@ -208,13 +216,13 @@ const App = () => {
             setEmployees(emps);
             console.log("生日資料:", emps.map(e => e.name + ":" + (e.birthday || "無")).join(", "));
 
-            const leaveJson = await apiFetch(CONFIG.LEAVE_PATH);
+            // 只拉當月+上月（不拉全表）
+            const pm = month === 1 ? 12 : month - 1;
+            const py = month === 1 ? year - 1 : year;
+            const leaveJson = await apiFetch(CONFIG.LEAVE_PATH + leaveWhere(py, pm, year, month));
             const lmap = {};
             const dmap = {};
             const nrmap = {};
-            // 上月統計
-            const pm = month === 1 ? 12 : month - 1;
-            const py = month === 1 ? year - 1 : year;
             const pStats = {};
             Object.entries(leaveJson)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
@@ -467,10 +475,10 @@ const App = () => {
                 empRagicIds[e.name] = e.ragicId;
             });
 
-            // 讀上月值日次數（決定誰被選中）— 從排休表中 TYPE=值日 的紀錄
+            // 讀上月+當月（上月算 countMap，當月刪舊紀錄+建 zhibanByDate）
             const prevMonth = month === 1 ? 12 : month - 1;
             const prevYear = month === 1 ? year - 1 : year;
-            const allLeaveForDuty = await apiFetch(CONFIG.LEAVE_PATH);
+            const allLeaveForDuty = await apiFetch(CONFIG.LEAVE_PATH + leaveWhere(prevYear, prevMonth, year, month));
             const countMap = {};
             allEmployees.forEach(e => { countMap[e.name] = 0; });
             Object.entries(allLeaveForDuty)
@@ -793,8 +801,8 @@ const App = () => {
             });
             if (eligible.length === 0) { showToast("沒有符合條件的值班人員", false); setAutoZhiban(false); return; }
 
-            // 讀全表（刪除舊紀錄 + 建 onLeave 用）
-            const allLeaveJson = await apiFetch(CONFIG.LEAVE_PATH);
+            // 只讀當月（刪除舊紀錄 + 建 onLeave 用，值班不追債不需上月）
+            const allLeaveJson = await apiFetch(CONFIG.LEAVE_PATH + leaveWhere(year, month, year, month));
             // 本月從零開始，跨月不追債（新人入池不用補歷史）
             const zCount = {};
             eligible.forEach(e => { zCount[e.name] = 0; });
