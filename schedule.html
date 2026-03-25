@@ -1106,7 +1106,7 @@ const App = () => {
                                         <th key={emp.name} className="emp-cell p-1 text-center font-medium text-gray-700 text-xs whitespace-nowrap">
                                             <div>{emp.display}</div>
                                             {ps && <div className="font-normal text-gray-400" style={{fontSize:"9px", lineHeight:"1.2"}}>
-                                                {pm}月 🧹{ps.duty.toFixed(0)} 🕗{ps.zhiban.toFixed(0)}
+                                                {pm}月 🧹{ps.duty.toFixed(0)}{emp.hire === "承攬" && emp.dept !== "社宅部" ? ` 🕗${ps.zhiban.toFixed(0)}` : ""}
                                             </div>}
                                         </th>
                                     );
