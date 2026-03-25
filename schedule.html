@@ -570,6 +570,16 @@ const App = () => {
             const COUPLES = [["張忠豪", "蕭眞儀"]];
             const coupleSet = new Set(COUPLES.flat());
 
+            // 預算夫妻的值班值日天數：值班那天夫妻會一起掃地，先算進 countMap
+            // 這樣 Plan A/B 在其他天就會少排他們，總次數跟大家一樣
+            const coupleZhibanDays = Object.values(zhibanByDate).filter(emp => coupleSet.has(emp)).length;
+            if (coupleZhibanDays > 0) {
+                for (const name of coupleSet) {
+                    countMap[name] = (countMap[name] || 0) + coupleZhibanDays;
+                }
+                console.log("夫妻值班值日預算:", coupleZhibanDays, "天，countMap 各 +", coupleZhibanDays);
+            }
+
             for (let day = 1; day <= daysInMonth; day++) {
                 const mm = String(month).padStart(2,"0");
                 const dd = String(day).padStart(2,"0");
@@ -589,9 +599,9 @@ const App = () => {
                     GOV_REST_EMPLOYEES.forEach(name => onLeaveToday.add(name));
                 }
 
-                // 值班+值日重疊：夫妻成員的值班不觸發自動值日（避免 forcedSpouse 導致次數膨脹）
+                // 值班+值日重疊（夫妻也適用，已預算進 countMap）
                 const todayZhiban = zhibanByDate[dateStr] || "";
-                const zhibanAvailable = todayZhiban && !onLeaveToday.has(todayZhiban) && !coupleSet.has(todayZhiban);
+                const zhibanAvailable = todayZhiban && !onLeaveToday.has(todayZhiban);
                 const scoreFn = (name) => {
                     let s = countMap[name] || 0;
                     const wk = weeklyAssigned[name];
@@ -606,9 +616,22 @@ const App = () => {
                     .map(e => ({ name: e.name, score: scoreFn(e.name) }))
                     .sort((a,b) => a.score - b.score);
 
+                // 值班的人是夫妻一方 → 配偶也一起掃（forcedSpouse）
+                let forcedSpouse = null;
+                if (zhibanAvailable && coupleSet.has(todayZhiban)) {
+                    for (const [a, b] of COUPLES) {
+                        const sp = todayZhiban === a ? b : (todayZhiban === b ? a : null);
+                        if (sp && !onLeaveToday.has(sp)) forcedSpouse = sp;
+                    }
+                }
+
                 let chosen;
-                {
-                    // 檢查夫妻是否今天都可用
+                if (forcedSpouse) {
+                    // 夫妻值班日：配偶保留名額，剩餘從個人選
+                    const indivs = mkIndiv(e => !lastAssigned.has(e.name) && !onLeaveToday.has(e.name));
+                    chosen = [forcedSpouse, ...indivs.slice(0, needCount - 1).map(c => c.name)];
+                } else {
+                    // 非夫妻值班日：Plan A vs Plan B 公平比較
                     let coupleNames = null;
                     for (const [a, b] of COUPLES) {
                         const aOk = !lastAssigned.has(a) && !onLeaveToday.has(a) && a !== todayZhiban;
