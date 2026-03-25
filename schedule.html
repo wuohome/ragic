@@ -949,7 +949,7 @@ const App = () => {
                                                             {leave.type === "排休" ? "排休" : leave.type === "特休" ? "特休" : leave.type === "值班" ? "值班" : "請假"}
                                                         </span>
                                                     ) : myDuty && myDuty.missed ? (
-                                                        <span className="inline-block w-full leading-[32px] text-[10px] font-bold text-white" style={{background:"#a855f7"}}>❌{floorLabel}未掃</span>
+                                                        <span className="inline-block w-full leading-[32px] text-[10px] font-bold" style={{background:"#fff1f2", color:"#be123c", border:"2px dashed #f87171"}}>{floorLabel}未掃</span>
                                                     ) : myDuty ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background: FLOOR_COLORS[myDuty.floor] || "#3b82f6"}}>{floorLabel}</span>
                                                     ) : null}
