@@ -692,34 +692,11 @@ const App = () => {
             });
             if (eligible.length === 0) { showToast("沒有符合條件的值班人員", false); setAutoZhiban(false); return; }
 
-            // 讀上月值班次數，補回差額
+            // 讀全表（刪除舊紀錄 + 建 onLeave 用）
             const allLeaveJson = await apiFetch(CONFIG.LEAVE_PATH);
-            const prevMonth = month === 1 ? 12 : month - 1;
-            const prevYear = month === 1 ? year - 1 : year;
-            const prevZCount = {};
-            eligible.forEach(e => { prevZCount[e.name] = 0; });
-            Object.entries(allLeaveJson)
-                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
-                .forEach(([id, f]) => {
-                    const type = f[CONFIG.F_LEAVE.TYPE] || "";
-                    if (type !== "值班") return;
-                    const date = f[CONFIG.F_LEAVE.DATE] || "";
-                    const emp = f[CONFIG.F_LEAVE.EMP] || "";
-                    if (!date || !emp) return;
-                    const parts = date.replace(/\//g,"-").split("-");
-                    const y = parseInt(parts[0]), m = parseInt(parts[1]);
-                    if (y === prevYear && m === prevMonth && prevZCount.hasOwnProperty(emp)) {
-                        prevZCount[emp]++;
-                    }
-                });
-            // 上月平均次數（新人用平均，不吃虧也不佔便宜）
-            const prevValues = Object.values(prevZCount);
-            const prevAvg = prevValues.length > 0 ? prevValues.reduce((a,b) => a+b, 0) / prevValues.length : 0;
-            // 本月起始次數 = 上月次數（有紀錄的沿用，新人用平均）
+            // 本月從零開始，跨月不追債（新人入池不用補歷史）
             const zCount = {};
-            eligible.forEach(e => {
-                zCount[e.name] = prevZCount.hasOwnProperty(e.name) ? prevZCount[e.name] : Math.round(prevAvg);
-            });
+            eligible.forEach(e => { zCount[e.name] = 0; });
 
             // 刪除本月所有值班紀錄（系統預排 + 手動）
             const toDelete = Object.entries(allLeaveJson)
@@ -738,24 +715,8 @@ const App = () => {
             }
 
             setProgress({ text: "計算排班...", current: 0, total: 0 });
-            // 每天排 1 人，按「達標率」均勻分配（不管休幾天，值班次數盡量一樣）
+            // 每天排 1 人，月內均勻分配
             const totalDays = new Date(year, month, 0).getDate();
-            const target = totalDays / eligible.length; // 每人目標次數
-
-            // 先算每人有幾天可以值班
-            const availDays = {};
-            eligible.forEach(e => { availDays[e.name] = 0; });
-            for (let d = 1; d <= totalDays; d++) {
-                const ds = `${year}/${String(month).padStart(2,"0")}/${String(d).padStart(2,"0")}`;
-                const dt = new Date(year, month-1, d);
-                const wk = dt.getDay()===0||dt.getDay()===6;
-                const lv = new Set();
-                Object.entries(leaves).forEach(([k,v]) => {
-                    if (k.endsWith("|" + ds) && v.type !== "值班") lv.add(k.split("|")[0]);
-                });
-                if (!noRest[ds] && isGovHoliday(ds, wk)) GOV_REST_EMPLOYEES.forEach(n => lv.add(n));
-                eligible.forEach(e => { if (!lv.has(e.name)) availDays[e.name]++; });
-            }
 
             const newZhiban = {};
             let lastPick = "";
@@ -772,17 +733,18 @@ const App = () => {
                 if (!noRest[dateStr] && isGovHoliday(dateStr, isWknd)) {
                     GOV_REST_EMPLOYEES.forEach(n => onLeave.add(n));
                 }
-                // 排序：count / availDays 比率低的優先（達標率低 = 還需要更多次）
-                const rateFn = (name) => availDays[name] > 0 ? (zCount[name]||0) / availDays[name] * totalDays : 999;
+                // 排序：本月次數少的優先（月內均勻），同分時保持原始順序（部門+年資）
+                // 跨月不追債：不用歷史次數影響排序
+                const sortFn = (a, b) => (zCount[a.name]||0) - (zCount[b.name]||0);
                 const cands = eligible
-                    .map(e => ({ name: e.name, rate: rateFn(e.name) }))
+                    .map(e => ({ name: e.name }))
                     .filter(e => e.name !== lastPick && !onLeave.has(e.name))
-                    .sort((a,b) => a.rate - b.rate);
+                    .sort(sortFn);
                 const pool = cands.length > 0 ? cands
-                    : eligible.map(e => ({ name: e.name, rate: rateFn(e.name) }))
-                        .filter(e => !onLeave.has(e.name)).sort((a,b) => a.rate - b.rate);
+                    : eligible.map(e => ({ name: e.name }))
+                        .filter(e => !onLeave.has(e.name)).sort(sortFn);
                 const final = pool.length > 0 ? pool
-                    : eligible.map(e => ({ name: e.name, rate: rateFn(e.name) })).sort((a,b) => a.rate - b.rate);
+                    : eligible.map(e => ({ name: e.name })).sort(sortFn);
                 const chosen = final[0].name;
                 zCount[chosen] = (zCount[chosen] || 0) + 1;
                 lastPick = chosen;
