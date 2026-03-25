@@ -600,6 +600,13 @@ const App = () => {
                 if (!noRest[dateStr] && isGovHoliday(dateStr, isWknd)) {
                     GOV_REST_EMPLOYEES.forEach(name => onLeaveToday.add(name));
                 }
+                // 生日當天不排值日生
+                allEmployees.forEach(e => {
+                    if (e.birthday && e.birthday.includes("/")) {
+                        const bp = e.birthday.split("/");
+                        if (parseInt(bp[1]) === month && parseInt(bp[2]) === day) onLeaveToday.add(e.name);
+                    }
+                });
 
                 // 值班+值日重疊（夫妻也適用，已預算進 countMap）
                 const todayZhiban = zhibanByDate[dateStr] || "";
@@ -830,13 +837,16 @@ const App = () => {
                 // 排序：本月次數少的優先（月內均勻），同分時保持原始順序（部門+年資）
                 // 跨月不追債：不用歷史次數影響排序
                 const sortFn = (a, b) => (zCount[a.name]||0) - (zCount[b.name]||0);
+                // 生日當天不排值班
+                const isBirthdayToday = (emp) => emp.birthday && emp.birthday.includes("/") && (() => {
+                    const bp = emp.birthday.split("/");
+                    return parseInt(bp[1]) === month && parseInt(bp[2]) === day;
+                })();
                 const cands = eligible
-                    .map(e => ({ name: e.name }))
-                    .filter(e => e.name !== lastPick && !onLeave.has(e.name))
+                    .filter(e => e.name !== lastPick && !onLeave.has(e.name) && !isBirthdayToday(e))
                     .sort(sortFn);
                 const pool = cands.length > 0 ? cands
-                    : eligible.map(e => ({ name: e.name }))
-                        .filter(e => !onLeave.has(e.name)).sort(sortFn);
+                    : eligible.filter(e => !onLeave.has(e.name) && !isBirthdayToday(e)).sort(sortFn);
                 const final = pool.length > 0 ? pool
                     : eligible.map(e => ({ name: e.name })).sort(sortFn);
                 const chosen = final[0].name;
