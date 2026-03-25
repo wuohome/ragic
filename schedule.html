@@ -919,11 +919,11 @@ const App = () => {
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-gray-400 bg-gray-100">休</span>
                                                     ) : leave && myDuty ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background:"linear-gradient(135deg, " + (leave.type === "排休" ? "#22c55e" : leave.type === "特休" ? "#eab308" : leave.type === "值班" ? "#f97316" : "#dc2626") + " 50%, " + (FLOOR_COLORS[myDuty.floor] || "#3b82f6") + " 50%)"}}>
-                                                            {leave.type === "排休" ? "休" : leave.type === "特休" ? "特" : leave.type === "值班" ? "班" : "假"}{floorLabel}
+                                                            {leave.type === "排休" ? "排休" : leave.type === "特休" ? "特休" : leave.type === "值班" ? "值班" : "請假"}{floorLabel}
                                                         </span>
                                                     ) : leave ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background: leave.type === "排休" ? "#22c55e" : leave.type === "特休" ? "#eab308" : leave.type === "值班" ? "#f97316" : "#dc2626"}}>
-                                                            {leave.type === "排休" ? "休" : leave.type === "特休" ? "特" : leave.type === "值班" ? "班" : "假"}
+                                                            {leave.type === "排休" ? "排休" : leave.type === "特休" ? "特休" : leave.type === "值班" ? "值班" : "請假"}
                                                         </span>
                                                     ) : myDuty ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background: FLOOR_COLORS[myDuty.floor] || "#3b82f6"}}>{floorLabel}</span>
