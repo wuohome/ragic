@@ -138,14 +138,15 @@ function isRedHoliday(y, m, d) {
   return fmtDate(y, m, d) in PUBLIC_HOLIDAYS_2026;
 }
 
-// Ordering: 租賃部=0, 管理部=1, 社宅部=2, 設計部=3
+// Ordering: 租賃部=0, 管理部(珊珊+瓊安)=1, 社宅部+設計部=2
 function getOrder(emp) {
   const dept = emp.rawDept || emp.dept;
   if (dept === '租賃部') return 0;
-  if (emp.name === '韓珊珊' || emp.name === '張瓊安' || dept?.startsWith('管理部')) return 1;
-  if (dept === '社宅部') return 2;
-  if (dept === '設計部') return 3;
-  return 4;
+  if (emp.name === '韓珊珊') return 10;
+  if (emp.name === '張瓊安') return 11;
+  if (dept === '社宅部') return 20;
+  if (dept === '設計部') return 21;
+  return 5;
 }
 
 /* ── API ────────────────────────────────────────────────────── */
@@ -427,13 +428,21 @@ function EntryScreen({ onPersonal, onTeam }) {
 /* ── Name Selection ─────────────────────────────────────────── */
 function NameSelect({ emps, onSelect, onBack }) {
   // Group by dept (preserving order)
+  // 合併分組：珊珊+瓊安 一排、社宅+設計 一排
   const groups = React.useMemo(() => {
     const m = {};
     for (const e of emps) {
-      if (!m[e.dept]) m[e.dept] = [];
-      m[e.dept].push(e);
+      let groupKey = e.dept;
+      if (e.name === '韓珊珊' || e.name === '張瓊安') groupKey = '管理部';
+      else if (e.dept === '社宅部' || e.dept === '設計部') groupKey = '社宅部 / 設計部';
+      if (!m[groupKey]) m[groupKey] = [];
+      m[groupKey].push(e);
     }
-    return m;
+    // 排序：租賃部 → 管理部 → 社宅/設計
+    const order = { '租賃部': 0, '管理部': 1, '社宅部 / 設計部': 2 };
+    return Object.fromEntries(
+      Object.entries(m).sort(([a], [b]) => (order[a] ?? 9) - (order[b] ?? 9))
+    );
   }, [emps]);
 
   const navBtn = {
