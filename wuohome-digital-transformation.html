@@ -1059,7 +1059,7 @@
 <section id="done">
   <div class="section-tag">Section 3</div>
   <h2>我們已經做了什麼</h2>
-  <p class="section-desc">已建立核心資料庫、6 套自動化機器人、6 個線上工具頁面，覆蓋招募、業務、管理等流程。</p>
+  <p class="section-desc">已建立核心資料庫、9 套自動化機器人、7 個線上工具頁面，覆蓋招募、業務、管理等流程。</p>
 
   <!-- Ragic -->
   <h3>3.1 核心資料庫：Ragic</h3>
@@ -1093,7 +1093,7 @@
   <p style="margin-top:16px;color:var(--text-secondary);font-size:0.85rem;">以上表單之間透過<strong>連結欄位（Link）與自動載入</strong>互相關聯，例如：物件表連結屋主表、工程進度連結潛在客戶、收付款連結物件總表等，形成完整的資料關聯網絡。</p>
 
   <!-- 機器人 -->
-  <h3>3.2 六套自動化機器人</h3>
+  <h3>3.2 九套自動化機器人</h3>
 
   <!-- 591 -->
   <div class="sys-card">
@@ -1241,8 +1241,84 @@
     </div>
   </div>
 
+  <!-- 591 廣告管家 -->
+  <div class="sys-card">
+    <div class="sys-header">
+      <div class="sys-icon" style="background:var(--accent-light);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#dd6650" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 8h2m2 0h2"/><path d="M7 11h6"/></svg>
+      </div>
+      <div>
+        <div class="sys-name">591 廣告管家</div>
+        <div class="sys-subtitle">自動監控廣告版位，到期前主動提醒負責人</div>
+      </div>
+    </div>
+    <div class="flow">
+      <div class="flow-step">每日自動掃描 591 後台</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step highlight">比對 6 個黃金版位</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step">快到期物件<small>≤ 3 天自動警告</small></div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step">LINE 推播負責人</div>
+    </div>
+    <div class="ba">
+      <div class="ba-side before"><div class="ba-label">以前</div><p>沒人知道哪些物件廣告快到期，版位空著浪費錢</p></div>
+      <div class="ba-side after"><div class="ba-label">現在</div><p>系統每天盯著，到期前自動通知負責人補上，版位不浪費</p></div>
+    </div>
+  </div>
+
+  <!-- LINE 訊息匯總 -->
+  <div class="sys-card">
+    <div class="sys-header">
+      <div class="sys-icon" style="background:var(--success-light);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8"/><path d="M8 13h4"/></svg>
+      </div>
+      <div>
+        <div class="sys-name">LINE 訊息匯總 + AI 摘要</div>
+        <div class="sys-subtitle">9 個群組訊息自動收集，AI 每小時產出重點摘要</div>
+      </div>
+    </div>
+    <div class="flow">
+      <div class="flow-step">9 個 LINE 群組訊息</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step highlight">機器人自動收集</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step ai">AI 摘要<small>GPT-4o-mini 每小時整理</small></div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step">Telegram 推送重點</div>
+    </div>
+    <div class="ba">
+      <div class="ba-side before"><div class="ba-label">以前</div><p>特助每天花 60% 時間爬 LINE 群組訊息，怕漏掉重要事</p></div>
+      <div class="ba-side after"><div class="ba-label">現在</div><p>AI 每小時自動整理，只看摘要就知道各群組在聊什麼</p></div>
+    </div>
+  </div>
+
+  <!-- 排班通知 -->
+  <div class="sys-card">
+    <div class="sys-header">
+      <div class="sys-icon" style="background:var(--yellow-light);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#b89e00" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/></svg>
+      </div>
+      <div>
+        <div class="sys-name">排班通知機器人</div>
+        <div class="sys-subtitle">每月 20 號自動提醒全員排下個月的班</div>
+      </div>
+    </div>
+    <div class="flow">
+      <div class="flow-step">每月 20 號 10:00</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step highlight">自動推送 LINE 群組</div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-4-4 4 4-4 4"/></svg></div>
+      <div class="flow-step">一鍵開啟排班表<small>直接排休</small></div>
+    </div>
+    <div class="ba">
+      <div class="ba-side before"><div class="ba-label">以前</div><p>秘書每個月要手動提醒每個人排班，常忘記</p></div>
+      <div class="ba-side after"><div class="ba-label">現在</div><p>機器人每月自動提醒，附一鍵開啟排班表按鈕</p></div>
+    </div>
+  </div>
+
   <!-- 線上工具 -->
-  <h3>3.3 六個線上工具頁面</h3>
+  <h3>3.3 七個線上工具頁面</h3>
   <p style="margin-bottom:16px;color:var(--text-secondary);font-size:0.9rem;">員工和客戶都能在手機或電腦上直接使用。點擊可開啟實際頁面。</p>
 
   <div class="link-grid">
@@ -1280,6 +1356,12 @@
       <div class="lc-name">信封列印</div>
       <div class="lc-for">行政</div>
       <div class="lc-desc">填地址自動查郵遞區號，直接列印標準直式信封</div>
+      <div class="lc-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>開啟線上版</div>
+    </a>
+    <a class="link-card" href="https://wuohome.github.io/ragic/schedule-view.html" target="_blank">
+      <div class="lc-name">排班表</div>
+      <div class="lc-for">全體員工</div>
+      <div class="lc-desc">白板式排班系統，員工自己排休、查看全體排班，值日生自動公平分配</div>
       <div class="lc-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>開啟線上版</div>
     </a>
   </div>
@@ -1390,6 +1472,9 @@
         <div class="arch-chip">PULO 機器人</div>
         <div class="arch-chip">房源同步</div>
         <div class="arch-chip">LINE 點名</div>
+        <div class="arch-chip">591 廣告管家</div>
+        <div class="arch-chip">LINE 訊息匯總</div>
+        <div class="arch-chip">排班通知</div>
       </div>
     </div>
     <div class="arch-connector"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-4-4 4 4 4-4"/></svg></div>
@@ -1408,6 +1493,7 @@
         <div class="arch-chip">綁定頁面</div>
         <div class="arch-chip">線上斡旋</div>
         <div class="arch-chip">信封列印</div>
+        <div class="arch-chip">排班表</div>
       </div>
     </div>
     <div class="arch-connector"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-4-4 4 4 4-4"/></svg></div>
@@ -1429,6 +1515,8 @@
     <div class="tb-item"><div class="tb-name">GitHub Pages</div><div class="tb-role">網頁託管</div></div>
     <div class="tb-item"><div class="tb-name">LINE API</div><div class="tb-role">客戶通知</div></div>
     <div class="tb-item"><div class="tb-name">Telegram Bot</div><div class="tb-role">內部通知</div></div>
+    <div class="tb-item"><div class="tb-name">OpenAI API</div><div class="tb-role">AI 摘要 / 履歷篩選</div></div>
+    <div class="tb-item"><div class="tb-name">Playwright</div><div class="tb-role">瀏覽器自動化</div></div>
   </div>
 </section>
 
