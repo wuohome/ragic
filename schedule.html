@@ -1193,9 +1193,9 @@ const App = () => {
                                                 const bp = emp.birthday.split("/");
                                                 return parseInt(bp[1]) === month && parseInt(bp[2]) === day;
                                             })();
-                                            const birthdayStyle = isBirthday && !leave && !myDuty && !isGovRest
-                                                ? {background:"#fef9c3", border:"2px dashed #eab308"}
-                                                : isBirthday ? {boxShadow:"inset 0 0 0 2px #eab308"} : undefined;
+                                            const birthdayStyle = isBirthday
+                                                ? {outline:"2px dashed #eab308", outlineOffset:"-2px", ...((!leave && !myDuty && !isGovRest) ? {background:"#fef9c3"} : {})}
+                                                : undefined;
                                             return (
                                                 <td key={key}
                                                     onClick={() => !IS_READONLY && !isGovRest && mode !== "禁休" && handleClick(emp.name, dateStr)}
