@@ -78,6 +78,7 @@ const apiBatchCreate = async (path, records, onProgress) => {
 const DAYS = ["日","一","二","三","四","五","六"];
 const DEPT_COLORS = { "管理部/秘書":"#8b5cf6", "管理部/特助":"#8b5cf6", "設計部":"#10b981", "租賃部":"#f97316", "社宅部":"#0ea5e9" };
 const DEPT_ORDER = { "管理部/秘書":0, "管理部/特助":1, "設計部":2, "租賃部":3, "社宅部":4 };
+// 社宅部不排值班，只排值日生
 
 // 見紅休人員（設計部 + 瓊安）
 const GOV_REST_EMPLOYEES = new Set(["張瓊安", "沈郁雯", "呂鴻墀"]);
@@ -136,6 +137,7 @@ const App = () => {
     const [autoZhiban, setAutoZhiban] = React.useState(false);
     const [progress, setProgress] = React.useState(null); // { text, current, total }
     const [mode, setMode] = React.useState("排休");
+    const [noRest, setNoRest] = React.useState({}); // { dateStr: { ragicId, reason } }
 
     const handleUnlock = () => {
         if (pwInput === EDIT_PASSWORD) {
@@ -205,6 +207,7 @@ const App = () => {
             const leaveJson = await apiFetch(CONFIG.LEAVE_PATH);
             const lmap = {};
             const dmap = {};
+            const nrmap = {};
             Object.entries(leaveJson)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
                 .forEach(([id, f]) => {
@@ -215,8 +218,10 @@ const App = () => {
                     const parts = date.replace(/\//g,"-").split("-");
                     const y = parseInt(parts[0]), m = parseInt(parts[1]);
                     if (y !== year || m !== month) return;
-                    if (type === "值日") {
-                        // 值日生紀錄 → duties state
+                    if (type === "禁休") {
+                        const reason = f[CONFIG.F_LEAVE.NOTE] || "";
+                        nrmap[date] = { ragicId: id, reason };
+                    } else if (type === "值日") {
                         const note = f[CONFIG.F_LEAVE.NOTE] || "";
                         const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
                         const floor = (note.match(/^(1F|2F|3F)$/) || [""])[0];
@@ -228,6 +233,7 @@ const App = () => {
                 });
             setLeaves(lmap);
             setDuties(dmap);
+            setNoRest(nrmap);
         } catch(e) {
             console.error(e);
             showToast("載入失敗: " + e.message, false);
@@ -236,6 +242,44 @@ const App = () => {
     };
 
     React.useEffect(() => { load(); }, [year, month]);
+
+    // 禁休：點日期欄設定/取消
+    const handleNoRest = async (dateStr) => {
+        if (IS_READONLY) return;
+        const savingKey = `norest|${dateStr}`;
+        if (saving[savingKey]) return;
+        setSaving(s => ({...s, [savingKey]: true}));
+        try {
+            const existing = noRest[dateStr];
+            if (existing) {
+                await apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, { method: "DELETE" });
+                setNoRest(nr => { const n = {...nr}; delete n[dateStr]; return n; });
+                showToast(`${dateStr} 禁休已取消`);
+            } else {
+                const reason = prompt("禁休原因（如：開幕活動）：");
+                if (reason === null) { setSaving(s => { const n = {...s}; delete n[savingKey]; return n; }); return; }
+                const params = new URLSearchParams();
+                params.append(CONFIG.F_LEAVE.EMP, "韓珊珊");
+                params.append(CONFIG.F_LEAVE.DATE, dateStr);
+                params.append(CONFIG.F_LEAVE.YEAR, String(year));
+                params.append(CONFIG.F_LEAVE.MONTH, String(month));
+                params.append(CONFIG.F_LEAVE.TYPE, "禁休");
+                params.append(CONFIG.F_LEAVE.NOTE, reason || "");
+                params.append(CONFIG.F_LEAVE.DEPT, "禁休設定");
+                const res = await apiFetch(CONFIG.LEAVE_PATH, {
+                    method: "POST",
+                    headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                    body: params.toString()
+                });
+                setNoRest(nr => ({...nr, [dateStr]: { ragicId: String(res.ragicId), reason: reason || "" }}));
+                showToast(`${dateStr} 已設為禁休${reason ? "（" + reason + "）" : ""}`);
+            }
+        } catch(e) {
+            console.error(e);
+            showToast("禁休設定失敗: " + e.message, false);
+        }
+        setSaving(s => { const n = {...s}; delete n[savingKey]; return n; });
+    };
 
     const handleClick = async (empName, dateStr) => {
         if (mode === "值日") {
@@ -316,6 +360,15 @@ const App = () => {
         // 排休/請假/值班模式
         const key = `${empName}|${dateStr}`;
         if (saving[key]) return;
+
+        // 禁休日排休/特休需確認（請假不擋）
+        const nrInfo = noRest[dateStr];
+        if (nrInfo && (mode === "排休" || mode === "特休")) {
+            const existing = leaves[key];
+            if (!existing) {
+                if (!window.confirm(`${dateStr} 為禁休日${nrInfo.reason ? "（" + nrInfo.reason + "）" : ""}，確定要排${mode}？`)) return;
+            }
+        }
 
         setSaving(s => ({...s, [key]: true}));
         try {
@@ -440,7 +493,7 @@ const App = () => {
                 Object.entries(leaves).forEach(([k,v]) => {
                     if (k.endsWith("|" + dateStr)) onLeaveToday.add(k.split("|")[0]);
                 });
-                if (isGovHoliday(dateStr, isWknd)) {
+                if (!noRest[dateStr] && isGovHoliday(dateStr, isWknd)) {
                     GOV_REST_EMPLOYEES.forEach(name => onLeaveToday.add(name));
                 }
 
@@ -610,7 +663,7 @@ const App = () => {
                 Object.entries(leaves).forEach(([k,v]) => {
                     if (k.endsWith("|" + dateStr) && v.type !== "值班") onLeave.add(k.split("|")[0]);
                 });
-                if (isGovHoliday(dateStr, isWknd)) {
+                if (!noRest[dateStr] && isGovHoliday(dateStr, isWknd)) {
                     GOV_REST_EMPLOYEES.forEach(n => onLeave.add(n));
                 }
                 const cands = eligible
@@ -758,6 +811,7 @@ const App = () => {
                     {id:"請假", color:"bg-red-500", label:"請假"},
                     {id:"值班", color:"bg-orange-500", label:"值班"},
                     {id:"值日", color:"bg-blue-500", label:"值日生"},
+                    {id:"禁休", color:"bg-rose-700", label:"禁休"},
                 ].map(m => (
                     <button key={m.id} onClick={() => setMode(m.id)}
                         className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${mode === m.id ? m.color + " text-white shadow-md scale-105" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
@@ -773,7 +827,8 @@ const App = () => {
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#8b5cf6"}}></span> 2F</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#0891b2"}}></span> 3F</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-gray-200 inline-block"></span> 見紅休</span>
-                {!IS_READONLY && <span className="ml-2 text-gray-400 text-sm">點格子={mode}，再點=清除</span>}
+                <span className="flex items-center gap-1 text-sm">🚫 禁休</span>
+                {!IS_READONLY && <span className="ml-2 text-gray-400 text-sm">{mode === "禁休" ? "點左邊日期欄設定/取消禁休" : `點格子=${mode}，再點=清除`}</span>}
             </div>
 
             {loading ? (
@@ -825,25 +880,31 @@ const App = () => {
                                 const dutyList = duties[dateStr] || [];
                                 const dutyKey = `duty|${dateStr}`;
                                 const isDutySaving = saving[dutyKey];
+                                const nrInfo = noRest[dateStr];
+                                const noRestSaving = saving[`norest|${dateStr}`];
 
                                 return (
                                     <tr key={day} className={rowBg}>
-                                        <td className={`sticky-left p-2 text-center font-medium whitespace-nowrap ${isToday ? "bg-yellow-50" : isWeekend ? "bg-blue-50" : "bg-white"} ${isWeekend ? "text-red-500" : "text-gray-700"}`}>
+                                        <td className={`sticky-left p-2 text-center font-medium whitespace-nowrap ${isToday ? "bg-yellow-50" : isWeekend ? "bg-blue-50" : "bg-white"} ${isWeekend ? "text-red-500" : "text-gray-700"} ${mode === "禁休" && !IS_READONLY ? "cursor-pointer hover:bg-rose-50" : ""}`}
+                                            onClick={() => mode === "禁休" && handleNoRest(dateStr)}
+                                            title={nrInfo ? "禁休：" + (nrInfo.reason || "無原因") : ""}>
                                             <span className="text-sm">{day}</span>
                                             <span className="text-xs ml-1 text-gray-400">({dow})</span>
+                                            {nrInfo && <span className="ml-1 text-[10px] text-rose-600 font-bold" title={nrInfo.reason}>🚫</span>}
                                         </td>
                                         {employees.map(emp => {
                                             const key = `${emp.name}|${dateStr}`;
                                             const leave = leaves[key];
                                             const myDuty = dutyList.find(d => d.empName === emp.name);
-                                            const isGovRest = GOV_REST_EMPLOYEES.has(emp.name) && isGovHoliday(dateStr, isWeekend);
+                                            // 禁休日覆蓋見紅休（設計部+瓊安也要上班）
+                                            const isGovRest = !nrInfo && GOV_REST_EMPLOYEES.has(emp.name) && isGovHoliday(dateStr, isWeekend);
                                             const savingKey = mode === "值日" ? `duty|${dateStr}` : key;
                                             const cellSaving = saving[savingKey];
                                             const floorLabel = myDuty ? (myDuty.floor || "值") : "";
                                             return (
                                                 <td key={key}
-                                                    onClick={() => !IS_READONLY && !isGovRest && handleClick(emp.name, dateStr)}
-                                                    className={`emp-cell p-0 text-center transition-colors select-none ${isGovRest ? "cursor-default" : "cursor-pointer hover:bg-gray-100"} ${cellSaving ? "opacity-50" : ""}`}>
+                                                    onClick={() => !IS_READONLY && !isGovRest && mode !== "禁休" && handleClick(emp.name, dateStr)}
+                                                    className={`emp-cell p-0 text-center transition-colors select-none ${isGovRest ? "cursor-default" : mode === "禁休" ? "cursor-default" : "cursor-pointer hover:bg-gray-100"} ${cellSaving ? "opacity-50" : ""} ${nrInfo && !leave && !myDuty && !isGovRest ? "bg-rose-50/50" : ""}`}>
                                                     {cellSaving ? (
                                                         <span className="cell-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full"></span>
                                                     ) : isGovRest ? (
