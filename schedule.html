@@ -1238,7 +1238,7 @@ const App = () => {
                                             {(() => {
                                                 const restShort = 8 - s.totalRest;
                                                 return restShort > 0
-                                                    ? <span className="text-red-500 font-bold" title={`總休 ${s.totalRest} 天（排休${s.paixiu}+特休${s.texiu}+請假${s.qingjia}${s.govRestDays > 0 ? "+見紅休" + s.govRestDays : ""}），還差 ${restShort} 天`}>少休{restShort}天 </span>
+                                                    ? <span className="text-red-500 font-bold" title={`總休 ${s.totalRest} 天（排休${s.paixiu}+特休${s.texiu}+請假${s.qingjia}${s.govRestDays > 0 ? "+見紅休" + s.govRestDays : ""}），還差 ${restShort} 天`}>未休{restShort}天 </span>
                                                     : null;
                                             })()}
                                             {s.paixiu > 0 && <span className="text-green-600">{s.paixiu}休</span>}
