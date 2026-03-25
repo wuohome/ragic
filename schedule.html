@@ -87,27 +87,27 @@ const GOV_REST_EMPLOYEES = new Set(["張瓊安", "沈郁雯", "呂鴻墀"]);
 const FLOORS = ["1F", "2F", "3F"];
 const FLOOR_COLORS = { "1F": "#3b82f6", "2F": "#8b5cf6", "3F": "#0891b2" };
 
-// 2026 台灣國定假日（非週末的放假日）
-const GOV_HOLIDAYS_2026 = new Set([
-    "2026/01/01", // 元旦
-    "2026/02/16", // 除夕
-    "2026/02/17", // 初一
-    "2026/02/18", // 初二
-    "2026/02/19", // 初三
-    "2026/02/20", // 初四
-    "2026/02/27", // 228補假（228是週六，補週五）
-    "2026/04/03", // 兒童節補假（4/4週六，補週五）
-    "2026/04/06", // 清明節補假（4/5週日，補週一）
-    "2026/05/01", // 勞動節
-    "2026/06/19", // 端午節
-    "2026/09/25", // 中秋節
-    "2026/09/28", // 教師節補假
-    "2026/10/09", // 國慶日補假（10/10週六，補週五）
-    "2026/10/26", // 光復節補假（10/25週日，補週一）
-    "2026/12/25", // 行憲紀念日
-]);
+// 2026 台灣國定假日（非週末的放假日）— 含名稱
+const GOV_HOLIDAYS_2026 = {
+    "2026/01/01": "元旦",
+    "2026/02/16": "除夕",
+    "2026/02/17": "春節",
+    "2026/02/18": "春節",
+    "2026/02/19": "春節",
+    "2026/02/20": "春節",
+    "2026/02/27": "228",
+    "2026/04/03": "兒童節",
+    "2026/04/06": "清明",
+    "2026/05/01": "勞動節",
+    "2026/06/19": "端午",
+    "2026/09/25": "中秋",
+    "2026/09/28": "教師節",
+    "2026/10/09": "國慶",
+    "2026/10/26": "光復節",
+    "2026/12/25": "行憲",
+};
 
-const isGovHoliday = (dateStr, isWeekend) => isWeekend || GOV_HOLIDAYS_2026.has(dateStr);
+const isGovHoliday = (dateStr, isWeekend) => isWeekend || dateStr in GOV_HOLIDAYS_2026;
 
 const EDIT_PASSWORD = "0718";
 const isOpenPeriod = () => new Date().getDate() >= 20;
@@ -880,7 +880,9 @@ const App = () => {
                                 const dateStr = `${year}/${mm}/${dd}`;
                                 const isToday = dateStr === todayStr;
                                 const nrInfo = noRest[dateStr];
-                                const rowBg = nrInfo ? "" : isToday ? "bg-yellow-50" : isWeekend ? "bg-blue-50/40" : "";
+                                const holidayName = GOV_HOLIDAYS_2026[dateStr] || "";
+                                const isHoliday = isWeekend || !!holidayName;
+                                const rowBg = nrInfo ? "" : isToday ? "bg-yellow-50" : isHoliday ? "bg-blue-50/40" : "";
                                 const dutyList = duties[dateStr] || [];
                                 const dutyKey = `duty|${dateStr}`;
                                 const isDutySaving = saving[dutyKey];
@@ -888,12 +890,13 @@ const App = () => {
 
                                 return (
                                     <tr key={day} className={rowBg} style={nrInfo ? {background:"#fff1f2", outline:"2px solid #fda4af", outlineOffset:"-1px"} : undefined}>
-                                        <td className={`sticky-left p-2 text-center font-medium whitespace-nowrap ${nrInfo ? "text-rose-700" : isToday ? "bg-yellow-50" : isWeekend ? "bg-blue-50" : "bg-white"} ${!nrInfo && isWeekend ? "text-red-500" : !nrInfo ? "text-gray-700" : ""} ${mode === "禁休" && !IS_READONLY ? "cursor-pointer hover:bg-rose-100" : ""}`}
+                                        <td className={`sticky-left p-2 text-center font-medium whitespace-nowrap ${nrInfo ? "text-rose-700" : isToday ? "bg-yellow-50" : isHoliday ? "bg-blue-50" : "bg-white"} ${!nrInfo && isHoliday ? "text-red-500" : !nrInfo ? "text-gray-700" : ""} ${mode === "禁休" && !IS_READONLY ? "cursor-pointer hover:bg-rose-100" : ""}`}
                                             style={nrInfo ? {background:"#ffe4e6", borderLeft:"3px solid #e11d48"} : undefined}
                                             onClick={() => mode === "禁休" && handleNoRest(dateStr)}
-                                            title={nrInfo ? "禁休：" + (nrInfo.reason || "無原因") : ""}>
+                                            title={nrInfo ? "禁休：" + (nrInfo.reason || "無原因") : holidayName || ""}>
                                             <span className="text-sm">{day}</span>
                                             <span className="text-xs ml-1 text-gray-400">({dow})</span>
+                                            {holidayName && !nrInfo && <span className="block text-[9px] text-red-400 font-medium leading-tight">{holidayName}</span>}
                                             {nrInfo && <span className="block text-[9px] text-rose-600 font-bold leading-tight mt-0.5">🚫{nrInfo.reason ? " "+nrInfo.reason : ""}</span>}
                                         </td>
                                         {employees.map(emp => {
