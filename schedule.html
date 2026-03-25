@@ -502,6 +502,23 @@ const App = () => {
             const daysInMonth = new Date(year, month, 0).getDate();
             const newDuties = {};
             const lastAssigned = new Set();
+            const weeklyAssigned = {}; // weeklyAssigned[name] = Set of week numbers
+
+            // 建立值班表：哪天誰值班（用來讓值班+值日同天）
+            const zhibanByDate = {};
+            Object.entries(leaves).forEach(([k,v]) => {
+                if (v.type === "值班") {
+                    const [name, date] = k.split("|");
+                    zhibanByDate[date] = name;
+                }
+            });
+
+            // 計算週數（週一起算）
+            const getWeekNum = (day) => {
+                const d = new Date(year, month-1, day);
+                const jan1 = new Date(year, 0, 1);
+                return Math.ceil(((d - jan1) / 86400000 + jan1.getDay()) / 7);
+            };
 
             for (let day = 1; day <= daysInMonth; day++) {
                 const mm = String(month).padStart(2,"0");
@@ -513,6 +530,7 @@ const App = () => {
 
                 const d = new Date(year, month-1, day);
                 const isWknd = d.getDay()===0||d.getDay()===6;
+                const weekNum = getWeekNum(day);
                 const onLeaveToday = new Set();
                 Object.entries(leaves).forEach(([k,v]) => {
                     if (k.endsWith("|" + dateStr)) onLeaveToday.add(k.split("|")[0]);
@@ -521,16 +539,28 @@ const App = () => {
                     GOV_REST_EMPLOYEES.forEach(name => onLeaveToday.add(name));
                 }
 
-                // 選人：排除昨天已排 + 休假，按上月次數少優先
+                // 當天值班的人（優先排值日，這樣只需留一天）
+                const todayZhiban = zhibanByDate[dateStr] || "";
+
+                // 選人：排除昨天已排 + 休假，按 score 排序
+                // score = 上月次數 + 本週已排過加 5 分（盡量一週一次）- 當天有值班減 3 分（盡量同天）
+                const scoreFn = (name) => {
+                    let s = countMap[name] || 0;
+                    const wk = weeklyAssigned[name];
+                    if (wk && wk.has(weekNum)) s += 5; // 本週已排過，降低優先
+                    if (name === todayZhiban) s -= 3;   // 當天值班，提高優先
+                    return s;
+                };
+
                 const candidates = allEmployees
-                    .map(e => ({ name: e.name, count: countMap[e.name] || 0 }))
+                    .map(e => ({ name: e.name, score: scoreFn(e.name) }))
                     .filter(e => !lastAssigned.has(e.name) && !onLeaveToday.has(e.name))
-                    .sort((a,b) => a.count - b.count);
+                    .sort((a,b) => a.score - b.score);
                 const pool = candidates.length >= 3 ? candidates
-                    : allEmployees.map(e => ({ name: e.name, count: countMap[e.name] || 0 }))
-                        .filter(e => !onLeaveToday.has(e.name)).sort((a,b) => a.count - b.count);
+                    : allEmployees.map(e => ({ name: e.name, score: scoreFn(e.name) }))
+                        .filter(e => !onLeaveToday.has(e.name)).sort((a,b) => a.score - b.score);
                 const finalPool = pool.length >= 3 ? pool
-                    : allEmployees.map(e => ({ name: e.name, count: countMap[e.name] || 0 })).sort((a,b) => a.count - b.count);
+                    : allEmployees.map(e => ({ name: e.name, score: scoreFn(e.name) })).sort((a,b) => a.score - b.score);
                 let chosen = finalPool.slice(0, 3).map(c => c.name);
 
                 // 夫妻同排：張忠豪 & 蕭眞儀 盡量排同一天
@@ -538,7 +568,6 @@ const App = () => {
                 for (const [a, b] of COUPLES) {
                     const hasA = chosen.includes(a), hasB = chosen.includes(b);
                     if (hasA && !hasB && !onLeaveToday.has(b)) {
-                        // A 在但 B 不在，把第3人換成 B
                         const swap = chosen.findLast(n => n !== a);
                         if (swap) chosen = chosen.map(n => n === swap ? b : n);
                     } else if (hasB && !hasA && !onLeaveToday.has(a)) {
@@ -559,7 +588,11 @@ const App = () => {
                 }
 
                 lastAssigned.clear();
-                assignments.forEach(a => lastAssigned.add(a.empName));
+                assignments.forEach(a => {
+                    lastAssigned.add(a.empName);
+                    if (!weeklyAssigned[a.empName]) weeklyAssigned[a.empName] = new Set();
+                    weeklyAssigned[a.empName].add(weekNum);
+                });
                 newDuties[dateStr] = assignments;
             }
 
