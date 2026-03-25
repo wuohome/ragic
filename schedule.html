@@ -317,6 +317,7 @@ const App = () => {
                         });
                         setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).map(x => x.ragicId === myDuty.ragicId ? {...x, missed: true} : x)}));
                         showToast(`${empName} ${dateStr} 標記未掃 ❌`);
+                    }
                 } else {
                     // 分配空樓層中此人次數最少的
                     const usedFloors = current.map(d => d.floor);
