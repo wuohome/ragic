@@ -565,7 +565,7 @@ const App = () => {
                 const todayZhiban = zhibanByDate[dateStr] || "";
                 const zhibanAvailable = todayZhiban && !onLeaveToday.has(todayZhiban);
 
-                // === 選人：夫妻作為 2-slot 單位與個人公平競爭 ===
+                // === 選人：夫妻用 Plan A vs Plan B 總分比較，確保公平 ===
                 const COUPLES = [["張忠豪", "蕭眞儀"]];
                 const coupleSet = new Set(COUPLES.flat());
                 const scoreFn = (name) => {
@@ -576,6 +576,12 @@ const App = () => {
                 };
                 const needCount = zhibanAvailable ? 2 : 3;
 
+                // 非夫妻個人候選（按 score 排序）
+                const mkIndiv = (filterFn) => allEmployees
+                    .filter(e => !coupleSet.has(e.name) && filterFn(e) && e.name !== todayZhiban)
+                    .map(e => ({ name: e.name, score: scoreFn(e.name) }))
+                    .sort((a,b) => a.score - b.score);
+
                 // 值班的人是夫妻一方 → 配偶直接保留名額
                 let forcedSpouse = null;
                 if (zhibanAvailable) {
@@ -585,50 +591,35 @@ const App = () => {
                     }
                 }
 
-                // 夫妻單位（雙方都可用才成立）
-                let coupleUnit = null;
-                if (!forcedSpouse) {
+                let chosen;
+                if (forcedSpouse) {
+                    const indivs = mkIndiv(e => !lastAssigned.has(e.name) && !onLeaveToday.has(e.name));
+                    chosen = [forcedSpouse, ...indivs.slice(0, needCount - 1).map(c => c.name)];
+                } else {
+                    // 檢查夫妻是否今天都可用
+                    let coupleNames = null;
                     for (const [a, b] of COUPLES) {
                         const aOk = !lastAssigned.has(a) && !onLeaveToday.has(a) && a !== todayZhiban;
                         const bOk = !lastAssigned.has(b) && !onLeaveToday.has(b) && b !== todayZhiban;
-                        if (aOk && bOk && needCount >= 2) {
-                            coupleUnit = { names: [a, b], score: Math.max(scoreFn(a), scoreFn(b)), slots: 2 };
-                        }
+                        if (aOk && bOk && needCount >= 2) coupleNames = [a, b];
                     }
-                }
-
-                // 非夫妻的個人候選（夫妻成員不單獨參選，只能作為一組）
-                const mkIndiv = (filterFn) => allEmployees
-                    .filter(e => !coupleSet.has(e.name) && filterFn(e) && e.name !== todayZhiban)
-                    .map(e => ({ names: [e.name], score: scoreFn(e.name), slots: 1 }));
-
-                // 貪心填滿：按 score 排序，slots 夠才選
-                const greedyFill = (cands, slots) => {
-                    const picked = [];
-                    let left = slots;
-                    for (const c of cands) {
-                        if (left <= 0) break;
-                        if (c.slots <= left) { picked.push(...c.names); left -= c.slots; }
-                    }
-                    return picked;
-                };
-
-                let chosen;
-                if (forcedSpouse) {
-                    // 配偶已確定，剩餘名額從個人選
-                    const indivs = mkIndiv(e => !lastAssigned.has(e.name) && !onLeaveToday.has(e.name)).sort((a,b) => a.score - b.score);
-                    chosen = [forcedSpouse, ...indivs.slice(0, needCount - 1).map(c => c.names[0])];
-                } else {
-                    // 夫妻單位 vs 個人公平競爭
                     const indivs = mkIndiv(e => !lastAssigned.has(e.name) && !onLeaveToday.has(e.name));
-                    const allCands = (coupleUnit ? [...indivs, coupleUnit] : indivs).sort((a,b) => a.score - b.score);
-                    chosen = greedyFill(allCands, needCount);
+
+                    if (coupleNames) {
+                        // Plan A：夫妻 + (N-2) 個人 vs Plan B：N 個人
+                        const planA = [...coupleNames, ...indivs.slice(0, needCount - 2).map(c => c.name)];
+                        const planB = indivs.slice(0, needCount).map(c => c.name);
+                        const scoreA = planA.reduce((s, n) => s + scoreFn(n), 0);
+                        const scoreB = planB.reduce((s, n) => s + scoreFn(n), 0);
+                        chosen = scoreA < scoreB ? planA : planB;
+                    } else {
+                        chosen = indivs.slice(0, needCount).map(c => c.name);
+                    }
                 }
                 // Fallback：放寬 lastAssigned
                 if (chosen.length < needCount) {
-                    const relaxed = mkIndiv(e => !onLeaveToday.has(e.name))
-                        .filter(c => !chosen.includes(c.names[0])).sort((a,b) => a.score - b.score);
-                    while (chosen.length < needCount && relaxed.length > 0) chosen.push(relaxed.shift().names[0]);
+                    const relaxed = mkIndiv(e => !onLeaveToday.has(e.name)).filter(c => !chosen.includes(c.name));
+                    while (chosen.length < needCount && relaxed.length > 0) chosen.push(relaxed.shift().name);
                 }
                 // Final fallback
                 if (chosen.length < needCount) {
