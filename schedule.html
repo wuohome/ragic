@@ -487,6 +487,9 @@ const App = () => {
                 const dd = String(day).padStart(2,"0");
                 const dateStr = `${year}/${mm}/${dd}`;
 
+                // 禁休日不排值日生（全員打掃）
+                if (noRest[dateStr]) continue;
+
                 const d = new Date(year, month-1, day);
                 const isWknd = d.getDay()===0||d.getDay()===6;
                 const onLeaveToday = new Set();
@@ -876,7 +879,8 @@ const App = () => {
                                 const dd = String(day).padStart(2,"0");
                                 const dateStr = `${year}/${mm}/${dd}`;
                                 const isToday = dateStr === todayStr;
-                                const rowBg = isToday ? "bg-yellow-50" : isWeekend ? "bg-blue-50/40" : "";
+                                const nrInfo = noRest[dateStr];
+                                const rowBg = nrInfo ? "" : isToday ? "bg-yellow-50" : isWeekend ? "bg-blue-50/40" : "";
                                 const dutyList = duties[dateStr] || [];
                                 const dutyKey = `duty|${dateStr}`;
                                 const isDutySaving = saving[dutyKey];
@@ -884,8 +888,9 @@ const App = () => {
                                 const noRestSaving = saving[`norest|${dateStr}`];
 
                                 return (
-                                    <tr key={day} className={rowBg}>
-                                        <td className={`sticky-left p-2 text-center font-medium whitespace-nowrap ${isToday ? "bg-yellow-50" : isWeekend ? "bg-blue-50" : "bg-white"} ${isWeekend ? "text-red-500" : "text-gray-700"} ${mode === "禁休" && !IS_READONLY ? "cursor-pointer hover:bg-rose-50" : ""}`}
+                                    <tr key={day} className={rowBg} style={nrInfo ? {background:"#fff1f2"} : undefined}>
+                                        <td className={`sticky-left p-2 text-center font-medium whitespace-nowrap ${nrInfo ? "text-rose-700" : isToday ? "bg-yellow-50" : isWeekend ? "bg-blue-50" : "bg-white"} ${!nrInfo && isWeekend ? "text-red-500" : !nrInfo ? "text-gray-700" : ""} ${mode === "禁休" && !IS_READONLY ? "cursor-pointer hover:bg-rose-100" : ""}`}
+                                            style={nrInfo ? {background:"#ffe4e6"} : undefined}
                                             onClick={() => mode === "禁休" && handleNoRest(dateStr)}
                                             title={nrInfo ? "禁休：" + (nrInfo.reason || "無原因") : ""}>
                                             <span className="text-sm">{day}</span>
@@ -904,7 +909,8 @@ const App = () => {
                                             return (
                                                 <td key={key}
                                                     onClick={() => !IS_READONLY && !isGovRest && mode !== "禁休" && handleClick(emp.name, dateStr)}
-                                                    className={`emp-cell p-0 text-center transition-colors select-none ${isGovRest ? "cursor-default" : mode === "禁休" ? "cursor-default" : "cursor-pointer hover:bg-gray-100"} ${cellSaving ? "opacity-50" : ""} ${nrInfo && !leave && !myDuty && !isGovRest ? "bg-rose-50/50" : ""}`}>
+                                                    className={`emp-cell p-0 text-center transition-colors select-none ${isGovRest ? "cursor-default" : mode === "禁休" ? "cursor-default" : "cursor-pointer hover:bg-gray-100"} ${cellSaving ? "opacity-50" : ""}`}
+                                                    style={nrInfo && !leave && !myDuty && !isGovRest ? {background:"#fff1f2"} : undefined}>
                                                     {cellSaving ? (
                                                         <span className="cell-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full"></span>
                                                     ) : isGovRest ? (
