@@ -76,12 +76,15 @@ const DAYS_TW = ['日','一','二','三','四','五','六'];
 
 // 見紅休 applies to these names
 const JIAN_HONG_NAMES = new Set(['張瓊安','沈郁雯','呂鴻墀']);
-// 2026 public holidays
-const PUBLIC_HOLIDAYS_2026 = new Set([
-  '2026/01/01','2026/02/16','2026/02/17','2026/02/18','2026/02/19','2026/02/20',
-  '2026/02/27','2026/04/03','2026/04/06','2026/05/01','2026/06/19',
-  '2026/09/25','2026/09/28','2026/10/09','2026/10/26','2026/12/25',
-]);
+// 2026 public holidays — 含名稱
+const PUBLIC_HOLIDAYS_2026 = {
+  '2026/01/01':'元旦','2026/02/16':'除夕','2026/02/17':'春節','2026/02/18':'春節',
+  '2026/02/19':'春節','2026/02/20':'春節','2026/02/27':'228',
+  '2026/04/03':'兒童節','2026/04/06':'清明','2026/05/01':'勞動節','2026/06/19':'端午',
+  '2026/09/25':'中秋','2026/09/28':'教師節','2026/10/09':'國慶','2026/10/26':'光復節',
+  '2026/12/25':'行憲',
+};
+function getHolidayName(y, m, d) { return PUBLIC_HOLIDAYS_2026[fmtDate(y, m, d)] || ''; }
 
 // Department display overrides
 const DEPT_DISPLAY = { '韓珊珊':'管理部/秘書', '張瓊安':'管理部/特助' };
@@ -132,7 +135,7 @@ function fmtDate(y, m, d)  {
 function isRedHoliday(y, m, d) {
   const dow = getDOW(y, m, d);
   if (dow === 0 || dow === 6) return true;
-  return PUBLIC_HOLIDAYS_2026.has(fmtDate(y, m, d));
+  return fmtDate(y, m, d) in PUBLIC_HOLIDAYS_2026;
 }
 
 // Ordering: 韓珊珊=0, 張瓊安=1, 設計部=2, 租賃部=3, 社宅部=4
@@ -630,9 +633,11 @@ function PersonalView({ emp, onBack }) {
             const canEdit = isCellEditable(cell.d);
             const cellDate = fmtDate(year, month, cell.d);
             const nrInfo = noRest[cellDate];
+            const holidayName = getHolidayName(year, month, cell.d);
+            const isHoliday = cell.isWeekend || !!holidayName;
             let extraClass = '';
             if (cell.isToday) extraClass = ' today';
-            else if (cell.isWeekend) extraClass = ' weekend';
+            else if (isHoliday) extraClass = ' weekend';
             if (canEdit) extraClass += ' clickable';
             if (isSaving) extraClass += ' saving';
 
@@ -649,10 +654,12 @@ function PersonalView({ emp, onBack }) {
                 <span style={{
                   fontSize: 12, fontWeight: cell.isToday ? 800 : 500,
                   color: cell.isToday ? '#d97706'
-                       : cell.dow===0 ? '#dc2626'
-                       : cell.dow===6 ? '#3b82f6'
+                       : isHoliday ? '#dc2626'
                        : '#475569',
                 }}>{cell.d}</span>
+                {holidayName && !nrInfo && (
+                  <span style={{ fontSize: 9, color: '#dc2626', fontWeight: 600, lineHeight: 1 }}>{holidayName}</span>
+                )}
                 {nrInfo && (
                   <span style={{
                     fontSize: 9, color: '#be123c', fontWeight: 700,
@@ -933,21 +940,28 @@ function TeamView({ emps, onBack }) {
               {Array.from({ length: totalDays }, (_, i) => i+1).map(day => {
                 const dow       = getDOW(year, month, day);
                 const isWeekend = dow===0||dow===6;
+                const holidayName = getHolidayName(year, month, day);
+                const isHoliday = isWeekend || !!holidayName;
                 const isToday   = today.getFullYear()===year &&
                                   today.getMonth()+1===month &&
                                   today.getDate()===day;
-                const rowBg   = isToday ? '#fffbeb' : isWeekend ? '#eff6ff' : '#ffffff';
-                const dtColor = isToday ? '#dd6650' : isWeekend ? '#3b82f6' : '#475569';
+                const dateStr   = fmtDate(year, month, day);
+                const nrRow     = noRest[dateStr];
+                const rowBg   = nrRow ? '#fff1f2' : isToday ? '#fffbeb' : isHoliday ? '#eff6ff' : '#ffffff';
+                const dtColor = isToday ? '#dd6650' : isHoliday ? '#dc2626' : '#475569';
 
                 return (
-                  <tr key={day} style={{ background: rowBg, borderBottom: '1px solid #f1f5f9' }}>
+                  <tr key={day} style={{ background: rowBg, borderBottom: '1px solid #f1f5f9', outline: nrRow ? '2px solid #fda4af' : undefined, outlineOffset: nrRow ? '-1px' : undefined }}>
                     <td className="col-date" style={{
                       padding: '2px 8px', borderRight: '1px solid #e2e8f0',
-                      background: rowBg, fontSize: 12, fontWeight: isToday ? 800 : 500,
-                      color: dtColor, whiteSpace: 'nowrap',
+                      background: nrRow ? '#ffe4e6' : rowBg, fontSize: 12, fontWeight: isToday ? 800 : 500,
+                      color: nrRow ? '#be123c' : dtColor, whiteSpace: 'nowrap',
+                      borderLeft: nrRow ? '3px solid #e11d48' : undefined,
                     }}>
                       {month}/{day}{' '}
                       <span style={{ color: '#94a3b8', fontSize: 11 }}>({DAYS_TW[dow]})</span>
+                      {holidayName && !nrRow && <span style={{ fontSize: 9, color: '#dc2626', fontWeight: 600, marginLeft: 2 }}>{holidayName}</span>}
+                      {nrRow && <span style={{ fontSize: 9, color: '#be123c', fontWeight: 700, marginLeft: 2 }}>🚫{nrRow.reason ? ' '+nrRow.reason : ''}</span>}
                     </td>
                     {emps.map(emp => {
                       const statuses = getCellStatuses(emp, year, month, day, leaves, duties, noRest);
