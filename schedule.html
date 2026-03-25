@@ -28,39 +28,18 @@
 </head>
 <body>
 <div id="root"></div>
+<script src="schedule-common.js"></script>
 <script type="text/babel">
 
 const CONFIG = {
-    BASE: "https://ap15.ragic.com",
-    KEY: "VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==",
-    EMP_PATH: "/wuohome/ragicforms4/20004",
-    LEAVE_PATH: "/wuohome/ragicforms4/2",
-    F_EMP: { NAME:"3000933", DISPLAY:"1000848", DEPT:"3000937", STATUS:"3000945", HIRE:"3000955", HIRE_DATE:"3000943", BIRTHDAY:"3000954", FL1:"1002028", FL2:"1002029", FL3:"1002030" },
-    F_LEAVE: { EMP:"1000961", DATE:"1000963", YEAR:"1000964", MONTH:"1000965", TYPE:"1002025", DEPT:"1002026", NOTE:"1000967", IS_AUTO:"1000966" }
+    BASE: SC.BASE_URL, KEY: SC.API_KEY,
+    EMP_PATH: SC.EMP_PATH, LEAVE_PATH: SC.LEAVE_PATH,
+    F_EMP: SC.F_EMP, F_LEAVE: SC.F_LEAVE,
 };
 
-// 建立日期範圍 where 條件（只拉需要的月份，不拉全表）
-const leaveWhere = (fromY, fromM, toY, toM) => {
-    const from = `${fromY}/${String(fromM).padStart(2,"0")}/01`;
-    const lastDay = new Date(toY, toM, 0).getDate();
-    const to = `${toY}/${String(toM).padStart(2,"0")}/${String(lastDay).padStart(2,"0")}`;
-    return `?where=${CONFIG.F_LEAVE.DATE},gte,${from}&where=${CONFIG.F_LEAVE.DATE},lte,${to}`;
-};
+// leaveWhere → SC.leaveWhere（共用常數檔）
 
-const apiFetch = async (path, opts={}, retries=3) => {
-    const sep = path.includes("?") ? "&" : "?";
-    const url = `${CONFIG.BASE}${path}${sep}api=true&v=3&naming=EID&APIKey=${encodeURIComponent(CONFIG.KEY)}`;
-    for (let i = 0; i < retries; i++) {
-        const res = await fetch(url, opts);
-        if (res.status === 403 && i < retries - 1) {
-            await new Promise(r => setTimeout(r, 1000 * (i + 1)));
-            continue;
-        }
-        if (!res.ok) throw new Error(`API ${res.status}`);
-        if (opts.method === "DELETE") return {};
-        return res.json();
-    }
-};
+// apiFetch → SC.apiFetch（共用常數檔）
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -73,7 +52,7 @@ const apiBatchCreate = async (path, records, onProgress) => {
         for (const [k, v] of Object.entries(records[i])) {
             params.append(k, v);
         }
-        const res = await apiFetch(path, {
+        const res = await SC.apiFetch(path, {
             method: "POST",
             headers: {"Content-Type":"application/x-www-form-urlencoded"},
             body: params.toString()
@@ -83,42 +62,25 @@ const apiBatchCreate = async (path, records, onProgress) => {
     }
     return results;
 };
-const DAYS = ["日","一","二","三","四","五","六"];
-const DEPT_COLORS = { "管理部/秘書":"#8b5cf6", "管理部/特助":"#8b5cf6", "設計部":"#10b981", "租賃部":"#f97316", "社宅部":"#0ea5e9" };
-const DEPT_ORDER = { "管理部/秘書":0, "管理部/特助":1, "設計部":2, "租賃部":3, "社宅部":4 };
+const DAYS = SC.DAYS_TW;
+const DEPT_COLORS = SC.DEPT_COLORS;
+const DEPT_ORDER = SC.DEPT_ORDER;
 // 社宅部不排值班，只排值日生
 
 // 見紅休人員（設計部 + 瓊安）
-const GOV_REST_EMPLOYEES = new Set(["張瓊安", "沈郁雯", "呂鴻墀"]);
+const GOV_REST_EMPLOYEES = new Set(SC.GOV_REST_NAMES);
 
 // 2026/03/30 起搬到平安街，每天 3 位值日生（1F/2F/3F）
-const FLOORS = ["1F", "2F", "3F"];
-const FLOOR_COLORS = { "1F": "#3b82f6", "2F": "#8b5cf6", "3F": "#0891b2" };
+const FLOORS = SC.FLOORS;
+const FLOOR_COLORS = SC.FLOOR_COLORS;
 
 // 2026 台灣國定假日（非週末的放假日）— 含名稱
-const GOV_HOLIDAYS_2026 = {
-    "2026/01/01": "元旦",
-    "2026/02/16": "除夕",
-    "2026/02/17": "春節",
-    "2026/02/18": "春節",
-    "2026/02/19": "春節",
-    "2026/02/20": "春節",
-    "2026/02/27": "228",
-    "2026/04/03": "兒童節",
-    "2026/04/06": "清明",
-    "2026/05/01": "勞動節",
-    "2026/06/19": "端午",
-    "2026/09/25": "中秋",
-    "2026/09/28": "教師節",
-    "2026/10/09": "國慶",
-    "2026/10/26": "光復節",
-    "2026/12/25": "行憲",
-};
+const GOV_HOLIDAYS_2026 = SC.HOLIDAYS_2026;
 
-const isGovHoliday = (dateStr, isWeekend) => isWeekend || dateStr in GOV_HOLIDAYS_2026;
+const isGovHoliday = SC.isGovHoliday;
 
 const EDIT_PASSWORD = "0718";
-const isOpenPeriod = () => new Date().getDate() >= 20;
+const isOpenPeriod = SC.isOpenPeriod;
 const IS_READONLY = new URLSearchParams(window.location.search).has('readonly');
 
 const App = () => {
@@ -184,7 +146,7 @@ const App = () => {
     const load = async () => {
         setLoading(true);
         try {
-            const empJson = await apiFetch(CONFIG.EMP_PATH);
+            const empJson = await SC.apiFetch(CONFIG.EMP_PATH);
             const allEmps = Object.entries(empJson)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
                 .map(([id, f]) => ({
@@ -219,7 +181,7 @@ const App = () => {
             // 只拉當月+上月（不拉全表）
             const pm = month === 1 ? 12 : month - 1;
             const py = month === 1 ? year - 1 : year;
-            const leaveJson = await apiFetch(CONFIG.LEAVE_PATH + leaveWhere(py, pm, year, month));
+            const leaveJson = await SC.apiFetch(CONFIG.LEAVE_PATH + SC.leaveWhere(py, pm, year, month));
             const lmap = {};
             const dmap = {};
             const nrmap = {};
@@ -280,7 +242,7 @@ const App = () => {
         try {
             const existing = noRest[dateStr];
             if (existing) {
-                await apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, { method: "DELETE" });
+                await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, { method: "DELETE" });
                 setNoRest(nr => { const n = {...nr}; delete n[dateStr]; return n; });
                 showToast(`${dateStr} 禁休已取消`);
             } else {
@@ -294,7 +256,7 @@ const App = () => {
                 params.append(CONFIG.F_LEAVE.TYPE, "禁休");
                 params.append(CONFIG.F_LEAVE.NOTE, reason || "");
                 params.append(CONFIG.F_LEAVE.DEPT, "禁休設定");
-                const res = await apiFetch(CONFIG.LEAVE_PATH, {
+                const res = await SC.apiFetch(CONFIG.LEAVE_PATH, {
                     method: "POST",
                     headers: {"Content-Type":"application/x-www-form-urlencoded"},
                     body: params.toString()
@@ -323,10 +285,10 @@ const App = () => {
                 if (myDuty) {
                     if (myDuty.missed) {
                         // 未掃 → 再點 = 清除
-                        await apiFetch(`${CONFIG.LEAVE_PATH}/${myDuty.ragicId}`, { method: "DELETE" });
+                        await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${myDuty.ragicId}`, { method: "DELETE" });
                         if (myDuty.floor && empObj) {
                             const flField = myDuty.floor === "1F" ? CONFIG.F_EMP.FL1 : myDuty.floor === "2F" ? CONFIG.F_EMP.FL2 : CONFIG.F_EMP.FL3;
-                            await apiFetch(`${CONFIG.EMP_PATH}/${empObj.ragicId}`, {
+                            await SC.apiFetch(`${CONFIG.EMP_PATH}/${empObj.ragicId}`, {
                                 method: "POST",
                                 headers: {"Content-Type":"application/x-www-form-urlencoded"},
                                 body: new URLSearchParams({ [flField]: String(Math.max(0, (empObj.fc[myDuty.floor]||0) - 1)) }).toString()
@@ -337,7 +299,7 @@ const App = () => {
                         showToast(`${empName} ${dateStr} ${myDuty.floor || "值日"}已清除`);
                     } else {
                         // 正常 → 標記未掃
-                        await apiFetch(`${CONFIG.LEAVE_PATH}/${myDuty.ragicId}`, {
+                        await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${myDuty.ragicId}`, {
                             method: "POST",
                             headers: {"Content-Type":"application/x-www-form-urlencoded"},
                             body: new URLSearchParams({ [CONFIG.F_LEAVE.IS_AUTO]: "未掃" }).toString()
@@ -368,7 +330,7 @@ const App = () => {
                     params.append(CONFIG.F_LEAVE.NOTE, floor || "手動變更");
                     params.append(CONFIG.F_LEAVE.IS_AUTO, "No");
                     params.append(CONFIG.F_LEAVE.DEPT, "手動變更");
-                    const res = await apiFetch(CONFIG.LEAVE_PATH, {
+                    const res = await SC.apiFetch(CONFIG.LEAVE_PATH, {
                         method: "POST",
                         headers: {"Content-Type":"application/x-www-form-urlencoded"},
                         body: params.toString()
@@ -377,7 +339,7 @@ const App = () => {
                     if (floor && empObj) {
                         const newCount = (empObj.fc[floor] || 0) + 1;
                         const flField = floor === "1F" ? CONFIG.F_EMP.FL1 : floor === "2F" ? CONFIG.F_EMP.FL2 : CONFIG.F_EMP.FL3;
-                        await apiFetch(`${CONFIG.EMP_PATH}/${empObj.ragicId}`, {
+                        await SC.apiFetch(`${CONFIG.EMP_PATH}/${empObj.ragicId}`, {
                             method: "POST",
                             headers: {"Content-Type":"application/x-www-form-urlencoded"},
                             body: new URLSearchParams({ [flField]: String(newCount) }).toString()
@@ -429,7 +391,7 @@ const App = () => {
                 params.append(CONFIG.F_LEAVE.TYPE, mode);
                 const empObj = employees.find(e => e.name === empName);
                 if (empObj && empObj.dept) params.append(CONFIG.F_LEAVE.DEPT, empObj.dept);
-                const res = await apiFetch(CONFIG.LEAVE_PATH, {
+                const res = await SC.apiFetch(CONFIG.LEAVE_PATH, {
                     method: "POST",
                     headers: {"Content-Type":"application/x-www-form-urlencoded"},
                     body: params.toString()
@@ -438,14 +400,14 @@ const App = () => {
                 showToast(`${empName} ${dateStr} ${mode}`);
             } else if (existing.type === mode) {
                 // 同模式再點 = 清除
-                await apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, { method:"DELETE" });
+                await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, { method:"DELETE" });
                 setLeaves(l => { const n = {...l}; delete n[key]; return n; });
                 showToast(`${empName} ${dateStr} 已清除`);
             } else {
                 // 不同模式 → 更新
                 const params = new URLSearchParams();
                 params.append(CONFIG.F_LEAVE.TYPE, mode);
-                await apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, {
+                await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, {
                     method: "POST",
                     headers: {"Content-Type":"application/x-www-form-urlencoded"},
                     body: params.toString()
@@ -478,7 +440,7 @@ const App = () => {
             // 讀上月+當月（上月算 countMap，當月刪舊紀錄+建 zhibanByDate）
             const prevMonth = month === 1 ? 12 : month - 1;
             const prevYear = month === 1 ? year - 1 : year;
-            const allLeaveForDuty = await apiFetch(CONFIG.LEAVE_PATH + leaveWhere(prevYear, prevMonth, year, month));
+            const allLeaveForDuty = await SC.apiFetch(CONFIG.LEAVE_PATH + SC.leaveWhere(prevYear, prevMonth, year, month));
             const countMap = {};
             allEmployees.forEach(e => { countMap[e.name] = 0; });
             Object.entries(allLeaveForDuty)
@@ -543,7 +505,7 @@ const App = () => {
                 if (floor && fcMap[empName]) {
                     fcMap[empName][floor] = Math.max(0, (fcMap[empName][floor] || 0) - 1);
                 }
-                await apiFetch(`${CONFIG.LEAVE_PATH}/${id}`, { method: "DELETE" });
+                await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${id}`, { method: "DELETE" });
                 await sleep(200);
             }
 
@@ -577,7 +539,7 @@ const App = () => {
             };
 
             // 夫妻同排設定（迴圈外宣告，避免重複建立）
-            const COUPLES = [["張忠豪", "蕭眞儀"]];
+            const COUPLES = SC.COUPLES;
             const coupleSet = new Set(COUPLES.flat());
 
             // 預算夫妻的值班值日天數：值班那天夫妻會一起掃地，先算進 countMap
@@ -610,10 +572,7 @@ const App = () => {
                 }
                 // 生日當天不排值日生
                 allEmployees.forEach(e => {
-                    if (e.birthday && e.birthday.includes("/")) {
-                        const bp = e.birthday.split("/");
-                        if (parseInt(bp[1]) === month && parseInt(bp[2]) === day) onLeaveToday.add(e.name);
-                    }
+                    if (SC.isBirthday(e, month, day)) onLeaveToday.add(e.name);
                 });
 
                 // 值班+值日重疊（夫妻也適用，已預算進 countMap）
@@ -755,7 +714,7 @@ const App = () => {
             }
             // 員工表用逐筆更新（每人不同 record ID）
             for (const [rid, fields] of Object.entries(empBatch)) {
-                await apiFetch(`${CONFIG.EMP_PATH}/${rid}`, {
+                await SC.apiFetch(`${CONFIG.EMP_PATH}/${rid}`, {
                     method: "POST",
                     headers: {"Content-Type":"application/x-www-form-urlencoded"},
                     body: new URLSearchParams(fields).toString()
@@ -802,7 +761,7 @@ const App = () => {
             if (eligible.length === 0) { showToast("沒有符合條件的值班人員", false); setAutoZhiban(false); return; }
 
             // 只讀當月（刪除舊紀錄 + 建 onLeave 用，值班不追債不需上月）
-            const allLeaveJson = await apiFetch(CONFIG.LEAVE_PATH + leaveWhere(year, month, year, month));
+            const allLeaveJson = await SC.apiFetch(CONFIG.LEAVE_PATH + SC.leaveWhere(year, month, year, month));
             // 本月從零開始，跨月不追債（新人入池不用補歷史）
             const zCount = {};
             eligible.forEach(e => { zCount[e.name] = 0; });
@@ -819,7 +778,7 @@ const App = () => {
                 });
             for (let di = 0; di < toDelete.length; di++) {
                 setProgress({ text: "清除舊值班紀錄", current: di + 1, total: toDelete.length });
-                await apiFetch(`${CONFIG.LEAVE_PATH}/${toDelete[di][0]}`, { method: "DELETE" });
+                await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${toDelete[di][0]}`, { method: "DELETE" });
                 await sleep(200);
             }
 
@@ -846,10 +805,7 @@ const App = () => {
                 // 跨月不追債：不用歷史次數影響排序
                 const sortFn = (a, b) => (zCount[a.name]||0) - (zCount[b.name]||0);
                 // 生日當天不排值班
-                const isBirthdayToday = (emp) => emp.birthday && emp.birthday.includes("/") && (() => {
-                    const bp = emp.birthday.split("/");
-                    return parseInt(bp[1]) === month && parseInt(bp[2]) === day;
-                })();
+                const isBirthdayToday = (emp) => SC.isBirthday(emp, month, day);
                 const cands = eligible
                     .filter(e => e.name !== lastPick && !onLeave.has(e.name) && !isBirthdayToday(e))
                     .sort(sortFn);
@@ -1207,10 +1163,7 @@ const App = () => {
                                             const cellSaving = saving[savingKey];
                                             const floorLabel = myDuty ? (myDuty.floor || "值") : "";
                                             // 生日判斷：比對月/日
-                                            const isBirthday = emp.birthday && emp.birthday.includes("/") && (() => {
-                                                const bp = emp.birthday.split("/");
-                                                return parseInt(bp[1]) === month && parseInt(bp[2]) === day;
-                                            })();
+                                            const isBirthday = SC.isBirthday(emp, month, day);
                                             const birthdayStyle = isBirthday
                                                 ? {outline:"2px dashed #eab308", outlineOffset:"-2px", ...((!leave && !myDuty && !isGovRest) ? {background:"#fef9c3"} : {})}
                                                 : undefined;
