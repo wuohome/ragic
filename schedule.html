@@ -949,7 +949,7 @@ const App = () => {
                                                             {leave.type === "排休" ? "排休" : leave.type === "特休" ? "特休" : leave.type === "值班" ? "值班" : "請假"}
                                                         </span>
                                                     ) : myDuty && myDuty.missed ? (
-                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background:"#dc2626", textDecoration:"line-through"}}>❌{floorLabel}</span>
+                                                        <span className="inline-block w-full leading-[32px] text-[10px] font-bold text-white" style={{background:"#a855f7"}}>❌{floorLabel}未掃</span>
                                                     ) : myDuty ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background: FLOOR_COLORS[myDuty.floor] || "#3b82f6"}}>{floorLabel}</span>
                                                     ) : null}
@@ -972,7 +972,7 @@ const App = () => {
                                             {s.qingjia > 0 && <span className="text-red-600"> {s.qingjia}假</span>}
                                             {s.zhiban > 0 && <span className="text-orange-600"> {s.zhiban}班</span>}
                                             {(s.f1 + s.f2 + s.f3 + s.dutyOther) > 0 && <span className="text-blue-600"> {s.f1 + s.f2 + s.f3 + s.dutyOther}值</span>}
-                                            {s.missed > 0 && <span className="text-red-500"> {s.missed}❌</span>}
+                                            {s.missed > 0 && <span className="text-purple-500"> {s.missed}未掃</span>}
                                             {s.paixiu === 0 && s.texiu === 0 && s.qingjia === 0 && s.zhiban === 0 && s.f1 === 0 && s.f2 === 0 && s.f3 === 0 && s.dutyOther === 0 && s.missed === 0 && <span className="text-gray-300">-</span>}
                                         </td>
                                     );
