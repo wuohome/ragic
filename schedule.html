@@ -471,6 +471,21 @@ const App = () => {
                     }
                 });
 
+            // 新人入池：上月還沒到職的人，起始次數 = 在池老員工的平均（不追入池前的債）
+            const prevStart = new Date(prevYear, prevMonth - 1, 1);
+            const veteranNames = [];
+            const newNames = [];
+            allEmployees.forEach(e => {
+                const p = e.hireDate.split("/");
+                const hired = new Date(+p[0], +p[1]-1, +p[2]);
+                if (hired < prevStart) veteranNames.push(e.name);
+                else newNames.push(e.name);
+            });
+            if (veteranNames.length > 0 && newNames.length > 0) {
+                const avg = veteranNames.reduce((s, n) => s + (countMap[n]||0), 0) / veteranNames.length;
+                newNames.forEach(n => { countMap[n] = Math.round(avg); });
+            }
+
             // 先扣除本月舊的自動排班紀錄的樓層次數
             setProgress({ text: "清除舊紀錄...", current: 0, total: 0 });
             const toDelete = Object.entries(allLeaveForDuty)
