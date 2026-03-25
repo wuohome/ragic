@@ -540,7 +540,7 @@ const App = () => {
                 const weekNum = getWeekNum(day);
                 const onLeaveToday = new Set();
                 Object.entries(leaves).forEach(([k,v]) => {
-                    if (k.endsWith("|" + dateStr)) onLeaveToday.add(k.split("|")[0]);
+                    if (k.endsWith("|" + dateStr) && v.type !== "值班") onLeaveToday.add(k.split("|")[0]);
                 });
                 if (!noRest[dateStr] && isGovHoliday(dateStr, isWknd)) {
                     GOV_REST_EMPLOYEES.forEach(name => onLeaveToday.add(name));
@@ -548,7 +548,6 @@ const App = () => {
 
                 // 當天值班的人 → 直接保留一個值日名額（值班+值日同天）
                 const todayZhiban = zhibanByDate[dateStr] || "";
-                // 值班的人不受「昨天已排」限制（值班本身已不連續）
                 const zhibanAvailable = todayZhiban && !onLeaveToday.has(todayZhiban);
 
                 // 選人：排除昨天已排 + 休假，按 score 排序
