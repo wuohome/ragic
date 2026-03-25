@@ -887,14 +887,14 @@ const App = () => {
                                 const noRestSaving = saving[`norest|${dateStr}`];
 
                                 return (
-                                    <tr key={day} className={rowBg} style={nrInfo ? {background:"#fff1f2"} : undefined}>
+                                    <tr key={day} className={rowBg} style={nrInfo ? {background:"#fff1f2", outline:"2px solid #fda4af", outlineOffset:"-1px"} : undefined}>
                                         <td className={`sticky-left p-2 text-center font-medium whitespace-nowrap ${nrInfo ? "text-rose-700" : isToday ? "bg-yellow-50" : isWeekend ? "bg-blue-50" : "bg-white"} ${!nrInfo && isWeekend ? "text-red-500" : !nrInfo ? "text-gray-700" : ""} ${mode === "禁休" && !IS_READONLY ? "cursor-pointer hover:bg-rose-100" : ""}`}
-                                            style={nrInfo ? {background:"#ffe4e6"} : undefined}
+                                            style={nrInfo ? {background:"#ffe4e6", borderLeft:"3px solid #e11d48"} : undefined}
                                             onClick={() => mode === "禁休" && handleNoRest(dateStr)}
                                             title={nrInfo ? "禁休：" + (nrInfo.reason || "無原因") : ""}>
                                             <span className="text-sm">{day}</span>
                                             <span className="text-xs ml-1 text-gray-400">({dow})</span>
-                                            {nrInfo && <span className="ml-1 text-[10px] text-rose-600 font-bold" title={nrInfo.reason}>🚫</span>}
+                                            {nrInfo && <span className="block text-[9px] text-rose-600 font-bold leading-tight mt-0.5">🚫{nrInfo.reason ? " "+nrInfo.reason : ""}</span>}
                                         </td>
                                         {employees.map(emp => {
                                             const key = `${emp.name}|${dateStr}`;
