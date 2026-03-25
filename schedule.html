@@ -714,8 +714,25 @@ const App = () => {
             }
 
             setProgress({ text: "計算排班...", current: 0, total: 0 });
-            // 每天排 1 人
+            // 每天排 1 人，按「達標率」均勻分配（不管休幾天，值班次數盡量一樣）
             const totalDays = new Date(year, month, 0).getDate();
+            const target = totalDays / eligible.length; // 每人目標次數
+
+            // 先算每人有幾天可以值班
+            const availDays = {};
+            eligible.forEach(e => { availDays[e.name] = 0; });
+            for (let d = 1; d <= totalDays; d++) {
+                const ds = `${year}/${String(month).padStart(2,"0")}/${String(d).padStart(2,"0")}`;
+                const dt = new Date(year, month-1, d);
+                const wk = dt.getDay()===0||dt.getDay()===6;
+                const lv = new Set();
+                Object.entries(leaves).forEach(([k,v]) => {
+                    if (k.endsWith("|" + ds) && v.type !== "值班") lv.add(k.split("|")[0]);
+                });
+                if (!noRest[ds] && isGovHoliday(ds, wk)) GOV_REST_EMPLOYEES.forEach(n => lv.add(n));
+                eligible.forEach(e => { if (!lv.has(e.name)) availDays[e.name]++; });
+            }
+
             const newZhiban = {};
             let lastPick = "";
             for (let day = 1; day <= totalDays; day++) {
@@ -724,7 +741,6 @@ const App = () => {
                 const dateStr = `${year}/${mm}/${dd}`;
                 const d = new Date(year, month-1, day);
                 const isWknd = d.getDay()===0||d.getDay()===6;
-                // 排除當天已有排休/請假/特休的人
                 const onLeave = new Set();
                 Object.entries(leaves).forEach(([k,v]) => {
                     if (k.endsWith("|" + dateStr) && v.type !== "值班") onLeave.add(k.split("|")[0]);
@@ -732,15 +748,17 @@ const App = () => {
                 if (!noRest[dateStr] && isGovHoliday(dateStr, isWknd)) {
                     GOV_REST_EMPLOYEES.forEach(n => onLeave.add(n));
                 }
+                // 排序：count / availDays 比率低的優先（達標率低 = 還需要更多次）
+                const rateFn = (name) => availDays[name] > 0 ? (zCount[name]||0) / availDays[name] * totalDays : 999;
                 const cands = eligible
-                    .map(e => ({ name: e.name, count: zCount[e.name] || 0 }))
+                    .map(e => ({ name: e.name, rate: rateFn(e.name) }))
                     .filter(e => e.name !== lastPick && !onLeave.has(e.name))
-                    .sort((a,b) => a.count - b.count);
+                    .sort((a,b) => a.rate - b.rate);
                 const pool = cands.length > 0 ? cands
-                    : eligible.map(e => ({ name: e.name, count: zCount[e.name] || 0 }))
-                        .filter(e => !onLeave.has(e.name)).sort((a,b) => a.count - b.count);
+                    : eligible.map(e => ({ name: e.name, rate: rateFn(e.name) }))
+                        .filter(e => !onLeave.has(e.name)).sort((a,b) => a.rate - b.rate);
                 const final = pool.length > 0 ? pool
-                    : eligible.map(e => ({ name: e.name, count: zCount[e.name] || 0 })).sort((a,b) => a.count - b.count);
+                    : eligible.map(e => ({ name: e.name, rate: rateFn(e.name) })).sort((a,b) => a.rate - b.rate);
                 const chosen = final[0].name;
                 zCount[chosen] = (zCount[chosen] || 0) + 1;
                 lastPick = chosen;
