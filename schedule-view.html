@@ -49,43 +49,13 @@
 </head>
 <body style="margin:0;background:#f8fafc;min-height:100vh">
 <div id="root"></div>
+<script src="schedule-common.js"></script>
 <script type="text/babel">
 
-/* ── Constants ─────────────────────────────────────────────── */
-const API_KEY   = 'VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==';
-const BASE_URL  = 'https://ap15.ragic.com';
-const API_P     = `api=true&v=3&naming=EID&APIKey=${API_KEY}`;
-const EMP_FORM  = '/wuohome/ragicforms4/20004';
-const LEAVE_FORM= '/wuohome/ragicforms4/2';
-
-// Employee fields
-const F_NAME    = '3000933';
-const F_DEPT    = '3000937';
-const F_STATUS  = '3000945';
-const F_HIRE    = '3000955';
-// Leave fields
-const F_L_EMP   = '1000961';
-const F_L_DATE  = '1000963';
-const F_L_YEAR  = '1000964';
-const F_L_MONTH = '1000965';
-const F_L_TYPE  = '1002025';
-const F_L_NOTE  = '1000967';
-const F_L_AUTO  = '1000966';
-const F_BIRTHDAY = '3000954';
-
-const DAYS_TW = ['日','一','二','三','四','五','六'];
-
-// 見紅休 applies to these names
-const JIAN_HONG_NAMES = new Set(['張瓊安','沈郁雯','呂鴻墀']);
-// 2026 public holidays — 含名稱
-const PUBLIC_HOLIDAYS_2026 = {
-  '2026/01/01':'元旦','2026/02/16':'除夕','2026/02/17':'春節','2026/02/18':'春節',
-  '2026/02/19':'春節','2026/02/20':'春節','2026/02/27':'228',
-  '2026/04/03':'兒童節','2026/04/06':'清明','2026/05/01':'勞動節','2026/06/19':'端午',
-  '2026/09/25':'中秋','2026/09/28':'教師節','2026/10/09':'國慶','2026/10/26':'光復節',
-  '2026/12/25':'行憲',
-};
-function getHolidayName(y, m, d) { return PUBLIC_HOLIDAYS_2026[fmtDate(y, m, d)] || ''; }
+/* ── Constants (from schedule-common.js) ───────────────────── */
+const API_P = `api=true&v=3&naming=EID&APIKey=${SC.API_KEY}`;
+const JIAN_HONG_NAMES = new Set(SC.GOV_REST_NAMES);
+const PUBLIC_HOLIDAYS_2026 = SC.HOLIDAYS_2026;
 
 // Department display overrides
 const DEPT_DISPLAY = { '韓珊珊':'管理部/秘書', '張瓊安':'管理部/特助' };
@@ -119,7 +89,7 @@ const STATUS_CONFIG = {
 };
 
 // Returns true if today is in the open editing period (20th–31st)
-function isOpenPeriod() { return new Date().getDate() >= 20; }
+const isOpenPeriod = SC.isOpenPeriod;
 
 // Compute the display month: during open period, show next month
 function getInitialMonth() {
@@ -132,9 +102,7 @@ function getInitialMonth() {
 /* ── Helpers ────────────────────────────────────────────────── */
 function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); }
 function getDOW(y, m, d)   { return new Date(y, m-1, d).getDay(); }
-function fmtDate(y, m, d)  {
-  return y + '/' + String(m).padStart(2,'0') + '/' + String(d).padStart(2,'0');
-}
+const fmtDate = SC.fmtDate;
 function isRedHoliday(y, m, d) {
   const dow = getDOW(y, m, d);
   if (dow === 0 || dow === 6) return true;
@@ -154,16 +122,16 @@ function getOrder(emp) {
 
 /* ── API ────────────────────────────────────────────────────── */
 async function loadEmployees() {
-  const res = await fetch(BASE_URL + EMP_FORM + '?' + API_P);
+  const res = await fetch(SC.BASE_URL + SC.EMP_PATH + '?' + API_P);
   if (!res.ok) throw new Error('員工資料載入失敗 (' + res.status + ')');
   const data = await res.json();
   const raw = Object.entries(data)
-    .filter(([, r]) => r && typeof r === 'object' && r[F_NAME])
+    .filter(([, r]) => r && typeof r === 'object' && r[SC.F_EMP.NAME])
     .filter(([, r]) => {
-      const name = r[F_NAME];
-      const dept = r[F_DEPT];
-      const status = r[F_STATUS];
-      const hire = r[F_HIRE];
+      const name = r[SC.F_EMP.NAME];
+      const dept = r[SC.F_EMP.DEPT];
+      const status = r[SC.F_EMP.STATUS];
+      const hire = r[SC.F_EMP.HIRE];
       if (status !== '在職') return false;
       if (dept === '經營階層') return false;
       if (hire === '承攬') return true;
@@ -174,11 +142,11 @@ async function loadEmployees() {
       return false;
     })
     .map(([rid, r]) => {
-      const name = r[F_NAME];
-      const rawDept = r[F_DEPT];
+      const name = r[SC.F_EMP.NAME];
+      const rawDept = r[SC.F_EMP.DEPT];
       const dept = DEPT_DISPLAY[name] || rawDept;
-      const hire = r[F_HIRE] || '';
-      const birthday = r[F_BIRTHDAY] || '';
+      const hire = r[SC.F_EMP.HIRE] || '';
+      const birthday = r[SC.F_EMP.BIRTHDAY] || '';
       return { id: rid, name, dept, rawDept, hire, birthday };
     });
   raw.sort((a, b) => getOrder(a) - getOrder(b));
@@ -186,47 +154,47 @@ async function loadEmployees() {
 }
 
 async function loadLeaves(year, month) {
-  const url = BASE_URL + LEAVE_FORM + '?' + API_P
-    + '&where=' + F_L_YEAR + ',eq,' + year
-    + '&and=' + F_L_MONTH + ',eq,' + month;
+  const url = SC.BASE_URL + SC.LEAVE_PATH + '?' + API_P
+    + '&where=' + SC.F_LEAVE.YEAR + ',eq,' + year
+    + '&and=' + SC.F_LEAVE.MONTH + ',eq,' + month;
   const res = await fetch(url);
   if (!res.ok) throw new Error('排班資料載入失敗 (' + res.status + ')');
   const data = await res.json();
   // map: empName__date -> array of records (support multiple per cell)
   const map = {};
   for (const [rid, r] of Object.entries(data)) {
-    if (!r || typeof r !== 'object' || !r[F_L_DATE]) continue;
-    const type = r[F_L_TYPE] || '';
+    if (!r || typeof r !== 'object' || !r[SC.F_LEAVE.DATE]) continue;
+    const type = r[SC.F_LEAVE.TYPE] || '';
     if (type === '值日' || type === '禁休') continue; // 這兩種由 loadDutiesAndNoRest 處理
-    const key = r[F_L_EMP] + '__' + r[F_L_DATE];
+    const key = r[SC.F_LEAVE.EMP] + '__' + r[SC.F_LEAVE.DATE];
     if (!map[key]) map[key] = [];
-    map[key].push({ ragicId: rid, type, empName: r[F_L_EMP], date: r[F_L_DATE] });
+    map[key].push({ ragicId: rid, type, empName: r[SC.F_LEAVE.EMP], date: r[SC.F_LEAVE.DATE] });
   }
   return map;
 }
 
 async function loadDutiesAndNoRest(year, month) {
-  const url = BASE_URL + LEAVE_FORM + '?' + API_P
-    + '&where=' + F_L_YEAR + ',eq,' + year
-    + '&and=' + F_L_MONTH + ',eq,' + month;
+  const url = SC.BASE_URL + SC.LEAVE_PATH + '?' + API_P
+    + '&where=' + SC.F_LEAVE.YEAR + ',eq,' + year
+    + '&and=' + SC.F_LEAVE.MONTH + ',eq,' + month;
   const res = await fetch(url);
   if (!res.ok) throw new Error('值日資料載入失敗 (' + res.status + ')');
   const data = await res.json();
   const duties = {};
   const noRest = {};
   for (const [rid, r] of Object.entries(data)) {
-    if (!r || typeof r !== 'object' || !r[F_L_DATE]) continue;
-    const type = r[F_L_TYPE] || '';
+    if (!r || typeof r !== 'object' || !r[SC.F_LEAVE.DATE]) continue;
+    const type = r[SC.F_LEAVE.TYPE] || '';
     if (type === '值日') {
-      const empName = r[F_L_EMP];
-      const date = r[F_L_DATE];
+      const empName = r[SC.F_LEAVE.EMP];
+      const date = r[SC.F_LEAVE.DATE];
       const key = empName + '__' + date;
-      const note = r[F_L_NOTE] || '';
+      const note = r[SC.F_LEAVE.NOTE] || '';
       const floor = /^(1F|2F|3F)$/.test(note) ? note : '';
       duties[key] = { ragicId: rid, empName, date, floor };
     } else if (type === '禁休') {
-      const date = r[F_L_DATE];
-      const reason = r[F_L_NOTE] || '';
+      const date = r[SC.F_LEAVE.DATE];
+      const reason = r[SC.F_LEAVE.NOTE] || '';
       noRest[date] = { ragicId: rid, reason };
     }
   }
@@ -236,21 +204,21 @@ async function loadDutiesAndNoRest(year, month) {
 async function loadPrevStats(year, month) {
   const pm = month === 1 ? 12 : month - 1;
   const py = month === 1 ? year - 1 : year;
-  const url = BASE_URL + LEAVE_FORM + '?' + API_P
-    + '&where=' + F_L_YEAR + ',eq,' + py
-    + '&and=' + F_L_MONTH + ',eq,' + pm;
+  const url = SC.BASE_URL + SC.LEAVE_PATH + '?' + API_P
+    + '&where=' + SC.F_LEAVE.YEAR + ',eq,' + py
+    + '&and=' + SC.F_LEAVE.MONTH + ',eq,' + pm;
   const res = await fetch(url);
   if (!res.ok) return {};
   const data = await res.json();
   const stats = {};
   for (const [rid, r] of Object.entries(data)) {
-    if (!r || typeof r !== 'object' || !r[F_L_DATE]) continue;
-    const emp = r[F_L_EMP] || '';
-    const type = r[F_L_TYPE] || '';
+    if (!r || typeof r !== 'object' || !r[SC.F_LEAVE.DATE]) continue;
+    const emp = r[SC.F_LEAVE.EMP] || '';
+    const type = r[SC.F_LEAVE.TYPE] || '';
     if (!emp) continue;
     if (!stats[emp]) stats[emp] = { duty: 0, zhiban: 0 };
     if (type === '值日') {
-      const isAuto = r[F_L_AUTO] || '';
+      const isAuto = r[SC.F_LEAVE.IS_AUTO] || '';
       if (isAuto !== '未掃') stats[emp].duty++;
     } else if (type === '值班') {
       stats[emp].zhiban++;
@@ -261,13 +229,13 @@ async function loadPrevStats(year, month) {
 
 /* ── Write API helpers ──────────────────────────────────────── */
 async function apiCreateLeave(empName, date, year, month, type) {
-  const url = `${BASE_URL}${LEAVE_FORM}?${API_P}`;
+  const url = `${SC.BASE_URL}${SC.LEAVE_PATH}?${API_P}`;
   const body = new URLSearchParams({
-    [F_L_EMP]:   empName,
-    [F_L_DATE]:  date,
-    [F_L_YEAR]:  String(year),
-    [F_L_MONTH]: String(month),
-    [F_L_TYPE]:  type,
+    [SC.F_LEAVE.EMP]:   empName,
+    [SC.F_LEAVE.DATE]:  date,
+    [SC.F_LEAVE.YEAR]:  String(year),
+    [SC.F_LEAVE.MONTH]: String(month),
+    [SC.F_LEAVE.TYPE]:  type,
   }).toString();
   const res = await fetch(url, {
     method: 'POST',
@@ -280,14 +248,14 @@ async function apiCreateLeave(empName, date, year, month, type) {
 }
 
 async function apiDeleteLeave(ragicId) {
-  const url = `${BASE_URL}${LEAVE_FORM}/${ragicId}?${API_P}`;
+  const url = `${SC.BASE_URL}${SC.LEAVE_PATH}/${ragicId}?${API_P}`;
   const res = await fetch(url, { method: 'DELETE' });
   if (!res.ok) throw new Error('刪除失敗 (' + res.status + ')');
 }
 
 async function apiUpdateLeaveType(ragicId, newType) {
-  const url = `${BASE_URL}${LEAVE_FORM}/${ragicId}?${API_P}`;
-  const body = new URLSearchParams({ [F_L_TYPE]: newType }).toString();
+  const url = `${SC.BASE_URL}${SC.LEAVE_PATH}/${ragicId}?${API_P}`;
+  const body = new URLSearchParams({ [SC.F_LEAVE.TYPE]: newType }).toString();
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -665,7 +633,7 @@ function PersonalView({ emp, onBack }) {
 
         {/* Weekday header */}
         <div className="cal-grid" style={{ marginBottom: 4 }}>
-          {DAYS_TW.map((d, i) => (
+          {SC.DAYS_TW.map((d, i) => (
             <div key={d} style={{
               textAlign: 'center', fontSize: 12, fontWeight: 700, padding: '4px 0',
               color: i===0 ? '#dc2626' : i===6 ? '#3b82f6' : '#64748b',
@@ -683,7 +651,7 @@ function PersonalView({ emp, onBack }) {
             const canEdit = isCellEditable(cell.d);
             const cellDate = fmtDate(year, month, cell.d);
             const nrInfo = noRest[cellDate];
-            const holidayName = getHolidayName(year, month, cell.d);
+            const holidayName = SC.getHolidayName(year, month, cell.d);
             const isHoliday = cell.isWeekend || !!holidayName;
             let extraClass = '';
             if (cell.isToday) extraClass = ' today';
@@ -692,10 +660,7 @@ function PersonalView({ emp, onBack }) {
             if (isSaving) extraClass += ' saving';
 
             // 生日判斷
-            const isBirthday = emp.birthday && emp.birthday.includes('/') && (() => {
-                const bp = emp.birthday.split('/');
-                return parseInt(bp[1]) === month && parseInt(bp[2]) === cell.d;
-            })();
+            const isBirthday = SC.isBirthday(emp, month, cell.d);
             const cellStyle = nrInfo ? { background: '#fff1f2', borderColor: '#fda4af' }
                 : isBirthday ? { background: '#fef9c3', outline: '2px dashed #eab308', outlineOffset: '-2px' }
                 : {};
@@ -1056,7 +1021,7 @@ function TeamView({ emps, onBack }) {
               {Array.from({ length: totalDays }, (_, i) => i+1).map(day => {
                 const dow       = getDOW(year, month, day);
                 const isWeekend = dow===0||dow===6;
-                const holidayName = getHolidayName(year, month, day);
+                const holidayName = SC.getHolidayName(year, month, day);
                 const isHoliday = isWeekend || !!holidayName;
                 const isToday   = today.getFullYear()===year &&
                                   today.getMonth()+1===month &&
@@ -1075,16 +1040,13 @@ function TeamView({ emps, onBack }) {
                       borderLeft: nrRow ? '3px solid #e11d48' : undefined,
                     }}>
                       {month}/{day}{' '}
-                      <span style={{ color: '#94a3b8', fontSize: 11 }}>({DAYS_TW[dow]})</span>
+                      <span style={{ color: '#94a3b8', fontSize: 11 }}>({SC.DAYS_TW[dow]})</span>
                       {holidayName && !nrRow && <span style={{ fontSize: 9, color: '#dc2626', fontWeight: 600, marginLeft: 2 }}>{holidayName}</span>}
                       {nrRow && <span style={{ fontSize: 9, color: '#be123c', fontWeight: 700, marginLeft: 2 }}>🚫{nrRow.reason ? ' '+nrRow.reason : ''}</span>}
                     </td>
                     {emps.map(emp => {
                       const statuses = getCellStatuses(emp, year, month, day, leaves, duties, noRest);
-                      const isBirthday = emp.birthday && emp.birthday.includes('/') && (() => {
-                          const bp = emp.birthday.split('/');
-                          return parseInt(bp[1]) === month && parseInt(bp[2]) === day;
-                      })();
+                      const isBirthday = SC.isBirthday(emp, month, day);
                       return (
                         <td key={emp.name} style={{
                           borderRight: '1px solid #f1f5f9',
