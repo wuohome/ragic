@@ -132,6 +132,7 @@ const App = () => {
     const [loading, setLoading] = React.useState(true);
     const [saving, setSaving] = React.useState({});
     const [duties, setDuties] = React.useState({});
+    const [prevStats, setPrevStats] = React.useState({}); // { name: { duty: N, zhiban: N } }
     const [toast, setToast] = React.useState(null);
     const [autoScheduling, setAutoScheduling] = React.useState(false);
     const [autoZhiban, setAutoZhiban] = React.useState(false);
@@ -209,6 +210,10 @@ const App = () => {
             const lmap = {};
             const dmap = {};
             const nrmap = {};
+            // 上月統計
+            const pm = month === 1 ? 12 : month - 1;
+            const py = month === 1 ? year - 1 : year;
+            const pStats = {};
             Object.entries(leaveJson)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
                 .forEach(([id, f]) => {
@@ -218,6 +223,16 @@ const App = () => {
                     if (!emp || !date) return;
                     const parts = date.replace(/\//g,"-").split("-");
                     const y = parseInt(parts[0]), m = parseInt(parts[1]);
+                    // 上月值日/值班統計
+                    if (y === py && m === pm) {
+                        if (!pStats[emp]) pStats[emp] = { duty: 0, zhiban: 0 };
+                        if (type === "值日") {
+                            const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
+                            if (isAuto !== "未掃") pStats[emp].duty++;
+                        } else if (type === "值班") {
+                            pStats[emp].zhiban++;
+                        }
+                    }
                     if (y !== year || m !== month) return;
                     if (type === "禁休") {
                         const reason = f[CONFIG.F_LEAVE.NOTE] || "";
@@ -236,6 +251,7 @@ const App = () => {
             setLeaves(lmap);
             setDuties(dmap);
             setNoRest(nrmap);
+            setPrevStats(pStats);
         } catch(e) {
             console.error(e);
             showToast("載入失敗: " + e.message, false);
@@ -1071,11 +1087,18 @@ const App = () => {
                                 })()}
                             </tr>
                             <tr className="bg-gray-50">
-                                {employees.map(emp => (
-                                    <th key={emp.name} className="emp-cell p-1 text-center font-medium text-gray-700 text-xs whitespace-nowrap">
-                                        {emp.display}
-                                    </th>
-                                ))}
+                                {employees.map(emp => {
+                                    const ps = prevStats[emp.name];
+                                    const pm = month === 1 ? 12 : month - 1;
+                                    return (
+                                        <th key={emp.name} className="emp-cell p-1 text-center font-medium text-gray-700 text-xs whitespace-nowrap">
+                                            <div>{emp.display}</div>
+                                            {ps && <div className="font-normal text-gray-400" style={{fontSize:"9px", lineHeight:"1.2"}}>
+                                                {pm}月 🧹{ps.duty.toFixed(0)} 🕗{ps.zhiban.toFixed(0)}
+                                            </div>}
+                                        </th>
+                                    );
+                                })}
                             </tr>
                         </thead>
                         <tbody>
