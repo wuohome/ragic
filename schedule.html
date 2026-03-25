@@ -226,7 +226,8 @@ const App = () => {
                         const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
                         const floor = (note.match(/^(1F|2F|3F)$/) || [""])[0];
                         if (!dmap[date]) dmap[date] = [];
-                        dmap[date].push({ ragicId: id, empName: emp, isAuto, note, floor });
+                        const missed = isAuto === "未掃";
+                        dmap[date].push({ ragicId: id, empName: emp, isAuto, note, floor, missed });
                     } else {
                         lmap[`${emp}|${date}`] = { ragicId: id, type };
                     }
@@ -293,20 +294,29 @@ const App = () => {
             setSaving(s => ({...s, [dutyKey]: true}));
             try {
                 if (myDuty) {
-                    // 同一人再點 = 清除該筆 + 扣回樓層次數
-                    await apiFetch(`${CONFIG.LEAVE_PATH}/${myDuty.ragicId}`, { method: "DELETE" });
-                    if (myDuty.floor && empObj) {
-                        const newCount = Math.max(0, (empObj.fc[myDuty.floor] || 0) - 1);
-                        const flField = myDuty.floor === "1F" ? CONFIG.F_EMP.FL1 : myDuty.floor === "2F" ? CONFIG.F_EMP.FL2 : CONFIG.F_EMP.FL3;
-                        await apiFetch(`${CONFIG.EMP_PATH}/${empObj.ragicId}`, {
+                    if (myDuty.missed) {
+                        // 未掃 → 再點 = 清除
+                        await apiFetch(`${CONFIG.LEAVE_PATH}/${myDuty.ragicId}`, { method: "DELETE" });
+                        if (myDuty.floor && empObj) {
+                            const flField = myDuty.floor === "1F" ? CONFIG.F_EMP.FL1 : myDuty.floor === "2F" ? CONFIG.F_EMP.FL2 : CONFIG.F_EMP.FL3;
+                            await apiFetch(`${CONFIG.EMP_PATH}/${empObj.ragicId}`, {
+                                method: "POST",
+                                headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                                body: new URLSearchParams({ [flField]: String(Math.max(0, (empObj.fc[myDuty.floor]||0) - 1)) }).toString()
+                            });
+                            empObj.fc[myDuty.floor] = Math.max(0, (empObj.fc[myDuty.floor]||0) - 1);
+                        }
+                        setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => x.ragicId !== myDuty.ragicId)}));
+                        showToast(`${empName} ${dateStr} ${myDuty.floor || "值日"}已清除`);
+                    } else {
+                        // 正常 → 標記未掃
+                        await apiFetch(`${CONFIG.LEAVE_PATH}/${myDuty.ragicId}`, {
                             method: "POST",
                             headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                            body: new URLSearchParams({ [flField]: String(newCount) }).toString()
+                            body: new URLSearchParams({ [CONFIG.F_LEAVE.IS_AUTO]: "未掃" }).toString()
                         });
-                        empObj.fc[myDuty.floor] = newCount;
-                    }
-                    setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => x.ragicId !== myDuty.ragicId)}));
-                    showToast(`${empName} ${dateStr} ${myDuty.floor || "值日"}已清除`);
+                        setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).map(x => x.ragicId === myDuty.ragicId ? {...x, missed: true} : x)}));
+                        showToast(`${empName} ${dateStr} 標記未掃 ❌`);
                 } else {
                     // 分配空樓層中此人次數最少的
                     const usedFloors = current.map(d => d.floor);
@@ -448,6 +458,8 @@ const App = () => {
                 .forEach(([id, f]) => {
                     const type = f[CONFIG.F_LEAVE.TYPE] || "";
                     if (type !== "值日") return;
+                    const isAutoVal = f[CONFIG.F_LEAVE.IS_AUTO] || "";
+                    if (isAutoVal === "未掃") return; // 未掃不計入次數
                     const date = f[CONFIG.F_LEAVE.DATE] || "";
                     const empName = f[CONFIG.F_LEAVE.EMP] || "";
                     if (!date || !empName) return;
@@ -758,16 +770,18 @@ const App = () => {
                 else qingjia++;
             }
         });
+        let missed = 0;
         Object.values(duties).forEach(arr => {
             (arr||[]).forEach(d => {
                 if (d.empName !== empName) return;
+                if (d.missed) { missed++; return; }
                 if (d.floor === "1F") f1++;
                 else if (d.floor === "2F") f2++;
                 else if (d.floor === "3F") f3++;
                 else dutyOther++;
             });
         });
-        return { paixiu, texiu, qingjia, zhiban, f1, f2, f3, dutyOther };
+        return { paixiu, texiu, qingjia, zhiban, f1, f2, f3, dutyOther, missed };
     };
 
     const pct = progress && progress.total > 0 ? Math.round(progress.current / progress.total * 100) : null;
@@ -933,6 +947,8 @@ const App = () => {
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background: leave.type === "排休" ? "#22c55e" : leave.type === "特休" ? "#eab308" : leave.type === "值班" ? "#f97316" : "#dc2626"}}>
                                                             {leave.type === "排休" ? "排休" : leave.type === "特休" ? "特休" : leave.type === "值班" ? "值班" : "請假"}
                                                         </span>
+                                                    ) : myDuty && myDuty.missed ? (
+                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background:"#dc2626", textDecoration:"line-through"}}>❌{floorLabel}</span>
                                                     ) : myDuty ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background: FLOOR_COLORS[myDuty.floor] || "#3b82f6"}}>{floorLabel}</span>
                                                     ) : null}
@@ -955,7 +971,8 @@ const App = () => {
                                             {s.qingjia > 0 && <span className="text-red-600"> {s.qingjia}假</span>}
                                             {s.zhiban > 0 && <span className="text-orange-600"> {s.zhiban}班</span>}
                                             {(s.f1 + s.f2 + s.f3 + s.dutyOther) > 0 && <span className="text-blue-600"> {s.f1 + s.f2 + s.f3 + s.dutyOther}值</span>}
-                                            {s.paixiu === 0 && s.texiu === 0 && s.qingjia === 0 && s.zhiban === 0 && s.f1 === 0 && s.f2 === 0 && s.f3 === 0 && s.dutyOther === 0 && <span className="text-gray-300">-</span>}
+                                            {s.missed > 0 && <span className="text-red-500"> {s.missed}❌</span>}
+                                            {s.paixiu === 0 && s.texiu === 0 && s.qingjia === 0 && s.zhiban === 0 && s.f1 === 0 && s.f2 === 0 && s.f3 === 0 && s.dutyOther === 0 && s.missed === 0 && <span className="text-gray-300">-</span>}
                                         </td>
                                     );
                                 })}
