@@ -36,9 +36,7 @@ const CONFIG = {
     EMP_PATH: "/wuohome/ragicforms4/20004",
     LEAVE_PATH: "/wuohome/ragicforms4/2",
     F_EMP: { NAME:"3000933", DISPLAY:"1000848", DEPT:"3000937", STATUS:"3000945", HIRE:"3000955", HIRE_DATE:"3000943", FL1:"1002028", FL2:"1002029", FL3:"1002030" },
-    F_LEAVE: { EMP:"1000961", DATE:"1000963", YEAR:"1000964", MONTH:"1000965", TYPE:"1002025", DEPT:"1002026" },
-    DUTY_PATH: "/wuohome/ragicforms4/3",
-    F_DUTY: { DATE:"1000971", EMP:"1000972", YEAR:"1000973", MONTH:"1000974", IS_AUTO:"1000975", NOTE:"1000976" }
+    F_LEAVE: { EMP:"1000961", DATE:"1000963", YEAR:"1000964", MONTH:"1000965", TYPE:"1002025", DEPT:"1002026", NOTE:"1000967", IS_AUTO:"1000966" }
 };
 
 const apiFetch = async (path, opts={}, retries=3) => {
@@ -204,6 +202,7 @@ const App = () => {
 
             const leaveJson = await apiFetch(CONFIG.LEAVE_PATH);
             const lmap = {};
+            const dmap = {};
             Object.entries(leaveJson)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
                 .forEach(([id, f]) => {
@@ -213,31 +212,19 @@ const App = () => {
                     if (!emp || !date) return;
                     const parts = date.replace(/\//g,"-").split("-");
                     const y = parseInt(parts[0]), m = parseInt(parts[1]);
-                    if (y === year && m === month) {
+                    if (y !== year || m !== month) return;
+                    if (type === "值日") {
+                        // 值日生紀錄 → duties state
+                        const note = f[CONFIG.F_LEAVE.NOTE] || "";
+                        const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
+                        const floor = (note.match(/^(1F|2F|3F)$/) || [""])[0];
+                        if (!dmap[date]) dmap[date] = [];
+                        dmap[date].push({ ragicId: id, empName: emp, isAuto, note, floor });
+                    } else {
                         lmap[`${emp}|${date}`] = { ragicId: id, type };
                     }
                 });
             setLeaves(lmap);
-
-            // Fetch duties for current month（每天可能有多位值日生）
-            const dutyJson = await apiFetch(CONFIG.DUTY_PATH);
-            const dmap = {};
-            Object.entries(dutyJson)
-                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
-                .forEach(([id, f]) => {
-                    const date = f[CONFIG.F_DUTY.DATE] || "";
-                    const empName = f[CONFIG.F_DUTY.EMP] || "";
-                    const isAuto = f[CONFIG.F_DUTY.IS_AUTO] || "";
-                    const note = f[CONFIG.F_DUTY.NOTE] || "";
-                    if (!date || !empName) return;
-                    const parts = date.replace(/\//g,"-").split("-");
-                    const y = parseInt(parts[0]), m = parseInt(parts[1]);
-                    if (y === year && m === month) {
-                        if (!dmap[date]) dmap[date] = [];
-                        const floor = (note.match(/^(1F|2F|3F)$/) || [""])[0];
-                        dmap[date].push({ ragicId: id, empName, isAuto, note, floor });
-                    }
-                });
             setDuties(dmap);
         } catch(e) {
             console.error(e);
@@ -261,7 +248,7 @@ const App = () => {
             try {
                 if (myDuty) {
                     // 同一人再點 = 清除該筆 + 扣回樓層次數
-                    await apiFetch(`${CONFIG.DUTY_PATH}/${myDuty.ragicId}`, { method: "DELETE" });
+                    await apiFetch(`${CONFIG.LEAVE_PATH}/${myDuty.ragicId}`, { method: "DELETE" });
                     if (myDuty.floor && empObj) {
                         const newCount = Math.max(0, (empObj.fc[myDuty.floor] || 0) - 1);
                         const flField = myDuty.floor === "1F" ? CONFIG.F_EMP.FL1 : myDuty.floor === "2F" ? CONFIG.F_EMP.FL2 : CONFIG.F_EMP.FL3;
@@ -289,13 +276,15 @@ const App = () => {
                         ? availFloors.sort((a, b) => (fc[a]||0) - (fc[b]||0))[0]
                         : "";
                     const params = new URLSearchParams();
-                    params.append(CONFIG.F_DUTY.DATE, dateStr);
-                    params.append(CONFIG.F_DUTY.EMP, empName);
-                    params.append(CONFIG.F_DUTY.YEAR, String(year));
-                    params.append(CONFIG.F_DUTY.MONTH, String(month));
-                    params.append(CONFIG.F_DUTY.IS_AUTO, "No");
-                    params.append(CONFIG.F_DUTY.NOTE, floor || "手動變更");
-                    const res = await apiFetch(CONFIG.DUTY_PATH, {
+                    params.append(CONFIG.F_LEAVE.EMP, empName);
+                    params.append(CONFIG.F_LEAVE.DATE, dateStr);
+                    params.append(CONFIG.F_LEAVE.YEAR, String(year));
+                    params.append(CONFIG.F_LEAVE.MONTH, String(month));
+                    params.append(CONFIG.F_LEAVE.TYPE, "值日");
+                    params.append(CONFIG.F_LEAVE.NOTE, floor || "手動變更");
+                    params.append(CONFIG.F_LEAVE.IS_AUTO, "No");
+                    params.append(CONFIG.F_LEAVE.DEPT, "手動變更");
+                    const res = await apiFetch(CONFIG.LEAVE_PATH, {
                         method: "POST",
                         headers: {"Content-Type":"application/x-www-form-urlencoded"},
                         body: params.toString()
@@ -385,17 +374,19 @@ const App = () => {
                 empRagicIds[e.name] = e.ragicId;
             });
 
-            // 讀上月值日次數（決定誰被選中）
+            // 讀上月值日次數（決定誰被選中）— 從排休表中 TYPE=值日 的紀錄
             const prevMonth = month === 1 ? 12 : month - 1;
             const prevYear = month === 1 ? year - 1 : year;
-            const prevDutyJson = await apiFetch(CONFIG.DUTY_PATH);
+            const allLeaveForDuty = await apiFetch(CONFIG.LEAVE_PATH);
             const countMap = {};
             allEmployees.forEach(e => { countMap[e.name] = 0; });
-            Object.entries(prevDutyJson)
+            Object.entries(allLeaveForDuty)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
                 .forEach(([id, f]) => {
-                    const date = f[CONFIG.F_DUTY.DATE] || "";
-                    const empName = f[CONFIG.F_DUTY.EMP] || "";
+                    const type = f[CONFIG.F_LEAVE.TYPE] || "";
+                    if (type !== "值日") return;
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    const empName = f[CONFIG.F_LEAVE.EMP] || "";
                     if (!date || !empName) return;
                     const parts = date.replace(/\//g,"-").split("-");
                     const y = parseInt(parts[0]), m = parseInt(parts[1]);
@@ -406,12 +397,13 @@ const App = () => {
 
             // 先扣除本月舊的自動排班紀錄的樓層次數
             setProgress({ text: "清除舊紀錄...", current: 0, total: 0 });
-            const existingDutyJson = await apiFetch(CONFIG.DUTY_PATH);
-            const toDelete = Object.entries(existingDutyJson)
+            const toDelete = Object.entries(allLeaveForDuty)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
                 .filter(([id, f]) => {
-                    const date = f[CONFIG.F_DUTY.DATE] || "";
-                    const isAuto = f[CONFIG.F_DUTY.IS_AUTO] || "";
+                    const type = f[CONFIG.F_LEAVE.TYPE] || "";
+                    if (type !== "值日") return false;
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
                     if (!date) return false;
                     const parts = date.replace(/\//g,"-").split("-");
                     const y = parseInt(parts[0]), m = parseInt(parts[1]);
@@ -420,13 +412,13 @@ const App = () => {
             for (let di = 0; di < toDelete.length; di++) {
                 const [id, f] = toDelete[di];
                 setProgress({ text: "清除舊值日紀錄", current: di + 1, total: toDelete.length });
-                const empName = f[CONFIG.F_DUTY.EMP] || "";
-                const note = f[CONFIG.F_DUTY.NOTE] || "";
+                const empName = f[CONFIG.F_LEAVE.EMP] || "";
+                const note = f[CONFIG.F_LEAVE.NOTE] || "";
                 const floor = /^(1F|2F|3F)$/.test(note) ? note : "";
                 if (floor && fcMap[empName]) {
                     fcMap[empName][floor] = Math.max(0, (fcMap[empName][floor] || 0) - 1);
                 }
-                await apiFetch(`${CONFIG.DUTY_PATH}/${id}`, { method: "DELETE" });
+                await apiFetch(`${CONFIG.LEAVE_PATH}/${id}`, { method: "DELETE" });
                 await sleep(200);
             }
 
@@ -499,17 +491,19 @@ const App = () => {
             for (const [dateStr, assignments] of Object.entries(newDuties)) {
                 for (const { empName, floor } of assignments) {
                     batchRecords.push({
-                        [CONFIG.F_DUTY.DATE]: dateStr,
-                        [CONFIG.F_DUTY.EMP]: empName,
-                        [CONFIG.F_DUTY.YEAR]: String(year),
-                        [CONFIG.F_DUTY.MONTH]: String(month),
-                        [CONFIG.F_DUTY.IS_AUTO]: "Yes",
-                        [CONFIG.F_DUTY.NOTE]: floor
+                        [CONFIG.F_LEAVE.EMP]: empName,
+                        [CONFIG.F_LEAVE.DATE]: dateStr,
+                        [CONFIG.F_LEAVE.YEAR]: String(year),
+                        [CONFIG.F_LEAVE.MONTH]: String(month),
+                        [CONFIG.F_LEAVE.TYPE]: "值日",
+                        [CONFIG.F_LEAVE.NOTE]: floor,
+                        [CONFIG.F_LEAVE.IS_AUTO]: "Yes",
+                        [CONFIG.F_LEAVE.DEPT]: "系統預排"
                     });
                     batchMeta.push({ dateStr, empName, floor });
                 }
             }
-            const batchRes = await apiBatchCreate(CONFIG.DUTY_PATH, batchRecords, (cur, tot) => {
+            const batchRes = await apiBatchCreate(CONFIG.LEAVE_PATH, batchRecords, (cur, tot) => {
                 setProgress({ text: "寫入值日紀錄...", current: cur, total: tot });
             });
             const results = batchMeta.map((m, i) => ({ ...m, ragicId: batchRes[i]?.ragicId || "" }));
