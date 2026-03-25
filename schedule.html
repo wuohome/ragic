@@ -504,14 +504,21 @@ const App = () => {
             const lastAssigned = new Set();
             const weeklyAssigned = {}; // weeklyAssigned[name] = Set of week numbers
 
-            // 建立值班表：哪天誰值班（用來讓值班+值日同天）
+            // 建立值班表：從 API 直接讀（不依賴 React state，避免時序問題）
             const zhibanByDate = {};
-            Object.entries(leaves).forEach(([k,v]) => {
-                if (v.type === "值班") {
-                    const [name, date] = k.split("|");
-                    zhibanByDate[date] = name;
-                }
-            });
+            Object.entries(allLeaveForDuty)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([id, f]) => {
+                    const type = f[CONFIG.F_LEAVE.TYPE] || "";
+                    if (type !== "值班") return;
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    const emp = f[CONFIG.F_LEAVE.EMP] || "";
+                    if (!date || !emp) return;
+                    const parts = date.replace(/\//g,"-").split("-");
+                    const y = parseInt(parts[0]), m = parseInt(parts[1]);
+                    if (y === year && m === month) zhibanByDate[date] = emp;
+                });
+            console.log("值班天數:", Object.keys(zhibanByDate).length, "筆");
 
             // 計算週數（週一起算）
             const getWeekNum = (day) => {
