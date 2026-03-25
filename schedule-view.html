@@ -138,13 +138,14 @@ function isRedHoliday(y, m, d) {
   return fmtDate(y, m, d) in PUBLIC_HOLIDAYS_2026;
 }
 
-// Ordering: 韓珊珊=0, 張瓊安=1, 設計部=2, 租賃部=3, 社宅部=4
+// Ordering: 租賃部=0, 管理部=1, 社宅部=2, 設計部=3
 function getOrder(emp) {
-  if (emp.name === '韓珊珊') return 0;
-  if (emp.name === '張瓊安') return 1;
-  if (emp.rawDept === '設計部' || emp.dept === '設計部') return 2;
-  if (emp.rawDept === '社宅部' || emp.dept === '社宅部') return 4;
-  return 3;
+  const dept = emp.rawDept || emp.dept;
+  if (dept === '租賃部') return 0;
+  if (emp.name === '韓珊珊' || emp.name === '張瓊安' || dept?.startsWith('管理部')) return 1;
+  if (dept === '社宅部') return 2;
+  if (dept === '設計部') return 3;
+  return 4;
 }
 
 /* ── API ────────────────────────────────────────────────────── */
@@ -469,7 +470,7 @@ function NameSelect({ emps, onSelect, onBack }) {
               }}>{dept}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                 {members.map(emp => (
-                  <button key={emp.name} onClick={() => onSelect(emp)} style={{
+                  <button key={emp.name} onClick={() => { if (window.confirm(`確認您是「${emp.name}」嗎？`)) onSelect(emp); }} style={{
                     background: '#fff', border: '2px solid ' + dc.border,
                     borderRadius: 10, padding: '12px 22px',
                     cursor: 'pointer', fontSize: 15, fontWeight: 700, color: dc.text,
