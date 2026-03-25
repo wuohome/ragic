@@ -541,7 +541,8 @@ const App = () => {
 
                 // 當天值班的人 → 直接保留一個值日名額（值班+值日同天）
                 const todayZhiban = zhibanByDate[dateStr] || "";
-                const zhibanAvailable = todayZhiban && !onLeaveToday.has(todayZhiban) && !lastAssigned.has(todayZhiban);
+                // 值班的人不受「昨天已排」限制（值班本身已不連續）
+                const zhibanAvailable = todayZhiban && !onLeaveToday.has(todayZhiban);
 
                 // 選人：排除昨天已排 + 休假，按 score 排序
                 // score = 上月次數 + 本週已排過加 5 分（盡量一週一次）
