@@ -71,6 +71,7 @@ const F_L_MONTH = '1000965';
 const F_L_TYPE  = '1002025';
 const F_L_NOTE  = '1000967';
 const F_L_AUTO  = '1000966';
+const F_BIRTHDAY = '3000954';
 
 const DAYS_TW = ['日','一','二','三','四','五','六'];
 
@@ -177,7 +178,8 @@ async function loadEmployees() {
       const rawDept = r[F_DEPT];
       const dept = DEPT_DISPLAY[name] || rawDept;
       const hire = r[F_HIRE] || '';
-      return { id: rid, name, dept, rawDept, hire };
+      const birthday = r[F_BIRTHDAY] || '';
+      return { id: rid, name, dept, rawDept, hire, birthday };
     });
   raw.sort((a, b) => getOrder(a) - getOrder(b));
   return raw;
@@ -689,7 +691,14 @@ function PersonalView({ emp, onBack }) {
             if (canEdit) extraClass += ' clickable';
             if (isSaving) extraClass += ' saving';
 
-            const cellStyle = nrInfo ? { background: '#fff1f2', borderColor: '#fda4af' } : {};
+            // 生日判斷
+            const isBirthday = emp.birthday && emp.birthday.includes('/') && (() => {
+                const bp = emp.birthday.split('/');
+                return parseInt(bp[1]) === month && parseInt(bp[2]) === cell.d;
+            })();
+            const cellStyle = nrInfo ? { background: '#fff1f2', borderColor: '#fda4af' }
+                : isBirthday ? { background: '#fef9c3', borderColor: '#eab308', borderStyle: 'dashed', borderWidth: 2 }
+                : {};
 
             return (
               <div
@@ -697,7 +706,7 @@ function PersonalView({ emp, onBack }) {
                 className={'cal-cell' + extraClass}
                 style={cellStyle}
                 onClick={canEdit && !isSaving ? () => handleCellClick(cell.d) : undefined}
-                title={canEdit ? (nrInfo ? '禁休日' + (nrInfo.reason ? '（' + nrInfo.reason + '）' : '') + ' — 點擊仍可排休' : '點擊切換排休') : undefined}
+                title={isBirthday ? '🎂 生日' : canEdit ? (nrInfo ? '禁休日' + (nrInfo.reason ? '（' + nrInfo.reason + '）' : '') + ' — 點擊仍可排休' : '點擊切換排休') : undefined}
               >
                 <span style={{
                   fontSize: 12, fontWeight: cell.isToday ? 800 : 500,
@@ -714,6 +723,7 @@ function PersonalView({ emp, onBack }) {
                     lineHeight: 1, marginTop: 1,
                   }}>禁休{nrInfo.reason ? ' ' + nrInfo.reason : ''}</span>
                 )}
+                {isBirthday && <span style={{ fontSize: 14, lineHeight: 1 }}>🎂</span>}
                 {isSaving ? (
                   <div style={{ marginTop: 4 }}><Spinner small /></div>
                 ) : (
@@ -1071,11 +1081,18 @@ function TeamView({ emps, onBack }) {
                     </td>
                     {emps.map(emp => {
                       const statuses = getCellStatuses(emp, year, month, day, leaves, duties, noRest);
+                      const isBirthday = emp.birthday && emp.birthday.includes('/') && (() => {
+                          const bp = emp.birthday.split('/');
+                          return parseInt(bp[1]) === month && parseInt(bp[2]) === day;
+                      })();
                       return (
                         <td key={emp.name} style={{
                           borderRight: '1px solid #f1f5f9',
                           padding: '2px 1px', textAlign: 'center', verticalAlign: 'middle',
-                        }}>
+                          ...(isBirthday && statuses.length === 0 ? { background: '#fef9c3', border: '2px dashed #eab308' } : {}),
+                          ...(isBirthday && statuses.length > 0 ? { boxShadow: 'inset 0 0 0 2px #eab308' } : {}),
+                        }} title={isBirthday ? '🎂 ' + emp.name + ' 生日' : undefined}>
+                          {isBirthday && statuses.length === 0 && <span style={{ fontSize: 13 }}>🎂</span>}
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
                             {statuses.map(s => {
                               const cfg = STATUS_CONFIG[s];

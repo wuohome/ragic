@@ -35,7 +35,7 @@ const CONFIG = {
     KEY: "VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==",
     EMP_PATH: "/wuohome/ragicforms4/20004",
     LEAVE_PATH: "/wuohome/ragicforms4/2",
-    F_EMP: { NAME:"3000933", DISPLAY:"1000848", DEPT:"3000937", STATUS:"3000945", HIRE:"3000955", HIRE_DATE:"3000943", FL1:"1002028", FL2:"1002029", FL3:"1002030" },
+    F_EMP: { NAME:"3000933", DISPLAY:"1000848", DEPT:"3000937", STATUS:"3000945", HIRE:"3000955", HIRE_DATE:"3000943", BIRTHDAY:"3000954", FL1:"1002028", FL2:"1002029", FL3:"1002030" },
     F_LEAVE: { EMP:"1000961", DATE:"1000963", YEAR:"1000964", MONTH:"1000965", TYPE:"1002025", DEPT:"1002026", NOTE:"1000967", IS_AUTO:"1000966" }
 };
 
@@ -187,6 +187,7 @@ const App = () => {
                     status: f[CONFIG.F_EMP.STATUS] || "",
                     hire: f[CONFIG.F_EMP.HIRE] || "",
                     hireDate: f[CONFIG.F_EMP.HIRE_DATE] || "9999/12/31",
+                    birthday: f[CONFIG.F_EMP.BIRTHDAY] || "",
                     fc: { "1F": parseInt(f[CONFIG.F_EMP.FL1])||0, "2F": parseInt(f[CONFIG.F_EMP.FL2])||0, "3F": parseInt(f[CONFIG.F_EMP.FL3])||0 }
                 }))
                 .filter(e => e.status === "在職" && e.dept !== "經營階層");
@@ -205,6 +206,7 @@ const App = () => {
                 .map(e => e.name === "韓珊珊" ? {...e, dept: "管理部/秘書"} : e.name === "張瓊安" ? {...e, dept: "管理部/特助"} : e)
                 .sort((a,b) => getDeptOrder(a.dept) - getDeptOrder(b.dept) || a.hireDate.localeCompare(b.hireDate));
             setEmployees(emps);
+            console.log("生日資料:", emps.map(e => e.name + ":" + (e.birthday || "無")).join(", "));
 
             const leaveJson = await apiFetch(CONFIG.LEAVE_PATH);
             const lmap = {};
@@ -920,7 +922,22 @@ const App = () => {
                 else dutyOther++;
             });
         });
-        return { paixiu, texiu, qingjia, zhiban, f1, f2, f3, dutyOther, missed };
+        // 計算見紅休天數（該月的週末+國定假日，扣除禁休日）
+        let govRestDays = 0;
+        if (GOV_REST_EMPLOYEES.has(empName)) {
+            const dim = new Date(year, month, 0).getDate();
+            for (let d = 1; d <= dim; d++) {
+                const mm = String(month).padStart(2,"0");
+                const dd = String(d).padStart(2,"0");
+                const ds = `${year}/${mm}/${dd}`;
+                if (noRest[ds]) continue; // 禁休日不算
+                const dt = new Date(year, month-1, d);
+                const isWk = dt.getDay()===0||dt.getDay()===6;
+                if (isGovHoliday(ds, isWk)) govRestDays++;
+            }
+        }
+        const totalRest = paixiu + texiu + qingjia + govRestDays;
+        return { paixiu, texiu, qingjia, zhiban, f1, f2, f3, dutyOther, missed, govRestDays, totalRest };
     };
 
     const pct = progress && progress.total > 0 ? Math.round(progress.current / progress.total * 100) : null;
@@ -1007,7 +1024,7 @@ const App = () => {
                                 <h3 className="font-bold text-base mb-1">🧹 一鍵預排值日生</h3>
                                 <ul className="list-disc pl-4 space-y-1">
                                     <li><b>資格</b>：全部在職（不含經營階層、兼職）</li>
-                                    <li><b>追債制</b>：上月次數少的人優先排（公平義務）</li>
+                                    <li><b>公平輪轉</b>：上月次數少的人優先排，多的少排</li>
                                     <li><b>新人不追入池前的債</b>：起始次數 = 老員工平均值</li>
                                     <li>每天 3 位，分配 1F / 2F / 3F（難度：1F &gt; 3F &gt; 2F）</li>
                                     <li>盡量一週排一次（本週已排過 +5 分降低優先）</li>
@@ -1016,16 +1033,16 @@ const App = () => {
                                     <li>禁休日全員打掃，不排值日生</li>
                                 </ul>
                                 <div className="mt-3 p-3 bg-blue-50 rounded-lg text-xs text-blue-800">
-                                    <p className="font-bold mb-1">💡 追債怎麼算？（舉例）</p>
+                                    <p className="font-bold mb-1">💡 怎麼決定誰多排？（舉例）</p>
                                     <p>假設上個月大家平均打掃 2 次：</p>
                                     <table className="w-full mt-1 text-xs">
                                         <thead><tr className="text-left"><th className="pr-2">人</th><th className="pr-2">上月實際</th><th className="pr-2">跟平均的差</th><th>本月結果</th></tr></thead>
                                         <tbody>
                                             <tr><td>瓊安</td><td>2 次</td><td>剛好</td><td>排 ~4 次（正常）</td></tr>
-                                            <tr><td>瓊安（如果上月 0 次）</td><td>0 次</td><td>欠 2 次</td><td>排 ~6 次（補 2 次債）</td></tr>
+                                            <tr><td>瓊安（如果上月 0 次）</td><td>0 次</td><td>少 2 次</td><td>排 ~6 次（多排 2 次拉平）</td></tr>
                                         </tbody>
                                     </table>
-                                    <p className="mt-1.5 text-blue-600">系統看的是「你上月實際打掃幾次 vs 大家平均」，不只是未掃的那次。被排比較少的人，下個月也會被多排來拉平。每位員工名字下方的 🧹 數字就是上月打掃次數，可以對照確認。</p>
+                                    <p className="mt-1.5 text-blue-600">大家都是按上月打掃次數排的 — 次數少的這個月多排一點，次數多的少排一點，確保長期下來每個人差不多。每位員工名字下方的 🧹 數字就是上月打掃次數，可以對照確認。</p>
                                 </div>
                             </div>
                             <hr className="border-gray-200" />
@@ -1034,7 +1051,7 @@ const App = () => {
                                 <ul className="list-disc pl-4 space-y-1">
                                     <li>值日生必須一起排（一組佔 2 個名額）</li>
                                     <li>作為一個「家庭單位」跟個人公平競爭</li>
-                                    <li>只有兩人的「合計欠債」比 2 個最該排的個人更高時，才會被排</li>
+                                    <li>只有兩人的「合計次數」比 2 個最該排的個人更少時，才會被排</li>
                                     <li>值班各自獨立，不受夫妻規則影響</li>
                                 </ul>
                             </div>
@@ -1171,11 +1188,20 @@ const App = () => {
                                             const savingKey = mode === "值日" ? `duty|${dateStr}` : key;
                                             const cellSaving = saving[savingKey];
                                             const floorLabel = myDuty ? (myDuty.floor || "值") : "";
+                                            // 生日判斷：比對月/日
+                                            const isBirthday = emp.birthday && emp.birthday.includes("/") && (() => {
+                                                const bp = emp.birthday.split("/");
+                                                return parseInt(bp[1]) === month && parseInt(bp[2]) === day;
+                                            })();
+                                            const birthdayStyle = isBirthday && !leave && !myDuty && !isGovRest
+                                                ? {background:"#fef9c3", border:"2px dashed #eab308"}
+                                                : isBirthday ? {boxShadow:"inset 0 0 0 2px #eab308"} : undefined;
                                             return (
                                                 <td key={key}
                                                     onClick={() => !IS_READONLY && !isGovRest && mode !== "禁休" && handleClick(emp.name, dateStr)}
                                                     className={`emp-cell p-0 text-center transition-colors select-none ${isGovRest ? "cursor-default" : mode === "禁休" ? "cursor-default" : "cursor-pointer hover:bg-gray-100"} ${cellSaving ? "opacity-50" : ""}`}
-                                                    style={nrInfo && !leave && !myDuty && !isGovRest ? {background:"#fff1f2"} : undefined}>
+                                                    style={{...(nrInfo && !leave && !myDuty && !isGovRest ? {background:"#fff1f2"} : undefined), ...birthdayStyle}}
+                                                    title={isBirthday ? `🎂 ${emp.name} 生日` : undefined}>
                                                     {cellSaving ? (
                                                         <span className="cell-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full"></span>
                                                     ) : isGovRest ? (
@@ -1192,6 +1218,8 @@ const App = () => {
                                                         <span className="inline-block w-full leading-[32px] text-[10px] font-bold" style={{background:"#fff1f2", color:"#be123c", border:"2px dashed #f87171"}}>{floorLabel}未掃</span>
                                                     ) : myDuty ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background: FLOOR_COLORS[myDuty.floor] || "#3b82f6"}}>{floorLabel}</span>
+                                                    ) : isBirthday ? (
+                                                        <span className="inline-block w-full leading-[32px] text-sm">🎂</span>
                                                     ) : null}
                                                 </td>
                                             );
@@ -1207,6 +1235,12 @@ const App = () => {
                                     const s = getStats(emp.name);
                                     return (
                                         <td key={emp.name} className="emp-cell p-1 text-center text-xs">
+                                            {(() => {
+                                                const restShort = 8 - s.totalRest;
+                                                return restShort > 0
+                                                    ? <span className="text-red-500 font-bold" title={`總休 ${s.totalRest} 天（排休${s.paixiu}+特休${s.texiu}+請假${s.qingjia}${s.govRestDays > 0 ? "+見紅休" + s.govRestDays : ""}），還差 ${restShort} 天`}>少休{restShort}天 </span>
+                                                    : null;
+                                            })()}
                                             {s.paixiu > 0 && <span className="text-green-600">{s.paixiu}休</span>}
                                             {s.texiu > 0 && <span className="text-yellow-600"> {s.texiu}特</span>}
                                             {s.qingjia > 0 && <span className="text-red-600"> {s.qingjia}假</span>}
