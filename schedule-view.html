@@ -164,6 +164,9 @@ async function loadLeaves(year, month) {
   const map = {};
   for (const [rid, r] of Object.entries(data)) {
     if (!r || typeof r !== 'object' || !r[SC.F_LEAVE.DATE]) continue;
+    // 驗證 DATE 的月份與查詢月份一致（Ragic MONTH 欄位可能與 DATE 不同步）
+    const dateParts = r[SC.F_LEAVE.DATE].split('/');
+    if (dateParts.length >= 2 && parseInt(dateParts[1]) !== month) continue;
     const type = r[SC.F_LEAVE.TYPE] || '';
     if (type === '值日' || type === '禁休') continue; // 這兩種由 loadDutiesAndNoRest 處理
     const key = r[SC.F_LEAVE.EMP] + '__' + r[SC.F_LEAVE.DATE];
@@ -184,6 +187,9 @@ async function loadDutiesAndNoRest(year, month) {
   const noRest = {};
   for (const [rid, r] of Object.entries(data)) {
     if (!r || typeof r !== 'object' || !r[SC.F_LEAVE.DATE]) continue;
+    // 驗證 DATE 的月份與查詢月份一致
+    const dateParts = r[SC.F_LEAVE.DATE].split('/');
+    if (dateParts.length >= 2 && parseInt(dateParts[1]) !== month) continue;
     const type = r[SC.F_LEAVE.TYPE] || '';
     if (type === '值日') {
       const empName = r[SC.F_LEAVE.EMP];
