@@ -197,7 +197,8 @@ async function loadDutiesAndNoRest(year, month) {
       const key = empName + '__' + date;
       const note = r[SC.F_LEAVE.NOTE] || '';
       const floor = /^(1F|2F|3F)$/.test(note) ? note : '';
-      duties[key] = { ragicId: rid, empName, date, floor };
+      if (!duties[key]) duties[key] = [];
+      duties[key].push({ ragicId: rid, empName, date, floor });
     } else if (type === '禁休') {
       const date = r[SC.F_LEAVE.DATE];
       const reason = r[SC.F_LEAVE.NOTE] || '';
@@ -275,8 +276,11 @@ function getCellStatuses(emp, y, m, d, leaves, duties, noRest) {
   const date = fmtDate(y, m, d);
   const result = [];
   // 值日（有樓層顯示樓層，無樓層顯示「值」）
-  const dutyRec = duties[emp.name + '__' + date];
-  if (dutyRec) result.push(dutyRec.floor || '值日');
+  const dutyRecs = duties[emp.name + '__' + date] || [];
+  for (const dutyRec of dutyRecs) {
+    const label = dutyRec.floor || '值日';
+    if (!result.includes(label)) result.push(label);
+  }
   // Leave types from leave records
   const recs = leaves[emp.name + '__' + date] || [];
   for (const r of recs) {
@@ -842,11 +846,13 @@ function TeamView({ emps, onBack }) {
       }
     }
     // Count duties per floor
-    for (const [key, rec] of Object.entries(duties)) {
+    for (const [key, recs] of Object.entries(duties)) {
       const empName = key.split('__')[0];
       if (!s[empName]) continue;
-      const floorKey = rec.floor || '值日';
-      s[empName][floorKey] = (s[empName][floorKey] || 0) + 1;
+      for (const rec of recs) {
+        const floorKey = rec.floor || '值日';
+        s[empName][floorKey] = (s[empName][floorKey] || 0) + 1;
+      }
     }
     // Count 見紅休 days for qualified employees (exclude 禁休 days)
     const totalDays = daysInMonth(year, month);
