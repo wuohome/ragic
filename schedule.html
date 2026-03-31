@@ -24,6 +24,13 @@
         tbody td { height: 32px; }
         .emp-cell { min-width: 48px; box-sizing: border-box; }
         .sticky-left { position: sticky; left: 0; z-index: 2; }
+        /* 十字準星高亮 */
+        tbody tr:hover { background: rgba(59,130,246,0.06) !important; }
+        tbody tr:hover td { background: inherit; }
+        tbody tr:hover td.sticky-left { background: #eef2ff !important; }
+        table { position: relative; }
+        .emp-col-highlight { position: relative; }
+        td.col-hover, th.col-hover { background: rgba(59,130,246,0.06) !important; }
     </style>
 </head>
 <body>
@@ -110,6 +117,31 @@ const App = () => {
     const [progress, setProgress] = React.useState(null); // { text, current, total }
     const [mode, setMode] = React.useState("排休");
     const [noRest, setNoRest] = React.useState({}); // { dateStr: { ragicId, reason } }
+    const tableRef = React.useRef(null);
+    const hoverStyleRef = React.useRef(null);
+    React.useEffect(() => {
+        const style = document.createElement("style");
+        document.head.appendChild(style);
+        hoverStyleRef.current = style;
+        return () => style.remove();
+    }, []);
+    const handleTableHover = React.useCallback((e) => {
+        const td = e.target.closest("td, th");
+        if (!td || !tableRef.current) return;
+        const ci = td.cellIndex;
+        const isHeader = td.tagName === "TH";
+        // 表頭第二行沒有日期欄（rowSpan=2），所以 emp[0] 的 cellIndex=0
+        // body 行有日期欄，emp[0] 的 cellIndex=1
+        const empIdx = isHeader ? ci : ci - 1; // 0-based 員工索引
+        if (empIdx < 0) { hoverStyleRef.current.textContent = ""; return; }
+        const bodyNth = empIdx + 2; // body td: nth-child 1-based + 日期欄
+        const headerNth = empIdx + 1; // 表頭 th: nth-child 1-based, 無日期欄
+        hoverStyleRef.current.textContent =
+            `table.sched-table tbody td:nth-child(${bodyNth}), table.sched-table thead tr:last-child th:nth-child(${headerNth}) { background-color: rgba(59,130,246,0.06) !important; }`;
+    }, []);
+    const handleTableLeave = React.useCallback(() => {
+        if (hoverStyleRef.current) hoverStyleRef.current.textContent = "";
+    }, []);
 
     const handleUnlock = () => {
         if (pwInput === EDIT_PASSWORD) {
@@ -1148,7 +1180,7 @@ const App = () => {
                 </div>
             ) : (
                 <div className="overflow-x-auto bg-white rounded-xl shadow-sm">
-                    <table className="w-full text-sm" style={{tableLayout:"fixed"}}>
+                    <table ref={tableRef} className="w-full text-sm sched-table" style={{tableLayout:"fixed"}} onMouseMove={handleTableHover} onMouseLeave={handleTableLeave}>
                         <thead>
                             <tr>
                                 <th className="sticky-left bg-white p-2" style={{width:"60px"}} rowSpan={2}>

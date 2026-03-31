@@ -18,6 +18,9 @@
     .sched-table td.col-date,
     .sched-table th.col-date { position: sticky; left: 0; z-index: 10; }
     .sched-table thead th.col-date { z-index: 30; }
+    /* 十字準星高亮 */
+    .sched-table tbody tr:hover { background: rgba(59,130,246,0.06) !important; }
+    .sched-table tbody tr:hover td.col-date { background: #eef2ff !important; }
     .cal-grid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
@@ -808,6 +811,26 @@ function TeamView({ emps, onBack }) {
   const [err,     setErr]     = React.useState(null);
   const [prevStatsData, setPrevStatsData] = React.useState({});
   const [showRules, setShowRules] = React.useState(false);
+  const hoverStyleRef = React.useRef(null);
+  React.useEffect(() => {
+    const style = document.createElement("style");
+    document.head.appendChild(style);
+    hoverStyleRef.current = style;
+    return () => style.remove();
+  }, []);
+  const handleTableHover = React.useCallback((e) => {
+    const td = e.target.closest("td, th");
+    if (!td) return;
+    const ci = td.cellIndex;
+    // schedule-view 的表頭第二行有日期欄，所以 th/td 的 cellIndex 一致
+    if (ci <= 0) { hoverStyleRef.current.textContent = ""; return; }
+    const nth = ci + 1; // nth-child 1-based
+    hoverStyleRef.current.textContent =
+      `table.sched-table tbody td:nth-child(${nth}), table.sched-table thead tr:last-child th:nth-child(${nth}) { background-color: rgba(59,130,246,0.06) !important; }`;
+  }, []);
+  const handleTableLeave = React.useCallback(() => {
+    if (hoverStyleRef.current) hoverStyleRef.current.textContent = "";
+  }, []);
 
   React.useEffect(() => {
     setLoading(true);
@@ -981,7 +1004,8 @@ function TeamView({ emps, onBack }) {
           </div>
         ) : (
           <table className="sched-table"
-            style={{ tableLayout: 'fixed', width: '100%', fontSize: 12 }}>
+            style={{ tableLayout: 'fixed', width: '100%', fontSize: 12 }}
+            onMouseMove={handleTableHover} onMouseLeave={handleTableLeave}>
             <thead>
               {/* Department header row */}
               <tr style={{ background: '#f1f5f9', borderBottom: '1px solid #cbd5e1' }}>
