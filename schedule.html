@@ -277,34 +277,94 @@ const App = () => {
             const dutyKey = `duty|${dateStr}`;
             if (saving[dutyKey]) return;
             const current = duties[dateStr] || [];
-            const myDuty = current.find(d => d.empName === empName);
+            const myDuties = current.filter(d => d.empName === empName);
 
             const empObj = allEmployees.find(e => e.name === empName);
             setSaving(s => ({...s, [dutyKey]: true}));
             try {
-                if (myDuty) {
-                    if (myDuty.missed) {
+                if (myDuties.length > 0) {
+                    // 同人多層：檢查是否還有空樓層可加
+                    const myFloors = myDuties.map(d => d.floor);
+                    const usedFloors = current.map(d => d.floor);
+                    const canAddFloor = FLOORS.filter(f => !usedFloors.includes(f) && !myFloors.includes(f));
+                    if (canAddFloor.length > 0 && !myDuties.some(d => d.missed)) {
+                        // 還有空樓層且沒有未掃狀態 → 問要加層還是標未掃
+                        const action = prompt(`${empName} 已排 ${myFloors.join("+")}，要？\n1) 加排 ${canAddFloor[0]}\n2) 標記 ${myFloors[myFloors.length-1]} 未掃\n3) 清除 ${myFloors[myFloors.length-1]}\n\n輸入 1/2/3`);
+                        if (action === "1") {
+                            // 加排新樓層
+                            const floor = canAddFloor.sort((a, b) => (empObj?.fc[a]||0) - (empObj?.fc[b]||0))[0];
+                            const params = new URLSearchParams();
+                            params.append(CONFIG.F_LEAVE.EMP, empName);
+                            params.append(CONFIG.F_LEAVE.DATE, dateStr);
+                            params.append(CONFIG.F_LEAVE.YEAR, String(year));
+                            params.append(CONFIG.F_LEAVE.MONTH, String(month));
+                            params.append(CONFIG.F_LEAVE.TYPE, "值日");
+                            params.append(CONFIG.F_LEAVE.NOTE, floor);
+                            params.append(CONFIG.F_LEAVE.IS_AUTO, "No");
+                            params.append(CONFIG.F_LEAVE.DEPT, "手動變更");
+                            const res = await SC.apiFetch(CONFIG.LEAVE_PATH, {
+                                method: "POST",
+                                headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                                body: params.toString()
+                            });
+                            if (floor && empObj) {
+                                const newCount = (empObj.fc[floor] || 0) + 1;
+                                const flField = floor === "1F" ? CONFIG.F_EMP.FL1 : floor === "2F" ? CONFIG.F_EMP.FL2 : CONFIG.F_EMP.FL3;
+                                await SC.apiFetch(`${CONFIG.EMP_PATH}/${empObj.ragicId}`, {
+                                    method: "POST",
+                                    headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                                    body: new URLSearchParams({ [flField]: String(newCount) }).toString()
+                                });
+                                empObj.fc[floor] = newCount;
+                            }
+                            setDuties(d => ({...d, [dateStr]: [...(d[dateStr]||[]), {ragicId: String(res.ragicId), empName, isAuto: "No", note: floor, floor}]}));
+                            showToast(`${dateStr} ${empName} 加排 ${floor}`);
+                            setSaving(s => { const n = {...s}; delete n[dutyKey]; return n; });
+                            return;
+                        } else if (action === "3") {
+                            // 清除最後一層
+                            const lastDuty = myDuties[myDuties.length - 1];
+                            await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${lastDuty.ragicId}`, { method: "DELETE" });
+                            if (lastDuty.floor && empObj) {
+                                const flField = lastDuty.floor === "1F" ? CONFIG.F_EMP.FL1 : lastDuty.floor === "2F" ? CONFIG.F_EMP.FL2 : CONFIG.F_EMP.FL3;
+                                await SC.apiFetch(`${CONFIG.EMP_PATH}/${empObj.ragicId}`, {
+                                    method: "POST",
+                                    headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                                    body: new URLSearchParams({ [flField]: String(Math.max(0, (empObj.fc[lastDuty.floor]||0) - 1)) }).toString()
+                                });
+                                empObj.fc[lastDuty.floor] = Math.max(0, (empObj.fc[lastDuty.floor]||0) - 1);
+                            }
+                            setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => x.ragicId !== lastDuty.ragicId)}));
+                            showToast(`${empName} ${dateStr} ${lastDuty.floor || "值日"}已清除`);
+                            setSaving(s => { const n = {...s}; delete n[dutyKey]; return n; });
+                            return;
+                        }
+                        // action === "2" 或其他 → 繼續走標未掃
+                    }
+                    // 標記未掃 / 清除（原邏輯，針對最後一筆操作）
+                    const lastDuty = myDuties[myDuties.length - 1];
+                    if (lastDuty.missed) {
                         // 未掃 → 再點 = 清除
-                        await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${myDuty.ragicId}`, { method: "DELETE" });
-                        if (myDuty.floor && empObj) {
-                            const flField = myDuty.floor === "1F" ? CONFIG.F_EMP.FL1 : myDuty.floor === "2F" ? CONFIG.F_EMP.FL2 : CONFIG.F_EMP.FL3;
+                        await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${lastDuty.ragicId}`, { method: "DELETE" });
+                        if (lastDuty.floor && empObj) {
+                            const flField = lastDuty.floor === "1F" ? CONFIG.F_EMP.FL1 : lastDuty.floor === "2F" ? CONFIG.F_EMP.FL2 : CONFIG.F_EMP.FL3;
                             await SC.apiFetch(`${CONFIG.EMP_PATH}/${empObj.ragicId}`, {
                                 method: "POST",
                                 headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                                body: new URLSearchParams({ [flField]: String(Math.max(0, (empObj.fc[myDuty.floor]||0) - 1)) }).toString()
+                                body: new URLSearchParams({ [flField]: String(Math.max(0, (empObj.fc[lastDuty.floor]||0) - 1)) }).toString()
                             });
-                            empObj.fc[myDuty.floor] = Math.max(0, (empObj.fc[myDuty.floor]||0) - 1);
+                            empObj.fc[lastDuty.floor] = Math.max(0, (empObj.fc[lastDuty.floor]||0) - 1);
                         }
-                        setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => x.ragicId !== myDuty.ragicId)}));
-                        showToast(`${empName} ${dateStr} ${myDuty.floor || "值日"}已清除`);
+                        setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => x.ragicId !== lastDuty.ragicId)}));
+                        showToast(`${empName} ${dateStr} ${lastDuty.floor || "值日"}已清除`);
                     } else {
                         // 正常 → 標記未掃
-                        await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${myDuty.ragicId}`, {
+                        await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${lastDuty.ragicId}`, {
                             method: "POST",
                             headers: {"Content-Type":"application/x-www-form-urlencoded"},
                             body: new URLSearchParams({ [CONFIG.F_LEAVE.IS_AUTO]: "未掃" }).toString()
                         });
-                        setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).map(x => x.ragicId === myDuty.ragicId ? {...x, missed: true} : x)}));
+                        setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).map(x => x.ragicId === lastDuty.ragicId ? {...x, missed: true} : x)}));
                         showToast(`${empName} ${dateStr} 標記未掃 ❌`);
                     }
                 } else {
@@ -1156,12 +1216,25 @@ const App = () => {
                                         {employees.map(emp => {
                                             const key = `${emp.name}|${dateStr}`;
                                             const leave = leaves[key];
-                                            const myDuty = dutyList.find(d => d.empName === emp.name);
+                                            const myDuties = dutyList.filter(d => d.empName === emp.name);
+                                            const myDuty = myDuties[0] || null;
+                                            const hasMultiFloor = myDuties.length > 1;
                                             // 禁休日覆蓋見紅休（設計部+瓊安也要上班）
                                             const isGovRest = !nrInfo && GOV_REST_EMPLOYEES.has(emp.name) && isGovHoliday(dateStr, isWeekend);
                                             const savingKey = mode === "值日" ? `duty|${dateStr}` : key;
                                             const cellSaving = saving[savingKey];
-                                            const floorLabel = myDuty ? (myDuty.floor || "值") : "";
+                                            const floorLabel = hasMultiFloor
+                                                ? myDuties.map(d => d.floor || "值").join("+")
+                                                : myDuty ? (myDuty.floor || "值") : "";
+                                            // 多層漸層背景
+                                            const multiFloorBg = hasMultiFloor
+                                                ? "linear-gradient(135deg, " + myDuties.map((d, i) => {
+                                                    const c = FLOOR_COLORS[d.floor] || "#3b82f6";
+                                                    const pct1 = Math.round(i / myDuties.length * 100);
+                                                    const pct2 = Math.round((i + 1) / myDuties.length * 100);
+                                                    return c + " " + pct1 + "%, " + c + " " + pct2 + "%";
+                                                  }).join(", ") + ")"
+                                                : null;
                                             // 生日判斷：比對月/日
                                             const isBirthday = SC.isBirthday(emp, month, day);
                                             const birthdayStyle = isBirthday
@@ -1172,23 +1245,23 @@ const App = () => {
                                                     onClick={() => !IS_READONLY && !isGovRest && mode !== "禁休" && handleClick(emp.name, dateStr)}
                                                     className={`emp-cell p-0 text-center transition-colors select-none ${isGovRest ? "cursor-default" : mode === "禁休" ? "cursor-default" : "cursor-pointer hover:bg-gray-100"} ${cellSaving ? "opacity-50" : ""}`}
                                                     style={{...(nrInfo && !leave && !myDuty && !isGovRest ? {background:"#fff1f2"} : undefined), ...birthdayStyle}}
-                                                    title={isBirthday ? `🎂 ${emp.name} 生日` : undefined}>
+                                                    title={isBirthday ? `🎂 ${emp.name} 生日` : hasMultiFloor ? `${emp.name} 值日：${floorLabel}` : undefined}>
                                                     {cellSaving ? (
                                                         <span className="cell-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full"></span>
                                                     ) : isGovRest ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-gray-400 bg-gray-100">休</span>
                                                     ) : leave && myDuty ? (
-                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background:"linear-gradient(135deg, " + (leave.type === "排休" ? "#22c55e" : leave.type === "特休" ? "#eab308" : leave.type === "值班" ? "#f97316" : "#dc2626") + " 50%, " + (FLOOR_COLORS[myDuty.floor] || "#3b82f6") + " 50%)"}}>
+                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background:"linear-gradient(135deg, " + (leave.type === "排休" ? "#22c55e" : leave.type === "特休" ? "#eab308" : leave.type === "值班" ? "#f97316" : "#dc2626") + " 50%, " + (hasMultiFloor ? (FLOOR_COLORS[myDuties[0].floor] || "#3b82f6") : (FLOOR_COLORS[myDuty.floor] || "#3b82f6")) + " 50%)"}}>
                                                             {leave.type === "排休" ? "排休" : leave.type === "特休" ? "特休" : leave.type === "值班" ? "值班" : "請假"}{floorLabel}
                                                         </span>
                                                     ) : leave ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background: leave.type === "排休" ? "#22c55e" : leave.type === "特休" ? "#eab308" : leave.type === "值班" ? "#f97316" : "#dc2626"}}>
                                                             {leave.type === "排休" ? "排休" : leave.type === "特休" ? "特休" : leave.type === "值班" ? "值班" : "請假"}
                                                         </span>
-                                                    ) : myDuty && myDuty.missed ? (
+                                                    ) : myDuties.some(d => d.missed) ? (
                                                         <span className="inline-block w-full leading-[32px] text-[10px] font-bold" style={{background:"#fff1f2", color:"#be123c", border:"2px dashed #f87171"}}>{floorLabel}未掃</span>
                                                     ) : myDuty ? (
-                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background: FLOOR_COLORS[myDuty.floor] || "#3b82f6"}}>{floorLabel}</span>
+                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background: hasMultiFloor ? multiFloorBg : (FLOOR_COLORS[myDuty.floor] || "#3b82f6")}}>{floorLabel}</span>
                                                     ) : isBirthday ? (
                                                         <span className="inline-block w-full leading-[32px] text-sm">🎂</span>
                                                     ) : null}
