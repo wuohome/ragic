@@ -25,12 +25,12 @@
         .emp-cell { min-width: 48px; box-sizing: border-box; }
         .sticky-left { position: sticky; left: 0; z-index: 2; }
         /* 十字準星高亮 */
-        tbody tr:hover { background: rgba(59,130,246,0.06) !important; }
+        tbody tr:hover { background: rgba(250,204,21,0.15) !important; }
         tbody tr:hover td { background: inherit; }
-        tbody tr:hover td.sticky-left { background: #eef2ff !important; }
+        tbody tr:hover td.sticky-left { background: #fefce8 !important; }
         table { position: relative; }
         .emp-col-highlight { position: relative; }
-        td.col-hover, th.col-hover { background: rgba(59,130,246,0.06) !important; }
+        td.col-hover, th.col-hover { background: rgba(250,204,21,0.15) !important; }
     </style>
 </head>
 <body>
@@ -137,7 +137,7 @@ const App = () => {
         const bodyNth = empIdx + 2; // body td: nth-child 1-based + 日期欄
         const headerNth = empIdx + 1; // 表頭 th: nth-child 1-based, 無日期欄
         hoverStyleRef.current.textContent =
-            `table.sched-table tbody td:nth-child(${bodyNth}), table.sched-table thead tr:last-child th:nth-child(${headerNth}) { background-color: rgba(59,130,246,0.06) !important; }`;
+            `table.sched-table tbody td:nth-child(${bodyNth}), table.sched-table thead tr:last-child th:nth-child(${headerNth}) { background-color: rgba(250,204,21,0.15) !important; }`;
     }, []);
     const handleTableLeave = React.useCallback(() => {
         if (hoverStyleRef.current) hoverStyleRef.current.textContent = "";
