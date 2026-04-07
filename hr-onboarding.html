@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#0f172a" />
+<title>窩的家 — 人事資料表單</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { sans: ['"Noto Sans TC"','-apple-system','system-ui','sans-serif'] },
+      colors: {
+        brand: { 50:'#f0fdf4',100:'#dcfce7',500:'#10b981',600:'#059669',700:'#047857',900:'#064e3b' },
+        ink: { 900:'#0f172a',700:'#334155',500:'#64748b',400:'#94a3b8',200:'#e2e8f0',100:'#f1f5f9',50:'#f8fafc' }
+      },
+      boxShadow: {
+        card: '0 1px 2px rgba(15,23,42,.04), 0 4px 16px rgba(15,23,42,.06)',
+        focus: '0 0 0 4px rgba(16,185,129,.18)'
+      }
+    }
+  }
+}
+</script>
+<style>
+  html,body{ background:#f8fafc; color:#0f172a; -webkit-tap-highlight-color: transparent; }
+  body{ font-feature-settings:"palt"; }
+  input,select,textarea{ font: inherit; }
+  /* Large native inputs */
+  .field { @apply w-full rounded-xl border border-ink-200 bg-white px-4 py-3.5 text-base text-ink-900 placeholder:text-ink-400 outline-none transition; min-height: 52px; }
+  .field:focus { @apply border-brand-500 shadow-focus; }
+  .field[aria-invalid="true"] { @apply border-rose-400; }
+  .label { @apply block text-sm font-medium text-ink-700 mb-1.5; }
+  .hint  { @apply mt-1 text-xs text-ink-500; }
+  .err   { @apply mt-1 text-xs text-rose-600 hidden; }
+  .field[aria-invalid="true"] + .err { @apply block; }
+  .req::after{ content:" *"; color:#e11d48; }
+  .chip { @apply inline-flex items-center justify-center rounded-full border border-ink-200 bg-white px-4 py-2 text-sm text-ink-700; min-height: 40px; }
+  .chip[aria-pressed="true"] { @apply border-brand-500 bg-brand-50 text-brand-700 font-medium; }
+  .btn-primary { @apply w-full rounded-xl bg-brand-600 px-5 py-4 text-base font-semibold text-white shadow-card transition active:scale-[.98] disabled:opacity-50; min-height: 56px; }
+  .btn-ghost   { @apply w-full rounded-xl bg-ink-100 px-5 py-4 text-base font-medium text-ink-700 active:scale-[.98]; min-height: 56px; }
+  .card { @apply rounded-2xl bg-white shadow-card border border-ink-100; }
+  .step-card { @apply card p-5 sm:p-6; }
+  .row { @apply space-y-4; }
+  .grid2 { @apply grid grid-cols-1 sm:grid-cols-2 gap-4; }
+  /* Photo dropzone */
+  .photo-zone { @apply relative flex items-center justify-center rounded-2xl border-2 border-dashed border-ink-200 bg-ink-50 text-ink-500; min-height: 180px; }
+  .photo-zone img { @apply absolute inset-0 h-full w-full rounded-2xl object-cover; }
+  /* Progress */
+  .progress-bar { @apply h-1.5 w-full overflow-hidden rounded-full bg-ink-200; }
+  .progress-fill { @apply h-full bg-brand-500 transition-all duration-300; }
+  /* Subtable card */
+  .subcard { @apply rounded-xl border border-ink-200 bg-ink-50 p-4 space-y-3; }
+  /* Hide steps */
+  .step { display:none; }
+  .step.active { display:block; animation: fade .25s ease; }
+  @keyframes fade { from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:none;} }
+  /* Sticky bottom */
+  .nav-bar { backdrop-filter: blur(10px); background: rgba(248,250,252,.92); }
+  /* Searchable bank dropdown */
+  .combo-list { @apply absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-xl border border-ink-200 bg-white shadow-card; }
+  .combo-item { @apply cursor-pointer px-4 py-3 text-base hover:bg-brand-50; }
+  .combo-item[aria-selected="true"]{ @apply bg-brand-50 text-brand-700 font-medium; }
+  /* Safe area */
+  .pb-safe { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
+</style>
+</head>
+<body class="min-h-screen">
+
+<header class="sticky top-0 z-20 nav-bar border-b border-ink-100">
+  <div class="mx-auto max-w-xl px-4 py-3">
+    <div class="flex items-center justify-between mb-2">
+      <div>
+        <div class="text-[11px] uppercase tracking-wider text-ink-500">窩的家集團</div>
+        <div class="text-base font-semibold text-ink-900">新進人員資料表</div>
+      </div>
+      <div class="text-xs text-ink-500"><span id="stepNum">1</span> / 8</div>
+    </div>
+    <div class="progress-bar"><div id="progressFill" class="progress-fill" style="width:12.5%"></div></div>
+  </div>
+</header>
+
+<main class="mx-auto max-w-xl px-4 py-5 pb-44">
+  <form id="form" novalidate autocomplete="on">
+
+  <!-- STEP 1: 基本資料 -->
+  <section class="step active" data-step="1">
+    <div class="mb-4">
+      <h2 class="text-xl font-bold text-ink-900">基本資料</h2>
+      <p class="mt-1 text-sm text-ink-500">先從你的個人資訊開始，之後的步驟會更快。</p>
+    </div>
+
+    <div class="step-card row">
+      <div>
+        <label class="label req" for="f_name">姓名</label>
+        <input class="field" id="f_name" name="姓名" required autocomplete="name" placeholder="請輸入身分證上的姓名"/>
+        <div class="err">請輸入姓名</div>
+      </div>
+
+      <div>
+        <label class="label" for="f_eng">英文名稱</label>
+        <input class="field" id="f_eng" name="英文名稱" autocomplete="name" placeholder="護照英文姓名（選填）"/>
+      </div>
+
+      <div>
+        <label class="label req" for="f_id">身分證字號</label>
+        <input class="field" id="f_id" name="身分證字號" required inputmode="text" maxlength="10" placeholder="A123456789"
+               style="text-transform:uppercase"/>
+        <div class="err">身分證字號格式錯誤</div>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <label class="label req" for="f_birth">出生日期</label>
+          <input class="field" id="f_birth" name="出生日期" type="date" required/>
+          <div class="err">請選擇出生日期</div>
+        </div>
+        <div>
+          <label class="label req">性別</label>
+          <div class="flex gap-2" id="g_sex" role="group">
+            <button type="button" class="chip flex-1" data-name="性別" data-value="男">男</button>
+            <button type="button" class="chip flex-1" data-name="性別" data-value="女">女</button>
+            <button type="button" class="chip flex-1" data-name="性別" data-value="其他">其他</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <label class="label">婚姻狀態</label>
+          <div class="flex gap-2" role="group">
+            <button type="button" class="chip flex-1" data-name="婚姻狀態" data-value="未婚">未婚</button>
+            <button type="button" class="chip flex-1" data-name="婚姻狀態" data-value="已婚">已婚</button>
+          </div>
+        </div>
+        <div>
+          <label class="label" for="f_edu">最高教育程度</label>
+          <select class="field" id="f_edu" name="最高教育程度">
+            <option value="">請選擇</option>
+            <option>博士</option><option>碩士</option><option>大學</option>
+            <option>四技</option><option>二專</option><option>三專</option><option>五專</option>
+            <option>高中</option><option>高職</option><option>國中</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="label">大頭照</label>
+        <label class="photo-zone block cursor-pointer" id="photoZone">
+          <input type="file" id="f_photo" name="照片" accept="image/*" capture="user" class="sr-only"/>
+          <div id="photoHint" class="text-center px-4">
+            <div class="text-3xl">📷</div>
+            <div class="mt-1 text-sm">點擊拍照或上傳</div>
+            <div class="text-xs text-ink-400">建議正面、清晰、無遮擋</div>
+          </div>
+          <img id="photoPreview" alt="" hidden/>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 2: 聯絡方式 -->
+  <section class="step" data-step="2">
+    <div class="mb-4">
+      <h2 class="text-xl font-bold text-ink-900">聯絡方式</h2>
+      <p class="mt-1 text-sm text-ink-500">方便 HR 與直屬主管聯繫你。</p>
+    </div>
+    <div class="step-card row">
+      <div>
+        <label class="label req" for="f_mobile">主要手機號碼</label>
+        <input class="field" id="f_mobile" name="主要手機號碼" type="tel" inputmode="tel" required autocomplete="tel" placeholder="0912345678"/>
+        <div class="err">請輸入正確的手機號碼</div>
+      </div>
+      <div>
+        <label class="label" for="f_mobile2">次要手機號碼</label>
+        <input class="field" id="f_mobile2" name="次要手機號碼" type="tel" inputmode="tel" placeholder="選填"/>
+      </div>
+      <div>
+        <label class="label req" for="f_email">Email</label>
+        <input class="field" id="f_email" name="Email" type="email" inputmode="email" required autocomplete="email" placeholder="you@example.com"/>
+        <div class="err">Email 格式錯誤</div>
+      </div>
+      <div>
+        <label class="label" for="f_lineid">LINE ID</label>
+        <input class="field" id="f_lineid" name="LINE ID" placeholder="選填"/>
+      </div>
+      <div>
+        <label class="label req" for="f_addr1">通訊地址</label>
+        <input class="field" id="f_addr1" name="通訊地址" required autocomplete="street-address" placeholder="實際居住地址"/>
+        <div class="err">請輸入通訊地址</div>
+      </div>
+      <div>
+        <label class="label req" for="f_addr2">戶籍地址</label>
+        <input class="field" id="f_addr2" name="戶籍地址" required placeholder="身分證上的地址"/>
+        <button type="button" id="copyAddr" class="mt-2 text-sm text-brand-700 underline underline-offset-2">↺ 同通訊地址</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 3: 銀行帳戶 -->
+  <section class="step" data-step="3">
+    <div class="mb-4">
+      <h2 class="text-xl font-bold text-ink-900">薪轉帳戶</h2>
+      <p class="mt-1 text-sm text-ink-500">薪資將匯入這個帳戶。請與存摺資訊一致。</p>
+    </div>
+    <div class="step-card row">
+      <div class="relative">
+        <label class="label req" for="f_bank">銀行</label>
+        <input class="field" id="f_bank" name="銀行" required readonly placeholder="點擊選擇銀行" />
+        <input type="hidden" id="f_bank_value" />
+        <div id="bankList" class="combo-list hidden"></div>
+        <div class="err">請選擇銀行</div>
+      </div>
+      <div class="grid2">
+        <div>
+          <label class="label" for="f_branch">分行</label>
+          <input class="field" id="f_branch" name="分行" placeholder="例：信義分行"/>
+        </div>
+        <div>
+          <label class="label req" for="f_acct">銀行帳號</label>
+          <input class="field" id="f_acct" name="銀行帳號" required inputmode="numeric" pattern="[0-9-]+" placeholder="僅輸入數字"/>
+          <div class="err">請輸入帳號</div>
+        </div>
+      </div>
+      <div>
+        <label class="label">存摺照片</label>
+        <label class="photo-zone block cursor-pointer">
+          <input type="file" id="f_passbook" name="存摺上傳" accept="image/*" capture="environment" class="sr-only"/>
+          <div id="passbookHint" class="text-center px-4">
+            <div class="text-3xl">🏦</div>
+            <div class="mt-1 text-sm">拍攝存摺封面（顯示帳號的那頁）</div>
+          </div>
+          <img id="passbookPreview" alt="" hidden/>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 4: 學歷 -->
+  <section class="step" data-step="4">
+    <div class="mb-4">
+      <h2 class="text-xl font-bold text-ink-900">學歷</h2>
+      <p class="mt-1 text-sm text-ink-500">由近到遠填寫。可以新增多筆。</p>
+    </div>
+    <div id="eduList" class="space-y-3"></div>
+    <button type="button" class="mt-3 btn-ghost" data-add="edu">＋ 新增學歷</button>
+  </section>
+
+  <!-- STEP 5: 工作經歷 -->
+  <section class="step" data-step="5">
+    <div class="mb-4">
+      <h2 class="text-xl font-bold text-ink-900">工作經歷</h2>
+      <p class="mt-1 text-sm text-ink-500">列出最近 3 段工作經歷即可。</p>
+    </div>
+    <div id="workList" class="space-y-3"></div>
+    <button type="button" class="mt-3 btn-ghost" data-add="work">＋ 新增工作經歷</button>
+  </section>
+
+  <!-- STEP 6: 緊急聯絡人 -->
+  <section class="step" data-step="6">
+    <div class="mb-4">
+      <h2 class="text-xl font-bold text-ink-900">緊急聯絡人</h2>
+      <p class="mt-1 text-sm text-ink-500">至少填一位，建議兩位以上。</p>
+    </div>
+    <div id="emList" class="space-y-3"></div>
+    <button type="button" class="mt-3 btn-ghost" data-add="em">＋ 新增聯絡人</button>
+  </section>
+
+  <!-- STEP 7: 證件 -->
+  <section class="step" data-step="7">
+    <div class="mb-4">
+      <h2 class="text-xl font-bold text-ink-900">證件繳交</h2>
+      <p class="mt-1 text-sm text-ink-500">請拍清楚正反面，HR 會在簽收後歸還。</p>
+    </div>
+    <div id="certList" class="space-y-3"></div>
+    <button type="button" class="mt-3 btn-ghost" data-add="cert">＋ 新增證件</button>
+  </section>
+
+  <!-- STEP 8: 確認 -->
+  <section class="step" data-step="8">
+    <div class="mb-4">
+      <h2 class="text-xl font-bold text-ink-900">確認送出</h2>
+      <p class="mt-1 text-sm text-ink-500">請再檢查一次，送出後若需修改請聯絡 HR。</p>
+    </div>
+    <div id="reviewArea" class="space-y-3"></div>
+    <div class="step-card mt-4">
+      <label class="flex items-start gap-3 cursor-pointer">
+        <input type="checkbox" id="agree" class="mt-1 h-5 w-5 rounded border-ink-300 text-brand-600 focus:ring-brand-500"/>
+        <span class="text-sm text-ink-700">我已確認以上資料正確無誤，並同意公司依個資法蒐集、處理及利用本表資料。</span>
+      </label>
+    </div>
+  </section>
+
+  </form>
+</main>
+
+<!-- Sticky bottom nav -->
+<nav class="fixed bottom-0 left-0 right-0 z-20 nav-bar border-t border-ink-100">
+  <div class="mx-auto max-w-xl px-4 pt-3 pb-safe">
+    <div class="flex gap-3">
+      <button type="button" id="btnPrev" class="btn-ghost" style="flex:1">← 上一步</button>
+      <button type="button" id="btnNext" class="btn-primary" style="flex:2">下一步 →</button>
+    </div>
+    <div class="mt-2 text-center text-[11px] text-ink-400">資料會自動暫存在這支手機上 · 中斷後可回來繼續</div>
+  </div>
+</nav>
+
+<!-- Success modal -->
+<div id="successModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-ink-900/60 p-6">
+  <div class="card max-w-sm w-full p-6 text-center">
+    <div class="mx-auto h-16 w-16 rounded-full bg-brand-100 flex items-center justify-center text-3xl">✅</div>
+    <h3 class="mt-4 text-lg font-bold text-ink-900">已送出成功</h3>
+    <p class="mt-2 text-sm text-ink-500">HR 會盡快與你聯繫後續流程。你可以關閉這個頁面了。</p>
+    <button type="button" onclick="location.reload()" class="mt-5 btn-ghost">填寫下一位</button>
+  </div>
+</div>
+
+<script>
+/* 窩的家 — 人事資料表單 · 直接寫入 Ragic form 20004 · 同 bind.html pattern */
+(() => {
+  const RAGIC_URL = 'https://ap15.ragic.com/wuohome/ragicforms4/20004?api&APIKey=VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==';
+
+  const MAIN_FIELDS = {
+    '姓名':'3000933','英文名稱':'3000947','身分證字號':'3001021','出生日期':'3000954',
+    '性別':'3000956','婚姻狀態':'3001020','最高教育程度':'3001022','在職狀態':'3000945',
+    '到職日期':'3000943','主要手機號碼':'3000975','次要手機號碼':'3000941','LINE ID':'1000875',
+    'Email':'3000976','通訊地址':'3000977','戶籍地址':'3001019','銀行':'1000861',
+    '分行':'1000863','銀行帳號':'1000864','照片':'3000953','存摺上傳':'1000865'
+  };
+  const SUB_FIELDS = {
+    edu: {'學校名稱':'3000965','學歷':'3000988','畢/肄業':'3001092','主修':'3000990','入學日期':'3000991','結業日期':'3000992'},
+    work:{'公司名稱':'3000982','職稱':'3000983','開始日期':'3000984','結束日期':'3000986','工作描述':'3000987'},
+    em:  {'姓名':'3000979','關係':'3001027','手機':'3001031','住家電話':'3001029','公司電話':'3001030','地址':'1000874'},
+    cert:{'證書類型':'1000868','繳交日期':'1000870','檔案上傳':'1000925'}
+  };
+
+  const TOTAL_STEPS = 8;
+  const LS_KEY = 'wuohome_hr_form_v1';
+  let step = 1;
+  let state = { fields:{}, sub:{edu:[],work:[],em:[],cert:[]}, files:{} };
+  const $ = s => document.querySelector(s);
+  const $$ = s => document.querySelectorAll(s);
+
+  const BANKS = ['(822) 中國信託','(004) 台灣銀行','(005) 土地銀行','(006) 合作金庫','(007) 第一銀行','(008) 華南銀行','(009) 彰化銀行','(011) 上海商業','(012) 台北富邦','(013) 國泰世華','(016) 高雄銀行','(017) 兆豐國際','(021) 花旗銀行','(050) 台灣中小企銀','(052) 渣打國際','(053) 台中銀行','(054) 京城銀行','(081) 滙豐銀行','(101) 瑞興銀行','(102) 華泰銀行','(103) 新光銀行','(108) 陽信銀行','(118) 板信銀行','(147) 三信商業','(289) 王道銀行','(803) 聯邦銀行','(805) 遠東商銀','(806) 元大銀行','(807) 永豐銀行','(808) 玉山銀行','(809) 凱基銀行','(810) 星展銀行','(812) 台新銀行','(815) 日盛銀行','(816) 安泰銀行'];
+
+  function save(){ try{ localStorage.setItem(LS_KEY,JSON.stringify({fields:state.fields,sub:state.sub,step})); }catch(e){} }
+  function load(){ try{ const r=localStorage.getItem(LS_KEY); if(!r)return; const s=JSON.parse(r); if(s.fields)state.fields=s.fields; if(s.sub)state.sub=s.sub; if(s.step)step=Math.min(s.step,TOTAL_STEPS); }catch(e){} }
+
+  function showStep(n){
+    step = Math.max(1,Math.min(TOTAL_STEPS,n));
+    $$('.step').forEach(s => s.classList.toggle('active', +s.dataset.step===step));
+    $('#stepNum').textContent = step;
+    $('#progressFill').style.width = (step/TOTAL_STEPS*100)+'%';
+    $('#btnPrev').style.visibility = step===1 ? 'hidden' : 'visible';
+    $('#btnNext').textContent = step===TOTAL_STEPS ? '✓ 確認送出' : '下一步 →';
+    if (step===8) renderReview();
+    window.scrollTo({top:0,behavior:'smooth'}); save();
+  }
+  function next(){ if(!validateStep(step))return; if(step===TOTAL_STEPS){submit();return;} showStep(step+1); }
+  function prev(){ showStep(step-1); }
+
+  function validateStep(n){
+    let ok=true;
+    const el=document.querySelector(`.step[data-step="${n}"]`);
+    if(!el) return true;
+    el.querySelectorAll('input,select,textarea').forEach(e=>{
+      if(e.type==='file') return;
+      if(e.required && !e.value.trim()){ mark(e,false); ok=false; return; }
+      if(e.id==='f_id' && !/^[A-Z][12]\d{8}$/.test(e.value.trim().toUpperCase())){ mark(e,false); ok=false; return; }
+      if(e.id==='f_email' && e.value && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e.value.trim())){ mark(e,false); ok=false; return; }
+      if((e.id==='f_mobile'||e.id==='f_mobile2') && e.value && !/^09\d{8}$|^\+886\s?9\d{8}$/.test(e.value.trim().replace(/[-\s]/g,''))){ mark(e,false); ok=false; return; }
+      mark(e,true);
+    });
+    if(n===1 && !state.fields['性別']){ ok=false; flash('請選擇性別'); }
+    if(n===3 && !state.fields['銀行']){ ok=false; mark($('#f_bank'),false); }
+    if(n===8 && !$('#agree').checked){ ok=false; flash('請勾選同意聲明'); }
+    if(!ok) flash('請檢查紅色欄位');
+    return ok;
+  }
+  function mark(el,ok){ el.setAttribute('aria-invalid', ok?'false':'true'); }
+
+  let toastTimer;
+  function flash(msg){
+    let t=document.getElementById('__toast');
+    if(!t){ t=document.createElement('div'); t.id='__toast'; t.className='fixed left-1/2 top-20 z-50 -translate-x-1/2 rounded-full bg-ink-900 px-4 py-2 text-sm text-white shadow-lg'; document.body.appendChild(t); }
+    t.textContent=msg; t.style.opacity='1';
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.style.opacity='0',2200);
+  }
+
+  function bindFields(){
+    $$('input[name],select[name],textarea[name]').forEach(el=>{
+      if(el.type==='file'){
+        el.addEventListener('change',e=>{
+          const f=e.target.files[0]; if(!f) return;
+          state.files[el.name]=f;
+          if(el.id==='f_photo'||el.id==='f_passbook'){
+            const pid=el.id==='f_photo'?'photoPreview':'passbookPreview';
+            const hid=el.id==='f_photo'?'photoHint':'passbookHint';
+            const img=document.getElementById(pid); img.src=URL.createObjectURL(f); img.hidden=false;
+            document.getElementById(hid).style.display='none';
+          }
+        });
+        return;
+      }
+      if(state.fields[el.name]!=null) el.value=state.fields[el.name];
+      el.addEventListener('input',()=>{ state.fields[el.name]=el.value; save(); });
+      el.addEventListener('blur', ()=>{ state.fields[el.name]=el.value; save(); });
+    });
+    $$('button.chip[data-name]').forEach(btn=>{
+      const name=btn.dataset.name, val=btn.dataset.value;
+      if(state.fields[name]===val) btn.setAttribute('aria-pressed','true');
+      btn.addEventListener('click',()=>{
+        state.fields[name]=val;
+        document.querySelectorAll(`button.chip[data-name="${name}"]`).forEach(b=>b.setAttribute('aria-pressed',b===btn?'true':'false'));
+        save();
+      });
+    });
+    $('#f_id').addEventListener('input',e=>{ e.target.value=e.target.value.toUpperCase(); state.fields['身分證字號']=e.target.value; });
+    $('#copyAddr').addEventListener('click',()=>{ $('#f_addr2').value=$('#f_addr1').value; state.fields['戶籍地址']=$('#f_addr1').value; });
+  }
+
+  function bindBank(){
+    const input=$('#f_bank'), list=$('#bankList');
+    function open(){
+      list.innerHTML='';
+      BANKS.forEach(b=>{
+        const d=document.createElement('div'); d.className='combo-item'; d.textContent=b;
+        if(state.fields['銀行']===b) d.setAttribute('aria-selected','true');
+        d.addEventListener('click',()=>{ state.fields['銀行']=b; input.value=b; list.classList.add('hidden'); mark(input,true); save(); });
+        list.appendChild(d);
+      });
+      list.classList.remove('hidden');
+    }
+    input.addEventListener('click',open); input.addEventListener('focus',open);
+    document.addEventListener('click',e=>{ if(!input.contains(e.target)&&!list.contains(e.target)) list.classList.add('hidden'); });
+    if(state.fields['銀行']) input.value=state.fields['銀行'];
+  }
+
+  const SUB_TEMPLATES = {
+    edu: { title:'學歷', fields:[
+      {k:'學校名稱',label:'學校名稱',type:'text',required:true},
+      {k:'學歷',label:'學位',type:'select',options:['國中','高中','高職','大學','碩士','博士']},
+      {k:'畢/肄業',label:'狀態',type:'select',options:['畢業','肄業']},
+      {k:'主修',label:'主修科系',type:'text'},
+      {k:'入學日期',label:'入學',type:'date'},
+      {k:'結業日期',label:'結業',type:'date'}
+    ]},
+    work:{ title:'工作經歷', fields:[
+      {k:'公司名稱',label:'公司名稱',type:'text',required:true},
+      {k:'職稱',label:'職稱',type:'text',required:true},
+      {k:'開始日期',label:'開始',type:'date'},
+      {k:'結束日期',label:'結束',type:'date'},
+      {k:'工作描述',label:'工作描述',type:'textarea'}
+    ]},
+    em:{ title:'緊急聯絡人', fields:[
+      {k:'姓名',label:'姓名',type:'text',required:true},
+      {k:'關係',label:'關係',type:'text',required:true,placeholder:'例：母親、配偶'},
+      {k:'手機',label:'手機',type:'tel',required:true},
+      {k:'住家電話',label:'住家電話',type:'tel'},
+      {k:'公司電話',label:'公司電話',type:'tel'},
+      {k:'地址',label:'地址',type:'text'}
+    ]},
+    cert:{ title:'證件', fields:[
+      {k:'證書類型',label:'證件類型',type:'select',options:['身分證','不動產經紀營業員證明','租賃住宅管理人員證書'],required:true},
+      {k:'繳交日期',label:'繳交日期',type:'date'},
+      {k:'_file',label:'證件照片',type:'file'}
+    ]}
+  };
+
+  function renderSubtables(){
+    ['edu','work','em','cert'].forEach(kind=>{
+      const list=document.getElementById(kind+'List'); list.innerHTML='';
+      if(state.sub[kind].length===0) state.sub[kind].push({});
+      state.sub[kind].forEach((row,idx)=>list.appendChild(buildSubCard(kind,row,idx)));
+    });
+    $$('button[data-add]').forEach(btn=>{ btn.onclick=()=>{ const k=btn.dataset.add; state.sub[k].push({}); renderSubtables(); save(); }; });
+  }
+  function buildSubCard(kind,row,idx){
+    const tpl=SUB_TEMPLATES[kind];
+    const card=document.createElement('div'); card.className='subcard';
+    card.innerHTML = `<div class="flex items-center justify-between">
+      <div class="text-sm font-semibold text-ink-700">${tpl.title} #${idx+1}</div>
+      ${state.sub[kind].length>1 ? '<button type="button" class="text-xs text-rose-600">移除</button>' : ''}
+    </div>`;
+    const rm=card.querySelector('button');
+    if(rm) rm.onclick=()=>{ state.sub[kind].splice(idx,1); renderSubtables(); save(); };
+    tpl.fields.forEach(f=>{
+      const wrap=document.createElement('div');
+      const lbl=document.createElement('label'); lbl.className='label'+(f.required?' req':''); lbl.textContent=f.label; wrap.appendChild(lbl);
+      let el;
+      if(f.type==='select'){
+        el=document.createElement('select'); el.className='field';
+        el.innerHTML='<option value="">請選擇</option>'+f.options.map(o=>`<option ${row[f.k]===o?'selected':''}>${o}</option>`).join('');
+      } else if(f.type==='textarea'){
+        el=document.createElement('textarea'); el.className='field'; el.rows=3; el.value=row[f.k]||'';
+      } else if(f.type==='file'){
+        el=document.createElement('input'); el.type='file'; el.accept='image/*'; el.capture='environment'; el.className='field';
+      } else {
+        el=document.createElement('input'); el.type=f.type; el.className='field'; el.value=row[f.k]||'';
+        if(f.placeholder) el.placeholder=f.placeholder;
+      }
+      el.addEventListener('change',()=>{
+        if(f.type==='file'){ const fl=el.files[0]; if(fl) state.files[`${kind}_${idx}_${f.k}`]=fl; }
+        else { row[f.k]=el.value; save(); }
+      });
+      el.addEventListener('input',()=>{ if(f.type!=='file'){ row[f.k]=el.value; save(); } });
+      wrap.appendChild(el); card.appendChild(wrap);
+    });
+    return card;
+  }
+
+  function renderReview(){
+    const area=$('#reviewArea'); area.innerHTML='';
+    const secs=[
+      {title:'基本資料',keys:['姓名','英文名稱','身分證字號','出生日期','性別','婚姻狀態','最高教育程度']},
+      {title:'聯絡方式',keys:['主要手機號碼','次要手機號碼','Email','LINE ID','通訊地址','戶籍地址']},
+      {title:'銀行帳戶',keys:['銀行','分行','銀行帳號']}
+    ];
+    secs.forEach(sec=>{
+      const div=document.createElement('div'); div.className='step-card';
+      let h=`<div class="mb-3 text-sm font-semibold text-ink-900">${sec.title}</div><dl class="space-y-2 text-sm">`;
+      sec.keys.forEach(k=>{ const v=state.fields[k]||'—'; h+=`<div class="flex justify-between gap-3"><dt class="text-ink-500">${k}</dt><dd class="text-right text-ink-900 break-all">${esc(v)}</dd></div>`; });
+      h+='</dl>'; div.innerHTML=h; area.appendChild(div);
+    });
+    const sd=document.createElement('div'); sd.className='step-card';
+    sd.innerHTML=`<div class="mb-3 text-sm font-semibold text-ink-900">附加資料</div>
+      <ul class="space-y-1 text-sm text-ink-700">
+        <li>學歷：${state.sub.edu.filter(r=>r['學校名稱']).length} 筆</li>
+        <li>工作經歷：${state.sub.work.filter(r=>r['公司名稱']).length} 筆</li>
+        <li>緊急聯絡人：${state.sub.em.filter(r=>r['姓名']).length} 筆</li>
+        <li>證件：${state.sub.cert.filter(r=>r['證書類型']).length} 筆</li>
+        <li>大頭照：${state.files['照片']?'✓ 已上傳':'— 未上傳'}</li>
+        <li>存摺照：${state.files['存摺上傳']?'✓ 已上傳':'— 未上傳'}</li>
+      </ul>`;
+    area.appendChild(sd);
+  }
+  function esc(s){ return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function dt(v){ return v ? String(v).replace(/-/g,'/') : ''; }
+
+  async function submit(){
+    const btn=$('#btnNext'); btn.disabled=true; btn.textContent='送出中…';
+    try {
+      const fd = new FormData();
+      const f = state.fields;
+      const put = (k,v) => { if(v!=null && v!=='' && MAIN_FIELDS[k]) fd.append(MAIN_FIELDS[k], String(v)); };
+      put('姓名', f['姓名']);
+      put('英文名稱', f['英文名稱']);
+      put('身分證字號', (f['身分證字號']||'').toUpperCase());
+      put('出生日期', dt(f['出生日期']));
+      put('性別', f['性別']);
+      put('婚姻狀態', f['婚姻狀態']);
+      put('最高教育程度', f['最高教育程度']);
+      put('主要手機號碼', f['主要手機號碼']);
+      put('次要手機號碼', f['次要手機號碼']);
+      put('LINE ID', f['LINE ID']);
+      put('Email', f['Email']);
+      put('通訊地址', f['通訊地址']);
+      put('戶籍地址', f['戶籍地址']);
+      put('銀行', f['銀行']);
+      put('分行', f['分行']);
+      put('銀行帳號', f['銀行帳號']);
+      put('在職狀態', '試用');
+      put('到職日期', new Date().toISOString().slice(0,10).replace(/-/g,'/'));
+
+      if(state.files['照片']) fd.append(MAIN_FIELDS['照片'], state.files['照片'], state.files['照片'].name);
+      if(state.files['存摺上傳']) fd.append(MAIN_FIELDS['存摺上傳'], state.files['存摺上傳'], state.files['存摺上傳'].name);
+
+      const pushSub = (kind, rows) => {
+        const map = SUB_FIELDS[kind];
+        rows.forEach((row, i) => {
+          Object.entries(map).forEach(([k, fid]) => {
+            let v = row[k];
+            if (v==null || v==='') return;
+            if (k.includes('日期')) v = dt(v);
+            fd.append(`${fid}_${i}`, String(v));
+          });
+        });
+      };
+      pushSub('edu',  state.sub.edu.filter(r=>r['學校名稱']));
+      pushSub('work', state.sub.work.filter(r=>r['公司名稱']));
+      pushSub('em',   state.sub.em.filter(r=>r['姓名']));
+      const certs = state.sub.cert.filter(r=>r['證書類型']);
+      pushSub('cert', certs);
+      certs.forEach((_, i) => {
+        const cf = state.files[`cert_${i}__file`];
+        if (cf) fd.append(`1000925_${i}`, cf, cf.name);
+      });
+
+      // Fire-and-forget no-cors POST, same pattern as bind.html
+      await fetch(RAGIC_URL, { method:'POST', mode:'no-cors', body: fd });
+
+      localStorage.removeItem(LS_KEY);
+      $('#successModal').classList.remove('hidden');
+      $('#successModal').classList.add('flex');
+    } catch(e) {
+      flash(e.message || '送出失敗，請檢查網路');
+      btn.disabled=false; btn.textContent='✓ 確認送出';
+    }
+  }
+
+  function init(){
+    load(); bindFields(); bindBank(); renderSubtables(); showStep(step);
+    $('#btnNext').addEventListener('click', next);
+    $('#btnPrev').addEventListener('click', prev);
+  }
+  document.addEventListener('DOMContentLoaded', init);
+})();
+</script>
+</body>
+</html>
