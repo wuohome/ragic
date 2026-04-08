@@ -357,6 +357,54 @@
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
   }
+  /* Welcome screen */
+  #welcomeScreen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 30px 50px;
+    text-align: center;
+    flex: 1;
+    animation: fadeIn .5s ease;
+  }
+  #welcomeScreen .welcome-emoji {
+    font-size: 64px;
+    margin-bottom: 16px;
+  }
+  #welcomeScreen h1 {
+    color: #007894;
+    font-size: 26px;
+    font-weight: 900;
+    margin: 0 0 12px;
+  }
+  #welcomeScreen p {
+    color: #555;
+    font-size: 16px;
+    line-height: 1.7;
+    margin: 0 0 32px;
+  }
+  #welcomeScreen .start-btn {
+    background: #007894;
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    padding: 16px 48px;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .2s;
+    font-family: inherit;
+  }
+  #welcomeScreen .start-btn:hover { background: #005f75; }
+  /* Field hint text */
+  .field-hint {
+    color: #888;
+    font-size: 13px;
+    margin: -6px 0 10px;
+    line-height: 1.5;
+    padding-left: 2px;
+  }
 </style>
 </head>
 <body>
@@ -369,7 +417,15 @@
     <div class="logo-sub">新進人員資料表 · 第 <span id="stepNum">1</span> / 8 步</div>
   </div>
 
-  <form id="hrForm" novalidate autocomplete="on">
+  <!-- 歡迎畫面 -->
+  <div id="welcomeScreen">
+    <div class="welcome-emoji">🎉</div>
+    <h1>歡迎來到窩的家大家庭</h1>
+    <p>第一步，先讓我們認識你！<br>請花幾分鐘填寫人事資料表，<br>填完就算正式報到囉。</p>
+    <button class="start-btn" onclick="startForm()">開始填寫 →</button>
+  </div>
+
+  <form id="hrForm" novalidate autocomplete="on" style="display:none">
 
     <!-- STEP 1: 基本資料 -->
     <div class="step-content active" data-step="1">
@@ -426,12 +482,14 @@
 
       <p class="question-label req">主要手機號碼</p>
       <input type="tel" id="f_mobile" data-key="主要手機號碼" inputmode="tel" placeholder="0912345678" autocomplete="tel">
+      <p class="field-hint">📢 此號碼將作為對外打房屋廣告的聯絡電話</p>
 
       <p class="question-label">次要手機號碼</p>
       <input type="tel" id="f_mobile2" data-key="次要手機號碼" inputmode="tel" placeholder="選填">
 
       <p class="question-label req">Email</p>
-      <input type="email" id="f_email" data-key="Email" inputmode="email" placeholder="you@example.com" autocomplete="email">
+      <input type="email" id="f_email" data-key="Email" inputmode="email" placeholder="you@gmail.com" autocomplete="email">
+      <p class="field-hint">💡 建議使用 Google 帳號，方便直接登入公司系統</p>
 
       <p class="question-label">LINE ID</p>
       <input type="text" id="f_lineid" data-key="LINE ID" placeholder="選填">
@@ -450,6 +508,7 @@
     <div class="step-content" data-step="3">
       <h2>💰 薪轉帳戶</h2>
       <p class="desc">薪資將匯入這個帳戶，請與存摺資訊一致</p>
+      <p class="field-hint" style="text-align:center; margin-bottom:16px;">💳 建議選擇中國信託，可省去 $15 轉帳手續費</p>
 
       <p class="question-label req">銀行</p>
       <select id="f_bank" data-key="銀行" style="text-align-last:center">
@@ -517,7 +576,7 @@
 
   </form>
 
-  <div class="footer-btns">
+  <div class="footer-btns" id="footerBtns">
     <button class="btn-prev" id="btnPrev" onclick="prevStep()">上一步</button>
     <button class="btn-next" id="btnNext" onclick="nextStep()">下一步</button>
   </div>
@@ -698,7 +757,7 @@ bindUpload('f_passbook', 'passbookPreview', 'passbookZone', '存摺上傳');
 /* ===== Subtables ===== */
 const SUB_TPL = {
   edu:  { title:'學歷', icon:'🎓', fields:[
-    {k:'學校名稱', label:'學校名稱', type:'text', req:true, placeholder:'例：中國科技大學'},
+    {k:'學校名稱', label:'學校名稱', type:'text', req:true, placeholder:'例：國立台灣大學'},
     {k:'學歷', label:'學位', type:'select', options:['國中','高中','高職','大學','碩士','博士']},
     {k:'畢/肄業', label:'狀態', type:'select', options:['畢業','肄業']},
     {k:'主修', label:'主修科系', type:'text', placeholder:'例：財政稅務系'},
@@ -723,7 +782,7 @@ const SUB_TPL = {
   cert: { title:'證件', icon:'📋', fields:[
     {k:'證書類型', label:'證件類型', type:'select', options:['身分證','不動產經紀營業員證明','租賃住宅管理人員證書'], req:true},
     {k:'繳交日期', label:'繳交日期', type:'date'},
-    {k:'_file', label:'證件照片', type:'file'}
+    {k:'_file', label:'證件照片', type:'file', hint:'📷 可以直接拍照，也可以從相簿選取'}
   ]}
 };
 
@@ -792,6 +851,12 @@ function buildCard(kind, row, idx) {
     });
     el.addEventListener('input', () => { if(f.type!=='file'){ row[f.k]=el.value; save(); }});
     card.appendChild(el);
+    if(f.hint) {
+      const hint = document.createElement('p');
+      hint.className = 'field-hint';
+      hint.textContent = f.hint;
+      card.appendChild(hint);
+    }
   });
   return card;
 }
@@ -894,11 +959,26 @@ async function submit() {
   }
 }
 
+/* ===== Welcome screen ===== */
+function startForm() {
+  document.getElementById('welcomeScreen').style.display = 'none';
+  document.getElementById('hrForm').style.display = 'flex';
+  document.getElementById('footerBtns').style.display = 'flex';
+}
+
 /* ===== Init ===== */
 load();
 restoreFields();
 renderSubtables();
-showStep(step);
+// 有存檔（非第一次）→ 跳過歡迎畫面直接顯示表單
+if(localStorage.getItem(LS_KEY)) {
+  startForm();
+  showStep(step);
+} else {
+  // 新訪客：顯示歡迎畫面，隱藏底部按鈕
+  document.getElementById('footerBtns').style.display = 'none';
+  showStep(step);
+}
 </script>
 </body>
 </html>
