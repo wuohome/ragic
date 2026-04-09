@@ -14,6 +14,9 @@ from pathlib import Path
 API_KEY = os.environ.get("RAGIC_API_KEY") or "VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw=="
 BASE    = "https://ap15.ragic.com/wuohome/operation/4"
 FIELD_START = "1000260"
+PAYMENTS_BASE = "https://ap15.ragic.com/wuohome/payments/2"
+PERF_SERVICE_TYPES_LANDLORD = {"房東服務費"}
+PERF_SERVICE_TYPES_TENANT   = {"服務費", "定金轉服務費"}
 
 VAULT    = Path(r"c:/Second Brain/Obsidian")
 PERF_MD  = VAULT / "窩的家/管理部/全店每月業績表.md"
@@ -97,7 +100,83 @@ def to_intake_records(rows):
     return out
 
 
-# ── 2. OB 業績解析 ──────────────────────────────────────────────────
+# ── 2. Ragic 業績（payments/2）──────────────────────────────────────
+
+def fetch_perf_from_ragic():
+    """
+    從 Ragic payments/2 抓業績資料
+    回傳 [{"ym": "2026-04", "name": "蕭眞儀", "perf": 5750}, ...]
+    算業績的類型：
+      _subtable_1001701 (房東) → 房東服務費
+      _subtable_1000777 (租客) → 服務費、定金轉服務費
+    """
+    qs = "api=&subtables=true&limit=10000"
+    req = urllib.request.Request(
+        f"{PAYMENTS_BASE}?{qs}",
+        headers={"Authorization": "Basic " + API_KEY},
+    )
+    data = json.loads(urllib.request.urlopen(req, timeout=120).read())
+    records = []
+    for rec in data.values():
+        staff = (rec.get("經辦人員") or "").strip()
+        if not staff:
+            continue
+        if staff in EXCLUDE_DEVS or any(k in staff for k in EXCLUDE_KEYWORDS):
+            continue
+        date_str = (rec.get("收款日期") or "").strip()
+        if not date_str:
+            continue
+        parts = date_str.split("/")
+        if len(parts) < 2:
+            continue
+        ym = f"{parts[0]}-{int(parts[1]):02d}"
+        for row in (rec.get("_subtable_1001701") or {}).values():
+            if row.get("類型", "").strip() in PERF_SERVICE_TYPES_LANDLORD:
+                try:
+                    amt = int(float(row.get("金額") or 0))
+                except Exception:
+                    amt = 0
+                if amt > 0:
+                    records.append({"ym": ym, "name": staff, "perf": amt})
+        for row in (rec.get("_subtable_1000777") or {}).values():
+            if row.get("類型", "").strip() in PERF_SERVICE_TYPES_TENANT:
+                try:
+                    amt = int(float(row.get("金額") or 0))
+                except Exception:
+                    amt = 0
+                if amt > 0:
+                    records.append({"ym": ym, "name": staff, "perf": amt})
+    return records
+
+
+def build_compare(ragic_perf, ob_perf):
+    """
+    比對兩個業績來源，回傳 {ym: [{name, ragic, ob, diff, status}]}
+    status: match / ragic_more / ob_more / only_ragic / only_ob
+    """
+    from collections import defaultdict
+    ragic_map = defaultdict(int)
+    ob_map    = defaultdict(int)
+    for r in ragic_perf:
+        ragic_map[(r["ym"], r["name"])] += r["perf"]
+    for r in ob_perf:
+        ob_map[(r["ym"], r["name"])]    += r["perf"]
+    all_keys = set(ragic_map) | set(ob_map)
+    result   = defaultdict(list)
+    for ym, name in sorted(all_keys):
+        ragic_amt = ragic_map[(ym, name)]
+        ob_amt    = ob_map[(ym, name)]
+        diff      = ragic_amt - ob_amt
+        if   ragic_amt == 0: status = "only_ob"
+        elif ob_amt    == 0: status = "only_ragic"
+        elif diff      == 0: status = "match"
+        elif diff      >  0: status = "ragic_more"
+        else:                status = "ob_more"
+        result[ym].append({"name": name, "ragic": ragic_amt, "ob": ob_amt, "diff": diff, "status": status})
+    return {k: v for k, v in sorted(result.items())}
+
+
+# ── 3. OB 業績解析（用於比對）────────────────────────────────────── ──────────────────────────────────────────────────
 
 def roc_to_iso(roc_str):
     """'113/03' → '2024-03'"""
@@ -191,6 +270,7 @@ HTML_TPL = r"""<!DOCTYPE html>
     <div class="tab active pb-3 text-lg px-1" data-tab="week">📦 週進案量</div>
     <div class="tab pb-3 text-lg px-1" data-tab="month">💰 月業績</div>
     <div class="tab pb-3 text-lg px-1" data-tab="year">📊 年度總覽</div>
+    <div class="tab pb-3 text-lg px-1" data-tab="compare">⚖️ 資料比對</div>
   </div>
 
   <!-- ── 週進案量 ── -->
@@ -323,14 +403,33 @@ HTML_TPL = r"""<!DOCTYPE html>
     </section>
   </div>
 
+  <!-- ── 資料比對 ── -->
+  <div class="tab-panel" id="panel-compare">
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 text-sm text-amber-800">
+      ⚠️ 比對 <strong>Ragic 收款紀錄</strong> vs <strong>珊珊 GSheet（OB 業績表）</strong>，找出漏填或資料不一致。<br>
+      <span class="text-amber-600 text-xs mt-1 block">📊 Ragic 多 = 有收款但珊珊表未更新 ／ 📋 GSheet 多 = 有業績但未 key in Ragic ／ ❌ 未 key in = 僅在 GSheet，Ragic 完全缺失</span>
+    </div>
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+      <div class="flex flex-wrap gap-2" id="cMonthChips"></div>
+    </section>
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-slate-900">⚖️ 比對結果</h2>
+        <div id="cSummary" class="text-sm text-slate-500"></div>
+      </div>
+      <div id="cTable" class="overflow-x-auto"></div>
+    </section>
+  </div>
+
   <footer class="text-center text-slate-400 text-xs py-6">
     Generated by staff_dashboard.py　•　窩的家系統部
   </footer>
 </div>
 
 <script>
-const INTAKE = __INTAKE__;
-const PERF   = __PERF__;
+const INTAKE   = __INTAKE__;
+const PERF     = __PERF__;
+const COMPARE  = __COMPARE__;
 
 // ── utils ──
 function ymd(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;}
@@ -516,12 +615,77 @@ function buildYearChips(){
   });
 }
 
+// ════════════════════════════════════════
+// 資料比對
+// ════════════════════════════════════════
+const compareMonths = Object.keys(COMPARE).sort().reverse();
+
+const statusBadge = {
+  match:       '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">✅ 一致</span>',
+  ragic_more:  '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">📊 Ragic 多</span>',
+  ob_more:     '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">📋 GSheet 多</span>',
+  only_ragic:  '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">🆕 僅 Ragic</span>',
+  only_ob:     '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">❌ 未 key in</span>',
+};
+
+function renderCompare(targetYm){
+  const rows = COMPARE[targetYm] || [];
+  const matched = rows.filter(r=>r.status==='match').length;
+  const issues  = rows.length - matched;
+  document.getElementById('cSummary').textContent =
+    rows.length + ' 人次　✅ 一致 ' + matched + '　⚠️ 差異 ' + issues;
+  document.querySelectorAll('[data-c]').forEach(c=>c.classList.toggle('active', c.dataset.c===targetYm));
+  if(!rows.length){
+    document.getElementById('cTable').innerHTML='<div class="text-center text-slate-400 py-8">無資料</div>';
+    return;
+  }
+  const sorted = rows.slice().sort((a,b)=>{
+    const order={only_ob:0,ob_more:1,ragic_more:2,only_ragic:3,match:4};
+    return (order[a.status]??5)-(order[b.status]??5);
+  });
+  const tbl = '<table class="w-full text-sm"><thead><tr class="text-left text-xs font-semibold text-slate-500 uppercase border-b-2 border-slate-200">' +
+    '<th class="py-2 px-3">業務</th>' +
+    '<th class="py-2 px-3 text-right">Ragic</th>' +
+    '<th class="py-2 px-3 text-right">GSheet（OB）</th>' +
+    '<th class="py-2 px-3 text-right">差異</th>' +
+    '<th class="py-2 px-3">狀態</th>' +
+    '</tr></thead><tbody>' +
+    sorted.map(r=>{
+      const diffStr = r.diff===0?'—':(r.diff>0?'+':'')+fmtMoney(r.diff);
+      const diffCls = r.diff===0?'text-slate-400':r.diff>0?'text-blue-600 font-medium':'text-amber-700 font-medium';
+      const rowCls  = r.status==='match'?'opacity-50':'';
+      return '<tr class="border-b border-slate-100 hover:bg-slate-50 ' + rowCls + '">' +
+        '<td class="py-3 px-3 font-medium">' + esc(r.name) + '</td>' +
+        '<td class="py-3 px-3 text-right font-mono">' + (r.ragic?fmtMoney(r.ragic):'—') + '</td>' +
+        '<td class="py-3 px-3 text-right font-mono">'  + (r.ob   ?fmtMoney(r.ob)   :'—') + '</td>' +
+        '<td class="py-3 px-3 text-right font-mono ' + diffCls + '">' + diffStr + '</td>' +
+        '<td class="py-3 px-3">' + (statusBadge[r.status]||r.status) + '</td>' +
+      '</tr>';
+    }).join('') +
+    '</tbody></table>';
+  document.getElementById('cTable').innerHTML = tbl;
+}
+
+function buildCompareChips(){
+  const container = document.getElementById('cMonthChips');
+  compareMonths.slice(0,12).forEach(m=>{
+    const el = document.createElement('span');
+    el.className = 'chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium';
+    el.dataset.c = m;
+    el.textContent = m;
+    el.addEventListener('click', ()=>renderCompare(m));
+    container.appendChild(el);
+  });
+}
+
 // ── 初始化 ──
 buildMonthChips();
 buildYearChips();
+buildCompareChips();
 applyWeekPreset('thisWeek');
 (()=>{const d=new Date(); renderMonth(ym(d));})();
 if(allYears.length) renderYear(allYears[0]);
+if(compareMonths.length) renderCompare(compareMonths[0]);
 </script>
 </body>
 </html>"""
@@ -535,14 +699,22 @@ def main():
     intake  = to_intake_records(rows)
     print(f"  {len(intake)} 筆")
 
-    print("解析 OB 業績資料...")
-    perf = parse_perf_md(PERF_MD)
-    print(f"  {len(perf)} 筆（{len(set(r['ym'] for r in perf))} 個月）")
+    print("抓取 Ragic 業績資料...")
+    perf_ragic = fetch_perf_from_ragic()
+    print(f"  {len(perf_ragic)} 筆（{len(set(r['ym'] for r in perf_ragic))} 個月）")
+
+    print("解析 OB 業績資料（用於比對）...")
+    perf_ob = parse_perf_md(PERF_MD)
+    print(f"  {len(perf_ob)} 筆（{len(set(r['ym'] for r in perf_ob))} 個月）")
+
+    compare = build_compare(perf_ragic, perf_ob)
+    print(f"  比對 {len(compare)} 個月份")
 
     html_doc = (
         HTML_TPL
-        .replace("__INTAKE__", json.dumps(intake, ensure_ascii=False))
-        .replace("__PERF__",   json.dumps(perf,   ensure_ascii=False))
+        .replace("__INTAKE__",  json.dumps(intake,     ensure_ascii=False))
+        .replace("__PERF__",    json.dumps(perf_ragic, ensure_ascii=False))
+        .replace("__COMPARE__", json.dumps(compare,    ensure_ascii=False))
         .replace("__UPDATED__", f"{datetime.now():%Y-%m-%d %H:%M}")
     )
 
