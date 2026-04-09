@@ -242,6 +242,7 @@ HTML_TPL = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>窩的家｜租賃部業績儀表板</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
   body{font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;}
   .medal-1{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#78350f;}
@@ -399,7 +400,7 @@ HTML_TPL = r"""<!DOCTYPE html>
 
     <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
       <h2 class="text-xl font-bold text-slate-900 mb-6">📈 月度趨勢</h2>
-      <div id="yTrend" class="overflow-x-auto"></div>
+      <div class="relative" style="height:300px"><canvas id="yTrendChart"></canvas></div>
     </section>
   </div>
 
@@ -578,27 +579,102 @@ function renderYear(year){
   document.getElementById('yPerfRanking').innerHTML   = rankHtml(perfItems,   fmtMoney,'元');
   document.getElementById('yIntakeRanking').innerHTML = rankHtml(intakeItems, fmtN,    '間');
 
-  // 月度趨勢表
+  // 月度趨勢折線圖
+  const SYSTEM_START = '2025-12'; // Ragic 正式試用起始月
   const months=[];
   for(let m=1;m<=12;m++) months.push(`${year}-${String(m).padStart(2,'0')}`);
-  const trendHtml = `<table class="w-full text-sm">
-    <thead><tr class="text-left text-xs font-semibold text-slate-500 border-b-2 border-slate-200">
-      <th class="py-2 px-2">月份</th>
-      <th class="py-2 px-2 text-right">業績</th>
-      <th class="py-2 px-2 text-right">進案量</th>
-    </tr></thead><tbody>${
-    months.map(m=>{
-      const mp = PERF.filter(r=>r.ym===m).reduce((a,r)=>a+r.perf,0);
-      const mi = INTAKE.filter(r=>r.date.startsWith(m)).length;
-      const empty = mp===0 && mi===0;
-      return `<tr class="border-b border-slate-100 hover:bg-slate-50 ${empty?'text-slate-300':''}">
-        <td class="py-2 px-2 font-medium">${m}</td>
-        <td class="py-2 px-2 text-right font-mono">${mp?fmtMoney(mp):'—'}</td>
-        <td class="py-2 px-2 text-right">${mi||'—'}</td>
-      </tr>`;
-    }).join('')
-  }</tbody></table>`;
-  document.getElementById('yTrend').innerHTML = trendHtml;
+  // 業績來自 OB markdown，有歷史資料；進案量來自 Ragic，系統建置前無資料
+  const perfData   = months.map(m=>PERF.filter(r=>r.ym===m).reduce((a,r)=>a+r.perf,0));
+  const intakeData = months.map(m=>m<SYSTEM_START ? null : INTAKE.filter(r=>r.date.startsWith(m)).length);
+  const labels     = months.map(m=>m.slice(5)+'月');
+  // inline plugin：對無資料月份畫灰底 + 文字
+  const noDataPlugin = {
+    id:'noData',
+    beforeDraw(chart){
+      const {ctx, chartArea, scales} = chart;
+      if(!chartArea) return;
+      const xs = scales.x;
+      const preIdxs = months.reduce((a,m,i)=>{ if(m<SYSTEM_START) a.push(i); return a; },[]);
+      if(!preIdxs.length) return;
+      const barW = xs.width / months.length;
+      ctx.save();
+      ctx.fillStyle = 'rgba(148,163,184,0.13)';
+      preIdxs.forEach(i=>{
+        const cx = xs.getPixelForValue(i);
+        ctx.fillRect(cx-barW/2, chartArea.top, barW, chartArea.height);
+      });
+      // 中央標示文字
+      const midI = preIdxs[Math.floor(preIdxs.length/2)];
+      const midX = xs.getPixelForValue(midI);
+      const midY = chartArea.top + chartArea.height/2;
+      ctx.fillStyle = 'rgba(100,116,139,0.55)';
+      ctx.font = 'bold 12px "Noto Sans TC",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('進案量無資料', midX, midY);
+      ctx.restore();
+    }
+  };
+  if(window._trendChart) window._trendChart.destroy();
+  window._trendChart = new Chart(document.getElementById('yTrendChart'),{
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {
+          label:'業績（元）',
+          data:perfData,
+          borderColor:'#6366f1',
+          backgroundColor:'rgba(99,102,241,0.08)',
+          fill:true,
+          tension:0.35,
+          pointRadius:4,
+          pointHoverRadius:6,
+          spanGaps:false,
+          yAxisID:'yPerf'
+        },
+        {
+          type:'bar',
+          label:'進案量（間）',
+          data:intakeData,
+          backgroundColor:'rgba(16,185,129,0.25)',
+          borderColor:'#10b981',
+          borderWidth:1.5,
+          borderRadius:4,
+          yAxisID:'yIntake'
+        }
+      ]
+    },
+    plugins:[noDataPlugin],
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{position:'top',labels:{font:{size:13}}},
+        tooltip:{
+          filter:item=>item.parsed.y!==null,
+          callbacks:{
+            label:ctx=>ctx.dataset.yAxisID==='yPerf'
+              ? '業績 '+fmtMoney(ctx.parsed.y)
+              : '進案 '+fmtN(ctx.parsed.y)+'間'
+          }
+        }
+      },
+      scales:{
+        yPerf:{
+          type:'linear',position:'left',
+          ticks:{callback:v=>v===0?'0':fmtMoney(v),font:{size:11}},
+          grid:{color:'rgba(0,0,0,0.05)'}
+        },
+        yIntake:{
+          type:'linear',position:'right',
+          ticks:{callback:v=>v+'間',stepSize:1,font:{size:11}},
+          grid:{drawOnChartArea:false}
+        }
+      }
+    }
+  });
 
   document.querySelectorAll('[data-y]').forEach(c=>c.classList.toggle('active',c.dataset.y===year));
 }
