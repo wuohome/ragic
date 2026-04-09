@@ -52,12 +52,17 @@ def fmt_rent(v):
         return v or "—"
 
 
+EXCLUDE_DEVS = {"張瓊安"}
+EXCLUDE_KEYWORDS = ["測試"]
+
 def extract_devs(c):
     sub = c.get("_subtable_1000254") or {}
     devs = []
     for row in sub.values():
         name = (row.get("開發人員") or "").strip()
         if not name:
+            continue
+        if name in EXCLUDE_DEVS or any(k in name for k in EXCLUDE_KEYWORDS):
             continue
         try:
             ratio = float(row.get("比例") or 0)
