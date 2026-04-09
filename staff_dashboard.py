@@ -713,7 +713,7 @@ def main():
     html_doc = (
         HTML_TPL
         .replace("__INTAKE__",  json.dumps(intake,     ensure_ascii=False))
-        .replace("__PERF__",    json.dumps(perf_ragic, ensure_ascii=False))
+        .replace("__PERF__",    json.dumps(perf_ob,    ensure_ascii=False))
         .replace("__COMPARE__", json.dumps(compare,    ensure_ascii=False))
         .replace("__UPDATED__", f"{datetime.now():%Y-%m-%d %H:%M}")
     )
