@@ -58,6 +58,38 @@ def fmt_rent(v):
 EXCLUDE_DEVS = {"張瓊安"}
 EXCLUDE_KEYWORDS = ["測試"]
 
+# 人名統一對照（暱稱/變體 → 本名）
+# OB 業績表用暱稱，Ragic 用本名，需要合併
+NAME_ALIASES = {
+    # 蕭靜芳 = TINA
+    "TINA":            "蕭靜芳",
+    "TINA（蕭靜芳）":  "蕭靜芳",
+    # 蕭眞儀 & 張忠豪（夫妻檔）
+    "眞儀":            "蕭眞儀",
+    "忠豪":            "張忠豪",
+    "忠豪&眞儀":       "張忠豪&蕭眞儀",
+    "張忠豪、蕭眞儀":  "張忠豪&蕭眞儀",
+    "蕭眞儀、張忠豪":  "張忠豪&蕭眞儀",
+    # 其他業務
+    "宣佑":   "林宣佑",
+    "惠慈":   "吳惠慈",
+    "張傳":   "詹張傳",
+    "小碩":   "劉子碩",
+    "小鐘":   "鐘晟鈺",
+    "炫儒":   "吳炫儒",
+    "佳燕":   "林佳燕",
+    "心瑜":   "陳心瑜",
+    "則泓":   "張則泓",
+    "薇雅":   "陳薇雅",
+    "卓威":   "李卓威",
+    "小方":   "方鼎文",
+    # 管理層 / 非業務
+    "小吳哥": "吳彥廷",
+}
+
+def normalize_name(name):
+    return NAME_ALIASES.get(name, name)
+
 def extract_devs(c):
     sub = c.get("_subtable_1000254") or {}
     devs = []
@@ -72,7 +104,7 @@ def extract_devs(c):
         except Exception:
             ratio = 0
         if ratio > 0:
-            devs.append({"name": name, "ratio": ratio})
+            devs.append({"name": normalize_name(name), "ratio": ratio})
     return devs
 
 
@@ -118,7 +150,7 @@ def fetch_perf_from_ragic():
     data = json.loads(urllib.request.urlopen(req, timeout=120).read())
     records = []
     for rec in data.values():
-        staff = (rec.get("經辦人員") or "").strip()
+        staff = normalize_name((rec.get("經辦人員") or "").strip())
         if not staff:
             continue
         if staff in EXCLUDE_DEVS or any(k in staff for k in EXCLUDE_KEYWORDS):
@@ -248,9 +280,9 @@ def to_outreach_records(rows):
             continue
         # 建立日期格式: yyyy/MM/dd HH:mm:ss
         created_date = created[:10].replace("/", "-")
-        dev_name = (c.get("開發人員", "") or "").strip()
+        dev_name = normalize_name((c.get("開發人員", "") or "").strip())
         if not dev_name:
-            dev_name = (c.get("主要開發人", "") or "").strip()
+            dev_name = normalize_name((c.get("主要開發人", "") or "").strip())
         if dev_name in EXCLUDE_DEVS or any(k in dev_name for k in EXCLUDE_KEYWORDS):
             continue
         owner_name = (c.get("屋主姓名", "") or "").strip()
@@ -298,7 +330,7 @@ def to_client_records(rows):
             continue
         # 時間格式: yyyy/MM/dd HH:mm
         ts_date = ts[:10].replace("/", "-")
-        staff = (c.get("服務人員", "") or "").strip()
+        staff = normalize_name((c.get("服務人員", "") or "").strip())
         if staff in EXCLUDE_DEVS or any(k in staff for k in EXCLUDE_KEYWORDS):
             continue
         client_name = (c.get("租客姓名 / line名稱", "") or "").strip()
@@ -381,7 +413,7 @@ def parse_perf_md(path: Path):
         if not rank.isdigit():
             continue   # 跳過標題行、合計行
 
-        name = cols[2].strip("* ")
+        name = normalize_name(cols[2].strip("* "))
         if not name or name == "合計":
             continue
 
