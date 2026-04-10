@@ -494,7 +494,7 @@ HTML_TPL = r"""<!DOCTYPE html>
     <div class="flex items-center gap-3">
       <span class="text-sm font-medium text-slate-500">👤 檢視對象</span>
       <select id="staffSelector" class="border border-slate-200 rounded-lg px-4 py-2 text-sm font-medium bg-white min-w-[160px]">
-        <option value="">全部門</option>
+        <option value="">All</option>
       </select>
       <span id="staffLabel" class="text-sm text-slate-400"></span>
     </div>
