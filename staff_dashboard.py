@@ -95,7 +95,7 @@ def normalize_name(name):
 
 def extract_devs(c):
     sub = c.get("_subtable_1000254") or {}
-    devs = []
+    merged = {}
     for row in sub.values():
         name = (row.get("開發人員") or "").strip()
         if not name:
@@ -107,8 +107,9 @@ def extract_devs(c):
         except Exception:
             ratio = 0
         if ratio > 0:
-            devs.append({"name": normalize_name(name), "ratio": ratio})
-    return devs
+            norm = normalize_name(name)
+            merged[norm] = merged.get(norm, 0) + ratio
+    return [{"name": n, "ratio": r} for n, r in merged.items()]
 
 
 def to_intake_records(rows):
