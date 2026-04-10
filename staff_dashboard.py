@@ -612,7 +612,7 @@ HTML_TPL = r"""<!DOCTYPE html>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
       <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
-        <h2 class="text-xl font-bold text-slate-900 mb-6">🏆 業務庫存排行</h2>
+        <h2 class="text-xl font-bold text-slate-900 mb-6">⚠️ 業務庫存分佈　<span class="text-sm font-normal text-slate-400">庫存越多 = 待消化越多</span></h2>
         <div id="invRanking" class="space-y-3"></div>
       </section>
       <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
@@ -1102,7 +1102,15 @@ function renderInventory(){
   const counter = {};
   rows.forEach(r=>(r.devs||[]).forEach(d=>{ counter[d.name]=(counter[d.name]||0)+d.ratio; }));
   const items = Object.entries(counter).sort((a,b)=>b[1]-a[1]);
-  document.getElementById('invRanking').innerHTML = rankHtml(items, fmtN, '件');
+  // 庫存用警示風格，不用獎牌
+  const invHtml = items.length===0
+    ? '<div class="text-center text-slate-400 py-8">無庫存</div>'
+    : items.map(([name,n],i)=>{
+        const top = items[0][1]||1;
+        const pct = Math.round(n/top*100);
+        return `<div class="flex items-center gap-4"><span class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${n>=5?'bg-orange-100 text-orange-700':'bg-slate-100 text-slate-500'}">${i+1}</span><div class="flex-1"><div class="flex justify-between mb-1"><span class="font-bold text-slate-800">${esc(name)}</span><span class="font-black ${n>=5?'text-orange-600':'text-slate-700'}">${fmtN(n)} <span class="text-sm font-normal text-slate-400">件</span></span></div><div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="bar h-full ${n>=5?'bg-gradient-to-r from-orange-400 to-red-400':'bg-gradient-to-r from-slate-300 to-slate-400'} rounded-full" style="width:${pct}%"></div></div></div></div>`;
+      }).join('');
+  document.getElementById('invRanking').innerHTML = invHtml;
 
   // 類型圓餅圖
   const typeCount = {};
