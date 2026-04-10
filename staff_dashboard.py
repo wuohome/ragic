@@ -179,13 +179,25 @@ def fetch_inventory():
     return json.loads(urllib.request.urlopen(req, timeout=120).read())
 
 
+def _extract_cal_date(c):
+    """從 _index_calDates_ 抽出日期當 fallback"""
+    import re
+    raw = (c.get("_index_calDates_", "") or "")
+    m = re.search(r"(\d{4})/(\d{2})/(\d{2})", raw)
+    return f"{m.group(1)}-{m.group(2)}-{m.group(3)}" if m else ""
+
+
 def to_inventory_records(rows):
     today_str = date.today().isoformat()
     out = []
     for c in rows.values():
         d = (c.get("委託時間(起)", "") or "").replace("/", "-")
+        date_source = "委託日"
+        if not d:
+            d = _extract_cal_date(c)
+            date_source = "建檔日" if d else ""
         case_type_raw = (c.get("委託類型", "") or "").strip()
-        case_type = TYPE_MAP.get(case_type_raw, "其他") if case_type_raw else "未分類"
+        case_type = TYPE_MAP.get(case_type_raw, case_type_raw) if case_type_raw else "未分類"
         devs = extract_devs(c)
         people_str = "、".join(
             f"{x['name']}({int(round(x['ratio']*100))}%)" for x in devs
@@ -198,17 +210,18 @@ def to_inventory_records(rows):
             except Exception:
                 pass
         out.append({
-            "date":      d or "—",
-            "name":      c.get("案名", "") or "",
-            "city":      c.get("縣市", "") or "",
-            "district":  normalize_district(c.get("鄉鎮市區", "") or ""),
-            "rent":      fmt_rent(c.get("月租金")),
-            "people":    people_str,
-            "devs":      devs,
-            "type":      case_type,
-            "typeRaw":   case_type_raw,
-            "daysOn":    days_on,
-            "status":    c.get("狀態", "") or "",
+            "date":       d or "—",
+            "dateSource": date_source,
+            "name":       c.get("案名", "") or "",
+            "city":       c.get("縣市", "") or "",
+            "district":   normalize_district(c.get("鄉鎮市區", "") or ""),
+            "rent":       fmt_rent(c.get("月租金")),
+            "people":     people_str,
+            "devs":       devs,
+            "type":       case_type,
+            "typeRaw":    case_type_raw,
+            "daysOn":     days_on,
+            "status":     c.get("狀態", "") or "",
         })
     out.sort(key=lambda x: -x["daysOn"])
     return out
@@ -1133,7 +1146,8 @@ function renderInventory(){
         const warn = r.daysOn > 90;
         const rowCls = warn ? 'bg-orange-50' : '';
         const daysCls = warn ? 'text-orange-600 font-bold' : '';
-        return `<tr class="border-b border-slate-100 hover:bg-slate-50 ${rowCls}"><td class="py-3 px-2 font-medium">${esc(r.name)}</td><td class="py-3 px-2 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${r.type==='專任出租案'?'bg-indigo-100 text-indigo-700':r.type==='包租代管案'?'bg-purple-100 text-purple-700':'bg-emerald-100 text-emerald-700'}">${esc(r.type)}</span></td><td class="py-3 px-2 text-sm">${esc(r.people)}</td><td class="py-3 px-2 text-sm">${esc(r.city+' '+r.district)}</td><td class="py-3 px-2 text-right font-mono">${esc(r.rent)}</td><td class="py-3 px-2 text-right font-mono ${daysCls}">${r.daysOn}天${warn?' ⚠️':''}</td></tr>`;
+        const dateSrc = r.dateSource==='建檔日' ? '<span class="text-xs text-slate-400 ml-1">(建檔日)</span>' : '';
+        return `<tr class="border-b border-slate-100 hover:bg-slate-50 ${rowCls}"><td class="py-3 px-2 font-medium">${esc(r.name)}</td><td class="py-3 px-2 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${r.type==='專任出租案'?'bg-indigo-100 text-indigo-700':r.type==='包租代管案'?'bg-purple-100 text-purple-700':'bg-emerald-100 text-emerald-700'}">${esc(r.type)}</span></td><td class="py-3 px-2 text-sm">${esc(r.people)}</td><td class="py-3 px-2 text-sm">${esc(r.city+' '+r.district)}</td><td class="py-3 px-2 text-right font-mono">${esc(r.rent)}</td><td class="py-3 px-2 text-right font-mono ${daysCls}">${r.daysOn}天${warn?' ⚠️':''}${dateSrc}</td></tr>`;
       }).join('')
     }</tbody></table>`;
   document.getElementById('invDetail').innerHTML = detailHtml;
