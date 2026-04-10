@@ -55,7 +55,7 @@ def fmt_rent(v):
         return v or "—"
 
 
-EXCLUDE_DEVS = {"張瓊安"}
+EXCLUDE_DEVS = {"張瓊安", "minor", "孟書", "廖崇勝", "陳泳竹"}
 EXCLUDE_KEYWORDS = ["測試"]
 
 # 人名統一對照（暱稱/變體 → 本名）
@@ -83,6 +83,7 @@ NAME_ALIASES = {
     "薇雅":   "陳薇雅",
     "卓威":   "李卓威",
     "小方":   "方鼎文",
+    "馬丁":   "關宗宇",
     # 管理層 / 非業務
     "小吳哥": "吳彥廷",
 }
@@ -348,6 +349,27 @@ def to_client_records(rows):
         })
     out.sort(key=lambda x: x["date"], reverse=True)
     return out
+
+
+# ── 1e. Ragic 人事資料（在職名單）─────────────────────────────────────
+
+HR_BASE = "https://ap15.ragic.com/wuohome/ragicforms4/20004"
+
+def fetch_inactive_staff():
+    """從人事資料表抓非在職人員姓名（離職/留停等），用於排除"""
+    qs = "api=&limit=200"
+    req = urllib.request.Request(
+        f"{HR_BASE}?{qs}",
+        headers={"Authorization": "Basic " + API_KEY},
+    )
+    data = json.loads(urllib.request.urlopen(req, timeout=30).read())
+    inactive = set()
+    for c in data.values():
+        status = (c.get("在職狀態", "") or "").strip()
+        name = (c.get("姓名", "") or "").strip()
+        if name and status and status != "在職" and status != "試用":
+            inactive.add(name)
+    return inactive
 
 
 def build_compare(ragic_perf, ob_perf):
@@ -828,9 +850,10 @@ HTML_TPL = r"""<!DOCTYPE html>
 const INTAKE    = __INTAKE__;
 const PERF      = __PERF__;
 const COMPARE   = __COMPARE__;
-const INVENTORY = __INVENTORY__;
-const OUTREACH  = __OUTREACH__;
-const CLIENTS   = __CLIENTS__;
+const INVENTORY    = __INVENTORY__;
+const OUTREACH     = __OUTREACH__;
+const CLIENTS      = __CLIENTS__;
+const ACTIVE_STAFF = new Set(__ACTIVE_STAFF__);
 
 // ── utils ──
 function ymd(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;}
@@ -867,14 +890,8 @@ function rankHtml(items, fmtVal, unit){
 // ── 全域人員篩選 ──
 let curStaff = '';
 function buildStaffSelector(){
-  const names = new Set();
-  INTAKE.forEach(r=>(r.devs||[]).forEach(d=>names.add(d.name)));
-  PERF.forEach(r=>names.add(r.name));
-  INVENTORY.forEach(r=>(r.devs||[]).forEach(d=>names.add(d.name)));
-  OUTREACH.forEach(r=>{ if(r.dev) names.add(r.dev); });
-  CLIENTS.forEach(r=>{ if(r.staff) names.add(r.staff); });
   const sel = document.getElementById('staffSelector');
-  [...names].sort().forEach(n=>{
+  [...ACTIVE_STAFF].sort().forEach(n=>{
     const opt = document.createElement('option');
     opt.value = n; opt.textContent = n;
     sel.appendChild(opt);
@@ -1443,6 +1460,31 @@ def main():
     clients  = to_client_records(cli_rows)
     print(f"  {len(clients)} 筆")
 
+    print("抓取 Ragic 離職名單（用於排除）...")
+    inactive = fetch_inactive_staff()
+    print(f"  {len(inactive)} 人非在職")
+    # 從所有資料來源收集人名，排除離職 + Joan
+    all_staff = set()
+    for r in intake:
+        for d in (r.get("devs") or []):
+            all_staff.add(d["name"])
+    for r in perf_ob:
+        all_staff.add(r["name"])
+    for r in inventory:
+        for d in (r.get("devs") or []):
+            all_staff.add(d["name"])
+    for r in outreach:
+        if r["dev"]:
+            all_staff.add(r["dev"])
+    for r in clients:
+        if r["staff"]:
+            all_staff.add(r["staff"])
+    all_staff -= inactive
+    all_staff -= EXCLUDE_DEVS
+    all_staff -= {"", "合計"}
+    active_staff = all_staff
+    print(f"  下拉選單: {len(active_staff)} 人")
+
     html_doc = (
         HTML_TPL
         .replace("__INTAKE__",    json.dumps(intake,     ensure_ascii=False))
@@ -1450,8 +1492,9 @@ def main():
         .replace("__COMPARE__",   json.dumps(compare,    ensure_ascii=False))
         .replace("__INVENTORY__", json.dumps(inventory,  ensure_ascii=False))
         .replace("__OUTREACH__",  json.dumps(outreach,   ensure_ascii=False))
-        .replace("__CLIENTS__",   json.dumps(clients,    ensure_ascii=False))
-        .replace("__UPDATED__",   f"{datetime.now():%Y-%m-%d %H:%M}")
+        .replace("__CLIENTS__",      json.dumps(clients,           ensure_ascii=False))
+        .replace("__ACTIVE_STAFF__", json.dumps(sorted(active_staff), ensure_ascii=False))
+        .replace("__UPDATED__",      f"{datetime.now():%Y-%m-%d %H:%M}")
     )
 
     HTML_OUT.parent.mkdir(parents=True, exist_ok=True)
