@@ -197,11 +197,12 @@ TYPE_MAP = {
     "社會住宅":     "社會住宅",
 }
 
+INVENTORY_EXCLUDE_STATUS = {"下架"}
+
 def fetch_inventory():
-    """抓所有狀態=代租中的物件（不限日期），含子表"""
+    """抓所有在架物件（排除下架），含子表"""
     qs = (
         "api=&subtables=true"
-        f"&where={urllib.parse.quote(f'{FIELD_STATUS},eq,代租中')}"
         "&limit=10000"
     )
     req = urllib.request.Request(
@@ -223,6 +224,9 @@ def to_inventory_records(rows):
     today_str = date.today().isoformat()
     out = []
     for c in rows.values():
+        status = (c.get("狀態", "") or "").strip()
+        if status in INVENTORY_EXCLUDE_STATUS or not status:
+            continue
         d = (c.get("委託時間(起)", "") or "").replace("/", "-")
         date_source = "委託日"
         if not d:
@@ -1250,13 +1254,15 @@ function renderInventory(){
   if(invTypeFilter!=='all') detail = detail.filter(r=>r.type===invTypeFilter);
   const detailHtml = detail.length===0
     ? '<div class="text-center text-slate-400 py-8">無符合條件的案件</div>'
-    : `<table class="w-full"><thead><tr class="text-left text-xs font-semibold text-slate-500 uppercase border-b-2 border-slate-200"><th class="py-2 px-2">案名</th><th class="py-2 px-2">委託類型</th><th class="py-2 px-2">開發人員</th><th class="py-2 px-2">地區</th><th class="py-2 px-2 text-right">月租</th><th class="py-2 px-2 text-right">上架天數</th></tr></thead><tbody>${
+    : `<table class="w-full"><thead><tr class="text-left text-xs font-semibold text-slate-500 uppercase border-b-2 border-slate-200"><th class="py-2 px-2">案名</th><th class="py-2 px-2">狀態</th><th class="py-2 px-2">委託類型</th><th class="py-2 px-2">開發人員</th><th class="py-2 px-2">地區</th><th class="py-2 px-2 text-right">月租</th><th class="py-2 px-2 text-right">上架天數</th></tr></thead><tbody>${
       detail.map(r=>{
         const warn = r.daysOn > 90;
         const rowCls = warn ? 'bg-orange-50' : '';
         const daysCls = warn ? 'text-orange-600 font-bold' : '';
         const dateSrc = r.dateSource==='建檔日' ? '<span class="text-xs text-slate-400 ml-1">(建檔日)</span>' : '';
-        return `<tr class="border-b border-slate-100 hover:bg-slate-50 ${rowCls}"><td class="py-3 px-2 font-medium">${esc(r.name)}</td><td class="py-3 px-2 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${r.type==='專任出租案'?'bg-indigo-100 text-indigo-700':r.type==='包租代管案'?'bg-purple-100 text-purple-700':'bg-emerald-100 text-emerald-700'}">${esc(r.type)}</span></td><td class="py-3 px-2 text-sm">${esc(r.people)}</td><td class="py-3 px-2 text-sm">${esc(r.city+' '+r.district)}</td><td class="py-3 px-2 text-right font-mono">${esc(r.rent)}</td><td class="py-3 px-2 text-right font-mono ${daysCls}">${r.daysOn}天${warn?' ⚠️':''}${dateSrc}</td></tr>`;
+        const statusColors = {'代租中':'bg-emerald-100 text-emerald-700','已收定，可帶看':'bg-blue-100 text-blue-700','已收定，等簽約':'bg-blue-100 text-blue-700','整理中':'bg-amber-100 text-amber-700','維修中':'bg-red-100 text-red-700','即將開放':'bg-cyan-100 text-cyan-700','輸入中':'bg-slate-100 text-slate-600'};
+        const stCls = statusColors[r.status] || 'bg-slate-100 text-slate-600';
+        return `<tr class="border-b border-slate-100 hover:bg-slate-50 ${rowCls}"><td class="py-3 px-2 font-medium">${esc(r.name)}</td><td class="py-3 px-2 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${stCls}">${esc(r.status)}</span></td><td class="py-3 px-2 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${r.type==='專任出租案'?'bg-indigo-100 text-indigo-700':r.type==='包租代管案'?'bg-purple-100 text-purple-700':'bg-emerald-100 text-emerald-700'}">${esc(r.type)}</span></td><td class="py-3 px-2 text-sm">${esc(r.people)}</td><td class="py-3 px-2 text-sm">${esc(r.city+' '+r.district)}</td><td class="py-3 px-2 text-right font-mono">${esc(r.rent)}</td><td class="py-3 px-2 text-right font-mono ${daysCls}">${r.daysOn}天${warn?' ⚠️':''}${dateSrc}</td></tr>`;
       }).join('')
     }</tbody></table>`;
   document.getElementById('invDetail').innerHTML = detailHtml;
