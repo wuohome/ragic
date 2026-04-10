@@ -26,11 +26,22 @@
 
   <header class="mb-8">
     <h1 class="text-4xl font-black text-slate-900">🏠 窩的家 租賃部業績儀表板</h1>
-    <p class="text-slate-500 mt-2">最後更新：2026-04-10 15:26</p>
+    <p class="text-slate-500 mt-2">最後更新：2026-04-10 15:40</p>
   </header>
 
+  <!-- 人員篩選器 -->
+  <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 mb-6">
+    <div class="flex items-center gap-3">
+      <span class="text-sm font-medium text-slate-500">👤 檢視對象</span>
+      <select id="staffSelector" class="border border-slate-200 rounded-lg px-4 py-2 text-sm font-medium bg-white min-w-[160px]">
+        <option value="">全部門</option>
+      </select>
+      <span id="staffLabel" class="text-sm text-slate-400"></span>
+    </div>
+  </section>
+
   <!-- Tabs -->
-  <div class="flex gap-8 border-b border-slate-200 mb-8">
+  <div class="flex gap-8 border-b border-slate-200 mb-8 overflow-x-auto">
     <div class="tab active pb-3 text-lg px-1" data-tab="week">📦 週進案量</div>
     <div class="tab pb-3 text-lg px-1" data-tab="month">💰 月業績</div>
     <div class="tab pb-3 text-lg px-1" data-tab="year">📊 年度總覽</div>
@@ -233,7 +244,18 @@
     </div>
 
     <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
-      <h2 class="text-xl font-bold text-slate-900 mb-4">📋 庫存明細　<span class="text-sm font-normal text-slate-400">依上架天數排序，超過 90 天標橘色</span></h2>
+      <div class="flex flex-wrap items-center gap-3 mb-4">
+        <h2 class="text-xl font-bold text-slate-900">📋 庫存明細</h2>
+        <div class="flex flex-wrap gap-2 ml-auto">
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium active" data-inv-type="all">全部</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="專任出租案">專任</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="一般出租案">一般</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="包租代管案">包租代管</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="帶看同意">帶看同意</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="社會住宅">社會住宅</span>
+        </div>
+      </div>
+      <p class="text-sm text-slate-400 mb-4">依上架天數排序，超過 90 天標橘色</p>
       <div id="invDetail" class="overflow-x-auto"></div>
     </section>
   </div>
@@ -404,6 +426,52 @@ function rankHtml(items, fmtVal, unit){
   }).join('');
 }
 
+// ── 全域人員篩選 ──
+let curStaff = '';
+function buildStaffSelector(){
+  const names = new Set();
+  INTAKE.forEach(r=>(r.devs||[]).forEach(d=>names.add(d.name)));
+  PERF.forEach(r=>names.add(r.name));
+  INVENTORY.forEach(r=>(r.devs||[]).forEach(d=>names.add(d.name)));
+  OUTREACH.forEach(r=>{ if(r.dev) names.add(r.dev); });
+  CLIENTS.forEach(r=>{ if(r.staff) names.add(r.staff); });
+  const sel = document.getElementById('staffSelector');
+  [...names].sort().forEach(n=>{
+    const opt = document.createElement('option');
+    opt.value = n; opt.textContent = n;
+    sel.appendChild(opt);
+  });
+  // URL 參數 ?staff=xxx
+  const urlStaff = new URLSearchParams(window.location.search).get('staff');
+  if(urlStaff && names.has(urlStaff)){
+    sel.value = urlStaff;
+    curStaff = urlStaff;
+  }
+  sel.addEventListener('change',()=>{
+    curStaff = sel.value;
+    document.getElementById('staffLabel').textContent = curStaff ? `顯示 ${curStaff} 的個人數據` : '';
+    refreshAll();
+    // 更新 URL 不重新載入
+    const url = new URL(window.location);
+    if(curStaff) url.searchParams.set('staff', curStaff);
+    else url.searchParams.delete('staff');
+    history.replaceState(null, '', url);
+  });
+  if(curStaff) document.getElementById('staffLabel').textContent = `顯示 ${curStaff} 的個人數據`;
+}
+
+function refreshAll(){
+  renderWeek();
+  const d=new Date();
+  const curMonthChip = document.querySelector('[data-m].active');
+  if(curMonthChip) renderMonth(curMonthChip.dataset.m); else renderMonth(ym(d));
+  const curYearChip = document.querySelector('[data-y].active');
+  if(curYearChip) renderYear(curYearChip.dataset.y); else if(allYears.length) renderYear(allYears[0]);
+  renderInventory();
+  renderOutreach();
+  renderClients();
+}
+
 // ── Tab ──
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
@@ -419,7 +487,8 @@ function renderWeek(){
   const start=document.getElementById('wStart').value;
   const end=document.getElementById('wEnd').value;
   if(!start||!end||start>end) return;
-  const rows=INTAKE.filter(r=>r.date>=start && r.date<=end);
+  let rows=INTAKE.filter(r=>r.date>=start && r.date<=end);
+  if(curStaff) rows=rows.filter(r=>(r.devs||[]).some(d=>d.name===curStaff));
   const counter={};
   rows.forEach(r=>(r.devs||[]).forEach(d=>counter[d.name]=(counter[d.name]||0)+d.ratio));
   const days=(new Date(end)-new Date(start))/86400000+1;
@@ -461,7 +530,8 @@ document.getElementById('wEnd').addEventListener('change',()=>{document.querySel
 const perfMonths = [...new Set(PERF.map(r=>r.ym))].sort();
 
 function renderMonth(targetYm){
-  const rows = PERF.filter(r=>r.ym===targetYm);
+  let rows = PERF.filter(r=>r.ym===targetYm);
+  if(curStaff) rows=rows.filter(r=>r.name===curStaff);
   const counter = {};
   rows.forEach(r=>{ counter[r.name]=(counter[r.name]||0)+r.perf; });
   const total = Object.values(counter).reduce((a,b)=>a+b,0);
@@ -501,13 +571,15 @@ const allYears    = [...new Set([...intakeYears,...perfYears])].sort().reverse()
 
 function renderYear(year){
   // 業績
-  const perfRows = PERF.filter(r=>r.ym.startsWith(year));
+  let perfRows = PERF.filter(r=>r.ym.startsWith(year));
+  if(curStaff) perfRows=perfRows.filter(r=>r.name===curStaff);
   const perfCounter = {};
   perfRows.forEach(r=>{ perfCounter[r.name]=(perfCounter[r.name]||0)+r.perf; });
   const perfTotal = Object.values(perfCounter).reduce((a,b)=>a+b,0);
 
   // 進案
-  const intakeRows = INTAKE.filter(r=>r.date.startsWith(year));
+  let intakeRows = INTAKE.filter(r=>r.date.startsWith(year));
+  if(curStaff) intakeRows=intakeRows.filter(r=>(r.devs||[]).some(d=>d.name===curStaff));
   const intakeCounter = {};
   intakeRows.forEach(r=>(r.devs||[]).forEach(d=>{ intakeCounter[d.name]=(intakeCounter[d.name]||0)+d.ratio; }));
   const intakeTotal = intakeRows.length;
@@ -698,8 +770,12 @@ function buildCompareChips(){
 // ════════════════════════════════════════
 // 庫存統計
 // ════════════════════════════════════════
+let invTypeFilter = 'all';
+
 function renderInventory(){
-  const rows = INVENTORY;
+  let rows = INVENTORY;
+  // 人員篩選
+  if(curStaff) rows = rows.filter(r=>(r.devs||[]).some(d=>d.name===curStaff));
   const total = rows.length;
   const excl = rows.filter(r=>r.type==='專任出租案').length;
   const genl = rows.filter(r=>r.type==='一般出租案').length;
@@ -709,11 +785,10 @@ function renderInventory(){
   document.getElementById('invGenl').textContent  = genl;
   document.getElementById('invMgmt').textContent  = mgmt;
 
-  // 排行：每位業務的庫存數
+  // 排行
   const counter = {};
   rows.forEach(r=>(r.devs||[]).forEach(d=>{ counter[d.name]=(counter[d.name]||0)+d.ratio; }));
   const items = Object.entries(counter).sort((a,b)=>b[1]-a[1]);
-  // 庫存用警示風格，不用獎牌
   const invHtml = items.length===0
     ? '<div class="text-center text-slate-400 py-8">無庫存</div>'
     : items.map(([name,n],i)=>{
@@ -723,12 +798,12 @@ function renderInventory(){
       }).join('');
   document.getElementById('invRanking').innerHTML = invHtml;
 
-  // 類型圓餅圖
+  // 圓餅圖
   const typeCount = {};
   rows.forEach(r=>{ typeCount[r.type]=(typeCount[r.type]||0)+1; });
   const typeLabels = Object.keys(typeCount);
   const typeData   = Object.values(typeCount);
-  const typeColors = ['#6366f1','#10b981','#a855f7','#94a3b8'];
+  const typeColors = ['#6366f1','#10b981','#a855f7','#f59e0b','#ef4444','#94a3b8'];
   if(window._invTypeChart) window._invTypeChart.destroy();
   window._invTypeChart = new Chart(document.getElementById('invTypeChart'),{
     type:'doughnut',
@@ -736,11 +811,13 @@ function renderInventory(){
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:12}}}}}
   });
 
-  // 明細表
-  const detailHtml = rows.length===0
-    ? '<div class="text-center text-slate-400 py-8">無出租中案件</div>'
+  // 明細表（加類型篩選）
+  let detail = rows;
+  if(invTypeFilter!=='all') detail = detail.filter(r=>r.type===invTypeFilter);
+  const detailHtml = detail.length===0
+    ? '<div class="text-center text-slate-400 py-8">無符合條件的案件</div>'
     : `<table class="w-full"><thead><tr class="text-left text-xs font-semibold text-slate-500 uppercase border-b-2 border-slate-200"><th class="py-2 px-2">案名</th><th class="py-2 px-2">委託類型</th><th class="py-2 px-2">開發人員</th><th class="py-2 px-2">地區</th><th class="py-2 px-2 text-right">月租</th><th class="py-2 px-2 text-right">上架天數</th></tr></thead><tbody>${
-      rows.map(r=>{
+      detail.map(r=>{
         const warn = r.daysOn > 90;
         const rowCls = warn ? 'bg-orange-50' : '';
         const daysCls = warn ? 'text-orange-600 font-bold' : '';
@@ -751,6 +828,12 @@ function renderInventory(){
   document.getElementById('invDetail').innerHTML = detailHtml;
 }
 
+document.querySelectorAll('[data-inv-type]').forEach(c=>c.addEventListener('click',()=>{
+  invTypeFilter = c.dataset.invType;
+  document.querySelectorAll('[data-inv-type]').forEach(x=>x.classList.toggle('active',x.dataset.invType===invTypeFilter));
+  renderInventory();
+}));
+
 // ════════════════════════════════════════
 // 開發追蹤
 // ════════════════════════════════════════
@@ -758,7 +841,8 @@ function renderOutreach(){
   const start = document.getElementById('oStart').value;
   const end   = document.getElementById('oEnd').value;
   if(!start||!end||start>end) return;
-  const rows = OUTREACH.filter(r=>r.date>=start && r.date<=end);
+  let rows = OUTREACH.filter(r=>r.date>=start && r.date<=end);
+  if(curStaff) rows=rows.filter(r=>r.dev===curStaff);
   const total    = rows.length;
   const accepted = rows.filter(r=>r.status==='已接委託').length;
   const rate     = total > 0 ? (accepted/total*100).toFixed(1) : '0';
@@ -817,7 +901,8 @@ function renderClients(){
   const start = document.getElementById('clStart').value;
   const end   = document.getElementById('clEnd').value;
   if(!start||!end||start>end) return;
-  const rows = CLIENTS.filter(r=>r.date>=start && r.date<=end);
+  let rows = CLIENTS.filter(r=>r.date>=start && r.date<=end);
+  if(curStaff) rows=rows.filter(r=>r.staff===curStaff);
   const total = rows.length;
   const staffSet = new Set(rows.map(r=>r.staff).filter(Boolean));
   document.getElementById('clTotal').textContent = total;
@@ -868,6 +953,7 @@ document.getElementById('clStart').addEventListener('change',()=>{document.query
 document.getElementById('clEnd').addEventListener('change',()=>{document.querySelectorAll('[data-cl]').forEach(c=>c.classList.remove('active'));renderClients();});
 
 // ── 初始化 ──
+buildStaffSelector();
 buildMonthChips();
 buildYearChips();
 buildCompareChips();
