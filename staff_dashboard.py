@@ -149,6 +149,157 @@ def fetch_perf_from_ragic():
     return records
 
 
+# ── 1b. Ragic 庫存（代租中案件）──────────────────────────────────────
+
+INVENTORY_BASE = "https://ap15.ragic.com/wuohome/operation/4"
+FIELD_STATUS   = "1000707"
+FIELD_TYPE     = "1000248"
+
+TYPE_MAP = {
+    "專任":         "專任出租案",
+    "一般":         "一般出租案",
+    "專任(含代管)": "包租代管案",
+    "一般(含代管)": "包租代管案",
+    "包租代管":     "包租代管案",
+    "帶看同意":     "其他",
+    "社會住宅":     "其他",
+}
+
+def fetch_inventory():
+    """抓所有狀態=代租中的物件（不限日期），含子表"""
+    qs = (
+        "api=&subtables=true"
+        f"&where={urllib.parse.quote(f'{FIELD_STATUS},eq,代租中')}"
+        "&limit=10000"
+    )
+    req = urllib.request.Request(
+        f"{INVENTORY_BASE}?{qs}",
+        headers={"Authorization": "Basic " + API_KEY},
+    )
+    return json.loads(urllib.request.urlopen(req, timeout=120).read())
+
+
+def to_inventory_records(rows):
+    today_str = date.today().isoformat()
+    out = []
+    for c in rows.values():
+        d = (c.get("委託時間(起)", "") or "").replace("/", "-")
+        case_type_raw = (c.get("委託類型", "") or "").strip()
+        case_type = TYPE_MAP.get(case_type_raw, "其他") if case_type_raw else "未分類"
+        devs = extract_devs(c)
+        people_str = "、".join(
+            f"{x['name']}({int(round(x['ratio']*100))}%)" for x in devs
+        ) or (c.get("開發人員", "") or "")
+        days_on = 0
+        if d:
+            try:
+                delta = date.fromisoformat(today_str) - date.fromisoformat(d)
+                days_on = delta.days
+            except Exception:
+                pass
+        out.append({
+            "date":      d or "—",
+            "name":      c.get("案名", "") or "",
+            "city":      c.get("縣市", "") or "",
+            "district":  normalize_district(c.get("鄉鎮市區", "") or ""),
+            "rent":      fmt_rent(c.get("月租金")),
+            "people":    people_str,
+            "devs":      devs,
+            "type":      case_type,
+            "typeRaw":   case_type_raw,
+            "daysOn":    days_on,
+            "status":    c.get("狀態", "") or "",
+        })
+    out.sort(key=lambda x: -x["daysOn"])
+    return out
+
+
+# ── 1c. Ragic 開發募集 ────────────────────────────────────────────────
+
+OUTREACH_BASE = "https://ap15.ragic.com/wuohome/property-data-kept/17"
+
+def fetch_outreach():
+    qs = "api=&subtables=true&limit=10000"
+    req = urllib.request.Request(
+        f"{OUTREACH_BASE}?{qs}",
+        headers={"Authorization": "Basic " + API_KEY},
+    )
+    return json.loads(urllib.request.urlopen(req, timeout=120).read())
+
+
+def to_outreach_records(rows):
+    out = []
+    for c in rows.values():
+        created = (c.get("建立日期", "") or "").strip()
+        if not created:
+            continue
+        # 建立日期格式: yyyy/MM/dd HH:mm:ss
+        created_date = created[:10].replace("/", "-")
+        dev_name = (c.get("開發人員", "") or "").strip()
+        if not dev_name:
+            dev_name = (c.get("主要開發人", "") or "").strip()
+        if dev_name in EXCLUDE_DEVS or any(k in dev_name for k in EXCLUDE_KEYWORDS):
+            continue
+        owner_name = (c.get("屋主姓名", "") or "").strip()
+        phone      = (c.get("手機號碼", "") or "").strip()
+        status     = (c.get("屋主狀態", "") or "").strip()
+        accepted   = int(float(c.get("已接委託數量") or 0))
+        # 經營紀錄子表
+        logs = c.get("_subtable_1000271") or {}
+        log_count = len(logs)
+        # 完整度：姓名+電話+至少1筆經營紀錄 → 🟢；部分 → 🟡；空 → 🔴
+        filled = sum([bool(owner_name), bool(phone), log_count > 0])
+        completeness = "green" if filled == 3 else ("yellow" if filled >= 1 else "red")
+        out.append({
+            "date":         created_date,
+            "dev":          dev_name,
+            "owner":        owner_name,
+            "phone":        "有" if phone else "",
+            "status":       status,
+            "accepted":     accepted,
+            "logCount":     log_count,
+            "completeness": completeness,
+        })
+    out.sort(key=lambda x: x["date"], reverse=True)
+    return out
+
+
+# ── 1d. Ragic 租客需求（客戶來源）────────────────────────────────────
+
+CLIENTS_BASE = "https://ap15.ragic.com/wuohome/property-data-kept/8"
+
+def fetch_clients():
+    qs = "api=&limit=10000"
+    req = urllib.request.Request(
+        f"{CLIENTS_BASE}?{qs}",
+        headers={"Authorization": "Basic " + API_KEY},
+    )
+    return json.loads(urllib.request.urlopen(req, timeout=120).read())
+
+
+def to_client_records(rows):
+    out = []
+    for c in rows.values():
+        ts = (c.get("時間", "") or "").strip()
+        if not ts:
+            continue
+        # 時間格式: yyyy/MM/dd HH:mm
+        ts_date = ts[:10].replace("/", "-")
+        staff = (c.get("服務人員", "") or "").strip()
+        if staff in EXCLUDE_DEVS or any(k in staff for k in EXCLUDE_KEYWORDS):
+            continue
+        client_name = (c.get("租客姓名 / line名稱", "") or "").strip()
+        source      = (c.get("來源標記", "") or "").strip() or "未標記"
+        out.append({
+            "date":   ts_date,
+            "staff":  staff,
+            "client": client_name,
+            "source": source,
+        })
+    out.sort(key=lambda x: x["date"], reverse=True)
+    return out
+
+
 def build_compare(ragic_perf, ob_perf):
     """
     比對兩個業績來源，回傳 {ym: [{name, ragic, ob, diff, status}]}
@@ -272,6 +423,9 @@ HTML_TPL = r"""<!DOCTYPE html>
     <div class="tab pb-3 text-lg px-1" data-tab="month">💰 月業績</div>
     <div class="tab pb-3 text-lg px-1" data-tab="year">📊 年度總覽</div>
     <div class="tab pb-3 text-lg px-1" data-tab="compare">⚖️ 資料比對</div>
+    <div class="tab pb-3 text-lg px-1" data-tab="inventory">📦 庫存統計</div>
+    <div class="tab pb-3 text-lg px-1" data-tab="outreach">📞 開發追蹤</div>
+    <div class="tab pb-3 text-lg px-1" data-tab="clients">👥 客戶來源</div>
   </div>
 
   <!-- ── 週進案量 ── -->
@@ -422,15 +576,189 @@ HTML_TPL = r"""<!DOCTYPE html>
     </section>
   </div>
 
+  <!-- ── 庫存統計 ── -->
+  <div class="tab-panel" id="panel-inventory">
+    <section class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-6">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">全店總庫存</div>
+        <div class="flex items-baseline gap-2">
+          <div id="invTotal" class="text-5xl font-black text-blue-600">0</div>
+          <div class="text-slate-400">件</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">專任出租案</div>
+        <div class="flex items-baseline gap-2">
+          <div id="invExcl" class="text-4xl font-black text-indigo-600">0</div>
+          <div class="text-slate-400">件</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">一般出租案</div>
+        <div class="flex items-baseline gap-2">
+          <div id="invGenl" class="text-4xl font-black text-emerald-600">0</div>
+          <div class="text-slate-400">件</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">包租代管案</div>
+        <div class="flex items-baseline gap-2">
+          <div id="invMgmt" class="text-4xl font-black text-purple-600">0</div>
+          <div class="text-slate-400">件</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+        <h2 class="text-xl font-bold text-slate-900 mb-6">🏆 業務庫存排行</h2>
+        <div id="invRanking" class="space-y-3"></div>
+      </section>
+      <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+        <h2 class="text-xl font-bold text-slate-900 mb-6">📊 委託類型分佈</h2>
+        <div class="relative" style="height:260px"><canvas id="invTypeChart"></canvas></div>
+      </section>
+    </div>
+
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">📋 庫存明細　<span class="text-sm font-normal text-slate-400">依上架天數排序，超過 90 天標橘色</span></h2>
+      <div id="invDetail" class="overflow-x-auto"></div>
+    </section>
+  </div>
+
+  <!-- ── 開發追蹤 ── -->
+  <div class="tab-panel" id="panel-outreach">
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-500">起</label>
+          <input id="oStart" type="date" class="border border-slate-200 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-500">迄</label>
+          <input id="oEnd" type="date" class="border border-slate-200 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div class="flex flex-wrap gap-2 ml-auto">
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="thisWeek">本週</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="lastWeek">上週</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="thisMonth">本月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="last30">近30天</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="last90">近90天</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="all">全部</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">區間開發總數</div>
+        <div class="flex items-baseline gap-2">
+          <div id="oTotal" class="text-5xl font-black text-blue-600">0</div>
+          <div class="text-slate-400">筆</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">已接委託</div>
+        <div class="flex items-baseline gap-2">
+          <div id="oAccepted" class="text-5xl font-black text-emerald-600">0</div>
+          <div class="text-slate-400">筆</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">轉化率</div>
+        <div class="flex items-baseline gap-2">
+          <div id="oRate" class="text-5xl font-black text-purple-600">0</div>
+          <div class="text-slate-400">%</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+        <h2 class="text-xl font-bold text-slate-900 mb-6">🏆 開發王</h2>
+        <div id="oDevRanking" class="space-y-3"></div>
+      </section>
+      <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+        <h2 class="text-xl font-bold text-slate-900 mb-6">🏆 轉化王　<span class="text-sm font-normal text-slate-400">開發→接案轉化率</span></h2>
+        <div id="oConvRanking" class="space-y-3"></div>
+      </section>
+    </div>
+
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">📋 開發明細　<span class="text-sm font-normal text-slate-400">🟢 資料完整 🟡 部分 🔴 待補</span></h2>
+      <div id="oDetail" class="overflow-x-auto"></div>
+    </section>
+  </div>
+
+  <!-- ── 客戶來源 ── -->
+  <div class="tab-panel" id="panel-clients">
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-500">起</label>
+          <input id="clStart" type="date" class="border border-slate-200 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-500">迄</label>
+          <input id="clEnd" type="date" class="border border-slate-200 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div class="flex flex-wrap gap-2 ml-auto">
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="thisWeek">本週</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="lastWeek">上週</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="thisMonth">本月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="last30">近30天</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="last90">近90天</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="all">全部</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">區間客戶總數</div>
+        <div class="flex items-baseline gap-2">
+          <div id="clTotal" class="text-5xl font-black text-blue-600">0</div>
+          <div class="text-slate-400">人</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">參與業務</div>
+        <div class="flex items-baseline gap-2">
+          <div id="clStaff" class="text-5xl font-black text-emerald-600">0</div>
+          <div class="text-slate-400">人</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+        <h2 class="text-xl font-bold text-slate-900 mb-6">🏆 客戶王</h2>
+        <div id="clRanking" class="space-y-3"></div>
+      </section>
+      <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+        <h2 class="text-xl font-bold text-slate-900 mb-6">📊 來源分佈</h2>
+        <div class="relative" style="height:260px"><canvas id="clSourceChart"></canvas></div>
+      </section>
+    </div>
+
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">📋 客戶明細</h2>
+      <div id="clDetail" class="overflow-x-auto"></div>
+    </section>
+  </div>
+
   <footer class="text-center text-slate-400 text-xs py-6">
     Generated by staff_dashboard.py　•　窩的家系統部
   </footer>
 </div>
 
 <script>
-const INTAKE   = __INTAKE__;
-const PERF     = __PERF__;
-const COMPARE  = __COMPARE__;
+const INTAKE    = __INTAKE__;
+const PERF      = __PERF__;
+const COMPARE   = __COMPARE__;
+const INVENTORY = __INVENTORY__;
+const OUTREACH  = __OUTREACH__;
+const CLIENTS   = __CLIENTS__;
 
 // ── utils ──
 function ymd(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;}
@@ -447,6 +775,7 @@ const datePresets = {
   thisMonth:()=>{const d=new Date();return [new Date(d.getFullYear(),d.getMonth(),1),new Date(d.getFullYear(),d.getMonth()+1,0)];},
   last30:()=>{const d=new Date();return [addDays(d,-29),d];},
   last90:()=>{const d=new Date();return [addDays(d,-89),d];},
+  all:()=>[new Date(2020,0,1),new Date()],
 };
 
 function rankHtml(items, fmtVal, unit){
@@ -754,6 +1083,169 @@ function buildCompareChips(){
   });
 }
 
+// ════════════════════════════════════════
+// 庫存統計
+// ════════════════════════════════════════
+function renderInventory(){
+  const rows = INVENTORY;
+  const total = rows.length;
+  const excl = rows.filter(r=>r.type==='專任出租案').length;
+  const genl = rows.filter(r=>r.type==='一般出租案').length;
+  const mgmt = rows.filter(r=>r.type==='包租代管案').length;
+  document.getElementById('invTotal').textContent = total;
+  document.getElementById('invExcl').textContent  = excl;
+  document.getElementById('invGenl').textContent  = genl;
+  document.getElementById('invMgmt').textContent  = mgmt;
+
+  // 排行：每位業務的庫存數
+  const counter = {};
+  rows.forEach(r=>(r.devs||[]).forEach(d=>{ counter[d.name]=(counter[d.name]||0)+d.ratio; }));
+  const items = Object.entries(counter).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('invRanking').innerHTML = rankHtml(items, fmtN, '件');
+
+  // 類型圓餅圖
+  const typeCount = {};
+  rows.forEach(r=>{ typeCount[r.type]=(typeCount[r.type]||0)+1; });
+  const typeLabels = Object.keys(typeCount);
+  const typeData   = Object.values(typeCount);
+  const typeColors = ['#6366f1','#10b981','#a855f7','#94a3b8'];
+  if(window._invTypeChart) window._invTypeChart.destroy();
+  window._invTypeChart = new Chart(document.getElementById('invTypeChart'),{
+    type:'doughnut',
+    data:{labels:typeLabels,datasets:[{data:typeData,backgroundColor:typeColors.slice(0,typeLabels.length)}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:12}}}}}
+  });
+
+  // 明細表
+  const detailHtml = rows.length===0
+    ? '<div class="text-center text-slate-400 py-8">無出租中案件</div>'
+    : `<table class="w-full"><thead><tr class="text-left text-xs font-semibold text-slate-500 uppercase border-b-2 border-slate-200"><th class="py-2 px-2">案名</th><th class="py-2 px-2">委託類型</th><th class="py-2 px-2">開發人員</th><th class="py-2 px-2">地區</th><th class="py-2 px-2 text-right">月租</th><th class="py-2 px-2 text-right">上架天數</th></tr></thead><tbody>${
+      rows.map(r=>{
+        const warn = r.daysOn > 90;
+        const rowCls = warn ? 'bg-orange-50' : '';
+        const daysCls = warn ? 'text-orange-600 font-bold' : '';
+        return `<tr class="border-b border-slate-100 hover:bg-slate-50 ${rowCls}"><td class="py-3 px-2 font-medium">${esc(r.name)}</td><td class="py-3 px-2 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${r.type==='專任出租案'?'bg-indigo-100 text-indigo-700':r.type==='包租代管案'?'bg-purple-100 text-purple-700':'bg-emerald-100 text-emerald-700'}">${esc(r.type)}</span></td><td class="py-3 px-2 text-sm">${esc(r.people)}</td><td class="py-3 px-2 text-sm">${esc(r.city+' '+r.district)}</td><td class="py-3 px-2 text-right font-mono">${esc(r.rent)}</td><td class="py-3 px-2 text-right font-mono ${daysCls}">${r.daysOn}天${warn?' ⚠️':''}</td></tr>`;
+      }).join('')
+    }</tbody></table>`;
+  document.getElementById('invDetail').innerHTML = detailHtml;
+}
+
+// ════════════════════════════════════════
+// 開發追蹤
+// ════════════════════════════════════════
+function renderOutreach(){
+  const start = document.getElementById('oStart').value;
+  const end   = document.getElementById('oEnd').value;
+  if(!start||!end||start>end) return;
+  const rows = OUTREACH.filter(r=>r.date>=start && r.date<=end);
+  const total    = rows.length;
+  const accepted = rows.filter(r=>r.status==='已接委託').length;
+  const rate     = total > 0 ? (accepted/total*100).toFixed(1) : '0';
+  document.getElementById('oTotal').textContent    = total;
+  document.getElementById('oAccepted').textContent = accepted;
+  document.getElementById('oRate').textContent     = rate;
+
+  // 開發王排行
+  const devCounter = {};
+  rows.forEach(r=>{ devCounter[r.dev]=(devCounter[r.dev]||0)+1; });
+  const devItems = Object.entries(devCounter).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('oDevRanking').innerHTML = rankHtml(devItems, fmtN, '筆');
+
+  // 轉化王：每人 accepted/total
+  const accCounter = {};
+  rows.forEach(r=>{ if(r.status==='已接委託') accCounter[r.dev]=(accCounter[r.dev]||0)+1; });
+  const convItems = Object.keys(devCounter).map(name=>{
+    const dev = devCounter[name]||0;
+    const acc = accCounter[name]||0;
+    return [name, dev>0 ? Math.round(acc/dev*100) : 0];
+  }).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('oConvRanking').innerHTML = convItems.length
+    ? rankHtml(convItems, v=>v, '%')
+    : '<div class="text-center text-slate-400 py-8">此區間無轉化</div>';
+
+  // 明細表
+  const dots = {green:'🟢',yellow:'🟡',red:'🔴'};
+  const detailHtml = rows.length===0
+    ? '<div class="text-center text-slate-400 py-8">此區間無開發紀錄</div>'
+    : `<table class="w-full"><thead><tr class="text-left text-xs font-semibold text-slate-500 uppercase border-b-2 border-slate-200"><th class="py-2 px-2">日期</th><th class="py-2 px-2">開發人</th><th class="py-2 px-2">屋主</th><th class="py-2 px-2">電話</th><th class="py-2 px-2">經營次數</th><th class="py-2 px-2">完整度</th><th class="py-2 px-2">狀態</th></tr></thead><tbody>${
+      rows.map(r=>{
+        const statusTag = r.status==='已接委託'
+          ? '<span class="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">已接委託</span>'
+          : '<span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600">潛在屋主</span>';
+        return `<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="py-3 px-2 text-sm whitespace-nowrap">${esc(r.date)}</td><td class="py-3 px-2 font-medium">${esc(r.dev)}</td><td class="py-3 px-2 text-sm">${esc(r.owner||'—')}</td><td class="py-3 px-2 text-sm">${r.phone||'—'}</td><td class="py-3 px-2 text-sm text-center">${r.logCount}</td><td class="py-3 px-2 text-center">${dots[r.completeness]||'—'}</td><td class="py-3 px-2">${statusTag}</td></tr>`;
+      }).join('')
+    }</tbody></table>`;
+  document.getElementById('oDetail').innerHTML = detailHtml;
+}
+
+function applyOutreachPreset(name){
+  const [s,e] = datePresets[name]();
+  document.getElementById('oStart').value = ymd(s);
+  document.getElementById('oEnd').value   = ymd(e);
+  document.querySelectorAll('[data-o]').forEach(c=>c.classList.toggle('active',c.dataset.o===name));
+  renderOutreach();
+}
+document.querySelectorAll('[data-o]').forEach(c=>c.addEventListener('click',()=>applyOutreachPreset(c.dataset.o)));
+document.getElementById('oStart').addEventListener('change',()=>{document.querySelectorAll('[data-o]').forEach(c=>c.classList.remove('active'));renderOutreach();});
+document.getElementById('oEnd').addEventListener('change',()=>{document.querySelectorAll('[data-o]').forEach(c=>c.classList.remove('active'));renderOutreach();});
+
+// ════════════════════════════════════════
+// 客戶來源
+// ════════════════════════════════════════
+function renderClients(){
+  const start = document.getElementById('clStart').value;
+  const end   = document.getElementById('clEnd').value;
+  if(!start||!end||start>end) return;
+  const rows = CLIENTS.filter(r=>r.date>=start && r.date<=end);
+  const total = rows.length;
+  const staffSet = new Set(rows.map(r=>r.staff).filter(Boolean));
+  document.getElementById('clTotal').textContent = total;
+  document.getElementById('clStaff').textContent = staffSet.size;
+
+  // 客戶王排行
+  const counter = {};
+  rows.forEach(r=>{ if(r.staff) counter[r.staff]=(counter[r.staff]||0)+1; });
+  const items = Object.entries(counter).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('clRanking').innerHTML = rankHtml(items, fmtN, '人');
+
+  // 來源圓餅圖
+  const srcCount = {};
+  rows.forEach(r=>{ srcCount[r.source]=(srcCount[r.source]||0)+1; });
+  const srcLabels = Object.keys(srcCount);
+  const srcData   = Object.values(srcCount);
+  const srcColors = ['#3b82f6','#ef4444','#f59e0b','#8b5cf6','#10b981','#ec4899','#94a3b8'];
+  if(window._clSourceChart) window._clSourceChart.destroy();
+  window._clSourceChart = new Chart(document.getElementById('clSourceChart'),{
+    type:'doughnut',
+    data:{labels:srcLabels,datasets:[{data:srcData,backgroundColor:srcColors.slice(0,srcLabels.length)}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:12}}}}}
+  });
+
+  // 明細
+  const detailHtml = rows.length===0
+    ? '<div class="text-center text-slate-400 py-8">此區間無客戶紀錄</div>'
+    : `<table class="w-full"><thead><tr class="text-left text-xs font-semibold text-slate-500 uppercase border-b-2 border-slate-200"><th class="py-2 px-2">日期</th><th class="py-2 px-2">服務人員</th><th class="py-2 px-2">客戶名稱</th><th class="py-2 px-2">來源</th></tr></thead><tbody>${
+      rows.map(r=>{
+        const srcTag = r.source==='未標記'
+          ? '<span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-500">未標記</span>'
+          : `<span class="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700">${esc(r.source)}</span>`;
+        return `<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="py-3 px-2 text-sm whitespace-nowrap">${esc(r.date)}</td><td class="py-3 px-2 font-medium">${esc(r.staff)}</td><td class="py-3 px-2 text-sm">${esc(r.client||'—')}</td><td class="py-3 px-2">${srcTag}</td></tr>`;
+      }).join('')
+    }</tbody></table>`;
+  document.getElementById('clDetail').innerHTML = detailHtml;
+}
+
+function applyClientPreset(name){
+  const [s,e] = datePresets[name]();
+  document.getElementById('clStart').value = ymd(s);
+  document.getElementById('clEnd').value   = ymd(e);
+  document.querySelectorAll('[data-cl]').forEach(c=>c.classList.toggle('active',c.dataset.cl===name));
+  renderClients();
+}
+document.querySelectorAll('[data-cl]').forEach(c=>c.addEventListener('click',()=>applyClientPreset(c.dataset.cl)));
+document.getElementById('clStart').addEventListener('change',()=>{document.querySelectorAll('[data-cl]').forEach(c=>c.classList.remove('active'));renderClients();});
+document.getElementById('clEnd').addEventListener('change',()=>{document.querySelectorAll('[data-cl]').forEach(c=>c.classList.remove('active'));renderClients();});
+
 // ── 初始化 ──
 buildMonthChips();
 buildYearChips();
@@ -762,6 +1254,9 @@ applyWeekPreset('thisWeek');
 (()=>{const d=new Date(); renderMonth(ym(d));})();
 if(allYears.length) renderYear(allYears[0]);
 if(compareMonths.length) renderCompare(compareMonths[0]);
+renderInventory();
+applyOutreachPreset('thisMonth');
+applyClientPreset('thisMonth');
 </script>
 </body>
 </html>"""
@@ -786,12 +1281,30 @@ def main():
     compare = build_compare(perf_ragic, perf_ob)
     print(f"  比對 {len(compare)} 個月份")
 
+    print("抓取 Ragic 庫存（代租中案件）...")
+    inv_rows  = fetch_inventory()
+    inventory = to_inventory_records(inv_rows)
+    print(f"  {len(inventory)} 件")
+
+    print("抓取 Ragic 開發募集...")
+    out_rows  = fetch_outreach()
+    outreach  = to_outreach_records(out_rows)
+    print(f"  {len(outreach)} 筆")
+
+    print("抓取 Ragic 租客需求（客戶來源）...")
+    cli_rows = fetch_clients()
+    clients  = to_client_records(cli_rows)
+    print(f"  {len(clients)} 筆")
+
     html_doc = (
         HTML_TPL
-        .replace("__INTAKE__",  json.dumps(intake,     ensure_ascii=False))
-        .replace("__PERF__",    json.dumps(perf_ob,    ensure_ascii=False))
-        .replace("__COMPARE__", json.dumps(compare,    ensure_ascii=False))
-        .replace("__UPDATED__", f"{datetime.now():%Y-%m-%d %H:%M}")
+        .replace("__INTAKE__",    json.dumps(intake,     ensure_ascii=False))
+        .replace("__PERF__",      json.dumps(perf_ob,    ensure_ascii=False))
+        .replace("__COMPARE__",   json.dumps(compare,    ensure_ascii=False))
+        .replace("__INVENTORY__", json.dumps(inventory,  ensure_ascii=False))
+        .replace("__OUTREACH__",  json.dumps(outreach,   ensure_ascii=False))
+        .replace("__CLIENTS__",   json.dumps(clients,    ensure_ascii=False))
+        .replace("__UPDATED__",   f"{datetime.now():%Y-%m-%d %H:%M}")
     )
 
     HTML_OUT.parent.mkdir(parents=True, exist_ok=True)
