@@ -440,10 +440,22 @@
         <div class="step-content active" id="step1">
             <h2>👋 您好！</h2>
             <p class="desc">歡迎來到窩的家。<br>請先留下您的聯絡方式</p>
-            
+
             <input type="text" id="field_name" name="1000581" placeholder="您的姓名 / Line 暱稱 (必填)" required>
             <input type="tel" id="field_phone" name="1000583" placeholder="手機號碼 (必填)" required>
             <input type="text" id="field_line" name="1000647" placeholder="LINE ID (選填)">
+
+            <p class="question-label" style="margin-top: 20px;">您從哪裡找到我們的？</p>
+            <input type="hidden" id="field_source_channel">
+            <div id="source_container" class="option-grid">
+                <div class="multi-select-btn" onclick="selectSource(this)">591</div>
+                <div class="multi-select-btn" onclick="selectSource(this)">IG</div>
+                <div class="multi-select-btn" onclick="selectSource(this)">FB</div>
+                <div class="multi-select-btn" onclick="selectSource(this)">Threads</div>
+                <div class="multi-select-btn" onclick="selectSource(this)">LINE</div>
+                <div class="multi-select-btn" onclick="selectSource(this)">朋友介紹</div>
+                <div class="multi-select-btn" onclick="selectSource(this)">其他</div>
+            </div>
         </div>
 
         <!-- STEP 2: 房屋需求 -->
@@ -755,6 +767,15 @@
     }
 
     // --- 多選按鈕邏輯 ---
+    // 來源選擇（單選）
+    let selectedSource = '';
+    function selectSource(btn) {
+        document.querySelectorAll('#source_container .multi-select-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedSource = btn.innerText;
+        document.getElementById('field_source_channel').value = selectedSource;
+    }
+
     function toggleSelection(btn, type) {
         const value = btn.innerText;
 
@@ -1039,8 +1060,10 @@ ${furnitureText}
     function submitForm() {
         document.getElementById('loadingOverlay').style.display = 'flex';
         
+        // 來源追蹤優先順序：客戶手選 > URL ?s=xxx > wizard session ID
+        const urlSource = new URLSearchParams(window.location.search).get('s');
         const timestamp = new Date().getTime();
-        document.getElementById('input_source_mark').value = 'wizard_v1_' + timestamp;
+        document.getElementById('input_source_mark').value = selectedSource || urlSource || ('wizard_v1_' + timestamp);
         
         const now = new Date();
         const timeString = now.getFullYear() + "/" + 
