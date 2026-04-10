@@ -213,14 +213,6 @@ def fetch_inventory():
     return json.loads(urllib.request.urlopen(req, timeout=120).read())
 
 
-def _extract_cal_date(c):
-    """從 _index_calDates_ 抽出日期當 fallback"""
-    import re
-    raw = (c.get("_index_calDates_", "") or "")
-    m = re.search(r"(\d{4})/(\d{2})/(\d{2})", raw)
-    return f"{m.group(1)}-{m.group(2)}-{m.group(3)}" if m else ""
-
-
 def to_inventory_records(rows):
     today_str = date.today().isoformat()
     out = []
@@ -229,10 +221,9 @@ def to_inventory_records(rows):
         if status in INVENTORY_EXCLUDE_STATUS or not status:
             continue
         d = (c.get("委託時間(起)", "") or "").replace("/", "-")
-        date_source = "委託日"
+        date_source = ""
         if not d:
-            d = _extract_cal_date(c)
-            date_source = "建檔日" if d else ""
+            date_source = "未填委託日"
         case_type_raw = (c.get("委託類型", "") or "").strip()
         case_type = TYPE_MAP.get(case_type_raw, case_type_raw) if case_type_raw else "未分類"
         devs = extract_devs(c)
@@ -260,7 +251,8 @@ def to_inventory_records(rows):
             "daysOn":     days_on,
             "status":     c.get("狀態", "") or "",
         })
-    out.sort(key=lambda x: -x["daysOn"])
+    # 有日期的依天數排序，未填委託日的排最後
+    out.sort(key=lambda x: (-x["daysOn"] if x["dateSource"] != "未填委託日" else 0, x["dateSource"] == "未填委託日"))
     return out
 
 
@@ -1276,10 +1268,11 @@ function renderInventory(){
         const warn = r.daysOn > 90;
         const rowCls = warn ? 'bg-orange-50' : '';
         const daysCls = warn ? 'text-orange-600 font-bold' : '';
-        const dateSrc = r.dateSource==='建檔日' ? '<span class="text-xs text-slate-400 ml-1">(建檔日)</span>' : '';
+        const noDate = r.dateSource==='未填委託日';
+        const daysCell = noDate ? '<span class="text-xs text-slate-400">未填委託日</span>' : `${r.daysOn}天${warn?' ⚠️':''}`;
         const statusColors = {'代租中':'bg-emerald-100 text-emerald-700','已收定，可帶看':'bg-blue-100 text-blue-700','已收定，等簽約':'bg-blue-100 text-blue-700','整理中':'bg-amber-100 text-amber-700','維修中':'bg-red-100 text-red-700','即將開放':'bg-cyan-100 text-cyan-700','輸入中':'bg-slate-100 text-slate-600'};
         const stCls = statusColors[r.status] || 'bg-slate-100 text-slate-600';
-        return `<tr class="border-b border-slate-100 hover:bg-slate-50 ${rowCls}"><td class="py-3 px-2 font-medium">${esc(r.name)}</td><td class="py-3 px-2 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${stCls}">${esc(r.status)}</span></td><td class="py-3 px-2 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${r.type==='專任出租案'?'bg-indigo-100 text-indigo-700':r.type==='包租代管案'?'bg-purple-100 text-purple-700':'bg-emerald-100 text-emerald-700'}">${esc(r.type)}</span></td><td class="py-3 px-2 text-sm">${esc(r.people)}</td><td class="py-3 px-2 text-sm">${esc(r.city+' '+r.district)}</td><td class="py-3 px-2 text-right font-mono">${esc(r.rent)}</td><td class="py-3 px-2 text-right font-mono ${daysCls}">${r.daysOn}天${warn?' ⚠️':''}${dateSrc}</td></tr>`;
+        return `<tr class="border-b border-slate-100 hover:bg-slate-50 ${rowCls}"><td class="py-3 px-2 font-medium">${esc(r.name)}</td><td class="py-3 px-2 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${stCls}">${esc(r.status)}</span></td><td class="py-3 px-2 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${r.type==='專任出租案'?'bg-indigo-100 text-indigo-700':r.type==='包租代管案'?'bg-purple-100 text-purple-700':'bg-emerald-100 text-emerald-700'}">${esc(r.type)}</span></td><td class="py-3 px-2 text-sm">${esc(r.people)}</td><td class="py-3 px-2 text-sm">${esc(r.city+' '+r.district)}</td><td class="py-3 px-2 text-right font-mono">${esc(r.rent)}</td><td class="py-3 px-2 text-right font-mono ${daysCls}">${daysCell}</td></tr>`;
       }).join('')
     }</tbody></table>`;
   document.getElementById('invDetail').innerHTML = detailHtml;
