@@ -289,7 +289,8 @@ def to_client_records(rows):
         if staff in EXCLUDE_DEVS or any(k in staff for k in EXCLUDE_KEYWORDS):
             continue
         client_name = (c.get("租客姓名 / line名稱", "") or "").strip()
-        source      = (c.get("來源標記", "") or "").strip() or "未標記"
+        source_raw  = (c.get("來源標記", "") or "").strip()
+        source      = "未標記" if (not source_raw or source_raw.startswith("wizard_v1_")) else source_raw
         out.append({
             "date":   ts_date,
             "staff":  staff,
