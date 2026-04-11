@@ -525,8 +525,7 @@ HTML_TPL = r"""<!DOCTYPE html>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-w="thisWeek">本週</span>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-w="lastWeek">上週</span>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-w="thisMonth">本月</span>
-          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-w="last30">近30天</span>
-          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-w="last90">近90天</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-w="lastMonth">上個月</span>
         </div>
       </div>
     </section>
@@ -742,8 +741,7 @@ HTML_TPL = r"""<!DOCTYPE html>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="thisWeek">本週</span>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="lastWeek">上週</span>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="thisMonth">本月</span>
-          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="last30">近30天</span>
-          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="last90">近90天</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="lastMonth">上個月</span>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="all">全部</span>
         </div>
       </div>
@@ -806,8 +804,7 @@ HTML_TPL = r"""<!DOCTYPE html>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="thisWeek">本週</span>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="lastWeek">上週</span>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="thisMonth">本月</span>
-          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="last30">近30天</span>
-          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="last90">近90天</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="lastMonth">上個月</span>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="all">全部</span>
         </div>
       </div>
@@ -874,6 +871,7 @@ const datePresets = {
   thisWeek:()=>{const m=thisMonday();return [m,addDays(m,6)];},
   lastWeek:()=>{const m=addDays(thisMonday(),-7);return [m,addDays(m,6)];},
   thisMonth:()=>{const d=new Date();return [new Date(d.getFullYear(),d.getMonth(),1),new Date(d.getFullYear(),d.getMonth()+1,0)];},
+  lastMonth:()=>{const d=new Date();return [new Date(d.getFullYear(),d.getMonth()-1,1),new Date(d.getFullYear(),d.getMonth(),0)];},
   last30:()=>{const d=new Date();return [addDays(d,-29),d];},
   last90:()=>{const d=new Date();return [addDays(d,-89),d];},
   all:()=>[new Date(2020,0,1),new Date()],
