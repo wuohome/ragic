@@ -19,8 +19,8 @@ PERF_SERVICE_TYPES_LANDLORD = {"房東服務費"}
 PERF_SERVICE_TYPES_TENANT   = {"服務費", "定金轉服務費"}
 
 VAULT    = Path(r"c:/Second Brain/Obsidian")
-PERF_MD  = VAULT / "窩的家/管理部/全店每月業績表.md"
-HTML_OUT = Path(r"C:/Users/Joan/Downloads/租賃部業績儀表板.html")
+PERF_MD  = Path(os.environ.get("PERF_MD_PATH", str(VAULT / "窩的家/管理部/全店每月業績表.md")))
+HTML_OUT = Path(os.environ.get("HTML_OUT", r"C:/Users/Joan/Downloads/租賃部業績儀表板.html"))
 
 LOOKBACK_DAYS = 365
 
@@ -555,6 +555,14 @@ HTML_TPL = r"""<!DOCTYPE html>
       </div>
     </section>
 
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+      <div class="mb-4">
+        <h2 class="text-xl font-bold text-slate-900">⏱️ 最後進案距今</h2>
+        <p class="text-slate-500 text-sm mt-0.5">不受日期篩選影響，計算到今天為止</p>
+      </div>
+      <div id="wLastCase" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"></div>
+    </section>
+
     <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
       <h2 class="text-xl font-bold text-slate-900 mb-6">🏆 開發量排行</h2>
       <div id="wRanking" class="space-y-3"></div>
@@ -934,6 +942,23 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
 }));
 
 // ════════════════════════════════════════
+// 最後進案距今（不受日期篩選影響）
+// ════════════════════════════════════════
+(function renderLastCase(){
+  const today=new Date(); today.setHours(0,0,0,0);
+  const lastDate={};
+  INTAKE.forEach(r=>(r.devs||[]).forEach(d=>{
+    if(!lastDate[d.name]||r.date>lastDate[d.name]) lastDate[d.name]=r.date;
+  }));
+  const allLast=Object.values(lastDate).reduce((a,b)=>a>b?a:b,'');
+  function daysAgo(ds){const d=new Date(ds);d.setHours(0,0,0,0);return Math.round((today-d)/86400000);}
+  function cls(n){if(n<=7)return 'bg-emerald-100 text-emerald-800 border-emerald-200';if(n<=14)return 'bg-yellow-100 text-yellow-800 border-yellow-200';if(n<=30)return 'bg-orange-100 text-orange-800 border-orange-200';return 'bg-red-100 text-red-800 border-red-200';}
+  function dot(n){if(n<=7)return 'bg-emerald-500';if(n<=14)return 'bg-yellow-400';if(n<=30)return 'bg-orange-500';return 'bg-red-500';}
+  function card(name,ds,isAll){const n=daysAgo(ds);return `<div class="rounded-xl border p-3 flex flex-col gap-1 ${cls(n)}"><div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full ${dot(n)} flex-shrink-0"></span><span class="font-semibold text-sm truncate">${isAll?'🏢 全部門':esc(name)}</span></div><div class="text-2xl font-black leading-none">${n}<span class="text-sm font-normal ml-1">天前</span></div><div class="text-xs opacity-70">${ds}</div></div>`;}
+  const people=Object.entries(lastDate).sort((a,b)=>daysAgo(a[1])-daysAgo(b[1]));
+  document.getElementById('wLastCase').innerHTML=card('',allLast,true)+people.map(([n,d])=>card(n,d,false)).join('');
+})();
+
 // 週進案量
 // ════════════════════════════════════════
 function renderWeek(){

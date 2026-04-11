@@ -1,0 +1,40 @@
+name: 自動更新業績儀表板
+
+on:
+  schedule:
+    # 每天 09:00 台灣時間（UTC+8 → UTC 01:00）
+    - cron: '0 1 * * *'
+  # 手動觸發（Actions 頁面可手動跑）
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 產出儀表板 HTML
+        env:
+          RAGIC_API_KEY: ${{ secrets.RAGIC_API_KEY }}
+          PERF_MD_PATH: ./data/perf.md
+          HTML_OUT: ./staff-dashboard.html
+        run: python staff_dashboard.py
+
+      - name: Commit & push（有變更才 commit）
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add staff-dashboard.html
+          if git diff --cached --quiet; then
+            echo "No changes, skip commit."
+          else
+            git commit -m "chore: auto-update dashboard $(date +'%Y-%m-%d %H:%M') UTC"
+            git push
+          fi
