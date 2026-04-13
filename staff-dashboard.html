@@ -22,18 +22,19 @@
   .tab.active{border-bottom-color:#2563eb;color:#2563eb;font-weight:700;}
   .tab-panel{display:none;}
   .tab-panel.active{display:block;}
-  #loadingOverlay{position:fixed;inset:0;background:rgba(248,250,252,.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .3s;}
+  #loadingOverlay{position:fixed;inset:0;background:rgba(248,250,252,.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;transition:opacity .4s;}
   #loadingOverlay.fade-out{opacity:0;pointer-events:none;}
-  .spinner{width:48px;height:48px;border:4px solid #e2e8f0;border-top-color:#2563eb;border-radius:50%;animation:spin .8s linear infinite;}
-  @keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
 
 <!-- Loading Overlay -->
 <div id="loadingOverlay">
-  <div class="spinner"></div>
-  <div id="loadingText" class="text-slate-500 text-sm font-medium">正在從 Ragic 抓取即時資料…</div>
+  <div class="text-4xl mb-4">🏠</div>
+  <div id="loadingText" class="text-slate-600 text-sm font-semibold mb-3">正在從 Ragic 抓取即時資料…</div>
+  <div class="w-64 h-2.5 bg-slate-200 rounded-full overflow-hidden mb-2">
+    <div id="progressBar" class="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-300 ease-out" style="width:0%"></div>
+  </div>
   <div id="loadingDetail" class="text-slate-400 text-xs"></div>
 </div>
 
@@ -672,9 +673,16 @@ async function ragicFetch(path, params = '') {
   return res.json();
 }
 
-function setLoading(text) {
-  const el = document.getElementById('loadingDetail');
-  if (el) el.textContent = text;
+let _loadDone = 0;
+const _loadTotal = 7;
+const _loadLabels = ['進案量','業績','庫存','開發追蹤','客戶來源','人事資料','業績比對'];
+function setProgress(label) {
+  _loadDone++;
+  const pct = Math.round(_loadDone / _loadTotal * 100);
+  const bar = document.getElementById('progressBar');
+  const detail = document.getElementById('loadingDetail');
+  if (bar) bar.style.width = pct + '%';
+  if (detail) detail.textContent = `✓ ${label}（${_loadDone}/${_loadTotal}）`;
 }
 
 async function fetchAllData() {
@@ -685,21 +693,20 @@ async function fetchAllData() {
   dataEnd.setDate(dataEnd.getDate() + 30);
   const fmtDate = d => `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
 
-  setLoading('進案量 + 業績 + 庫存 + 開發 + 客戶 + 人事 同時抓取中…');
-
   const intakeParams = `subtables=true&where=${encodeURIComponent(`1000260,gte,${fmtDate(dataStart)}`)}&where=${encodeURIComponent(`1000260,lte,${fmtDate(dataEnd)}`)}&limit=10000`;
 
   const [rawIntake, rawPayments, rawInventory, rawOutreach, rawClients, rawHr, perfMdText] = await Promise.all([
-    ragicFetch('operation/4', intakeParams),
-    ragicFetch('payments/2', 'subtables=true&limit=10000'),
-    ragicFetch('operation/4', 'subtables=true&limit=10000'),
-    ragicFetch('property-data-kept/17', 'subtables=true&limit=10000'),
-    ragicFetch('property-data-kept/8', 'limit=10000'),
-    ragicFetch('ragicforms4/20004', 'limit=200'),
-    fetch('data/perf.md').then(r => r.ok ? r.text() : '').catch(() => ''),
+    ragicFetch('operation/4', intakeParams).then(r => { setProgress('進案量'); return r; }),
+    ragicFetch('payments/2', 'subtables=true&limit=10000').then(r => { setProgress('業績'); return r; }),
+    ragicFetch('operation/4', 'subtables=true&limit=10000').then(r => { setProgress('庫存'); return r; }),
+    ragicFetch('property-data-kept/17', 'subtables=true&limit=10000').then(r => { setProgress('開發追蹤'); return r; }),
+    ragicFetch('property-data-kept/8', 'limit=10000').then(r => { setProgress('客戶來源'); return r; }),
+    ragicFetch('ragicforms4/20004', 'limit=200').then(r => { setProgress('人事資料'); return r; }),
+    fetch('data/perf.md').then(r => r.ok ? r.text() : '').catch(() => '').then(r => { setProgress('業績比對'); return r; }),
   ]);
 
-  setLoading('資料轉換中…');
+  document.getElementById('loadingText').textContent = '資料轉換中…';
+  document.getElementById('progressBar').style.width = '100%';
 
   INTAKE    = toIntakeRecords(rawIntake);
   PERF_RAGIC = toPerfRecords(rawPayments);
