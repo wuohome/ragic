@@ -701,8 +701,8 @@ async function fetchAllData() {
   const inactive = getInactiveStaff(rawHr);
   const perfOb   = parsePerfMd(perfMdText);
 
-  // For month perf tab + year tab, use OB perf (has historical data)
-  PERF    = perfOb;
+  // For month perf tab + year tab: prefer OB perf (has historical data), fallback to Ragic
+  PERF    = perfOb.length > 0 ? perfOb : PERF_RAGIC;
   COMPARE = buildCompare(PERF_RAGIC, perfOb);
 
   // Build active staff set
