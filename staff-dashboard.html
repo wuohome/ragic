@@ -577,7 +577,7 @@ function toOutreachRecords(rawData) {
     const logCount = Object.keys(logs).length;
     const filled = [!!ownerName, !!phone, logCount > 0].filter(Boolean).length;
     const completeness = filled === 3 ? 'green' : (filled >= 1 ? 'yellow' : 'red');
-    out.push({ date: createdDate, dev: devName, owner: ownerName, phone: phone?'有':'', status, accepted, logCount, completeness });
+    out.push({ date: createdDate, dev: devName, owner: ownerName, rawPhone: phone, phone: phone?'有':'', status, accepted, logCount, completeness });
   }
   out.sort((a, b) => b.date.localeCompare(a.date));
   return out;
@@ -714,6 +714,21 @@ async function fetchAllData() {
   INVENTORY = toInventoryRecords(rawInventory);
   OUTREACH  = toOutreachRecords(rawOutreach);
   CLIENTS   = toClientRecords(rawClients);
+
+  // 交叉配對：開發募集 × 物件總表（用手機號碼）
+  const normPhone = p => (p||'').replace(/[\s\-\+]/g,'').replace(/^886/,'0').replace(/^09/,'09');
+  const phoneToProp = {};
+  for (const [rid, c] of Object.entries(rawInventory)) {
+    const ph = normPhone(c['屋主手機號碼']);
+    const name = (c['案名']||'').trim();
+    if (ph.length >= 9 && name) phoneToProp[ph] = { name, rid };
+  }
+  for (const r of OUTREACH) {
+    if (r.status === '已接委託' && r.rawPhone) {
+      const match = phoneToProp[normPhone(r.rawPhone)];
+      if (match) { r.matchedName = match.name; r.matchedRid = match.rid; }
+    }
+  }
 
   const inactive = getInactiveStaff(rawHr);
   const perfOb   = parsePerfMd(perfMdText);
@@ -1179,8 +1194,11 @@ function renderOutreach(){
     ? '<div class="text-center text-slate-400 py-8">此區間無開發紀錄</div>'
     : `<table class="w-full"><thead><tr class="text-left text-xs font-semibold text-slate-500 uppercase border-b-2 border-slate-200"><th class="py-2 px-2">日期</th><th class="py-2 px-2">開發人</th><th class="py-2 px-2">屋主</th><th class="py-2 px-2">電話</th><th class="py-2 px-2">經營次數</th><th class="py-2 px-2">完整度</th><th class="py-2 px-2">狀態</th></tr></thead><tbody>${
       rows.map(r=>{
+        const propLink = r.matchedName
+          ? ` → <a href="https://ap15.ragic.com/wuohome/operation/4/${r.matchedRid}" target="_blank" class="text-indigo-600 hover:underline">${esc(r.matchedName)}</a>`
+          : '';
         const statusTag = r.status==='已接委託'
-          ? '<span class="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">已接委託</span>'
+          ? `<span class="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">已接委託</span>${propLink}`
           : '<span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600">潛在屋主</span>';
         return `<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="py-3 px-2 text-sm whitespace-nowrap">${esc(r.date)}</td><td class="py-3 px-2 font-medium">${esc(r.dev)}</td><td class="py-3 px-2 text-sm">${esc(r.owner||'—')}</td><td class="py-3 px-2 text-sm">${r.phone||'—'}</td><td class="py-3 px-2 text-sm text-center">${r.logCount}</td><td class="py-3 px-2 text-center">${dots[r.completeness]||'—'}</td><td class="py-3 px-2">${statusTag}</td></tr>`;
       }).join('')
