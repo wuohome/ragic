@@ -1,5 +1,5 @@
 /**
- * 窩的家｜租賃部業務系統 — 共用模組
+ * 窩的家｜行動辦公室 — 共用模組
  * API 封裝、人名統一、人員驗證、UI 元件、地址工具
  */
 
@@ -118,7 +118,7 @@ export async function ensureAuth(container) {
         <div class="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
           <div class="text-center mb-6">
             <div class="text-3xl mb-2">🏠</div>
-            <h1 class="text-xl font-bold text-slate-900">窩的家 租賃部系統</h1>
+            <h1 class="text-xl font-bold text-slate-900">窩的家 行動辦公室</h1>
             <p class="text-slate-500 text-sm mt-1">請選擇您的姓名</p>
           </div>
           <select id="staffSelect" class="w-full border border-slate-300 rounded-lg px-4 py-3 text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">

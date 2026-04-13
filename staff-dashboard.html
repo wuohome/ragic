@@ -538,7 +538,8 @@ function toInventoryRecords(rawData) {
     let dateSource = '';
     if (!d) dateSource = '未填委託日';
     const typeRaw = (c['委託類型'] || '').trim();
-    const caseType = typeRaw ? (TYPE_MAP[typeRaw] || typeRaw) : '未分類';
+    const mapped = TYPE_MAP[typeRaw];
+    const caseType = typeRaw ? (mapped || (/^[\u4e00-\u9fff()\uff08\uff09]+$/.test(typeRaw) ? typeRaw : '未分類')) : '未分類';
     const devs = extractDevs(c);
     const peopleStr = devs.map(x => `${x.name}(${Math.round(x.ratio*100)}%)`).join('、')
                       || (c['開發人員'] || '');
@@ -724,9 +725,12 @@ async function fetchAllData() {
     if (ph.length >= 9 && name) phoneToProp[ph] = { name, rid };
   }
   for (const r of OUTREACH) {
-    if (r.status === '已接委託' && r.rawPhone) {
-      const match = phoneToProp[normPhone(r.rawPhone)];
-      if (match) { r.matchedName = match.name; r.matchedRid = match.rid; }
+    if (!r.rawPhone) continue;
+    const match = phoneToProp[normPhone(r.rawPhone)];
+    if (match) {
+      r.status = '已接委託';
+      r.matchedName = match.name;
+      r.matchedRid = match.rid;
     }
   }
 
