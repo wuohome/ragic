@@ -9,6 +9,18 @@
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
     .fade-in { animation: fadeIn 0.3s ease; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .link-preview { position: relative; }
+    .link-preview:hover .preview-tooltip { display: block; }
+    .preview-tooltip {
+      display: none; position: absolute; z-index: 50; bottom: 100%; left: 0; margin-bottom: 8px;
+      background: white; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      padding: 4px; width: 360px;
+    }
+    .preview-tooltip img { width: 100%; border-radius: 6px; display: block; }
+    .preview-tooltip .loading-placeholder {
+      width: 100%; height: 200px; background: #f1f5f9; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 12px;
+    }
   </style>
 </head>
 <body class="bg-slate-50 min-h-screen">
@@ -56,6 +68,7 @@
           properties.push({
             subId,
             link591: sr['591連結'] || '',
+            screenshot: sr['591截圖'] || '',
             caseName: sr['案名'] || '',
             rent: sr['月租金'] || '',
             address: sr['地址'] || '',
@@ -127,70 +140,69 @@
         if (props.some(p => p.completeness === 'yellow')) return 'yellow';
         return 'red';
       };
+      const fmtDate = d => d ? d.replace(/-/g, '/') : '';
 
       app.innerHTML = `
-        <div class="max-w-6xl mx-auto px-4 py-6">
-          <!-- Header -->
-          <div class="flex items-center justify-between mb-6">
-            <div class="flex items-center gap-3">
-              <a href="index.html" class="text-slate-400 hover:text-slate-600">←</a>
-              <h1 class="text-2xl font-bold text-slate-900">📞 開發募集</h1>
-              <span class="text-slate-400 text-sm">${filtered.length} 筆</span>
-            </div>
-            <div class="flex items-center gap-3">
-              <div id="userBadge"></div>
-              <button id="addBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">+ 新增</button>
-            </div>
+        <div class="max-w-7xl mx-auto px-4 py-4">
+          <!-- Top Bar -->
+          <div class="flex items-center gap-3 mb-3">
+            <a href="index.html" class="text-gray-500 hover:text-gray-700 text-sm">← 返回</a>
+            <button id="addBtn" class="bg-red-500 text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-red-600">+新增</button>
+            <div id="userBadge" class="ml-auto"></div>
           </div>
 
+          <h1 class="text-2xl font-bold text-gray-900 mb-2">開發募集</h1>
+          <p class="text-xs text-gray-400 mb-3">共 ${filtered.length} 筆　|　目前顯示：${{'mine':'我的','all':'全部','accepted':'已接委託','potential':'潛在屋主'}[currentFilter]}</p>
+
           <!-- Search + Filters -->
-          <div class="flex flex-col sm:flex-row gap-3 mb-4">
+          <div class="flex gap-2 mb-3 items-center">
             <input id="searchInput" type="text" placeholder="搜尋屋主、手機、地址、案名..." value="${escHtml(searchQuery)}"
-              class="flex-1 border border-slate-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-            <div class="flex gap-2">
-              ${['mine','all','accepted','potential'].map(f => {
-                const labels = { mine: '我的', all: '全部', accepted: '已接委託', potential: '潛在屋主' };
-                const active = currentFilter === f;
-                return `<button data-filter="${f}" class="filter-chip px-3 py-2 rounded-lg text-sm font-medium transition ${active ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}">${labels[f]}</button>`;
-              }).join('')}
-            </div>
+              class="flex-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
+            ${['mine','all','accepted','potential'].map(f => {
+              const labels = { mine: '我的', all: '全部', accepted: '已接委託', potential: '潛在屋主' };
+              const active = currentFilter === f;
+              return `<button data-filter="${f}" class="filter-chip px-3 py-1.5 text-sm font-medium border ${active ? 'bg-purple-700 text-white border-purple-700' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}">${labels[f]}</button>`;
+            }).join('')}
           </div>
 
           <!-- Table -->
-          <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <table class="w-full">
-              <thead>
-                <tr class="text-left text-xs font-semibold text-slate-500 uppercase border-b-2 border-slate-200">
-                  <th class="py-3 px-4">屋主</th>
-                  <th class="py-3 px-4">手機</th>
-                  <th class="py-3 px-4">開發人員</th>
-                  <th class="py-3 px-4 text-center">物件</th>
-                  <th class="py-3 px-4 text-center">完整度</th>
-                  <th class="py-3 px-4 text-center">經營</th>
-                  <th class="py-3 px-4">狀態</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${filtered.length === 0
-                  ? '<tr><td colspan="7" class="text-center text-slate-400 py-12">沒有符合條件的記錄</td></tr>'
-                  : filtered.map(r => `
-                    <tr class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition" data-id="${r.id}">
-                      <td class="py-3 px-4 font-medium text-slate-900">${escHtml(r.owner) || '—'}</td>
-                      <td class="py-3 px-4 text-sm text-slate-600">${maskPhone(r.phone)}</td>
-                      <td class="py-3 px-4 text-sm">${escHtml(r.devName)}</td>
-                      <td class="py-3 px-4 text-center text-sm">${r.properties.length}</td>
-                      <td class="py-3 px-4 text-center">${completenessEmoji(bestCompleteness(r.properties))}</td>
-                      <td class="py-3 px-4 text-center text-sm">${r.logCount}</td>
-                      <td class="py-3 px-4">
-                        ${r.status === '已接委託'
-                          ? '<span class="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">已接委託</span>'
-                          : '<span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600">潛在屋主</span>'}
-                      </td>
-                    </tr>
-                  `).join('')}
-              </tbody>
-            </table>
-          </div>
+          <table class="w-full border border-gray-300 text-sm">
+            <thead>
+              <tr class="bg-purple-800 text-white text-xs">
+                <th class="py-2 px-3 text-left font-medium border-r border-purple-700">建立日期</th>
+                <th class="py-2 px-3 text-left font-medium border-r border-purple-700">屋主姓名</th>
+                <th class="py-2 px-3 text-left font-medium border-r border-purple-700">手機號碼</th>
+                <th class="py-2 px-3 text-left font-medium border-r border-purple-700">開發人員</th>
+                <th class="py-2 px-3 text-left font-medium border-r border-purple-700">案名 / 地址</th>
+                <th class="py-2 px-3 text-center font-medium border-r border-purple-700 w-12">完整</th>
+                <th class="py-2 px-3 text-center font-medium border-r border-purple-700 w-10">經營</th>
+                <th class="py-2 px-3 text-left font-medium w-20">狀態</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filtered.length === 0
+                ? '<tr><td colspan="8" class="text-center text-gray-400 py-8">沒有符合條件的記錄</td></tr>'
+                : filtered.map(r => {
+                  const firstProp = r.properties[0];
+                  const propSummary = firstProp
+                    ? `<div class="font-medium">${escHtml(firstProp.caseName)}</div><div class="text-gray-400 text-xs truncate">${escHtml(firstProp.address)}</div>`
+                    : '<span class="text-gray-300">—</span>';
+                  return `
+                    <tr class="border-b border-gray-200 hover:bg-blue-50 cursor-pointer" data-id="${r.id}">
+                      <td class="py-2 px-3 border-r border-gray-200 text-gray-500 whitespace-nowrap">${fmtDate(r.created)}</td>
+                      <td class="py-2 px-3 border-r border-gray-200 font-bold text-gray-900">${escHtml(r.owner) || '—'}</td>
+                      <td class="py-2 px-3 border-r border-gray-200 text-blue-600">${maskPhone(r.phone)}</td>
+                      <td class="py-2 px-3 border-r border-gray-200">${escHtml(r.devName)}</td>
+                      <td class="py-2 px-3 border-r border-gray-200">${propSummary}${r.properties.length > 1 ? `<span class="text-xs text-gray-400">+${r.properties.length - 1} 筆</span>` : ''}</td>
+                      <td class="py-2 px-3 border-r border-gray-200 text-center">${completenessEmoji(bestCompleteness(r.properties))}</td>
+                      <td class="py-2 px-3 border-r border-gray-200 text-center">${r.logCount}</td>
+                      <td class="py-2 px-3 text-xs">${r.status === '已接委託'
+                        ? '<span class="text-emerald-600 font-medium">已接委託</span>'
+                        : '<span class="text-gray-400">潛在屋主</span>'}</td>
+                    </tr>`;
+                }).join('')}
+            </tbody>
+          </table>
         </div>`;
 
       // Event listeners
@@ -277,12 +289,12 @@
           <table class="w-full border border-gray-300 text-sm mb-0">
             <thead>
               <tr class="bg-gray-50 border-b border-gray-300">
-                <th class="text-left px-3 py-2 text-gray-600 font-medium border-r border-gray-200 w-40">591連結</th>
-                <th class="text-left px-3 py-2 text-gray-600 font-medium border-r border-gray-200">案名</th>
-                <th class="text-left px-3 py-2 text-gray-600 font-medium border-r border-gray-200 w-24">月租金</th>
+                <th class="text-left px-3 py-2 text-gray-600 font-medium border-r border-gray-200" style="width:160px">591連結</th>
+                <th class="text-left px-3 py-2 text-gray-600 font-medium border-r border-gray-200" style="width:200px">案名</th>
+                <th class="text-left px-3 py-2 text-gray-600 font-medium border-r border-gray-200" style="width:80px">月租金</th>
                 <th class="text-left px-3 py-2 text-gray-600 font-medium border-r border-gray-200">地址</th>
-                <th class="text-center px-2 py-2 text-gray-600 font-medium border-r border-gray-200 w-16">完整度</th>
-                <th class="text-center px-2 py-2 text-gray-600 font-medium w-20">操作</th>
+                <th class="text-center px-2 py-2 text-gray-600 font-medium border-r border-gray-200" style="width:50px">完整度</th>
+                <th class="text-center px-2 py-2 text-gray-600 font-medium" style="width:60px">操作</th>
               </tr>
             </thead>
             <tbody id="propList"></tbody>
@@ -345,7 +357,10 @@
         container.innerHTML = propState.map((p, i) => `
           <tr class="border-b border-gray-200 hover:bg-gray-50" data-idx="${i}">
             <td class="px-2 py-1.5 border-r border-gray-200">
-              <input class="prop-link w-full px-1 py-1 text-sm text-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-400" data-idx="${i}" value="${escHtml(p.link591)}" placeholder="https://rent.591..." />
+              <div class="flex items-center gap-1">
+                <input class="prop-link flex-1 px-1 py-1 text-sm text-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-400" data-idx="${i}" value="${escHtml(p.link591)}" placeholder="https://rent.591..." />
+                ${p.link591 ? `<span class="link-preview"><a href="${escHtml(p.link591)}" target="_blank" class="text-blue-400 hover:text-blue-600 text-xs">🔗${p.screenshot ? `<span class="preview-tooltip"><img src="${escHtml(p.screenshot)}" /><div class="text-xs text-gray-400 text-center py-1">點擊開啟 591</div></span>` : ''}</a></span>` : ''}
+              </div>
             </td>
             <td class="px-2 py-1.5 border-r border-gray-200">
               <input class="prop-name w-full px-1 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" data-idx="${i}" value="${escHtml(p.caseName)}" />
