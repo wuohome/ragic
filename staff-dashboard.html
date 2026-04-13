@@ -226,8 +226,8 @@
 
   <!-- ── 庫存統計 ── -->
   <div class="tab-panel" id="panel-inventory">
-    <section class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-6">
-      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+    <section class="grid grid-cols-2 md:grid-cols-5 gap-5 mb-6">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 col-span-2 md:col-span-1">
         <div class="text-slate-500 text-sm mb-1">全店總庫存</div>
         <div class="flex items-baseline gap-2">
           <div id="invTotal" class="text-5xl font-black text-blue-600">0</div>
@@ -249,7 +249,14 @@
         </div>
       </div>
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-        <div class="text-slate-500 text-sm mb-1">包租代管案</div>
+        <div class="text-slate-500 text-sm mb-1">包租案</div>
+        <div class="flex items-baseline gap-2">
+          <div id="invLease" class="text-4xl font-black text-amber-600">0</div>
+          <div class="text-slate-400">件</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">代管案</div>
         <div class="flex items-baseline gap-2">
           <div id="invMgmt" class="text-4xl font-black text-purple-600">0</div>
           <div class="text-slate-400">件</div>
@@ -275,7 +282,8 @@
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium active" data-inv-type="all">全部</span>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="專任出租案">專任</span>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="一般出租案">一般</span>
-          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="包租代管案">包租代管</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="包租案">包租</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="代管案">代管</span>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="帶看同意">帶看同意</span>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="社會住宅">社會住宅</span>
         </div>
@@ -434,7 +442,8 @@ const NAME_ALIASES = {
 
 const TYPE_MAP = {
   '專任':'專任出租案','一般':'一般出租案',
-  '專任(含代管)':'包租代管案','一般(含代管)':'包租代管案','包租代管':'包租代管案',
+  '包租':'包租案','包租代管':'包租案',
+  '代管':'代管案','專任(含代管)':'代管案','一般(含代管)':'代管案',
   '帶看同意':'帶看同意','社會住宅':'社會住宅',
 };
 
@@ -1063,7 +1072,8 @@ function renderInventory(){
   document.getElementById('invTotal').textContent = rows.length;
   document.getElementById('invExcl').textContent  = rows.filter(r=>r.type==='專任出租案').length;
   document.getElementById('invGenl').textContent  = rows.filter(r=>r.type==='一般出租案').length;
-  document.getElementById('invMgmt').textContent  = rows.filter(r=>r.type==='包租代管案').length;
+  document.getElementById('invLease').textContent = rows.filter(r=>r.type==='包租案').length;
+  document.getElementById('invMgmt').textContent  = rows.filter(r=>r.type==='代管案').length;
 
   const counter = {};
   rows.forEach(r=>(r.devs||[]).forEach(d=>{ counter[d.name]=(counter[d.name]||0)+d.ratio; }));
@@ -1101,7 +1111,8 @@ function renderInventory(){
         const noDate = r.dateSource==='未填委託日';
         const daysCell = noDate ? '<span class="text-xs text-slate-400">未填委託日</span>' : `${r.daysOn}天${warn?' ⚠️':''}`;
         const stCls = statusColors[r.status] || 'bg-slate-100 text-slate-600';
-        return `<tr class="border-b border-slate-100 hover:bg-slate-50 ${rowCls}"><td class="py-3 px-2 font-medium">${esc(r.name)}</td><td class="py-3 px-2 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${stCls}">${esc(r.status)}</span></td><td class="py-3 px-2 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${r.type==='專任出租案'?'bg-indigo-100 text-indigo-700':r.type==='包租代管案'?'bg-purple-100 text-purple-700':'bg-emerald-100 text-emerald-700'}">${esc(r.type)}</span></td><td class="py-3 px-2 text-sm">${esc(r.people)}</td><td class="py-3 px-2 text-sm">${esc(r.city+' '+r.district)}</td><td class="py-3 px-2 text-right font-mono">${esc(r.rent)}</td><td class="py-3 px-2 text-right font-mono ${daysCls}">${daysCell}</td></tr>`;
+        const typeCls = r.type==='專任出租案'?'bg-indigo-100 text-indigo-700':r.type==='包租案'?'bg-amber-100 text-amber-700':r.type==='代管案'?'bg-purple-100 text-purple-700':'bg-emerald-100 text-emerald-700';
+        return `<tr class="border-b border-slate-100 hover:bg-slate-50 ${rowCls}"><td class="py-3 px-2 font-medium">${esc(r.name)}</td><td class="py-3 px-2 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${stCls}">${esc(r.status)}</span></td><td class="py-3 px-2 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${typeCls}">${esc(r.type)}</span></td><td class="py-3 px-2 text-sm">${esc(r.people)}</td><td class="py-3 px-2 text-sm">${esc(r.city+' '+r.district)}</td><td class="py-3 px-2 text-right font-mono">${esc(r.rent)}</td><td class="py-3 px-2 text-right font-mono ${daysCls}">${daysCell}</td></tr>`;
       }).join('')
     }</tbody></table>`;
 }
