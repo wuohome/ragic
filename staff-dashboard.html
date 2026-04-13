@@ -60,7 +60,7 @@
   </section>
 
   <!-- Tabs -->
-  <div class="flex gap-8 border-b border-slate-200 mb-8 overflow-x-auto">
+  <div class="flex gap-8 border-b border-slate-200 overflow-x-auto">
     <div class="tab active pb-3 text-lg px-1" data-tab="week">📦 週進案量</div>
     <div class="tab pb-3 text-lg px-1" data-tab="month">💰 月業績</div>
     <div class="tab pb-3 text-lg px-1" data-tab="year">📊 年度總覽</div>
@@ -69,6 +69,7 @@
     <div class="tab pb-3 text-lg px-1" data-tab="outreach">📞 開發追蹤</div>
     <div class="tab pb-3 text-lg px-1" data-tab="clients">👥 客戶來源</div>
   </div>
+  <div id="tabDesc" class="text-sm text-slate-400 mb-6 mt-3">各業務在選定期間內新接了多少委託案件，以及距上次進案多久</div>
 
   <!-- ── 週進案量 ── -->
   <div class="tab-panel active" id="panel-week">
@@ -816,11 +817,21 @@ function refreshAll(){
 }
 
 // ── Tab ──
+const TAB_DESC = {
+  week:'各業務在選定期間內新接了多少委託案件，以及距上次進案多久',
+  month:'各業務當月的成交業績金額與排名',
+  year:'全年度各月業績趨勢與累計排行',
+  compare:'Ragic 資料與 OB 業績表的交叉比對，找出差異',
+  inventory:'目前所有在架物件的庫存狀態，庫存越多代表待消化越多',
+  outreach:'業務主動開發屋主的次數、轉化率與完整度追蹤',
+  clients:'租客來源管道分佈，了解客戶從哪裡找到我們',
+};
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));
   t.classList.add('active');
   document.getElementById('panel-'+t.dataset.tab).classList.add('active');
+  document.getElementById('tabDesc').textContent = TAB_DESC[t.dataset.tab]||'';
 }));
 
 // ════════════════════════════════════════
@@ -1097,11 +1108,12 @@ function renderInventory(){
   rows.forEach(r=>{ typeCount[r.type]=(typeCount[r.type]||0)+1; });
   const typeLabels = Object.keys(typeCount);
   const typeData   = Object.values(typeCount);
-  const typeColors = ['#6366f1','#10b981','#a855f7','#f59e0b','#ef4444','#94a3b8'];
+  const TYPE_COLORS = {'專任出租案':'#6366f1','一般出租案':'#10b981','包租案':'#f59e0b','代管案':'#a855f7','帶看同意':'#94a3b8','社會住宅':'#ef4444'};
+  const typeColors = typeLabels.map(l=>TYPE_COLORS[l]||'#cbd5e1');
   if(window._invTypeChart) window._invTypeChart.destroy();
   window._invTypeChart = new Chart(document.getElementById('invTypeChart'),{
     type:'doughnut',
-    data:{labels:typeLabels,datasets:[{data:typeData,backgroundColor:typeColors.slice(0,typeLabels.length)}]},
+    data:{labels:typeLabels,datasets:[{data:typeData,backgroundColor:typeColors}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:12}}}}}
   });
 
