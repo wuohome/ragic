@@ -576,8 +576,9 @@ function toOutreachRecords(rawData) {
     const accepted = parseInt(parseFloat(c['已接委託數量'] || 0)) || 0;
     const logs = c['_subtable_1000271'] || {};
     const logCount = Object.keys(logs).length;
-    const filled = [!!ownerName, !!phone, logCount > 0].filter(Boolean).length;
-    const completeness = filled === 3 ? 'green' : (filled >= 1 ? 'yellow' : 'red');
+    const listings = Object.values(c['_subtable_1000637'] || {});
+    const emojis = listings.map(r => (r['完整度'] || '').trim()).filter(Boolean);
+    const completeness = emojis.includes('🟢') ? 'green' : emojis.includes('🟡') ? 'yellow' : 'red';
     out.push({ date: createdDate, dev: devName, owner: ownerName, rawPhone: phone, phone: phone?'有':'', status, accepted, logCount, completeness });
   }
   out.sort((a, b) => b.date.localeCompare(a.date));
