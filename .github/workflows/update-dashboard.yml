@@ -1,10 +1,8 @@
-name: 自動更新業績儀表板
+name: 更新業績比對資料（perf.md）
 
 on:
-  schedule:
-    # 每天 09:17 台灣時間（UTC+8 → UTC 01:00）
-    - cron: '17 1 * * *'
-  # 手動觸發（Actions 頁面可手動跑）
+  # 不再需要排程 — HTML 已改為前端即時抓取 Ragic API
+  # 此 workflow 僅在手動觸發時更新 data/perf.md（月度業績比對用）
   workflow_dispatch:
 
 jobs:
@@ -22,21 +20,24 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 產出儀表板 HTML
+      - name: 產出儀表板 HTML（legacy，僅為更新 perf 比對）
         env:
           RAGIC_API_KEY: ${{ secrets.RAGIC_API_KEY }}
           PERF_MD_PATH: ./data/perf.md
-          HTML_OUT: ./staff-dashboard.html
+          HTML_OUT: ./staff-dashboard-legacy.html
         run: python staff_dashboard.py
 
-      - name: Commit & push（有變更才 commit）
+      - name: 只保留 legacy HTML 的 perf 比對，不覆蓋即時版
+        run: rm -f staff-dashboard-legacy.html
+
+      - name: Commit perf.md 更新（如有變更）
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add staff-dashboard.html
+          git add data/perf.md
           if git diff --cached --quiet; then
-            echo "No changes, skip commit."
+            echo "No perf.md changes."
           else
-            git commit -m "chore: auto-update dashboard $(date +'%Y-%m-%d %H:%M') UTC"
+            git commit -m "chore: update perf.md comparison data"
             git push
           fi
