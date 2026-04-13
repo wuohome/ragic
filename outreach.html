@@ -376,8 +376,8 @@
             </td>
             <td class="text-center py-1.5">
               ${p.completeness === 'green'
-                ? `<button class="convert-btn text-xs text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap" data-idx="${i}">🏠 轉入</button>`
-                : `<span class="text-xs text-gray-300">—</span>`}
+                ? `<button class="convert-btn text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 font-medium whitespace-nowrap" data-idx="${i}">接到委託</button>`
+                : `<button disabled class="text-xs bg-gray-200 text-gray-400 px-2 py-1 rounded cursor-not-allowed whitespace-nowrap" title="地址不完整，請補齊縣市、區、路街門牌">接到委託</button>`}
               ${propState.length > 1 ? `<button class="del-prop text-gray-300 hover:text-red-500 text-sm ml-1" data-idx="${i}">×</button>` : ''}
             </td>
           </tr>
@@ -473,7 +473,6 @@
 
       // ── Back / Cancel ──
       document.getElementById('backBtn').addEventListener('click', goBack);
-      document.getElementById('cancelBtn').addEventListener('click', goBack);
       function goBack() { editingId = null; applyFilters(); }
 
       // ── Save ──
