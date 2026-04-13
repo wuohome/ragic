@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>開發募集 — 窩的家</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+    .fade-in { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+  <div id="app"></div>
+
+  <script type="module">
+    import {
+      ensureAuth, renderUserBadge, isManager, ragicGet, ragicPost,
+      normalizeName, isExcluded, showToast, showLoading, confirmDialog,
+      escHtml, checkAddressCompleteness, completenessEmoji,
+    } from './js/shared.js';
+
+    const app = document.getElementById('app');
+    const user = await ensureAuth(app);
+
+    // ── State ──
+    let allRecords = [];
+    let filtered = [];
+    let currentFilter = 'mine';  // mine | all | accepted | potential
+    let searchQuery = '';
+    let editingId = null; // null = list view, 'new' = new, or record ID
+
+    // ── Load Data ──
+    async function loadData() {
+      showLoading(app, '載入開發募集資料...');
+      const raw = await ragicGet('property-data-kept/17', 'subtables=true&limit=10000');
+      allRecords = [];
+      for (const [id, rec] of Object.entries(raw)) {
+        const created = (rec['建立日期'] || '').trim();
+        if (!created) continue;
+        const devName = normalizeName((rec['開發人員'] || rec['主要開發人'] || '').trim());
+        if (isExcluded(devName)) continue;
+
+        const owner = (rec['屋主姓名'] || '').trim();
+        const phone = (rec['手機號碼'] || '').trim();
+        const status = (rec['屋主狀態'] || '').trim();
+        const idCard = (rec['身分證字號'] || '').trim();
+        const mainDev = (rec['主要開發人'] || '').trim();
+        const subDev = (rec['次要開發人'] || '').trim();
+
+        // 591 subtable
+        const st637 = rec['_subtable_1000637'] || {};
+        const properties = [];
+        for (const [subId, sr] of Object.entries(st637)) {
+          properties.push({
+            subId,
+            link591: sr['591連結'] || '',
+            caseName: sr['案名'] || '',
+            rent: sr['月租金'] || '',
+            address: sr['地址'] || '',
+            completeness: checkAddressCompleteness(sr['地址'] || ''),
+          });
+        }
+
+        // 1000121 subtable (linked properties)
+        const st121 = rec['_subtable_1000121'] || {};
+        const linkedProps = Object.keys(st121).length;
+
+        // 經營紀錄
+        const st271 = rec['_subtable_1000271'] || {};
+        const logCount = Object.keys(st271).length;
+        const logs = [];
+        for (const [subId, sr] of Object.entries(st271)) {
+          logs.push({
+            subId,
+            date: sr['日期'] || '',
+            method: sr['聯絡方式'] || '',
+            content: sr['經營內容'] || '',
+            recorder: sr['記錄人'] || '',
+          });
+        }
+
+        allRecords.push({
+          id, owner, phone, status, idCard, devName, mainDev, subDev,
+          properties, linkedProps, logCount, logs,
+          created: created.slice(0, 10).replace(/\//g, '-'),
+          _raw: rec,
+        });
+      }
+      allRecords.sort((a, b) => b.created.localeCompare(a.created));
+      applyFilters();
+    }
+
+    // ── Filters ──
+    function applyFilters() {
+      filtered = allRecords;
+
+      // Role filter
+      if (currentFilter === 'mine' && !isManager(user.name)) {
+        filtered = filtered.filter(r => r.devName === user.name || r.mainDev === user.name);
+      } else if (currentFilter === 'accepted') {
+        filtered = filtered.filter(r => r.status === '已接委託');
+      } else if (currentFilter === 'potential') {
+        filtered = filtered.filter(r => r.status !== '已接委託');
+      }
+
+      // Search
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        filtered = filtered.filter(r =>
+          (r.owner || '').toLowerCase().includes(q) ||
+          (r.phone || '').includes(q) ||
+          r.properties.some(p => (p.address || '').toLowerCase().includes(q)) ||
+          r.properties.some(p => (p.caseName || '').toLowerCase().includes(q))
+        );
+      }
+      renderList();
+    }
+
+    // ── Render List ──
+    function renderList() {
+      const maskPhone = p => p ? p.slice(0, 4) + '****' + p.slice(-2) : '—';
+      const bestCompleteness = (props) => {
+        if (!props.length) return 'red';
+        if (props.some(p => p.completeness === 'green')) return 'green';
+        if (props.some(p => p.completeness === 'yellow')) return 'yellow';
+        return 'red';
+      };
+
+      app.innerHTML = `
+        <div class="max-w-6xl mx-auto px-4 py-6">
+          <!-- Header -->
+          <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+              <a href="index.html" class="text-slate-400 hover:text-slate-600">←</a>
+              <h1 class="text-2xl font-bold text-slate-900">📞 開發募集</h1>
+              <span class="text-slate-400 text-sm">${filtered.length} 筆</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div id="userBadge"></div>
+              <button id="addBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">+ 新增</button>
+            </div>
+          </div>
+
+          <!-- Search + Filters -->
+          <div class="flex flex-col sm:flex-row gap-3 mb-4">
+            <input id="searchInput" type="text" placeholder="搜尋屋主、手機、地址、案名..." value="${escHtml(searchQuery)}"
+              class="flex-1 border border-slate-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+            <div class="flex gap-2">
+              ${['mine','all','accepted','potential'].map(f => {
+                const labels = { mine: '我的', all: '全部', accepted: '已接委託', potential: '潛在屋主' };
+                const active = currentFilter === f;
+                return `<button data-filter="${f}" class="filter-chip px-3 py-2 rounded-lg text-sm font-medium transition ${active ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}">${labels[f]}</button>`;
+              }).join('')}
+            </div>
+          </div>
+
+          <!-- Table -->
+          <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <table class="w-full">
+              <thead>
+                <tr class="text-left text-xs font-semibold text-slate-500 uppercase border-b-2 border-slate-200">
+                  <th class="py-3 px-4">屋主</th>
+                  <th class="py-3 px-4">手機</th>
+                  <th class="py-3 px-4">開發人員</th>
+                  <th class="py-3 px-4 text-center">物件</th>
+                  <th class="py-3 px-4 text-center">完整度</th>
+                  <th class="py-3 px-4 text-center">經營</th>
+                  <th class="py-3 px-4">狀態</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${filtered.length === 0
+                  ? '<tr><td colspan="7" class="text-center text-slate-400 py-12">沒有符合條件的記錄</td></tr>'
+                  : filtered.map(r => `
+                    <tr class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition" data-id="${r.id}">
+                      <td class="py-3 px-4 font-medium text-slate-900">${escHtml(r.owner) || '—'}</td>
+                      <td class="py-3 px-4 text-sm text-slate-600">${maskPhone(r.phone)}</td>
+                      <td class="py-3 px-4 text-sm">${escHtml(r.devName)}</td>
+                      <td class="py-3 px-4 text-center text-sm">${r.properties.length}</td>
+                      <td class="py-3 px-4 text-center">${completenessEmoji(bestCompleteness(r.properties))}</td>
+                      <td class="py-3 px-4 text-center text-sm">${r.logCount}</td>
+                      <td class="py-3 px-4">
+                        ${r.status === '已接委託'
+                          ? '<span class="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">已接委託</span>'
+                          : '<span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600">潛在屋主</span>'}
+                      </td>
+                    </tr>
+                  `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+
+      // Event listeners
+      renderUserBadge(document.getElementById('userBadge'), user);
+
+      document.getElementById('searchInput').addEventListener('input', e => {
+        searchQuery = e.target.value.trim();
+        applyFilters();
+      });
+
+      document.querySelectorAll('.filter-chip').forEach(btn => {
+        btn.addEventListener('click', () => {
+          currentFilter = btn.dataset.filter;
+          applyFilters();
+        });
+      });
+
+      document.getElementById('addBtn').addEventListener('click', () => {
+        editingId = 'new';
+        renderEditPage();
+      });
+
+      document.querySelectorAll('tr[data-id]').forEach(row => {
+        row.addEventListener('click', () => {
+          editingId = row.dataset.id;
+          renderEditPage();
+        });
+      });
+
+      // Manager defaults to 'all'
+      if (isManager(user.name) && currentFilter === 'mine') {
+        currentFilter = 'all';
+        applyFilters();
+      }
+    }
+
+    // ── Edit Page ──
+    function renderEditPage() {
+      const rec = editingId === 'new' ? null : allRecords.find(r => r.id === editingId);
+      const isNew = !rec;
+
+      app.innerHTML = `
+        <div class="max-w-4xl mx-auto px-4 py-6 fade-in">
+          <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+              <button id="backBtn" class="text-slate-400 hover:text-slate-600 text-lg">←</button>
+              <h1 class="text-2xl font-bold text-slate-900">${isNew ? '新增開發募集' : '編輯 ' + escHtml(rec.owner)}</h1>
+              ${!isNew ? `<span class="text-slate-400 text-sm">${rec._raw['屋主編號'] || ''}</span>` : ''}
+            </div>
+            ${!isNew && rec.status === '已接委託' ? '<span class="px-3 py-1 rounded-full text-sm bg-emerald-100 text-emerald-700">已接委託</span>' : ''}
+          </div>
+
+          <!-- 屋主資訊 -->
+          <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 mb-4">
+            <h2 class="text-base font-bold text-slate-800 mb-4">屋主資訊</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">屋主姓名 <span class="text-red-500">*</span></label>
+                <input id="fOwner" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" value="${escHtml(rec?.owner || '')}" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">手機號碼 <span class="text-red-500">*</span></label>
+                <input id="fPhone" type="tel" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" value="${escHtml(rec?.phone || '')}" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">身分證字號</label>
+                <input id="fIdCard" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" value="${escHtml(rec?.idCard || '')}" />
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">主要開發人</label>
+                <select id="fMainDev" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                  <option value="">— 選擇 —</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">次要開發人</label>
+                <select id="fSubDev" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                  <option value="">— 無 —</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- 591 物件 -->
+          <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 mb-4">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-base font-bold text-slate-800">潛在開發（同屋主）</h2>
+              <button id="addPropBtn" class="text-blue-600 hover:text-blue-800 text-sm font-medium">+ 新增物件</button>
+            </div>
+            <div id="propList" class="space-y-3"></div>
+          </div>
+
+          <!-- 經營紀錄 -->
+          <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 mb-4">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-base font-bold text-slate-800">屋主經營紀錄</h2>
+              <button id="addLogBtn" class="text-blue-600 hover:text-blue-800 text-sm font-medium">+ 新增紀錄</button>
+            </div>
+            <div id="logList" class="space-y-3"></div>
+          </div>
+
+          <!-- Save -->
+          <div class="flex gap-3 justify-end">
+            <button id="cancelBtn" class="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition">取消</button>
+            <button id="saveBtn" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">儲存</button>
+          </div>
+        </div>`;
+
+      // ── Populate dev dropdowns ──
+      (async () => {
+        const { fetchStaffList } = await import('./js/shared.js');
+        const staff = await fetchStaffList();
+        const mainDev = document.getElementById('fMainDev');
+        const subDev = document.getElementById('fSubDev');
+        staff.forEach(s => {
+          mainDev.add(new Option(s.name, s.name));
+          subDev.add(new Option(s.name, s.name));
+        });
+        // Set values
+        if (isNew) {
+          mainDev.value = user.name;
+        } else {
+          mainDev.value = rec.mainDev || rec.devName || '';
+          subDev.value = rec.subDev || '';
+        }
+      })();
+
+      // ── Render 591 Properties ──
+      const propState = isNew ? [{ link591: '', caseName: '', rent: '', address: '', subId: null }]
+        : (rec.properties.length ? rec.properties.map(p => ({ ...p })) : [{ link591: '', caseName: '', rent: '', address: '', subId: null }]);
+
+      function renderProps() {
+        const container = document.getElementById('propList');
+        container.innerHTML = propState.map((p, i) => `
+          <div class="border border-slate-200 rounded-xl p-4 relative" data-idx="${i}">
+            ${propState.length > 1 ? `<button class="del-prop absolute top-2 right-2 text-slate-300 hover:text-red-500 text-lg" data-idx="${i}">×</button>` : ''}
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">591 連結</label>
+                <input class="prop-link w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" data-idx="${i}" value="${escHtml(p.link591)}" placeholder="https://rent.591.com.tw/..." />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">案名</label>
+                <input class="prop-name w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" data-idx="${i}" value="${escHtml(p.caseName)}" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">月租金</label>
+                <input class="prop-rent w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" data-idx="${i}" type="number" value="${p.rent}" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">完整度</label>
+                <div class="prop-completeness text-2xl pt-1">${completenessEmoji(checkAddressCompleteness(p.address))}</div>
+              </div>
+            </div>
+            <div class="mt-3">
+              <label class="block text-xs text-slate-500 mb-1">地址</label>
+              <div class="addr-input-${i}"></div>
+            </div>
+            ${p.subId && rec?.linkedProps > 0 && Object.keys(rec._raw._subtable_1000121 || {}).some(k => {
+              const linked = rec._raw._subtable_1000121[k];
+              return linked && (linked['案名'] || '').includes(p.caseName) && p.caseName;
+            }) ? '<div class="mt-2 text-xs text-emerald-600">✓ 已轉入物件總表</div>' : `
+            ${p.completeness === 'green' ? `<button class="convert-btn mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium" data-idx="${i}">🏠 建立租賃物件</button>` : ''}`}
+          </div>
+        `).join('');
+
+        // Render address inputs
+        const { renderAddressInput } = await import('./js/shared.js');
+        propState.forEach((p, i) => {
+          const addrContainer = container.querySelector(`.addr-input-${i}`);
+          if (addrContainer) {
+            const addrInput = renderAddressInput(addrContainer, p.address);
+            // Update completeness on change
+            addrContainer.addEventListener('change', () => {
+              p.address = addrInput.getAddress();
+              p.completeness = checkAddressCompleteness(p.address);
+              const emoji = container.querySelector(`[data-idx="${i}"] .prop-completeness`);
+              if (emoji) emoji.textContent = completenessEmoji(p.completeness);
+            });
+            addrContainer.addEventListener('input', () => {
+              p.address = addrInput.getAddress();
+              p.completeness = checkAddressCompleteness(p.address);
+              const emoji = container.querySelector(`[data-idx="${i}"] .prop-completeness`);
+              if (emoji) emoji.textContent = completenessEmoji(p.completeness);
+            });
+            p._addrInput = addrInput;
+          }
+        });
+
+        // Delete property
+        container.querySelectorAll('.del-prop').forEach(btn => {
+          btn.addEventListener('click', () => { propState.splice(+btn.dataset.idx, 1); renderProps(); });
+        });
+
+        // Sync input values back to state on change
+        container.querySelectorAll('.prop-link').forEach(el => el.addEventListener('input', () => { propState[+el.dataset.idx].link591 = el.value; }));
+        container.querySelectorAll('.prop-name').forEach(el => el.addEventListener('input', () => { propState[+el.dataset.idx].caseName = el.value; }));
+        container.querySelectorAll('.prop-rent').forEach(el => el.addEventListener('input', () => { propState[+el.dataset.idx].rent = el.value; }));
+
+        // Convert buttons (STORY-005)
+        container.querySelectorAll('.convert-btn').forEach(btn => {
+          btn.addEventListener('click', () => handleConvert(+btn.dataset.idx));
+        });
+      }
+
+      // ── Render Logs ──
+      const today = new Date().toISOString().slice(0, 10).replace(/-/g, '/');
+      const logState = isNew ? [{ date: today, method: '', content: '', recorder: user.name, subId: null }]
+        : (rec.logs.length ? rec.logs.map(l => ({ ...l })) : [{ date: today, method: '', content: '', recorder: user.name, subId: null }]);
+
+      function renderLogs() {
+        const container = document.getElementById('logList');
+        container.innerHTML = logState.map((l, i) => `
+          <div class="border border-slate-200 rounded-xl p-4 relative" data-lidx="${i}">
+            ${logState.length > 1 ? `<button class="del-log absolute top-2 right-2 text-slate-300 hover:text-red-500 text-lg" data-lidx="${i}">×</button>` : ''}
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">日期</label>
+                <input class="log-date w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" data-lidx="${i}" type="date" value="${(l.date || '').replace(/\//g, '-')}" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">聯絡方式</label>
+                <select class="log-method w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" data-lidx="${i}">
+                  <option value="">—</option>
+                  ${['LINE聯繫','電話聯繫','未聯繫上','面談'].map(m => `<option value="${m}" ${l.method === m ? 'selected' : ''}>${m}</option>`).join('')}
+                </select>
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-xs text-slate-500 mb-1">經營內容</label>
+                <input class="log-content w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" data-lidx="${i}" value="${escHtml(l.content)}" />
+              </div>
+            </div>
+          </div>
+        `).join('');
+
+        container.querySelectorAll('.del-log').forEach(btn => {
+          btn.addEventListener('click', () => { logState.splice(+btn.dataset.lidx, 1); renderLogs(); });
+        });
+        container.querySelectorAll('.log-date').forEach(el => el.addEventListener('change', () => { logState[+el.dataset.lidx].date = el.value.replace(/-/g, '/'); }));
+        container.querySelectorAll('.log-method').forEach(el => el.addEventListener('change', () => { logState[+el.dataset.lidx].method = el.value; }));
+        container.querySelectorAll('.log-content').forEach(el => el.addEventListener('input', () => { logState[+el.dataset.lidx].content = el.value; }));
+      }
+
+      renderProps();
+      renderLogs();
+
+      // ── Add buttons ──
+      document.getElementById('addPropBtn').addEventListener('click', () => {
+        propState.push({ link591: '', caseName: '', rent: '', address: '', subId: null });
+        renderProps();
+      });
+      document.getElementById('addLogBtn').addEventListener('click', () => {
+        logState.push({ date: today, method: '', content: '', recorder: user.name, subId: null });
+        renderLogs();
+      });
+
+      // ── Back / Cancel ──
+      document.getElementById('backBtn').addEventListener('click', goBack);
+      document.getElementById('cancelBtn').addEventListener('click', goBack);
+      function goBack() { editingId = null; applyFilters(); }
+
+      // ── Save ──
+      document.getElementById('saveBtn').addEventListener('click', async () => {
+        const owner = document.getElementById('fOwner').value.trim();
+        const phone = document.getElementById('fPhone').value.trim();
+        if (!owner) { showToast('請填寫屋主姓名', 'error'); return; }
+        if (!phone) { showToast('請填寫手機號碼', 'error'); return; }
+
+        const saveBtn = document.getElementById('saveBtn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = '儲存中...';
+
+        try {
+          const mainDev = document.getElementById('fMainDev').value;
+          const subDev = document.getElementById('fSubDev').value;
+          const idCard = document.getElementById('fIdCard').value.trim();
+
+          // Build main fields
+          const fields = {
+            '1000262': owner,           // 屋主姓名
+            '1001642': phone,           // 手機號碼
+            '1000263': idCard,          // 身分證字號
+          };
+          // 主要/次要開發人是使用者欄位，需要用 email（但 Ragic 也接受姓名？先試姓名）
+          if (mainDev) fields['1000897'] = mainDev;
+          if (subDev) fields['1000898'] = subDev;
+
+          if (isNew) {
+            // Create new record
+            const result = await ragicPost('property-data-kept/17', fields);
+            const newId = result.ragicId;
+
+            // Add 591 subtable rows
+            for (const p of propState) {
+              if (!p.caseName && !p.address && !p.link591) continue;
+              const addr = p._addrInput ? p._addrInput.getAddress() : p.address;
+              await ragicPost(`property-data-kept/17/${newId}`, {
+                '1000633_NEW_0': p.link591,   // 591連結
+                '1000634_NEW_0': p.caseName,  // 案名
+                '1000635_NEW_0': p.rent,      // 月租金
+                '1000636_NEW_0': addr,        // 地址
+              });
+            }
+
+            // Add log rows
+            for (const l of logState) {
+              if (!l.content) continue;
+              await ragicPost(`property-data-kept/17/${newId}`, {
+                '1000266_NEW_0': l.date,      // 日期
+                '1000267_NEW_0': l.method,    // 聯絡方式
+                '1000268_NEW_0': l.content,   // 經營內容
+                '1000269_NEW_0': l.recorder || user.name,  // 記錄人
+              });
+            }
+
+            showToast('新增成功！');
+          } else {
+            // Update existing record
+            await ragicPost(`property-data-kept/17/${editingId}`, fields);
+
+            // Update existing 591 rows / add new ones
+            for (const p of propState) {
+              const addr = p._addrInput ? p._addrInput.getAddress() : p.address;
+              if (p.subId) {
+                // Update existing row
+                await ragicPost(`property-data-kept/17/${editingId}`, {
+                  [`1000633_${p.subId}`]: p.link591,
+                  [`1000634_${p.subId}`]: p.caseName,
+                  [`1000635_${p.subId}`]: p.rent,
+                  [`1000636_${p.subId}`]: addr,
+                });
+              } else if (p.caseName || addr || p.link591) {
+                // New row
+                await ragicPost(`property-data-kept/17/${editingId}`, {
+                  '1000633_NEW_0': p.link591,
+                  '1000634_NEW_0': p.caseName,
+                  '1000635_NEW_0': p.rent,
+                  '1000636_NEW_0': addr,
+                });
+              }
+            }
+
+            // Update/add logs
+            for (const l of logState) {
+              if (l.subId) {
+                await ragicPost(`property-data-kept/17/${editingId}`, {
+                  [`1000266_${l.subId}`]: l.date,
+                  [`1000267_${l.subId}`]: l.method,
+                  [`1000268_${l.subId}`]: l.content,
+                });
+              } else if (l.content) {
+                await ragicPost(`property-data-kept/17/${editingId}`, {
+                  '1000266_NEW_0': l.date,
+                  '1000267_NEW_0': l.method,
+                  '1000268_NEW_0': l.content,
+                  '1000269_NEW_0': l.recorder || user.name,
+                });
+              }
+            }
+
+            showToast('儲存成功！');
+          }
+
+          // Reload and go back to list
+          editingId = null;
+          await loadData();
+        } catch (err) {
+          showToast('儲存失敗：' + err.message, 'error');
+          saveBtn.disabled = false;
+          saveBtn.textContent = '儲存';
+        }
+      });
+
+      // ── Convert to Property (STORY-005) ──
+      async function handleConvert(idx) {
+        const p = propState[idx];
+        const addr = p._addrInput ? p._addrInput.getAddress() : p.address;
+        if (checkAddressCompleteness(addr) !== 'green') {
+          showToast('地址不完整，請補齊後再轉入', 'warning');
+          return;
+        }
+        const ok = await confirmDialog(`確定要建立租賃物件？\n\n案名：${p.caseName}\n地址：${addr}\n月租金：${p.rent}`);
+        if (!ok) return;
+
+        try {
+          const owner = document.getElementById('fOwner').value.trim();
+          const phone = document.getElementById('fPhone').value.trim();
+          const mainDev = document.getElementById('fMainDev').value;
+
+          // 1. Create 物件總表 record
+          const propFields = {
+            '1000050': p.caseName,       // 案名
+            '1000055': addr,             // 地址
+            '1000076': p.rent,           // 月租金
+            '1000707': '輸入中',         // 狀態 = 輸入中
+          };
+          const result = await ragicPost('operation/4', propFields);
+          const newPropId = result.ragicId;
+
+          // 2. Update 開發募集 subtable 1000121 (link to property)
+          if (editingId && editingId !== 'new') {
+            await ragicPost(`property-data-kept/17/${editingId}`, {
+              '1000050_NEW_0': p.caseName,  // 案名
+              '1000076_NEW_0': p.rent,      // 月租金
+            });
+          }
+
+          showToast(`已建立租賃物件 — ${p.caseName}`);
+
+          // Refresh
+          await loadData();
+          if (editingId) renderEditPage();
+        } catch (err) {
+          showToast('轉入失敗：' + err.message, 'error');
+        }
+      }
+    }
+
+    // ── Init ──
+    await loadData();
+  </script>
+</body>
+</html>
