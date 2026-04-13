@@ -263,6 +263,68 @@ def to_inventory_records(rows):
 
 OUTREACH_BASE = "https://ap15.ragic.com/wuohome/property-data-kept/17"
 
+
+def _normalize_phone(p):
+    """Extract last 10 digits from phone number for matching."""
+    if not p:
+        return ""
+    return re.sub(r'[^\d]', '', str(p))[-10:]
+
+
+def _normalize_addr(a):
+    """Normalize address for fuzzy comparison."""
+    if not a:
+        return ""
+    a = str(a).strip()
+    a = a.translate(str.maketrans('０１２３４５６７８９', '0123456789'))
+    a = re.sub(r'[\s\-\u3000]', '', a)
+    a = re.sub(r'^\d{3,5}', '', a)
+    a = re.sub(r'^台[灣湾]', '', a)
+    return a
+
+
+def cross_match_conversion(outreach_raw, inventory_raw):
+    """Cross-match 開發募集 vs 物件總表 by phone + fuzzy address.
+
+    Returns set of outreach record keys whose owner appears in 物件總表.
+    """
+    prop_phones = set()
+    prop_addrs = set()
+    for rec in inventory_raw.values():
+        ph = _normalize_phone(rec.get("屋主手機號碼") or "")
+        if ph:
+            prop_phones.add(ph)
+        ad = _normalize_addr(rec.get("地址") or "")
+        if ad:
+            prop_addrs.add(ad)
+
+    matched = set()
+    for key, rec in outreach_raw.items():
+        # 1) Phone match
+        ph = _normalize_phone(rec.get("手機號碼") or "")
+        if ph and ph in prop_phones:
+            matched.add(key)
+            continue
+        # 2) Fuzzy address match (591 subtable + 所有物件地址)
+        addrs = []
+        for sr in (rec.get("_subtable_1000637") or {}).values():
+            a = (sr.get("地址") or "").strip()
+            if a:
+                addrs.append(a)
+        all_addr = (rec.get("所有物件地址") or "").strip()
+        if all_addr:
+            addrs.extend(l.strip() for l in all_addr.split("\n") if l.strip())
+        for a in addrs:
+            na = _normalize_addr(a)
+            if na and len(na) >= 4:
+                for pa in prop_addrs:
+                    if na in pa or pa in na:
+                        matched.add(key)
+                        break
+            if key in matched:
+                break
+    return matched
+
 def fetch_outreach():
     qs = "api=&subtables=true&limit=10000"
     req = urllib.request.Request(
@@ -272,9 +334,9 @@ def fetch_outreach():
     return json.loads(urllib.request.urlopen(req, timeout=120).read())
 
 
-def to_outreach_records(rows):
+def to_outreach_records(rows, converted_keys=None):
     out = []
-    for c in rows.values():
+    for key, c in rows.items():
         created = (c.get("建立日期", "") or "").strip()
         if not created:
             continue
@@ -288,6 +350,9 @@ def to_outreach_records(rows):
         owner_name = (c.get("屋主姓名", "") or "").strip()
         phone      = (c.get("手機號碼", "") or "").strip()
         status     = (c.get("屋主狀態", "") or "").strip()
+        # Override status with cross-match result
+        if converted_keys and key in converted_keys:
+            status = "已接委託"
         accepted   = int(float(c.get("已接委託數量") or 0))
         # 經營紀錄子表
         logs = c.get("_subtable_1000271") or {}
@@ -1474,7 +1539,12 @@ def main():
 
     print("抓取 Ragic 開發募集...")
     out_rows  = fetch_outreach()
-    outreach  = to_outreach_records(out_rows)
+
+    print("交叉比對 開發募集 ↔ 物件總表（手機+地址）...")
+    converted = cross_match_conversion(out_rows, inv_rows)
+    print(f"  配對成功: {len(converted)} 筆")
+
+    outreach  = to_outreach_records(out_rows, converted)
     print(f"  {len(outreach)} 筆")
 
     print("抓取 Ragic 租客需求（客戶來源）...")
