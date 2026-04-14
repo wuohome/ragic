@@ -1171,13 +1171,48 @@ function renderInventory(){
         return `<div class="flex items-center gap-4"><span class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${badgeCls}">${i+1}</span><div class="flex-1"><div class="flex justify-between mb-1"><span class="font-bold text-slate-800">${esc(name)}<span class="ml-2 text-xs font-normal ${hit?'text-emerald-600':'text-amber-600'}">${hint}</span></span><span class="font-black ${numCls}">${fmtN(n)} <span class="text-sm font-normal text-slate-400">/ ${NEW_TARGET} 件</span></span></div><div class="relative h-2 bg-slate-100 rounded-full overflow-hidden"><div class="bar h-full ${barCls} rounded-full" style="width:${pct}%"></div></div></div></div>`;
       }).join('');
 
-  const mgmtItems = Object.entries(mgmtCounter).sort((a,b)=>b[1]-a[1]);
+  // 包租/代管 — 每人分 包租/代管 + 未租件數 + 可展開明細
+  const VACANT = '代租中';
+  const perPerson = {}; // { name: { lease:{total,vacant,cases}, mgmt:{total,vacant,cases}, total } }
+  rows.forEach(r=>{
+    const kind = r.type==='包租案' ? 'lease' : r.type==='代管案' ? 'mgmt' : null;
+    if (!kind) return;
+    (r.devs||[]).forEach(d=>{
+      if (!perPerson[d.name]) perPerson[d.name] = {
+        lease:{total:0,vacant:0,cases:[]},
+        mgmt: {total:0,vacant:0,cases:[]},
+        total:0
+      };
+      const p = perPerson[d.name];
+      p[kind].total += d.ratio;
+      p.total += d.ratio;
+      if (r.status === VACANT) p[kind].vacant += d.ratio;
+      p[kind].cases.push({ ratio:d.ratio, name:r.name, status:r.status, rent:r.rent, city:r.city, district:r.district, daysOn:r.daysOn, type:r.type });
+    });
+  });
+
+  const mgmtItems = Object.entries(perPerson).sort((a,b)=>b[1].total-a[1].total);
+  const stColor = s => s===VACANT ? 'bg-red-100 text-red-700' : /已收定/.test(s) ? 'bg-blue-100 text-blue-700' : /整理|維修/.test(s) ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600';
+
+  const renderCases = p => {
+    const all = [...p.lease.cases, ...p.mgmt.cases].sort((a,b)=>(a.status===VACANT?-1:0)-(b.status===VACANT?-1:0));
+    if (!all.length) return '';
+    return `<div class="mt-3 pt-3 border-t border-slate-100 space-y-2">${all.map(c=>{
+      const typeChip = c.type==='包租案' ? 'bg-amber-100 text-amber-700' : 'bg-purple-100 text-purple-700';
+      const typeLabel = c.type==='包租案' ? '包租' : '代管';
+      const ratioLabel = c.ratio < 1 ? `（${Math.round(c.ratio*100)}%）` : '';
+      return `<div class="flex items-center gap-3 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${typeChip} shrink-0">${typeLabel}</span><span class="font-medium text-slate-800 flex-1 truncate">${esc(c.name)}${ratioLabel}</span><span class="text-xs text-slate-400">${esc(c.city)}${esc(c.district)}</span><span class="px-2 py-0.5 rounded-full text-xs ${stColor(c.status)} shrink-0">${esc(c.status)}</span><span class="font-mono text-xs text-slate-500 w-20 text-right">${esc(c.rent)}</span><span class="text-xs text-slate-400 w-14 text-right">${c.daysOn}天</span></div>`;
+    }).join('')}</div>`;
+  };
+
   document.getElementById('invMgmtRanking').innerHTML = mgmtItems.length===0
     ? '<div class="text-center text-slate-400 py-8">無包租/代管案件</div>'
-    : mgmtItems.map(([name,n],i)=>{
-        const top = mgmtItems[0][1]||1;
-        const pct = Math.round(n/top*100);
-        return `<div class="flex items-center gap-4"><span class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm bg-purple-100 text-purple-700">${i+1}</span><div class="flex-1"><div class="flex justify-between mb-1"><span class="font-bold text-slate-800">${esc(name)}</span><span class="font-black text-purple-700">${fmtN(n)} <span class="text-sm font-normal text-slate-400">件</span></span></div><div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="bar h-full bg-gradient-to-r from-purple-400 to-fuchsia-400 rounded-full" style="width:${pct}%"></div></div></div></div>`;
+    : mgmtItems.map(([name,p],i)=>{
+        const vacant = p.lease.vacant + p.mgmt.vacant;
+        const leaseInfo = p.lease.total > 0 ? `<span class="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700">包租 ${fmtN(p.lease.total)}${p.lease.vacant>0?` <span class="font-bold">⚠️ 未租 ${fmtN(p.lease.vacant)}</span>`:''}</span>` : '';
+        const mgmtInfo  = p.mgmt.total  > 0 ? `<span class="px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-700">代管 ${fmtN(p.mgmt.total)}${p.mgmt.vacant>0?` <span class="font-bold">⚠️ 未租 ${fmtN(p.mgmt.vacant)}</span>`:''}</span>` : '';
+        const vacantBadge = vacant > 0 ? `<span class="ml-2 px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700 font-bold">空租 ${fmtN(vacant)} 件</span>` : '';
+        return `<details class="group"><summary class="list-none cursor-pointer flex items-center gap-4 hover:bg-slate-50 -mx-3 px-3 py-2 rounded-lg"><span class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm bg-purple-100 text-purple-700 shrink-0">${i+1}</span><div class="flex-1 min-w-0"><div class="flex flex-wrap items-center gap-2"><span class="font-bold text-slate-800">${esc(name)}</span>${leaseInfo}${mgmtInfo}${vacantBadge}</div></div><span class="font-black text-purple-700 shrink-0">${fmtN(p.total)} <span class="text-sm font-normal text-slate-400">件</span></span><span class="text-slate-300 text-xs transition-transform group-open:rotate-180 shrink-0">▼</span></summary>${renderCases(p)}</details>`;
       }).join('');
 
   const typeCount = {};
