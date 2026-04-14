@@ -20,9 +20,9 @@
 
     const cards = [
       { title: '開發募集', desc: '新增/編輯開發屋主、591 物件管理', icon: '📞', href: 'outreach.html', color: 'blue' },
-      { title: '業績儀表板', desc: '進案量、業績、轉化率即時數據', icon: '📊', href: 'staff-dashboard.html', color: 'purple' },
-      { title: '租客需求調查', desc: '客戶來源填寫（from.html）', icon: '👥', href: 'from.html', color: 'emerald' },
-      { title: '定金紀錄', desc: '定金 / 斡旋金管理', icon: '💰', href: 'earnest.html', color: 'amber' },
+      { title: '租賃物件', desc: '物件總表新增、編輯、查詢', icon: '🏠', href: 'property.html', color: 'emerald', wip: true },
+      { title: '定金 / 斡旋', desc: '定金收據、斡旋金紀錄', icon: '💰', href: 'earnest.html', color: 'amber' },
+      { title: '租押金 / 服務費', desc: '簽約時的租押金、服務費收據', icon: '📝', href: 'deposit.html', color: 'rose', wip: true },
     ];
 
     app.innerHTML = `
@@ -39,9 +39,10 @@
         <!-- Cards -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           ${cards.map(c => `
-            <a href="${c.href}" class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-md hover:border-${c.color}-200 transition group">
+            <a href="${c.wip ? 'javascript:void(0)' : c.href}" class="relative bg-white rounded-2xl p-6 shadow-sm border border-slate-100 ${c.wip ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md hover:border-' + c.color + '-200'} transition group">
+              ${c.wip ? '<span class="absolute top-3 right-3 text-xs bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">施工中</span>' : ''}
               <div class="text-3xl mb-3">${c.icon}</div>
-              <h2 class="text-lg font-bold text-slate-900 group-hover:text-${c.color}-600 transition">${c.title}</h2>
+              <h2 class="text-lg font-bold text-slate-900 ${c.wip ? '' : 'group-hover:text-' + c.color + '-600'} transition">${c.title}</h2>
               <p class="text-slate-500 text-sm mt-1">${c.desc}</p>
             </a>
           `).join('')}
