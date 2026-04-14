@@ -579,7 +579,8 @@ function toOutreachRecords(rawData) {
     const listings = Object.values(c['_subtable_1000637'] || {});
     const emojis = listings.map(r => (r['完整度'] || '').trim()).filter(Boolean);
     const completeness = emojis.includes('🟢') ? 'green' : emojis.includes('🟡') ? 'yellow' : 'red';
-    out.push({ date: createdDate, dev: devName, owner: ownerName, rawPhone: phone, phone: phone?'有':'', status, accepted, logCount, completeness });
+    const addresses = listings.map(r => (r['地址'] || '').trim()).filter(Boolean);
+    out.push({ date: createdDate, dev: devName, owner: ownerName, rawPhone: phone, phone: phone?'有':'', status, accepted, logCount, completeness, addresses });
   }
   out.sort((a, b) => b.date.localeCompare(a.date));
   return out;
@@ -717,17 +718,37 @@ async function fetchAllData() {
   OUTREACH  = toOutreachRecords(rawOutreach);
   CLIENTS   = toClientRecords(rawClients);
 
-  // 交叉配對：開發募集 × 物件總表（用手機號碼）
+  // 交叉配對：開發募集 × 物件總表（手機優先 → 地址 fallback）
   const normPhone = p => (p||'').replace(/[\s\-\+]/g,'').replace(/^886/,'0').replace(/^09/,'09');
+  // 地址正規化：去空白/換行/社區說明，只保留「路/街/巷+號」才算可配對
+  const coreAddr = a => {
+    let s = (a||'').replace(/[\s　\n\r]/g,'').replace(/所屬社區.*$/,'');
+    const m = s.match(/([路街巷弄大道].*?\d+號)/);
+    return m ? m[1] : '';
+  };
+
   const phoneToProp = {};
+  const addrToProp = {};
   for (const [rid, c] of Object.entries(rawInventory)) {
-    const ph = normPhone(c['屋主手機號碼']);
     const name = (c['案名']||'').trim();
-    if (ph.length >= 9 && name) phoneToProp[ph] = { name, rid };
+    if (!name) continue;
+    const ph = normPhone(c['屋主手機號碼']);
+    if (ph.length >= 9) phoneToProp[ph] = { name, rid };
+    const ca = coreAddr(c['地址']);
+    if (ca) addrToProp[ca] = { name, rid };
   }
+
   for (const r of OUTREACH) {
-    if (!r.rawPhone) continue;
-    const match = phoneToProp[normPhone(r.rawPhone)];
+    let match = null;
+    // 1. 手機配對
+    if (r.rawPhone) match = phoneToProp[normPhone(r.rawPhone)];
+    // 2. 地址配對 fallback
+    if (!match && r.addresses?.length) {
+      for (const addr of r.addresses) {
+        const ca = coreAddr(addr);
+        if (ca && addrToProp[ca]) { match = addrToProp[ca]; break; }
+      }
+    }
     if (match) {
       r.status = '已接委託';
       r.matchedName = match.name;
