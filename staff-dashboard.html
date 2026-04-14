@@ -268,7 +268,10 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
       <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
-        <h2 class="text-xl font-bold text-slate-900 mb-6">⚠️ 業務庫存分佈　<span class="text-sm font-normal text-slate-400">庫存越多 = 待消化越多</span></h2>
+        <div class="flex items-baseline justify-between mb-6 flex-wrap gap-2">
+          <h2 class="text-xl font-bold text-slate-900">🎯 新進案件排行　<span class="text-sm font-normal text-slate-400">自己接來的（不含包租代管）</span></h2>
+          <span id="invNewKpi" class="text-sm font-semibold text-slate-500"></span>
+        </div>
         <div id="invRanking" class="space-y-3"></div>
       </section>
       <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
@@ -276,6 +279,11 @@
         <div class="relative" style="height:260px"><canvas id="invTypeChart"></canvas></div>
       </section>
     </div>
+
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-6">📦 包租代管排行　<span class="text-sm font-normal text-slate-400">公司案源</span></h2>
+      <div id="invMgmtRanking" class="space-y-3"></div>
+    </section>
 
     <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
       <div class="flex flex-wrap items-center gap-3 mb-4">
@@ -1134,15 +1142,42 @@ function renderInventory(){
   document.getElementById('invLease').textContent = rows.filter(r=>r.type==='包租案').length;
   document.getElementById('invMgmt').textContent  = rows.filter(r=>r.type==='代管案').length;
 
-  const counter = {};
-  rows.forEach(r=>(r.devs||[]).forEach(d=>{ counter[d.name]=(counter[d.name]||0)+d.ratio; }));
-  const items = Object.entries(counter).sort((a,b)=>b[1]-a[1]);
-  document.getElementById('invRanking').innerHTML = items.length===0
-    ? '<div class="text-center text-slate-400 py-8">無庫存</div>'
-    : items.map(([name,n],i)=>{
-        const top = items[0][1]||1;
+  // 新進案件（自接案源）：排除 包租案 + 代管案
+  const NEW_TARGET = 10;
+  const newCounter = {};
+  const mgmtCounter = {};
+  rows.forEach(r=>{
+    const isMgmt = r.type==='包租案' || r.type==='代管案';
+    (r.devs||[]).forEach(d=>{
+      if (isMgmt) mgmtCounter[d.name]=(mgmtCounter[d.name]||0)+d.ratio;
+      else        newCounter[d.name] =(newCounter[d.name] ||0)+d.ratio;
+    });
+  });
+
+  const newItems = Object.entries(newCounter).sort((a,b)=>b[1]-a[1]);
+  const reached = newItems.filter(([,n])=>n>=NEW_TARGET).length;
+  document.getElementById('invNewKpi').textContent = newItems.length
+    ? `達標 ${reached}/${newItems.length} 人`
+    : '';
+  document.getElementById('invRanking').innerHTML = newItems.length===0
+    ? '<div class="text-center text-slate-400 py-8">無新進案件</div>'
+    : newItems.map(([name,n],i)=>{
+        const hit = n >= NEW_TARGET;
+        const pct = Math.min(100, Math.round(n/NEW_TARGET*100));
+        const barCls = hit ? 'bg-gradient-to-r from-emerald-400 to-green-500' : 'bg-gradient-to-r from-amber-300 to-orange-400';
+        const numCls = hit ? 'text-emerald-600' : 'text-amber-600';
+        const badgeCls = hit ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500';
+        const hint = hit ? '✅ 達標' : `缺 ${fmtN(NEW_TARGET-n)} 件`;
+        return `<div class="flex items-center gap-4"><span class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${badgeCls}">${i+1}</span><div class="flex-1"><div class="flex justify-between mb-1"><span class="font-bold text-slate-800">${esc(name)}<span class="ml-2 text-xs font-normal ${hit?'text-emerald-600':'text-amber-600'}">${hint}</span></span><span class="font-black ${numCls}">${fmtN(n)} <span class="text-sm font-normal text-slate-400">/ ${NEW_TARGET} 件</span></span></div><div class="relative h-2 bg-slate-100 rounded-full overflow-hidden"><div class="bar h-full ${barCls} rounded-full" style="width:${pct}%"></div></div></div></div>`;
+      }).join('');
+
+  const mgmtItems = Object.entries(mgmtCounter).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('invMgmtRanking').innerHTML = mgmtItems.length===0
+    ? '<div class="text-center text-slate-400 py-8">無包租代管案件</div>'
+    : mgmtItems.map(([name,n],i)=>{
+        const top = mgmtItems[0][1]||1;
         const pct = Math.round(n/top*100);
-        return `<div class="flex items-center gap-4"><span class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${n>=5?'bg-orange-100 text-orange-700':'bg-slate-100 text-slate-500'}">${i+1}</span><div class="flex-1"><div class="flex justify-between mb-1"><span class="font-bold text-slate-800">${esc(name)}</span><span class="font-black ${n>=5?'text-orange-600':'text-slate-700'}">${fmtN(n)} <span class="text-sm font-normal text-slate-400">件</span></span></div><div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="bar h-full ${n>=5?'bg-gradient-to-r from-orange-400 to-red-400':'bg-gradient-to-r from-slate-300 to-slate-400'} rounded-full" style="width:${pct}%"></div></div></div></div>`;
+        return `<div class="flex items-center gap-4"><span class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm bg-purple-100 text-purple-700">${i+1}</span><div class="flex-1"><div class="flex justify-between mb-1"><span class="font-bold text-slate-800">${esc(name)}</span><span class="font-black text-purple-700">${fmtN(n)} <span class="text-sm font-normal text-slate-400">件</span></span></div><div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="bar h-full bg-gradient-to-r from-purple-400 to-fuchsia-400 rounded-full" style="width:${pct}%"></div></div></div></div>`;
       }).join('');
 
   const typeCount = {};
