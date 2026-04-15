@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-04-15T11:57:34+08:00",
+  "updated_at": "2026-04-15T11:59:08+08:00",
   "scraped_date": "2026-04-15",
   "prev_date": "2026-04-14",
   "summary": {
@@ -7,11 +7,11 @@
     "total_vacant": 10,
     "total_expired": 16,
     "total_expiring": 7,
-    "total_disappeared": 97,
+    "total_disappeared": 29,
     "featured_count": 0,
     "super_top_count": 37,
     "normal_top_count": 0,
-    "owner_count": 16
+    "owner_count": 14
   },
   "packages": [
     {
@@ -940,550 +940,6 @@
   ],
   "disappeared": [
     {
-      "link_id": "20779376",
-      "title": "三和國中站-便利兩房可入戶籍",
-      "owner": "未知",
-      "package_num": 4,
-      "prev_date": "2026-04-01",
-      "waste_days": 14
-    },
-    {
-      "link_id": "20810614",
-      "title": "龍山寺丨高樓層丨系統收納丨質感裝潢丨🌟Wei🌟",
-      "owner": "未知",
-      "package_num": 4,
-      "prev_date": "2026-04-01",
-      "waste_days": 14
-    },
-    {
-      "link_id": "20872066",
-      "title": "三重國小丨三和國中丨可租補丨可寵物丨質感裝潢⭐️忠豪⭐️",
-      "owner": "未知",
-      "package_num": 2,
-      "prev_date": "2026-04-01",
-      "waste_days": 14
-    },
-    {
-      "link_id": "20915963",
-      "title": "⭐️三重國小可租補可寵丨裝潢三房",
-      "owner": "未知",
-      "package_num": 3,
-      "prev_date": "2026-04-01",
-      "waste_days": 14
-    },
-    {
-      "link_id": "20930724",
-      "title": "【獨家】新埔捷運站/設計師優質裝潢2房/伶包入住",
-      "owner": "未知",
-      "package_num": 3,
-      "prev_date": "2026-04-01",
-      "waste_days": 14
-    },
-    {
-      "link_id": "20934412",
-      "title": "⭐️三重國小丨可租補可寵丨裝潢三房",
-      "owner": "未知",
-      "package_num": 4,
-      "prev_date": "2026-04-01",
-      "waste_days": 14
-    },
-    {
-      "link_id": "20962251",
-      "title": "三重國小丨三和國中丨可租補丨可寵物丨質感裝潢⭐️Wei⭐️",
-      "owner": "未知",
-      "package_num": 2,
-      "prev_date": "2026-04-01",
-      "waste_days": 14
-    },
-    {
-      "link_id": "20772620",
-      "title": "c台北橋站丨含網路第四台丨獨立衛浴",
-      "owner": "蕭靜芳",
-      "package_num": 4,
-      "prev_date": "2026-04-01",
-      "waste_days": 14
-    },
-    {
-      "link_id": "20805403",
-      "title": "⭐三重站全新裝潢丨可租補可貓丨可開伙丨有管理員代收垃圾",
-      "owner": "蕭靜芳",
-      "package_num": 4,
-      "prev_date": "2026-04-01",
-      "waste_days": 14
-    },
-    {
-      "link_id": "20930962",
-      "title": "新埔民生丨採光佳丨系統收納丨質感裝潢⭐️忠豪⭐️",
-      "owner": "張忠豪",
-      "package_num": 4,
-      "prev_date": "2026-04-02",
-      "waste_days": 13
-    },
-    {
-      "link_id": "20939897",
-      "title": "先嗇宮丨可租補可寵丨年繳及長約有優惠丨另租平車🌟忠豪🌟",
-      "owner": "張忠豪",
-      "package_num": 4,
-      "prev_date": "2026-04-02",
-      "waste_days": 13
-    },
-    {
-      "link_id": "20846265",
-      "title": "和平東路麟光站二房/可合租/可寵/⭐心瑜⭐",
-      "owner": "未知",
-      "package_num": 3,
-      "prev_date": "2026-04-02",
-      "waste_days": 13
-    },
-    {
-      "link_id": "20753315",
-      "title": "🎉三民高中站｜免仲介費可租補｜新裝潢拎包入住｜🍀阿宣🍀",
-      "owner": "林宣佑",
-      "package_num": 4,
-      "prev_date": "2026-04-02",
-      "waste_days": 13
-    },
-    {
-      "link_id": "20761392",
-      "title": "🎉新埔站｜採光三房｜品味居家｜🍀阿宣🍀",
-      "owner": "林宣佑",
-      "package_num": 4,
-      "prev_date": "2026-04-02",
-      "waste_days": 13
-    },
-    {
-      "link_id": "20975104",
-      "title": "c台北橋站丨含網路第四台丨獨立衛浴",
-      "owner": "蕭靜芳",
-      "package_num": 4,
-      "prev_date": "2026-04-02",
-      "waste_days": 13
-    },
-    {
-      "link_id": "20822410",
-      "title": "丹鳳丨迴龍丨系統收納丨質感裝潢🌟 忠豪🌟",
-      "owner": "張忠豪",
-      "package_num": 5,
-      "prev_date": "2026-04-03",
-      "waste_days": 12
-    },
-    {
-      "link_id": "20865821",
-      "title": "三和國中丨可租補報稅丨雙衛浴丨使用空間大🌟忠豪🌟",
-      "owner": "張忠豪",
-      "package_num": 5,
-      "prev_date": "2026-04-03",
-      "waste_days": 12
-    },
-    {
-      "link_id": "20958157",
-      "title": "徐匯中學丨採光佳丨乾淨舒適丨使用空間大⭐忠豪 ⭐",
-      "owner": "張忠豪",
-      "package_num": 5,
-      "prev_date": "2026-04-03",
-      "waste_days": 12
-    },
-    {
-      "link_id": "20853059",
-      "title": "三重國小丨可租補可寵丨質感裝潢丨台水台電🌟Wei🌟",
-      "owner": "未知",
-      "package_num": 5,
-      "prev_date": "2026-04-03",
-      "waste_days": 12
-    },
-    {
-      "link_id": "20959153",
-      "title": "🌈寵物友善丨三重國小丨可租補丨正三房丨✨小碩✨",
-      "owner": "未知",
-      "package_num": 2,
-      "prev_date": "2026-04-03",
-      "waste_days": 12
-    },
-    {
-      "link_id": "20897514",
-      "title": "三和國中丨可寵物丨質感裝潢丨獨立陽台⭐️Wei⭐️",
-      "owner": "蕭眞儀",
-      "package_num": 5,
-      "prev_date": "2026-04-03",
-      "waste_days": 12
-    },
-    {
-      "link_id": "20973327",
-      "title": "三重丨可拜拜寵物丨採光佳丨雙陽台衛浴🌟Wei🌟",
-      "owner": "蕭眞儀",
-      "package_num": 5,
-      "prev_date": "2026-04-03",
-      "waste_days": 12
-    },
-    {
-      "link_id": "20848499",
-      "title": "中山國小丨晴光商圈丨系統收納丨生活機能佳🌟忠豪🌟",
-      "owner": "張忠豪",
-      "package_num": 5,
-      "prev_date": "2026-04-04",
-      "waste_days": 11
-    },
-    {
-      "link_id": "20936543",
-      "title": "中和環球/明亮整潔二房/含平面車位",
-      "owner": "未知",
-      "package_num": 5,
-      "prev_date": "2026-04-04",
-      "waste_days": 11
-    },
-    {
-      "link_id": "20937232",
-      "title": "🌈三重站｜CITYLINK｜邊間採光｜寵物友善☀️阿傳☀️",
-      "owner": "詹張傳",
-      "package_num": 2,
-      "prev_date": "2026-04-04",
-      "waste_days": 11
-    },
-    {
-      "link_id": "20848835",
-      "title": "台北橋菜寮採光套房-垃圾代收👍Howard👍",
-      "owner": "張則泓",
-      "package_num": 5,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20836350",
-      "title": "徐匯中學丨電梯可租補丨租金含水丨質感裝潢🌟忠豪🌟",
-      "owner": "張忠豪",
-      "package_num": 5,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20856310",
-      "title": "三重國小丨質感新裝潢丨可租補可寵丨台水台電🌟忠豪🌟",
-      "owner": "張忠豪",
-      "package_num": 3,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20798556",
-      "title": "🏠新莊副都心｜全新裝潢2房｜雙捷運｜出差出國方便🏠",
-      "owner": "方鼎文",
-      "package_num": 5,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20944226",
-      "title": "🌿土城永寧｜綠意盎然｜採光通風大套房｜可租補｜小方🌿",
-      "owner": "方鼎文",
-      "package_num": 5,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20898863",
-      "title": "⭐️新埔站丨可租補丨低樓層可開伙",
-      "owner": "未知",
-      "package_num": 4,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20875934",
-      "title": "🎉新埔站｜質感採光兩房｜靜寵可談｜🍀阿宣🍀",
-      "owner": "林宣佑",
-      "package_num": 4,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20989768",
-      "title": "三民高中丨專屬露台丨雙衛浴丨可另租車位⭐️Wei⭐️",
-      "owner": "蕭眞儀",
-      "package_num": 5,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20852299",
-      "title": "⭐️三重國小站丨可寵可租補丨三房",
-      "owner": "蕭靜芳",
-      "package_num": 4,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20861393",
-      "title": "⭐️H三和國中站丨女性丨有陽台洗衣機可使用",
-      "owner": "蕭靜芳",
-      "package_num": 3,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20934407",
-      "title": "⭐️三重國小站丨可寵可租補丨三房",
-      "owner": "蕭靜芳",
-      "package_num": 4,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20934410",
-      "title": "⭐️新埔站丨2樓可租補丨可開伙",
-      "owner": "蕭靜芳",
-      "package_num": 5,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20934411",
-      "title": "三重國小丨可租補可寵丨兩房附傢俱丨電器",
-      "owner": "蕭靜芳",
-      "package_num": 5,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20946791",
-      "title": "菜寮站丨可貓含水網路丨代收垃圾",
-      "owner": "蕭靜芳",
-      "package_num": 3,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20946793",
-      "title": "⭐️三重國小站丨可寵可租補丨三房",
-      "owner": "蕭靜芳",
-      "package_num": 3,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20948108",
-      "title": "⭐️新埔站丨可租補丨低樓層有廚房",
-      "owner": "蕭靜芳",
-      "package_num": 4,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20975101",
-      "title": "c台北橋站丨含網路第四台丨獨立衛浴",
-      "owner": "蕭靜芳",
-      "package_num": 5,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20885242",
-      "title": "【優式】新莊副都心/陽光明亮2房/寵物可談、可租補",
-      "owner": "關宗宇",
-      "package_num": 5,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20895402",
-      "title": "【優式】新莊副都新站/全新高樓景觀2房/租金含車位",
-      "owner": "關宗宇",
-      "package_num": 5,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20961998",
-      "title": "【優式】新埔站｜View採光全新兩房｜拎包入住",
-      "owner": "關宗宇",
-      "package_num": 2,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20990701",
-      "title": "可租補/三重國小站/溫馨寵物友好2房",
-      "owner": "關宗宇",
-      "package_num": 5,
-      "prev_date": "2026-04-05",
-      "waste_days": 10
-    },
-    {
-      "link_id": "20303901",
-      "title": "🎉優式丨可住可辦丨低樓層空間好利用丨🍀小炫🍀",
-      "owner": "吳炫儒",
-      "package_num": 4,
-      "prev_date": "2026-04-07",
-      "waste_days": 8
-    },
-    {
-      "link_id": "20812898",
-      "title": "⭐️三重站全新裝潢丨可租補可貓丨電梯管理員丨垃圾代收",
-      "owner": "吳炫儒",
-      "package_num": 4,
-      "prev_date": "2026-04-07",
-      "waste_days": 8
-    },
-    {
-      "link_id": "20813016",
-      "title": "⭐️三重站全新裝潢丨可租補可貓丨電梯管理員丨垃圾代收",
-      "owner": "吳炫儒",
-      "package_num": 4,
-      "prev_date": "2026-04-07",
-      "waste_days": 8
-    },
-    {
-      "link_id": "20853172",
-      "title": "木柵路丨可租補丨質感裝潢丨採光佳🌟忠豪🌟",
-      "owner": "張忠豪",
-      "package_num": 4,
-      "prev_date": "2026-04-07",
-      "waste_days": 8
-    },
-    {
-      "link_id": "20995573",
-      "title": "新埔民生丨採光佳丨系統收納丨質感裝潢⭐️忠豪⭐️",
-      "owner": "張忠豪",
-      "package_num": 3,
-      "prev_date": "2026-04-07",
-      "waste_days": 8
-    },
-    {
-      "link_id": "20901486",
-      "title": "台北橋站｜質感生活｜設備齊全｜附網路第四台🌺Amber🌺",
-      "owner": "林佳燕",
-      "package_num": 2,
-      "prev_date": "2026-04-07",
-      "waste_days": 8
-    },
-    {
-      "link_id": "20813415",
-      "title": "🎉行天宮站｜採光三房｜全新家具家電｜含水/網路🍀阿宣🍀",
-      "owner": "林宣佑",
-      "package_num": 4,
-      "prev_date": "2026-04-07",
-      "waste_days": 8
-    },
-    {
-      "link_id": "20813419",
-      "title": "🎉北門站｜可租補｜三房空間｜🍀阿宣🍀",
-      "owner": "林宣佑",
-      "package_num": 4,
-      "prev_date": "2026-04-07",
-      "waste_days": 8
-    },
-    {
-      "link_id": "20975108",
-      "title": "⭐三重站全新裝潢丨可租補可貓丨可開伙丨有管理員代收垃圾",
-      "owner": "蕭靜芳",
-      "package_num": 4,
-      "prev_date": "2026-04-07",
-      "waste_days": 8
-    },
-    {
-      "link_id": "20998199",
-      "title": "c台北橋站丨含網路第四台丨獨立衛浴",
-      "owner": "蕭靜芳",
-      "package_num": 4,
-      "prev_date": "2026-04-07",
-      "waste_days": 8
-    },
-    {
-      "link_id": "20913313",
-      "title": "【優式】View高樓優質3房/大都會公園首排/三重捷運站",
-      "owner": "關宗宇",
-      "package_num": 4,
-      "prev_date": "2026-04-07",
-      "waste_days": 8
-    },
-    {
-      "link_id": "20918667",
-      "title": "【優式】中和環球/溫馨採光二房/含平面車位⭐心瑜⭐",
-      "owner": "陳心瑜",
-      "package_num": 4,
-      "prev_date": "2026-04-07",
-      "waste_days": 8
-    },
-    {
-      "link_id": "20821127",
-      "title": "【優式】大同區/全新景觀綠意公園大3房/生活機能強",
-      "owner": "吳惠慈",
-      "package_num": 4,
-      "prev_date": "2026-04-08",
-      "waste_days": 7
-    },
-    {
-      "link_id": "20957891",
-      "title": "【優式】大都會公園/綠意黃昏景觀3房/含平面車位",
-      "owner": "吳惠慈",
-      "package_num": 4,
-      "prev_date": "2026-04-08",
-      "waste_days": 7
-    },
-    {
-      "link_id": "20998143",
-      "title": "三重國小丨可租補可寵丨兩房附傢俱丨電器",
-      "owner": "蕭靜芳",
-      "package_num": 4,
-      "prev_date": "2026-04-08",
-      "waste_days": 7
-    },
-    {
-      "link_id": "21011592",
-      "title": "【優式】新莊副都心/陽光明亮2房/寵物可談、可租補",
-      "owner": "關宗宇",
-      "package_num": 4,
-      "prev_date": "2026-04-08",
-      "waste_days": 7
-    },
-    {
-      "link_id": "20916302",
-      "title": "🌈樓上是夢想✨樓下是生活/❤️收納幸福與風景-小碩",
-      "owner": "劉子碩",
-      "package_num": 4,
-      "prev_date": "2026-04-09",
-      "waste_days": 6
-    },
-    {
-      "link_id": "20828849",
-      "title": "【獨家】可租補/佳瑪商圈/自然清新鳥鳴大3房",
-      "owner": "吳惠慈",
-      "package_num": 4,
-      "prev_date": "2026-04-09",
-      "waste_days": 6
-    },
-    {
-      "link_id": "20828865",
-      "title": "【優式】士林區/View高樓層3房/生活機能強",
-      "owner": "吳惠慈",
-      "package_num": 4,
-      "prev_date": "2026-04-09",
-      "waste_days": 6
-    },
-    {
-      "link_id": "20825542",
-      "title": "🎉徐匯中學站｜可租補｜網路/垃圾代收｜🍀阿宣🍀",
-      "owner": "林宣佑",
-      "package_num": 4,
-      "prev_date": "2026-04-09",
-      "waste_days": 6
-    },
-    {
-      "link_id": "21003893",
-      "title": "【優式】可租補\\秀朗橋站\\綠意鳥鳴大3房",
-      "owner": "關宗宇",
-      "package_num": 1,
-      "prev_date": "2026-04-09",
-      "waste_days": 6
-    },
-    {
-      "link_id": "20986171",
-      "title": "✨新莊副都心｜全新裝潢2房｜雙捷運｜💫小碩💫",
-      "owner": "劉子碩",
-      "package_num": 2,
-      "prev_date": "2026-04-10",
-      "waste_days": 5
-    },
-    {
       "link_id": "20916176",
       "title": "🌈女子公寓✨共生分租雅房❤️小碩❤️",
       "owner": "劉子碩",
@@ -2131,7 +1587,7 @@
       "name": "張忠豪",
       "active": 16,
       "expiring": 1,
-      "disappeared": 18,
+      "disappeared": 8,
       "featured": 0,
       "topped": 12
     },
@@ -2139,7 +1595,7 @@
       "name": "關宗宇",
       "active": 11,
       "expiring": 1,
-      "disappeared": 9,
+      "disappeared": 2,
       "featured": 0,
       "topped": 6
     },
@@ -2147,7 +1603,7 @@
       "name": "蕭靜芳",
       "active": 10,
       "expiring": 3,
-      "disappeared": 20,
+      "disappeared": 5,
       "featured": 0,
       "topped": 7
     },
@@ -2155,7 +1611,7 @@
       "name": "林宣佑",
       "active": 9,
       "expiring": 0,
-      "disappeared": 8,
+      "disappeared": 2,
       "featured": 0,
       "topped": 4
     },
@@ -2163,7 +1619,7 @@
       "name": "蕭眞儀",
       "active": 7,
       "expiring": 1,
-      "disappeared": 7,
+      "disappeared": 4,
       "featured": 0,
       "topped": 0
     },
@@ -2171,7 +1627,7 @@
       "name": "吳惠慈",
       "active": 6,
       "expiring": 0,
-      "disappeared": 6,
+      "disappeared": 2,
       "featured": 0,
       "topped": 3
     },
@@ -2179,7 +1635,7 @@
       "name": "詹張傳",
       "active": 5,
       "expiring": 0,
-      "disappeared": 4,
+      "disappeared": 3,
       "featured": 0,
       "topped": 2
     },
@@ -2187,7 +1643,7 @@
       "name": "林佳燕",
       "active": 2,
       "expiring": 0,
-      "disappeared": 1,
+      "disappeared": 0,
       "featured": 0,
       "topped": 2
     },
@@ -2203,7 +1659,7 @@
       "name": "劉子碩",
       "active": 2,
       "expiring": 0,
-      "disappeared": 4,
+      "disappeared": 2,
       "featured": 0,
       "topped": 0
     },
@@ -2219,7 +1675,7 @@
       "name": "陳心瑜",
       "active": 1,
       "expiring": 0,
-      "disappeared": 1,
+      "disappeared": 0,
       "featured": 0,
       "topped": 0
     },
@@ -2227,7 +1683,7 @@
       "name": "方鼎文",
       "active": 1,
       "expiring": 0,
-      "disappeared": 2,
+      "disappeared": 0,
       "featured": 0,
       "topped": 1
     },
@@ -2235,23 +1691,7 @@
       "name": "張則泓",
       "active": 1,
       "expiring": 0,
-      "disappeared": 2,
-      "featured": 0,
-      "topped": 0
-    },
-    {
-      "name": "未知",
-      "active": 0,
-      "expiring": 0,
-      "disappeared": 12,
-      "featured": 0,
-      "topped": 0
-    },
-    {
-      "name": "吳炫儒",
-      "active": 0,
-      "expiring": 0,
-      "disappeared": 3,
+      "disappeared": 1,
       "featured": 0,
       "topped": 0
     }
