@@ -493,13 +493,12 @@
         </div>
         <span id="adOwnerCount" class="text-xs text-slate-500 font-semibold"></span>
       </div>
-      <div class="hidden md:grid grid-cols-[48px_1fr_72px_96px_96px_72px] items-center gap-3 pb-2 mb-1 border-b-2 border-slate-100 text-xs text-slate-500 font-bold uppercase tracking-wider">
+      <div class="hidden md:grid grid-cols-[48px_1fr_96px_112px_128px] items-center gap-3 pb-2 mb-1 border-b-2 border-slate-100 text-xs text-slate-500 font-bold uppercase tracking-wider">
         <div></div>
         <div>負責人</div>
         <div class="text-center">在刊</div>
         <div class="text-center">今日到期</div>
         <div class="text-center">連日未上架</div>
-        <div class="text-center">加值</div>
       </div>
       <div id="adOwnerBoard" class="divide-y divide-slate-100"></div>
     </section>
@@ -1045,7 +1044,6 @@ function renderAd591(){
   });
   document.getElementById('adOwnerBoard').innerHTML = sortedOwners.map((o,i)=>{
     const disappeared=o.disappeared||0;
-    const addon=(o.featured||0)+(o.topped||0);
     let badge;
     if(disappeared===0 && i<3 && o.active>0){
       const cls=['medal-1','medal-2','medal-3'][i]; const icon=['🥇','🥈','🥉'][i];
@@ -1058,15 +1056,13 @@ function renderAd591(){
     // 24h 到期是中性訊息（提醒），用琥珀色小字；連日未上架才用橘色強調
     const expiringCell = o.expiring ? `<div class="text-center"><span class="inline-flex items-center justify-center min-w-[48px] px-3 py-1.5 rounded-lg text-lg font-bold text-amber-700 bg-amber-50 border border-amber-100">${o.expiring}</span></div>` : '<div class="text-center text-lg font-black text-slate-300">—</div>';
     const disappearedCell = disappeared ? `<div class="text-center"><span class="inline-flex items-center justify-center min-w-[48px] px-3 py-1.5 rounded-lg text-lg font-black text-white bg-orange-500">${disappeared}</span></div>` : '<div class="text-center text-lg font-black text-slate-300">—</div>';
-    const addonCell = addon ? `<div class="text-center"><span class="inline-flex items-center justify-center min-w-[48px] px-3 py-1.5 rounded-lg text-lg font-black text-blue-700 bg-blue-100">${addon}</span></div>` : '<div class="text-center text-lg font-black text-slate-300">—</div>';
-    return `<div class="grid grid-cols-[48px_1fr_72px_96px_96px_72px] items-center gap-3 py-3">
+    return `<div class="grid grid-cols-[48px_1fr_96px_112px_128px] items-center gap-3 py-3">
       ${badge}
       <div class="min-w-0"><div class="font-bold text-slate-900 truncate">${esc(o.name)}</div>
       ${disappeared ? '<div class="text-[11px] text-orange-600 font-semibold md:hidden">連日未上架 '+disappeared+' 筆</div>':''}</div>
       <div class="text-center text-lg font-black text-slate-800">${o.active||0}</div>
       ${expiringCell}
       ${disappearedCell}
-      ${addonCell}
     </div>`;
   }).join('');
 
