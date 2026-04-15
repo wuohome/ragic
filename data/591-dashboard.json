@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-04-15T12:39:41+08:00",
+  "updated_at": "2026-04-15T13:57:32+08:00",
   "scraped_date": "2026-04-15",
   "prev_date": "2026-04-14",
   "summary": {
@@ -7,8 +7,6 @@
     "total_vacant": 10,
     "total_expired": 16,
     "total_expiring": 7,
-    "total_declined": 12,
-    "declined_owner_count": 5,
     "featured_count": 0,
     "super_top_count": 37,
     "normal_top_count": 0,
@@ -939,48 +937,6 @@
       "topped": "超級置頂"
     }
   ],
-  "declines": [
-    {
-      "owner": "吳惠慈",
-      "today_count": 6,
-      "peak_count": 11,
-      "peak_date": "2026-04-08",
-      "declined": 5,
-      "days_since_peak": 7
-    },
-    {
-      "owner": "劉子碩",
-      "today_count": 2,
-      "peak_count": 5,
-      "peak_date": "2026-04-09",
-      "declined": 3,
-      "days_since_peak": 6
-    },
-    {
-      "owner": "詹張傳",
-      "today_count": 5,
-      "peak_count": 7,
-      "peak_date": "2026-04-12",
-      "declined": 2,
-      "days_since_peak": 3
-    },
-    {
-      "owner": "張則泓",
-      "today_count": 1,
-      "peak_count": 2,
-      "peak_date": "2026-04-12",
-      "declined": 1,
-      "days_since_peak": 3
-    },
-    {
-      "owner": "張忠豪",
-      "today_count": 16,
-      "peak_count": 17,
-      "peak_date": "2026-04-12",
-      "declined": 1,
-      "days_since_peak": 3
-    }
-  ],
   "featured_list": [],
   "topped_list": [
     {
@@ -1396,9 +1352,6 @@
       "name": "張忠豪",
       "active": 16,
       "expiring": 1,
-      "declined": 1,
-      "peak_count": 17,
-      "peak_date": "2026-04-12",
       "featured": 0,
       "topped": 12
     },
@@ -1406,9 +1359,6 @@
       "name": "關宗宇",
       "active": 11,
       "expiring": 1,
-      "declined": 0,
-      "peak_count": 0,
-      "peak_date": "",
       "featured": 0,
       "topped": 6
     },
@@ -1416,9 +1366,6 @@
       "name": "蕭靜芳",
       "active": 10,
       "expiring": 3,
-      "declined": 0,
-      "peak_count": 0,
-      "peak_date": "",
       "featured": 0,
       "topped": 7
     },
@@ -1426,9 +1373,6 @@
       "name": "林宣佑",
       "active": 9,
       "expiring": 0,
-      "declined": 0,
-      "peak_count": 0,
-      "peak_date": "",
       "featured": 0,
       "topped": 4
     },
@@ -1436,9 +1380,6 @@
       "name": "蕭眞儀",
       "active": 7,
       "expiring": 1,
-      "declined": 0,
-      "peak_count": 0,
-      "peak_date": "",
       "featured": 0,
       "topped": 0
     },
@@ -1446,9 +1387,6 @@
       "name": "吳惠慈",
       "active": 6,
       "expiring": 0,
-      "declined": 5,
-      "peak_count": 11,
-      "peak_date": "2026-04-08",
       "featured": 0,
       "topped": 3
     },
@@ -1456,9 +1394,6 @@
       "name": "詹張傳",
       "active": 5,
       "expiring": 0,
-      "declined": 2,
-      "peak_count": 7,
-      "peak_date": "2026-04-12",
       "featured": 0,
       "topped": 2
     },
@@ -1466,9 +1401,6 @@
       "name": "林佳燕",
       "active": 2,
       "expiring": 0,
-      "declined": 0,
-      "peak_count": 0,
-      "peak_date": "",
       "featured": 0,
       "topped": 2
     },
@@ -1476,9 +1408,6 @@
       "name": "李維",
       "active": 2,
       "expiring": 0,
-      "declined": 0,
-      "peak_count": 0,
-      "peak_date": "",
       "featured": 0,
       "topped": 0
     },
@@ -1486,9 +1415,6 @@
       "name": "劉子碩",
       "active": 2,
       "expiring": 0,
-      "declined": 3,
-      "peak_count": 5,
-      "peak_date": "2026-04-09",
       "featured": 0,
       "topped": 0
     },
@@ -1496,9 +1422,6 @@
       "name": "李卓威",
       "active": 1,
       "expiring": 1,
-      "declined": 0,
-      "peak_count": 0,
-      "peak_date": "",
       "featured": 0,
       "topped": 0
     },
@@ -1506,9 +1429,6 @@
       "name": "陳心瑜",
       "active": 1,
       "expiring": 0,
-      "declined": 0,
-      "peak_count": 0,
-      "peak_date": "",
       "featured": 0,
       "topped": 0
     },
@@ -1516,9 +1436,6 @@
       "name": "方鼎文",
       "active": 1,
       "expiring": 0,
-      "declined": 0,
-      "peak_count": 0,
-      "peak_date": "",
       "featured": 0,
       "topped": 1
     },
@@ -1526,9 +1443,6 @@
       "name": "張則泓",
       "active": 1,
       "expiring": 0,
-      "declined": 1,
-      "peak_count": 2,
-      "peak_date": "2026-04-12",
       "featured": 0,
       "topped": 0
     }
