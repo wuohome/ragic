@@ -68,6 +68,7 @@
     <div class="tab pb-3 text-lg px-1" data-tab="inventory">📦 庫存統計</div>
     <div class="tab pb-3 text-lg px-1" data-tab="outreach">📞 開發追蹤</div>
     <div class="tab pb-3 text-lg px-1" data-tab="clients">👥 客戶來源</div>
+    <div class="tab pb-3 text-lg px-1" data-tab="ad591">📢 591 廣告</div>
   </div>
   <div id="tabDesc" class="text-sm text-slate-400 mb-6 mt-3">各業務在選定期間內新接了多少委託案件，以及距上次進案多久</div>
 
@@ -422,6 +423,126 @@
     </section>
   </div>
 
+  <!-- ── 591 廣告 ── -->
+  <div class="tab-panel" id="panel-ad591">
+    <!-- Hero 雙卡 -->
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+      <div class="bg-gradient-to-br from-red-50 via-red-100 to-rose-100 rounded-2xl p-6 shadow-sm border border-red-200 relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-2xl -mr-16 -mt-16"></div>
+        <div class="relative flex items-center gap-2 mb-2">
+          <span class="text-2xl">🔴</span>
+          <span class="font-bold text-lg text-red-800">24 小時內到期</span>
+          <span class="ml-auto text-xs bg-red-600 text-white px-2 py-0.5 rounded-full font-bold">優先</span>
+        </div>
+        <div class="relative flex items-baseline gap-2 mb-3">
+          <div id="adHeroExpiring" class="text-7xl font-black text-red-600 leading-none">—</div>
+          <div class="text-red-700 font-semibold text-lg">筆需續刊</div>
+        </div>
+        <div id="adHeroExpiringOwners" class="relative text-red-900 text-sm font-medium min-h-[1.5rem]"></div>
+      </div>
+      <div class="bg-gradient-to-br from-orange-50 via-orange-100 to-amber-100 rounded-2xl p-6 shadow-sm border border-orange-200 relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-2xl -mr-16 -mt-16"></div>
+        <div class="relative flex items-center gap-2 mb-2">
+          <span class="text-2xl">⏰</span>
+          <span class="font-bold text-lg text-orange-800">到期未補</span>
+          <span class="ml-auto text-xs bg-orange-600 text-white px-2 py-0.5 rounded-full font-bold">追責</span>
+        </div>
+        <div class="relative flex items-baseline gap-2 mb-3">
+          <div id="adHeroDisappeared" class="text-7xl font-black text-orange-600 leading-none">—</div>
+          <div class="text-orange-700 font-semibold text-lg">筆待補</div>
+        </div>
+        <div id="adHeroDisappearedOwners" class="relative text-orange-900 text-sm font-medium min-h-[1.5rem]"></div>
+      </div>
+    </section>
+
+    <!-- KPI 4 格 -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-5 mb-6">
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">🏠 在刊</div>
+        <div id="adKpiActive" class="text-5xl font-black text-blue-600">0</div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">🪹 空位</div>
+        <div id="adKpiVacant" class="text-5xl font-black text-amber-600">0</div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">⭐ 精選</div>
+        <div id="adKpiFeatured" class="text-5xl font-black text-amber-500">0</div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">⚡ 置頂</div>
+        <div id="adKpiTopped" class="text-5xl font-black text-pink-600">0</div>
+      </div>
+    </section>
+
+    <!-- 套餐版位 -->
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-slate-900">📦 套餐版位</h2>
+        <span class="text-xs text-slate-500">在刊 / 容量</span>
+      </div>
+      <div id="adPackageList" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+    </section>
+
+    <!-- 負責人記分板 -->
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">🏆 負責人記分板</h2>
+          <p class="text-xs text-slate-500 mt-0.5">按今日問題數排序（24h 到期 + 到期未補）</p>
+        </div>
+        <span id="adOwnerCount" class="text-xs text-slate-500 font-semibold"></span>
+      </div>
+      <div class="hidden md:grid grid-cols-[48px_1fr_72px_96px_96px_72px] items-center gap-3 pb-2 mb-1 border-b-2 border-slate-100 text-xs text-slate-500 font-bold uppercase tracking-wider">
+        <div></div>
+        <div>負責人</div>
+        <div class="text-center">在刊</div>
+        <div class="text-center">24h 到期</div>
+        <div class="text-center">到期未補</div>
+        <div class="text-center">加值</div>
+      </div>
+      <div id="adOwnerBoard" class="divide-y divide-slate-100"></div>
+    </section>
+
+    <!-- 24h 到期明細 -->
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-slate-900">🔴 24h 到期明細</h2>
+        <span id="adExpiringCount" class="text-xs text-slate-500 font-semibold"></span>
+      </div>
+      <div id="adExpiringGroups" class="space-y-5"></div>
+    </section>
+
+    <!-- 到期未補明細 -->
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-slate-900">⏰ 到期未補明細</h2>
+        <span id="adDisappearedCount" class="text-xs text-slate-500 font-semibold"></span>
+      </div>
+      <div id="adDisappearedGroups" class="space-y-5"></div>
+    </section>
+
+    <!-- 全部在刊 -->
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-slate-900">📑 全部在刊物件</h2>
+        <span id="adAllItemsCount" class="text-xs text-slate-500 font-semibold"></span>
+      </div>
+      <div id="adOwnerFilter" class="flex flex-wrap gap-1.5 mb-4"></div>
+      <div id="adAllItemsList" class="space-y-1"></div>
+    </section>
+
+    <!-- 精選置頂 -->
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-slate-900">⭐ 精選 / 置頂明細</h2>
+        <span id="adFeaturedCount" class="text-xs text-slate-500 font-semibold"></span>
+      </div>
+      <div id="adToppedSection" class="mb-4"></div>
+      <div id="adFeaturedSection"></div>
+    </section>
+  </div>
+
   <footer class="text-center text-slate-400 text-xs py-6">
     即時資料 — 每次開啟頁面自動從 Ragic 抓取　•　窩的家系統部
   </footer>
@@ -686,7 +807,7 @@ async function ragicFetch(path, params = '') {
 }
 
 let _loadDone = 0;
-const _loadTotal = 7;
+const _loadTotal = 8;
 const _loadLabels = ['進案量','業績','庫存','開發追蹤','客戶來源','人事資料','業績比對'];
 function setProgress(label) {
   _loadDone++;
@@ -715,6 +836,7 @@ async function fetchAllData() {
     ragicFetch('property-data-kept/8', 'limit=10000').then(r => { setProgress('客戶來源'); return r; }),
     ragicFetch('ragicforms4/20004', 'limit=200').then(r => { setProgress('人事資料'); return r; }),
     fetch('data/perf.md').then(r => r.ok ? r.text() : '').catch(() => '').then(r => { setProgress('業績比對'); return r; }),
+    fetch('data/591-dashboard.json?v=' + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null).then(r => { setProgress('591 廣告'); AD591 = r; return r; }),
   ]);
 
   document.getElementById('loadingText').textContent = '資料轉換中…';
@@ -790,6 +912,7 @@ async function fetchAllData() {
 // ════════════════════════════════════════════════════════════════════
 let INTAKE = [], PERF = [], PERF_RAGIC = [], COMPARE = {}, INVENTORY = [], OUTREACH = [], CLIENTS = [];
 let ACTIVE_STAFF = new Set();
+let AD591 = null;
 
 
 // ════════════════════════════════════════════════════════════════════
@@ -865,6 +988,185 @@ function refreshAll(){
   renderClients();
 }
 
+// ════════════════════════════════════════
+// 591 廣告
+// ════════════════════════════════════════
+function renderAd591(){
+  const panel = document.getElementById('panel-ad591');
+  if(!AD591 || !AD591.summary){
+    panel.querySelector('#adHeroExpiring').textContent = '—';
+    panel.querySelector('#adHeroDisappeared').textContent = '—';
+    panel.querySelector('#adHeroExpiringOwners').innerHTML = '<span class="text-slate-500">資料尚未生成，請稍後再試</span>';
+    return;
+  }
+  const d = AD591, s = d.summary;
+
+  document.getElementById('adHeroExpiring').textContent = s.total_expiring;
+  document.getElementById('adHeroDisappeared').textContent = s.total_disappeared;
+  document.getElementById('adHeroExpiringOwners').innerHTML = ad591TopOwners(d.expiring, '✓ 全員已續刊');
+  document.getElementById('adHeroDisappearedOwners').innerHTML = ad591TopOwners(d.disappeared, '✓ 大家都有補');
+
+  document.getElementById('adKpiActive').textContent = s.total_active;
+  document.getElementById('adKpiVacant').textContent = s.total_vacant;
+  document.getElementById('adKpiFeatured').textContent = s.featured_count;
+  document.getElementById('adKpiTopped').textContent = (s.super_top_count||0) + (s.normal_top_count||0);
+
+  // 套餐卡片（rounded-xl + 彩色漸層）
+  document.getElementById('adPackageList').innerHTML = d.packages.map(p=>{
+    const total = p.active + p.vacant + p.expired;
+    const pct = total > 0 ? Math.round(p.active/total*100) : 0;
+    let bg='bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200', stat='滿刊', statCls='bg-emerald-500 text-white';
+    if(p.expired > 0){ bg='bg-gradient-to-br from-red-50 to-red-100 border-red-200'; stat=`${p.expired} 筆到期`; statCls='bg-red-500 text-white'; }
+    else if(p.vacant > 0){ bg='bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200'; stat=`${p.vacant} 空位`; statCls='bg-amber-500 text-white'; }
+    return `<div class="rounded-xl border p-4 ${bg}">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-bold text-slate-600">套餐 #${p.num}</span>
+        <span class="${statCls} text-[10px] font-bold px-2 py-0.5 rounded-full">${stat}</span>
+      </div>
+      <div class="flex items-baseline gap-1 mb-2">
+        <span class="text-3xl font-black text-slate-900">${p.active}</span>
+        <span class="text-sm text-slate-500">/ ${total}</span>
+      </div>
+      <div class="h-1.5 bg-white/60 rounded-full overflow-hidden">
+        <div class="h-full bg-slate-700 rounded-full" style="width:${pct}%"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // 負責人記分板
+  document.getElementById('adOwnerCount').textContent = `${d.owners.length} 人`;
+  const sortedOwners = [...d.owners].sort((a,b)=>{
+    const ai=(a.expiring||0)+(a.disappeared||0), bi=(b.expiring||0)+(b.disappeared||0);
+    if(bi!==ai) return bi-ai;
+    return (b.active||0)-(a.active||0);
+  });
+  document.getElementById('adOwnerBoard').innerHTML = sortedOwners.map((o,i)=>{
+    const issues=(o.expiring||0)+(o.disappeared||0);
+    const addon=(o.featured||0)+(o.topped||0);
+    let badge;
+    if(issues===0 && i<3 && o.active>0){
+      const cls=['medal-1','medal-2','medal-3'][i]; const icon=['🥇','🥈','🥉'][i];
+      badge = `<span class="${cls} w-10 h-10 rounded-full flex items-center justify-center font-black text-lg">${icon}</span>`;
+    } else if(issues>0){
+      badge = `<span class="w-10 h-10 rounded-full bg-red-500 text-white flex items-center justify-center font-black text-sm">!${issues}</span>`;
+    } else {
+      badge = `<span class="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center font-bold text-sm">${i+1}</span>`;
+    }
+    const cell = (v, cls, bg) => v ? `<div class="text-center"><span class="inline-flex items-center justify-center min-w-[48px] px-3 py-1.5 rounded-lg text-lg font-black ${cls} ${bg}">${v}</span></div>` : '<div class="text-center text-lg font-black text-slate-300">0</div>';
+    return `<div class="grid grid-cols-[48px_1fr_72px_96px_96px_72px] items-center gap-3 py-3">
+      ${badge}
+      <div class="min-w-0"><div class="font-bold text-slate-900 truncate">${esc(o.name)}</div>
+      ${issues ? '<div class="text-[11px] text-red-600 font-semibold md:hidden">需處理 '+issues+' 筆</div>':''}</div>
+      <div class="text-center text-lg font-black text-slate-800">${o.active||0}</div>
+      ${cell(o.expiring,'text-white','bg-red-500')}
+      ${cell(o.disappeared,'text-white','bg-orange-500')}
+      ${cell(addon,'text-blue-700','bg-blue-100')}
+    </div>`;
+  }).join('');
+
+  // 24h 到期明細
+  document.getElementById('adExpiringCount').textContent = d.expiring.length ? `共 ${d.expiring.length} 筆` : '';
+  document.getElementById('adExpiringGroups').innerHTML = d.expiring.length
+    ? ad591GroupBy(d.expiring,'owner').map(([o,items])=>ad591OwnerGroup(o,items,ad591ItemRow,'bg-red-500 text-white')).join('')
+    : '<div class="text-emerald-600 font-bold py-4 text-center">✓ 目前沒有 24 小時內到期的物件</div>';
+
+  document.getElementById('adDisappearedCount').textContent = d.disappeared.length ? `共 ${d.disappeared.length} 筆` : '';
+  document.getElementById('adDisappearedGroups').innerHTML = d.disappeared.length
+    ? ad591GroupBy(d.disappeared,'owner').map(([o,items])=>ad591OwnerGroup(o,items,ad591DisappearedRow,'bg-orange-500 text-white')).join('')
+    : '<div class="text-emerald-600 font-bold py-4 text-center">✓ 大家都有補新物件</div>';
+
+  // 全部在刊 + filter
+  document.getElementById('adAllItemsCount').textContent = `${d.items.length} 筆`;
+  const filterEl = document.getElementById('adOwnerFilter');
+  const listEl = document.getElementById('adAllItemsList');
+  const chipAct='bg-slate-900 text-white border-slate-900', chipIdle='bg-white text-slate-600 border-slate-200 hover:border-slate-400';
+  const chips = [{name:'全部',count:d.items.length},...sortedOwners.map(o=>({name:o.name,count:o.active||0}))];
+  filterEl.innerHTML = chips.map((c,i)=>`<button type="button" data-owner="${c.name==='全部'?'':esc(c.name)}" class="px-3 py-1 rounded-full text-xs font-semibold border ${i===0?chipAct:chipIdle}">${esc(c.name)}<span class="ml-1 text-[10px] opacity-70">${c.count}</span></button>`).join('');
+  const renderList = (filter)=>{
+    const arr = filter ? d.items.filter(it=>it.owner===filter) : d.items;
+    listEl.innerHTML = arr.length ? arr.map(ad591ItemRow).join('') : '<div class="text-sm text-slate-400 py-4 text-center">無符合資料</div>';
+  };
+  filterEl.onclick = (e)=>{
+    const btn = e.target.closest('button[data-owner]'); if(!btn) return;
+    filterEl.querySelectorAll('button').forEach(b=>b.className=b.className.replace(chipAct,chipIdle));
+    btn.className = btn.className.replace(chipIdle,chipAct);
+    renderList(btn.dataset.owner);
+  };
+  renderList('');
+
+  // 精選/置頂
+  document.getElementById('adFeaturedCount').textContent = `精選 ${s.featured_count} · 置頂 ${(s.super_top_count||0)+(s.normal_top_count||0)}`;
+  document.getElementById('adToppedSection').innerHTML = d.topped_list.length
+    ? `<div class="text-xs uppercase tracking-wider text-slate-500 font-bold mb-2">置頂中（${d.topped_list.length}）</div><div class="space-y-1">${d.topped_list.map(ad591ItemRow).join('')}</div>`
+    : '';
+  document.getElementById('adFeaturedSection').innerHTML = d.featured_list.length
+    ? `<div class="text-xs uppercase tracking-wider text-slate-500 font-bold mb-2 mt-4">精選中（${d.featured_list.length}）</div><div class="space-y-1">${d.featured_list.map(ad591ItemRow).join('')}</div>`
+    : (d.topped_list.length ? '' : '<div class="text-sm text-slate-400 py-2 text-center">目前沒有精選或置頂</div>');
+}
+function ad591UrgencyBadge(days){
+  if(days<=0) return {cls:'bg-red-600 text-white',label:'今天到期'};
+  if(days===1) return {cls:'bg-red-500 text-white',label:'剩 1 天'};
+  if(days<=3) return {cls:'bg-amber-500 text-white',label:`剩 ${days} 天`};
+  if(days<=7) return {cls:'bg-yellow-400 text-yellow-900',label:`剩 ${days} 天`};
+  return {cls:'bg-slate-200 text-slate-700',label:`剩 ${days} 天`};
+}
+function ad591ItemTags(it){
+  const t=[];
+  if(it.featured) t.push('<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">精選</span>');
+  if(it.topped==='超級置頂') t.push('<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200">超級置頂</span>');
+  else if(it.topped) t.push(`<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-pink-100 text-pink-800 border border-pink-200">${esc(it.topped)}</span>`);
+  return t.join(' ');
+}
+function ad591ItemRow(it){
+  const u = ad591UrgencyBadge(it.days);
+  return `<a href="${esc(it.href)}" target="_blank" rel="noopener" class="group flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors">
+    <span class="shrink-0 inline-flex items-center justify-center text-[11px] font-bold px-2 py-1 rounded ${u.cls} min-w-[68px] text-center">${u.label}</span>
+    <div class="flex-1 min-w-0">
+      <div class="text-sm text-slate-800 truncate font-semibold">${esc(it.title)}</div>
+      <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 flex-wrap">
+        <span>套餐 #${it.package_num}</span><span>·</span>
+        <span class="text-slate-700 font-semibold">${esc(it.owner)}</span>
+        ${ad591ItemTags(it) ? '<span>·</span>' + ad591ItemTags(it) : ''}
+      </div>
+    </div>
+    <span class="text-slate-300 group-hover:text-slate-500 shrink-0">↗</span>
+  </a>`;
+}
+function ad591DisappearedRow(d){
+  return `<a href="${esc(d.href)}" target="_blank" rel="noopener" class="group flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors">
+    <span class="shrink-0 inline-flex items-center justify-center text-[11px] font-bold px-2 py-1 rounded bg-orange-500 text-white min-w-[76px] text-center">浪費 ${d.waste_days} 天</span>
+    <div class="flex-1 min-w-0">
+      <div class="text-sm text-slate-800 truncate font-semibold">${esc(d.title)}</div>
+      <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 flex-wrap">
+        <span>套餐 #${d.package_num}</span><span>·</span>
+        <span class="text-slate-700 font-semibold">${esc(d.owner)}</span><span>·</span>
+        <span>${esc(d.prev_date)} 消失</span>
+      </div>
+    </div>
+    <span class="text-slate-300 group-hover:text-slate-500 shrink-0">↗</span>
+  </a>`;
+}
+function ad591GroupBy(arr,key){
+  const m = new Map();
+  for(const it of arr){ const k = it[key]||'未知'; if(!m.has(k)) m.set(k,[]); m.get(k).push(it); }
+  return [...m.entries()].sort((a,b)=>b[1].length-a[1].length);
+}
+function ad591OwnerGroup(owner,items,rowFn,accent){
+  return `<div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${accent} text-sm font-bold">
+        ${esc(owner)}<span class="bg-white/90 text-slate-800 px-1.5 rounded text-xs">${items.length}</span>
+      </span>
+    </div>
+    <div class="space-y-1">${items.map(rowFn).join('')}</div>
+  </div>`;
+}
+function ad591TopOwners(items,emptyText){
+  if(!items.length) return `<span class="inline-flex items-center gap-1 font-bold">${emptyText}</span>`;
+  const groups = ad591GroupBy(items,'owner').slice(0,4);
+  return groups.map(([o,arr])=>`<span class="inline-flex items-center gap-1 bg-white/70 px-2.5 py-1 rounded-full mr-1.5 mb-1 text-xs"><span class="font-bold">${esc(o)}</span><span>${arr.length}</span></span>`).join('');
+}
+
 // ── Tab ──
 const TAB_DESC = {
   week:'各業務在選定期間內新接了多少委託案件，以及距上次進案多久',
@@ -874,6 +1176,7 @@ const TAB_DESC = {
   inventory:'目前所有在架物件的庫存狀態，庫存越多代表待消化越多',
   outreach:'業務主動開發屋主的次數、轉化率與完整度追蹤',
   clients:'租客來源管道分佈，了解客戶從哪裡找到我們',
+  ad591:'591 套餐版位、24h 到期、到期未補與精選/置頂追蹤',
 };
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
@@ -1392,6 +1695,7 @@ document.getElementById('clEnd').addEventListener('change',()=>{document.querySe
     renderInventory();
     applyOutreachPreset('thisMonth');
     applyClientPreset('thisMonth');
+    renderAd591();
 
     // Fade out loading
     const overlay = document.getElementById('loadingOverlay');
