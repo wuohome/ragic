@@ -425,10 +425,10 @@
 
   <!-- ── 591 廣告 ── -->
   <div class="tab-panel" id="panel-ad591">
-    <!-- Hero 雙卡 -->
-    <section class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+    <!-- Hero 單卡 -->
+    <section class="mb-6">
       <div class="bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-50 rounded-2xl p-6 shadow-sm border border-sky-200 relative overflow-hidden">
-        <div class="absolute top-0 right-0 w-32 h-32 bg-sky-400/10 rounded-full blur-2xl -mr-16 -mt-16"></div>
+        <div class="absolute top-0 right-0 w-48 h-48 bg-sky-400/10 rounded-full blur-3xl -mr-24 -mt-24"></div>
         <div class="relative flex items-center gap-2 mb-2">
           <span class="text-2xl">⏳</span>
           <span class="font-bold text-lg text-sky-900">今日到期（24h 內）</span>
@@ -439,19 +439,6 @@
         </div>
         <p class="relative text-xs text-sky-700/80 mb-2">系統到期時會自動下架，看看要不要主動續刊或改補新</p>
         <div id="adHeroExpiringOwners" class="relative text-sky-900 text-sm font-medium min-h-[1.5rem]"></div>
-      </div>
-      <div class="bg-gradient-to-br from-orange-50 via-orange-100 to-amber-100 rounded-2xl p-6 shadow-sm border border-orange-200 relative overflow-hidden">
-        <div class="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-2xl -mr-16 -mt-16"></div>
-        <div class="relative flex items-center gap-2 mb-2">
-          <span class="text-2xl">📉</span>
-          <span class="font-bold text-lg text-orange-900">版位未補回</span>
-        </div>
-        <div class="relative flex items-baseline gap-2 mb-2">
-          <div id="adHeroDeclined" class="text-7xl font-black text-orange-600 leading-none">—</div>
-          <div class="text-orange-800 font-semibold text-lg">筆</div>
-        </div>
-        <p class="relative text-xs text-orange-700/80 mb-2">今天的在刊數比近 7 天最高峰少，且 ≥ 2 天沒回升</p>
-        <div id="adHeroDeclinedOwners" class="relative text-orange-900 text-sm font-medium min-h-[1.5rem]"></div>
       </div>
     </section>
 
@@ -489,16 +476,15 @@
       <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
           <h2 class="text-xl font-bold text-slate-900">🏆 負責人記分板</h2>
-          <p class="text-xs text-slate-500 mt-0.5">按「連日未上架」數排序，有連日未上架才顯示紅色徽章</p>
+          <p class="text-xs text-slate-500 mt-0.5">按在刊數排序，呈現當下各業務的版位使用情況</p>
         </div>
         <span id="adOwnerCount" class="text-xs text-slate-500 font-semibold"></span>
       </div>
-      <div class="hidden md:grid grid-cols-[48px_1fr_96px_112px_128px] items-center gap-3 pb-2 mb-1 border-b-2 border-slate-100 text-xs text-slate-500 font-bold uppercase tracking-wider">
+      <div class="hidden md:grid grid-cols-[48px_1fr_96px_112px] items-center gap-3 pb-2 mb-1 border-b-2 border-slate-100 text-xs text-slate-500 font-bold uppercase tracking-wider">
         <div></div>
         <div>負責人</div>
         <div class="text-center">在刊</div>
         <div class="text-center">今日到期</div>
-        <div class="text-center">未補回（高峰→今）</div>
       </div>
       <div id="adOwnerBoard" class="divide-y divide-slate-100"></div>
     </section>
@@ -510,18 +496,6 @@
         <span id="adExpiringCount" class="text-xs text-slate-500 font-semibold"></span>
       </div>
       <div id="adExpiringGroups" class="space-y-5"></div>
-    </section>
-
-    <!-- 版位未補回明細 -->
-    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
-      <div class="flex items-center justify-between mb-4">
-        <div>
-          <h2 class="text-xl font-bold text-slate-900">📉 版位未補回明細</h2>
-          <p class="text-xs text-slate-500 mt-0.5">每位業務「近 7 天最高在刊數」vs「今天在刊數」，差值就是還沒補回的版位</p>
-        </div>
-        <span id="adDeclinedCount" class="text-xs text-slate-500 font-semibold"></span>
-      </div>
-      <div id="adDeclinedList" class="space-y-2"></div>
     </section>
 
     <!-- 全部在刊 -->
@@ -1004,9 +978,7 @@ function renderAd591(){
   const d = AD591, s = d.summary;
 
   document.getElementById('adHeroExpiring').textContent = s.total_expiring;
-  document.getElementById('adHeroDeclined').textContent = s.total_declined || 0;
   document.getElementById('adHeroExpiringOwners').innerHTML = ad591TopOwners(d.expiring, '✓ 今天沒有到期的物件');
-  document.getElementById('adHeroDeclinedOwners').innerHTML = ad591TopDeclines(d.declines || []);
 
   document.getElementById('adKpiActive').textContent = s.total_active;
   document.getElementById('adKpiVacant').textContent = s.total_vacant;
@@ -1035,33 +1007,23 @@ function renderAd591(){
     </div>`;
   }).join('');
 
-  // 負責人記分板（按「版位未補回」當成真正的問題訊號）
+  // 負責人記分板（純事實呈現：名字、在刊、今日到期）
   document.getElementById('adOwnerCount').textContent = `${d.owners.length} 人`;
-  const sortedOwners = [...d.owners].sort((a,b)=>{
-    const ad=a.declined||0, bd=b.declined||0;
-    if(bd!==ad) return bd-ad;
-    return (b.active||0)-(a.active||0);
-  });
+  const sortedOwners = [...d.owners].sort((a,b)=>(b.active||0)-(a.active||0));
   document.getElementById('adOwnerBoard').innerHTML = sortedOwners.map((o,i)=>{
-    const declined=o.declined||0;
     let badge;
-    if(declined===0 && i<3 && o.active>0){
+    if(i<3 && o.active>0){
       const cls=['medal-1','medal-2','medal-3'][i]; const icon=['🥇','🥈','🥉'][i];
       badge = `<span class="${cls} w-10 h-10 rounded-full flex items-center justify-center font-black text-lg">${icon}</span>`;
-    } else if(declined>0){
-      badge = `<span class="w-10 h-10 rounded-full bg-orange-500 text-white flex items-center justify-center font-black text-sm">${declined}</span>`;
     } else {
       badge = `<span class="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center font-bold text-sm">${i+1}</span>`;
     }
     const expiringCell = o.expiring ? `<div class="text-center"><span class="inline-flex items-center justify-center min-w-[48px] px-3 py-1.5 rounded-lg text-lg font-bold text-amber-700 bg-amber-50 border border-amber-100">${o.expiring}</span></div>` : '<div class="text-center text-lg font-black text-slate-300">—</div>';
-    const declinedCell = declined ? `<div class="text-center"><span class="inline-flex items-center justify-center min-w-[60px] px-2 py-1.5 rounded-lg text-sm font-black text-white bg-orange-500 whitespace-nowrap">${o.peak_count}→${o.active||0}</span></div>` : '<div class="text-center text-lg font-black text-slate-300">—</div>';
-    return `<div class="grid grid-cols-[48px_1fr_96px_112px_128px] items-center gap-3 py-3">
+    return `<div class="grid grid-cols-[48px_1fr_96px_112px] items-center gap-3 py-3">
       ${badge}
-      <div class="min-w-0"><div class="font-bold text-slate-900 truncate">${esc(o.name)}</div>
-      ${declined ? '<div class="text-[11px] text-orange-600 font-semibold md:hidden">少 '+declined+' 筆未補回</div>':''}</div>
+      <div class="min-w-0"><div class="font-bold text-slate-900 truncate">${esc(o.name)}</div></div>
       <div class="text-center text-lg font-black text-slate-800">${o.active||0}</div>
       ${expiringCell}
-      ${declinedCell}
     </div>`;
   }).join('');
 
@@ -1071,13 +1033,6 @@ function renderAd591(){
     ? ad591GroupBy(d.expiring,'owner').map(([o,items])=>ad591OwnerGroup(o,items,ad591ItemRow,'bg-sky-600 text-white')).join('')
     : '<div class="text-emerald-600 font-bold py-4 text-center">✓ 今天沒有到期的物件</div>';
 
-  const declines = d.declines || [];
-  document.getElementById('adDeclinedCount').textContent = declines.length
-    ? `${declines.length} 位業務 · 共少 ${s.total_declined} 筆`
-    : '';
-  document.getElementById('adDeclinedList').innerHTML = declines.length
-    ? declines.map(ad591DeclineRow).join('')
-    : '<div class="text-emerald-600 font-bold py-4 text-center">✓ 大家的在刊數都維持在近期最高</div>';
 
   // 全部在刊 + filter
   document.getElementById('adAllItemsCount').textContent = `${d.items.length} 筆`;
@@ -1135,28 +1090,6 @@ function ad591ItemRow(it){
     </div>
     <span class="text-slate-300 group-hover:text-slate-500 shrink-0">↗</span>
   </a>`;
-}
-function ad591DeclineRow(x){
-  return `<div class="flex items-center gap-3 px-4 py-3 rounded-lg border border-orange-100 bg-orange-50/40">
-    <span class="shrink-0 inline-flex items-center justify-center text-sm font-black px-3 py-2 rounded-lg bg-orange-500 text-white min-w-[64px] text-center">-${x.declined}</span>
-    <div class="flex-1 min-w-0">
-      <div class="flex items-baseline gap-2">
-        <span class="text-base font-bold text-slate-900">${esc(x.owner)}</span>
-        <span class="text-sm text-slate-500">少 ${x.declined} 筆未補回</span>
-      </div>
-      <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-600 flex-wrap">
-        <span>近 7 天最高 <span class="font-bold text-slate-800">${x.peak_count} 筆</span> (${esc(x.peak_date)})</span>
-        <span>→</span>
-        <span>今天 <span class="font-bold text-slate-800">${x.today_count} 筆</span></span>
-        <span>·</span>
-        <span>已 ${x.days_since_peak} 天未回升</span>
-      </div>
-    </div>
-  </div>`;
-}
-function ad591TopDeclines(declines){
-  if(!declines.length) return '<span class="inline-flex items-center gap-1 font-bold">✓ 大家都維持在高峰</span>';
-  return declines.slice(0,4).map(x=>`<span class="inline-flex items-center gap-1 bg-white/70 px-2.5 py-1 rounded-full mr-1.5 mb-1 text-xs"><span class="font-bold">${esc(x.owner)}</span><span>少 ${x.declined}</span></span>`).join('');
 }
 function ad591GroupBy(arr,key){
   const m = new Map();
