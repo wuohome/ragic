@@ -18,7 +18,7 @@
   .chip{cursor:pointer;transition:all .15s;}
   .chip:hover{background:#dbeafe;}
   .chip.active{background:#2563eb;color:white;}
-  .tab{cursor:pointer;transition:all .2s;border-bottom:3px solid transparent;}
+  .tab{cursor:pointer;transition:all .2s;border-bottom:3px solid transparent;white-space:nowrap;flex-shrink:0;}
   .tab.active{border-bottom-color:#2563eb;color:#2563eb;font-weight:700;}
   .tab-panel{display:none;}
   .tab-panel.active{display:block;}
@@ -60,7 +60,7 @@
   </section>
 
   <!-- Tabs -->
-  <div class="flex gap-8 border-b border-slate-200 overflow-x-auto">
+  <div class="flex gap-6 border-b border-slate-200 overflow-x-auto scrollbar-thin">
     <div class="tab active pb-3 text-lg px-1" data-tab="week">📦 週進案量</div>
     <div class="tab pb-3 text-lg px-1" data-tab="month">💰 月業績</div>
     <div class="tab pb-3 text-lg px-1" data-tab="year">📊 年度總覽</div>
