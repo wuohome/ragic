@@ -427,30 +427,30 @@
   <div class="tab-panel" id="panel-ad591">
     <!-- Hero 雙卡 -->
     <section class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-      <div class="bg-gradient-to-br from-red-50 via-red-100 to-rose-100 rounded-2xl p-6 shadow-sm border border-red-200 relative overflow-hidden">
-        <div class="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-2xl -mr-16 -mt-16"></div>
+      <div class="bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-50 rounded-2xl p-6 shadow-sm border border-sky-200 relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-32 h-32 bg-sky-400/10 rounded-full blur-2xl -mr-16 -mt-16"></div>
         <div class="relative flex items-center gap-2 mb-2">
-          <span class="text-2xl">🔴</span>
-          <span class="font-bold text-lg text-red-800">24 小時內到期</span>
-          <span class="ml-auto text-xs bg-red-600 text-white px-2 py-0.5 rounded-full font-bold">優先</span>
+          <span class="text-2xl">⏳</span>
+          <span class="font-bold text-lg text-sky-900">今日到期（24h 內）</span>
         </div>
-        <div class="relative flex items-baseline gap-2 mb-3">
-          <div id="adHeroExpiring" class="text-7xl font-black text-red-600 leading-none">—</div>
-          <div class="text-red-700 font-semibold text-lg">筆需續刊</div>
+        <div class="relative flex items-baseline gap-2 mb-2">
+          <div id="adHeroExpiring" class="text-7xl font-black text-sky-700 leading-none">—</div>
+          <div class="text-sky-800 font-semibold text-lg">筆</div>
         </div>
-        <div id="adHeroExpiringOwners" class="relative text-red-900 text-sm font-medium min-h-[1.5rem]"></div>
+        <p class="relative text-xs text-sky-700/80 mb-2">系統到期時會自動下架，看看要不要主動續刊或改補新</p>
+        <div id="adHeroExpiringOwners" class="relative text-sky-900 text-sm font-medium min-h-[1.5rem]"></div>
       </div>
       <div class="bg-gradient-to-br from-orange-50 via-orange-100 to-amber-100 rounded-2xl p-6 shadow-sm border border-orange-200 relative overflow-hidden">
         <div class="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-2xl -mr-16 -mt-16"></div>
         <div class="relative flex items-center gap-2 mb-2">
-          <span class="text-2xl">⏰</span>
-          <span class="font-bold text-lg text-orange-800">到期未補</span>
-          <span class="ml-auto text-xs bg-orange-600 text-white px-2 py-0.5 rounded-full font-bold">追責</span>
+          <span class="text-2xl">📭</span>
+          <span class="font-bold text-lg text-orange-900">連日未上架（2+ 天）</span>
         </div>
-        <div class="relative flex items-baseline gap-2 mb-3">
+        <div class="relative flex items-baseline gap-2 mb-2">
           <div id="adHeroDisappeared" class="text-7xl font-black text-orange-600 leading-none">—</div>
-          <div class="text-orange-700 font-semibold text-lg">筆待補</div>
+          <div class="text-orange-800 font-semibold text-lg">筆</div>
         </div>
+        <p class="relative text-xs text-orange-700/80 mb-2">連續 2 天以上沒有新物件接上的負責人</p>
         <div id="adHeroDisappearedOwners" class="relative text-orange-900 text-sm font-medium min-h-[1.5rem]"></div>
       </div>
     </section>
@@ -489,7 +489,7 @@
       <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
           <h2 class="text-xl font-bold text-slate-900">🏆 負責人記分板</h2>
-          <p class="text-xs text-slate-500 mt-0.5">按今日問題數排序（24h 到期 + 到期未補）</p>
+          <p class="text-xs text-slate-500 mt-0.5">按「連日未上架」數排序，有連日未上架才顯示紅色徽章</p>
         </div>
         <span id="adOwnerCount" class="text-xs text-slate-500 font-semibold"></span>
       </div>
@@ -497,8 +497,8 @@
         <div></div>
         <div>負責人</div>
         <div class="text-center">在刊</div>
-        <div class="text-center">24h 到期</div>
-        <div class="text-center">到期未補</div>
+        <div class="text-center">今日到期</div>
+        <div class="text-center">連日未上架</div>
         <div class="text-center">加值</div>
       </div>
       <div id="adOwnerBoard" class="divide-y divide-slate-100"></div>
@@ -507,16 +507,19 @@
     <!-- 24h 到期明細 -->
     <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-bold text-slate-900">🔴 24h 到期明細</h2>
+        <h2 class="text-xl font-bold text-slate-900">⏳ 今日到期明細</h2>
         <span id="adExpiringCount" class="text-xs text-slate-500 font-semibold"></span>
       </div>
       <div id="adExpiringGroups" class="space-y-5"></div>
     </section>
 
-    <!-- 到期未補明細 -->
+    <!-- 連日未上架明細 -->
     <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-bold text-slate-900">⏰ 到期未補明細</h2>
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">📭 連日未上架明細</h2>
+          <p class="text-xs text-slate-500 mt-0.5">以下物件已下架，連結失效，僅供對照原本是誰的物件</p>
+        </div>
         <span id="adDisappearedCount" class="text-xs text-slate-500 font-semibold"></span>
       </div>
       <div id="adDisappearedGroups" class="space-y-5"></div>
@@ -1003,8 +1006,8 @@ function renderAd591(){
 
   document.getElementById('adHeroExpiring').textContent = s.total_expiring;
   document.getElementById('adHeroDisappeared').textContent = s.total_disappeared;
-  document.getElementById('adHeroExpiringOwners').innerHTML = ad591TopOwners(d.expiring, '✓ 全員已續刊');
-  document.getElementById('adHeroDisappearedOwners').innerHTML = ad591TopOwners(d.disappeared, '✓ 大家都有補');
+  document.getElementById('adHeroExpiringOwners').innerHTML = ad591TopOwners(d.expiring, '✓ 今天沒有到期的物件');
+  document.getElementById('adHeroDisappearedOwners').innerHTML = ad591TopOwners(d.disappeared, '✓ 大家都有持續補新');
 
   document.getElementById('adKpiActive').textContent = s.total_active;
   document.getElementById('adKpiVacant').textContent = s.total_vacant;
@@ -1033,47 +1036,50 @@ function renderAd591(){
     </div>`;
   }).join('');
 
-  // 負責人記分板
+  // 負責人記分板（只根據「連日未上架」當成真正的問題訊號）
   document.getElementById('adOwnerCount').textContent = `${d.owners.length} 人`;
   const sortedOwners = [...d.owners].sort((a,b)=>{
-    const ai=(a.expiring||0)+(a.disappeared||0), bi=(b.expiring||0)+(b.disappeared||0);
-    if(bi!==ai) return bi-ai;
+    const ad=a.disappeared||0, bd=b.disappeared||0;
+    if(bd!==ad) return bd-ad;
     return (b.active||0)-(a.active||0);
   });
   document.getElementById('adOwnerBoard').innerHTML = sortedOwners.map((o,i)=>{
-    const issues=(o.expiring||0)+(o.disappeared||0);
+    const disappeared=o.disappeared||0;
     const addon=(o.featured||0)+(o.topped||0);
     let badge;
-    if(issues===0 && i<3 && o.active>0){
+    if(disappeared===0 && i<3 && o.active>0){
       const cls=['medal-1','medal-2','medal-3'][i]; const icon=['🥇','🥈','🥉'][i];
       badge = `<span class="${cls} w-10 h-10 rounded-full flex items-center justify-center font-black text-lg">${icon}</span>`;
-    } else if(issues>0){
-      badge = `<span class="w-10 h-10 rounded-full bg-red-500 text-white flex items-center justify-center font-black text-sm">!${issues}</span>`;
+    } else if(disappeared>0){
+      badge = `<span class="w-10 h-10 rounded-full bg-orange-500 text-white flex items-center justify-center font-black text-sm">${disappeared}</span>`;
     } else {
       badge = `<span class="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center font-bold text-sm">${i+1}</span>`;
     }
-    const cell = (v, cls, bg) => v ? `<div class="text-center"><span class="inline-flex items-center justify-center min-w-[48px] px-3 py-1.5 rounded-lg text-lg font-black ${cls} ${bg}">${v}</span></div>` : '<div class="text-center text-lg font-black text-slate-300">0</div>';
+    // 24h 到期是中性訊息（提醒），用琥珀色小字；連日未上架才用橘色強調
+    const expiringCell = o.expiring ? `<div class="text-center"><span class="inline-flex items-center justify-center min-w-[48px] px-3 py-1.5 rounded-lg text-lg font-bold text-amber-700 bg-amber-50 border border-amber-100">${o.expiring}</span></div>` : '<div class="text-center text-lg font-black text-slate-300">—</div>';
+    const disappearedCell = disappeared ? `<div class="text-center"><span class="inline-flex items-center justify-center min-w-[48px] px-3 py-1.5 rounded-lg text-lg font-black text-white bg-orange-500">${disappeared}</span></div>` : '<div class="text-center text-lg font-black text-slate-300">—</div>';
+    const addonCell = addon ? `<div class="text-center"><span class="inline-flex items-center justify-center min-w-[48px] px-3 py-1.5 rounded-lg text-lg font-black text-blue-700 bg-blue-100">${addon}</span></div>` : '<div class="text-center text-lg font-black text-slate-300">—</div>';
     return `<div class="grid grid-cols-[48px_1fr_72px_96px_96px_72px] items-center gap-3 py-3">
       ${badge}
       <div class="min-w-0"><div class="font-bold text-slate-900 truncate">${esc(o.name)}</div>
-      ${issues ? '<div class="text-[11px] text-red-600 font-semibold md:hidden">需處理 '+issues+' 筆</div>':''}</div>
+      ${disappeared ? '<div class="text-[11px] text-orange-600 font-semibold md:hidden">連日未上架 '+disappeared+' 筆</div>':''}</div>
       <div class="text-center text-lg font-black text-slate-800">${o.active||0}</div>
-      ${cell(o.expiring,'text-white','bg-red-500')}
-      ${cell(o.disappeared,'text-white','bg-orange-500')}
-      ${cell(addon,'text-blue-700','bg-blue-100')}
+      ${expiringCell}
+      ${disappearedCell}
+      ${addonCell}
     </div>`;
   }).join('');
 
   // 24h 到期明細
   document.getElementById('adExpiringCount').textContent = d.expiring.length ? `共 ${d.expiring.length} 筆` : '';
   document.getElementById('adExpiringGroups').innerHTML = d.expiring.length
-    ? ad591GroupBy(d.expiring,'owner').map(([o,items])=>ad591OwnerGroup(o,items,ad591ItemRow,'bg-red-500 text-white')).join('')
-    : '<div class="text-emerald-600 font-bold py-4 text-center">✓ 目前沒有 24 小時內到期的物件</div>';
+    ? ad591GroupBy(d.expiring,'owner').map(([o,items])=>ad591OwnerGroup(o,items,ad591ItemRow,'bg-sky-600 text-white')).join('')
+    : '<div class="text-emerald-600 font-bold py-4 text-center">✓ 今天沒有到期的物件</div>';
 
   document.getElementById('adDisappearedCount').textContent = d.disappeared.length ? `共 ${d.disappeared.length} 筆` : '';
   document.getElementById('adDisappearedGroups').innerHTML = d.disappeared.length
     ? ad591GroupBy(d.disappeared,'owner').map(([o,items])=>ad591OwnerGroup(o,items,ad591DisappearedRow,'bg-orange-500 text-white')).join('')
-    : '<div class="text-emerald-600 font-bold py-4 text-center">✓ 大家都有補新物件</div>';
+    : '<div class="text-emerald-600 font-bold py-4 text-center">✓ 大家都有持續補新</div>';
 
   // 全部在刊 + filter
   document.getElementById('adAllItemsCount').textContent = `${d.items.length} 筆`;
@@ -1133,18 +1139,17 @@ function ad591ItemRow(it){
   </a>`;
 }
 function ad591DisappearedRow(d){
-  return `<a href="${esc(d.href)}" target="_blank" rel="noopener" class="group flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors">
-    <span class="shrink-0 inline-flex items-center justify-center text-[11px] font-bold px-2 py-1 rounded bg-orange-500 text-white min-w-[76px] text-center">浪費 ${d.waste_days} 天</span>
+  return `<div class="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
+    <span class="shrink-0 inline-flex items-center justify-center text-[11px] font-bold px-2 py-1 rounded bg-orange-500 text-white min-w-[84px] text-center">已 ${d.waste_days} 天未上架</span>
     <div class="flex-1 min-w-0">
-      <div class="text-sm text-slate-800 truncate font-semibold">${esc(d.title)}</div>
+      <div class="text-sm text-slate-700 truncate font-semibold">${esc(d.title)}</div>
       <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 flex-wrap">
         <span>套餐 #${d.package_num}</span><span>·</span>
         <span class="text-slate-700 font-semibold">${esc(d.owner)}</span><span>·</span>
-        <span>${esc(d.prev_date)} 消失</span>
+        <span>最後在線 ${esc(d.prev_date)}</span>
       </div>
     </div>
-    <span class="text-slate-300 group-hover:text-slate-500 shrink-0">↗</span>
-  </a>`;
+  </div>`;
 }
 function ad591GroupBy(arr,key){
   const m = new Map();
