@@ -833,26 +833,35 @@ async function fetchAllData() {
     return m ? m[1] : '';
   };
 
+  // 同 key 若對應多筆物件標為 ambiguous，寧可漏配不要錯配
+  const AMBIGUOUS = Symbol('ambiguous');
   const phoneToProp = {};
   const addrToProp = {};
   for (const [rid, c] of Object.entries(rawInventory)) {
     const name = (c['案名']||'').trim();
     if (!name) continue;
     const ph = normPhone(c['屋主手機號碼']);
-    if (ph.length >= 9) phoneToProp[ph] = { name, rid };
+    if (ph.length >= 9) {
+      phoneToProp[ph] = phoneToProp[ph] === undefined ? { name, rid } : AMBIGUOUS;
+    }
     const ca = coreAddr(c['地址']);
-    if (ca) addrToProp[ca] = { name, rid };
+    if (ca) {
+      addrToProp[ca] = addrToProp[ca] === undefined ? { name, rid } : AMBIGUOUS;
+    }
   }
+
+  const pick = v => (v && v !== AMBIGUOUS) ? v : null;
 
   for (const r of OUTREACH) {
     let match = null;
-    // 1. 手機配對
-    if (r.rawPhone) match = phoneToProp[normPhone(r.rawPhone)];
-    // 2. 地址配對 fallback
+    // 1. 手機配對（唯一對應才算）
+    if (r.rawPhone) match = pick(phoneToProp[normPhone(r.rawPhone)]);
+    // 2. 地址配對 fallback（唯一對應才算）
     if (!match && r.addresses?.length) {
       for (const addr of r.addresses) {
         const ca = coreAddr(addr);
-        if (ca && addrToProp[ca]) { match = addrToProp[ca]; break; }
+        const p = ca ? pick(addrToProp[ca]) : null;
+        if (p) { match = p; break; }
       }
     }
     if (match) {
