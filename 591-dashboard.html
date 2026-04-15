@@ -6,281 +6,462 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <title>窩的家｜591 廣告管家儀表板</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: { extend: {
+      fontFamily: { sans: ['"Noto Sans TC"','"PingFang TC"','"Microsoft JhengHei"','system-ui','sans-serif'] },
+      boxShadow: { card: '0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06)' }
+    }}
+  }
+</script>
 <style>
-  body{font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;}
-  .tag-featured{background:#fef3c7;color:#b45309;}
-  .tag-topped{background:#fce7f3;color:#9d174d;}
-  .tag-super{background:#fee2e2;color:#991b1b;}
-  .owner-chip{background:linear-gradient(135deg,#dbeafe,#e0e7ff);}
-  .urgent-0{background:#fee2e2;color:#991b1b;font-weight:700;}
-  .urgent-1{background:#ffedd5;color:#9a3412;font-weight:700;}
-  .urgent-soon{background:#fef9c3;color:#854d0e;}
-  .urgent-safe{background:#dcfce7;color:#166534;}
+  @media (prefers-reduced-motion: reduce){ *,*::before,*::after{animation-duration:0!important;transition-duration:0!important} }
+  body{font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;font-feature-settings:"tnum" 1;}
+  .num{font-variant-numeric: tabular-nums;}
   details>summary{list-style:none;cursor:pointer;}
   details>summary::-webkit-details-marker{display:none;}
-  .card-hover{transition:all .18s;}
-  .card-hover:hover{transform:translateY(-1px);box-shadow:0 10px 25px -5px rgb(0 0 0 / .08);}
-  a.item-link{transition:background .15s;}
-  a.item-link:hover{background:#eff6ff;}
+  details[open]>summary .chev{transform:rotate(180deg);}
+  .chev{transition:transform .2s;}
+  .bar-fill{transition:width .6s cubic-bezier(.4,0,.2,1);}
+  .item-link{transition:background .15s,border-color .15s;}
+  .item-link:hover{background:#f8fafc;border-color:#cbd5e1;}
+  .chip{transition:all .15s;cursor:pointer;}
+  .owner-row{transition:background .15s;}
+  .owner-row:hover{background:#f8fafc;}
 </style>
 </head>
-<body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
+<body class="bg-slate-50 text-slate-900 antialiased">
 
-<div id="loading" class="fixed inset-0 bg-white/90 flex flex-col items-center justify-center z-50">
-  <div class="text-4xl mb-3">📡</div>
-  <div class="text-slate-600 font-semibold">載入中…</div>
+<!-- Icons (lucide) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+    <symbol id="i-clock-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l3 2"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></symbol>
+    <symbol id="i-vacant" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 10h8"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></symbol>
+  </defs>
+</svg>
+
+<!-- Loading -->
+<div id="loading" class="fixed inset-0 bg-white flex items-center justify-center z-50">
+  <div class="flex flex-col items-center gap-3">
+    <svg class="animate-spin text-blue-600" width="28" height="28"><use href="#i-refresh"/></svg>
+    <div class="text-sm text-slate-500">載入中…</div>
+  </div>
 </div>
 
-<div id="error" class="hidden fixed inset-0 bg-white/95 flex flex-col items-center justify-center z-50 p-6">
-  <div class="text-5xl mb-3">⚠️</div>
-  <div class="text-slate-800 font-bold text-lg mb-2">資料載入失敗</div>
-  <div id="errorMsg" class="text-slate-500 text-sm text-center max-w-md"></div>
+<!-- Error -->
+<div id="error" class="hidden fixed inset-0 bg-white flex flex-col items-center justify-center z-50 p-6">
+  <svg class="text-red-500 mb-3" width="40" height="40"><use href="#i-alert"/></svg>
+  <div class="text-slate-800 font-bold text-lg mb-1">資料載入失敗</div>
+  <div id="errorMsg" class="text-slate-500 text-sm text-center max-w-md font-mono"></div>
+  <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-slate-900 text-white text-sm rounded-lg hover:bg-slate-800 transition-colors">重新載入</button>
 </div>
 
-<div class="max-w-6xl mx-auto p-4 md:p-6">
+<div class="max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-8">
 
-  <header class="mb-6">
-    <div class="flex flex-wrap items-end justify-between gap-2">
-      <div>
-        <h1 class="text-2xl md:text-3xl font-bold text-slate-800">591 廣告管家</h1>
-        <p class="text-slate-500 text-sm mt-1">窩的家 · 租賃部每日版位與到期追蹤</p>
-      </div>
-      <div class="text-right text-xs text-slate-500">
-        <div>資料日期：<span id="scrapedDate" class="font-mono">—</span></div>
-        <div>更新時間：<span id="updatedAt" class="font-mono">—</span></div>
-      </div>
+  <!-- Header -->
+  <header class="flex flex-wrap items-end justify-between gap-3 mb-6 md:mb-8 pb-4 md:pb-5 border-b border-slate-200">
+    <div>
+      <div class="text-xs uppercase tracking-[0.18em] text-slate-500 font-medium mb-1">WUOHOME · 591</div>
+      <h1 class="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">廣告管家儀表板</h1>
+    </div>
+    <div class="text-right text-xs text-slate-500 num">
+      <div>資料 <span id="scrapedDate" class="font-semibold text-slate-700">—</span></div>
+      <div>更新 <span id="updatedAt" class="font-semibold text-slate-700">—</span></div>
     </div>
   </header>
 
-  <!-- KPI 卡片 -->
-  <section class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
-    <div class="bg-white rounded-xl shadow-sm p-4 card-hover">
-      <div class="text-xs text-slate-500">在刊</div>
-      <div class="text-3xl font-bold text-slate-800 mt-1"><span id="kpiActive">—</span></div>
+  <!-- HERO: 兩張警示卡 -->
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 mb-6 md:mb-8">
+
+    <!-- 24h 到期 -->
+    <div class="relative bg-white rounded-2xl shadow-card border border-slate-200 overflow-hidden">
+      <div class="absolute inset-y-0 left-0 w-1 bg-red-500"></div>
+      <div class="p-5 md:p-6">
+        <div class="flex items-start justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <div class="w-9 h-9 rounded-lg bg-red-50 text-red-600 flex items-center justify-center">
+              <svg width="18" height="18"><use href="#i-alert"/></svg>
+            </div>
+            <div>
+              <div class="text-xs uppercase tracking-wider text-slate-500 font-semibold">HERO</div>
+              <div class="text-sm font-semibold text-slate-900">24 小時內到期</div>
+            </div>
+          </div>
+          <span class="text-[10px] text-red-700 bg-red-50 border border-red-100 px-2 py-0.5 rounded-full font-semibold">優先追蹤</span>
+        </div>
+        <div class="flex items-baseline gap-2 mb-4">
+          <span id="heroExpiring" class="text-6xl md:text-7xl font-bold text-red-600 num tracking-tight">—</span>
+          <span class="text-slate-500 text-base">筆需續刊</span>
+        </div>
+        <div id="heroExpiringOwners" class="text-sm text-slate-600 min-h-[1.25rem]"></div>
+      </div>
     </div>
-    <div class="bg-white rounded-xl shadow-sm p-4 card-hover">
-      <div class="text-xs text-slate-500">空位</div>
-      <div class="text-3xl font-bold text-amber-600 mt-1"><span id="kpiVacant">—</span></div>
-    </div>
-    <div class="bg-white rounded-xl shadow-sm p-4 card-hover">
-      <div class="text-xs text-slate-500">24h 內到期</div>
-      <div class="text-3xl font-bold text-red-600 mt-1"><span id="kpiExpiring">—</span></div>
-    </div>
-    <div class="bg-white rounded-xl shadow-sm p-4 card-hover">
-      <div class="text-xs text-slate-500">到期未補</div>
-      <div class="text-3xl font-bold text-orange-600 mt-1"><span id="kpiDisappeared">—</span></div>
-    </div>
-    <div class="bg-white rounded-xl shadow-sm p-4 card-hover">
-      <div class="text-xs text-slate-500">精選</div>
-      <div class="text-3xl font-bold text-amber-500 mt-1"><span id="kpiFeatured">—</span></div>
-    </div>
-    <div class="bg-white rounded-xl shadow-sm p-4 card-hover">
-      <div class="text-xs text-slate-500">置頂</div>
-      <div class="text-3xl font-bold text-pink-600 mt-1"><span id="kpiTopped">—</span></div>
+
+    <!-- 到期未補 -->
+    <div class="relative bg-white rounded-2xl shadow-card border border-slate-200 overflow-hidden">
+      <div class="absolute inset-y-0 left-0 w-1 bg-orange-500"></div>
+      <div class="p-5 md:p-6">
+        <div class="flex items-start justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <div class="w-9 h-9 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center">
+              <svg width="18" height="18"><use href="#i-clock-x"/></svg>
+            </div>
+            <div>
+              <div class="text-xs uppercase tracking-wider text-slate-500 font-semibold">HERO</div>
+              <div class="text-sm font-semibold text-slate-900">到期未補</div>
+            </div>
+          </div>
+          <span class="text-[10px] text-orange-700 bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-full font-semibold">追責</span>
+        </div>
+        <div class="flex items-baseline gap-2 mb-4">
+          <span id="heroDisappeared" class="text-6xl md:text-7xl font-bold text-orange-600 num tracking-tight">—</span>
+          <span class="text-slate-500 text-base">筆沒補新物件</span>
+        </div>
+        <div id="heroDisappearedOwners" class="text-sm text-slate-600 min-h-[1.25rem]"></div>
+      </div>
     </div>
   </section>
 
-  <!-- 套餐概況 -->
-  <section class="bg-white rounded-xl shadow-sm p-4 md:p-5 mb-6">
-    <h2 class="text-lg font-bold text-slate-800 mb-3">📦 套餐版位概況</h2>
-    <div id="packageGrid" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
-  </section>
-
-  <!-- 主秀 1: 24h 內到期 -->
-  <section class="bg-white rounded-xl shadow-sm p-4 md:p-5 mb-6 border-l-4 border-red-500">
-    <div class="flex items-center justify-between mb-3">
-      <h2 class="text-lg font-bold text-slate-800">🔴 24 小時內到期</h2>
-      <span id="expiringCount" class="text-sm text-slate-500"></span>
+  <!-- KPI 次要列 -->
+  <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 md:mb-8">
+    <div class="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><svg width="18" height="18"><use href="#i-home"/></svg></div>
+      <div><div class="text-xs text-slate-500">在刊</div><div class="text-2xl font-bold num text-slate-900" id="kpiActive">—</div></div>
     </div>
-    <div id="expiringGroups" class="space-y-4"></div>
+    <div class="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><svg width="18" height="18"><use href="#i-vacant"/></svg></div>
+      <div><div class="text-xs text-slate-500">空位</div><div class="text-2xl font-bold num text-slate-900" id="kpiVacant">—</div></div>
+    </div>
+    <div class="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><svg width="18" height="18"><use href="#i-star"/></svg></div>
+      <div><div class="text-xs text-slate-500">精選</div><div class="text-2xl font-bold num text-slate-900" id="kpiFeatured">—</div></div>
+    </div>
+    <div class="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-pink-50 text-pink-600 flex items-center justify-center shrink-0"><svg width="18" height="18"><use href="#i-zap"/></svg></div>
+      <div><div class="text-xs text-slate-500">置頂</div><div class="text-2xl font-bold num text-slate-900" id="kpiTopped">—</div></div>
+    </div>
   </section>
 
-  <!-- 主秀 2: 到期未補 -->
-  <section class="bg-white rounded-xl shadow-sm p-4 md:p-5 mb-6 border-l-4 border-orange-500">
-    <div class="flex items-center justify-between mb-3">
+  <!-- 套餐版位：進度條視覺化 -->
+  <section class="bg-white rounded-2xl shadow-card border border-slate-200 p-5 md:p-6 mb-6 md:mb-8">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-base md:text-lg font-bold text-slate-900">套餐版位</h2>
+      <span class="text-xs text-slate-500">在刊 / 容量</span>
+    </div>
+    <div id="packageList" class="space-y-3"></div>
+  </section>
+
+  <!-- 負責人記分板 -->
+  <section class="bg-white rounded-2xl shadow-card border border-slate-200 p-5 md:p-6 mb-6 md:mb-8">
+    <div class="flex items-center justify-between mb-4">
       <div>
-        <h2 class="text-lg font-bold text-slate-800">📋 到期未補追蹤</h2>
-        <p class="text-xs text-slate-500 mt-0.5">昨天有、今天沒了，還沒補新物件</p>
+        <h2 class="text-base md:text-lg font-bold text-slate-900">負責人記分板</h2>
+        <p class="text-xs text-slate-500 mt-0.5">按今日問題數排序（到期 + 未補）</p>
       </div>
-      <span id="disappearedCount" class="text-sm text-slate-500"></span>
+      <span id="ownerCount" class="text-xs text-slate-500 num"></span>
     </div>
-    <div id="disappearedGroups" class="space-y-4"></div>
+    <div id="ownerBoard" class="divide-y divide-slate-100 -mx-2"></div>
   </section>
 
-  <!-- 全部在刊（可摺疊，按負責人篩選） -->
-  <details class="bg-white rounded-xl shadow-sm mb-6">
-    <summary class="p-4 md:p-5 flex items-center justify-between">
-      <h2 class="text-lg font-bold text-slate-800">📑 全部在刊物件</h2>
-      <div class="flex items-center gap-2">
-        <span id="allItemsCount" class="text-sm text-slate-500"></span>
-        <span class="text-slate-400">▾</span>
+  <!-- 明細（折疊）-->
+  <details class="bg-white rounded-2xl shadow-card border border-slate-200 mb-4">
+    <summary class="p-5 md:p-6 flex items-center justify-between">
+      <div>
+        <h2 class="text-base md:text-lg font-bold text-slate-900">24h 內到期明細</h2>
+        <p class="text-xs text-slate-500 mt-0.5" id="expiringSubtitle">—</p>
       </div>
+      <svg class="chev text-slate-400" width="20" height="20"><use href="#i-chevron"/></svg>
     </summary>
-    <div class="px-4 md:px-5 pb-5">
-      <div id="ownerFilter" class="flex flex-wrap gap-1.5 mb-3"></div>
+    <div class="px-5 md:px-6 pb-5 md:pb-6 space-y-5" id="expiringGroups"></div>
+  </details>
+
+  <details class="bg-white rounded-2xl shadow-card border border-slate-200 mb-4">
+    <summary class="p-5 md:p-6 flex items-center justify-between">
+      <div>
+        <h2 class="text-base md:text-lg font-bold text-slate-900">到期未補明細</h2>
+        <p class="text-xs text-slate-500 mt-0.5" id="disappearedSubtitle">—</p>
+      </div>
+      <svg class="chev text-slate-400" width="20" height="20"><use href="#i-chevron"/></svg>
+    </summary>
+    <div class="px-5 md:px-6 pb-5 md:pb-6 space-y-5" id="disappearedGroups"></div>
+  </details>
+
+  <details class="bg-white rounded-2xl shadow-card border border-slate-200 mb-4">
+    <summary class="p-5 md:p-6 flex items-center justify-between">
+      <div>
+        <h2 class="text-base md:text-lg font-bold text-slate-900">全部在刊物件</h2>
+        <p class="text-xs text-slate-500 mt-0.5"><span id="allItemsCount">—</span> · 可依負責人篩選</p>
+      </div>
+      <svg class="chev text-slate-400" width="20" height="20"><use href="#i-chevron"/></svg>
+    </summary>
+    <div class="px-5 md:px-6 pb-5 md:pb-6">
+      <div id="ownerFilter" class="flex flex-wrap gap-1.5 mb-4"></div>
       <div id="allItemsList" class="space-y-1"></div>
     </div>
   </details>
 
-  <!-- 精選置頂明細（折疊） -->
-  <details class="bg-white rounded-xl shadow-sm mb-6">
-    <summary class="p-4 md:p-5 flex items-center justify-between">
-      <h2 class="text-lg font-bold text-slate-800">⭐ 精選 / 置頂明細</h2>
-      <div class="flex items-center gap-2">
-        <span id="featuredSummary" class="text-sm text-slate-500"></span>
-        <span class="text-slate-400">▾</span>
+  <details class="bg-white rounded-2xl shadow-card border border-slate-200 mb-4">
+    <summary class="p-5 md:p-6 flex items-center justify-between">
+      <div>
+        <h2 class="text-base md:text-lg font-bold text-slate-900">精選 / 置頂明細</h2>
+        <p class="text-xs text-slate-500 mt-0.5" id="featuredSubtitle">—</p>
       </div>
+      <svg class="chev text-slate-400" width="20" height="20"><use href="#i-chevron"/></svg>
     </summary>
-    <div class="px-4 md:px-5 pb-5 space-y-4">
+    <div class="px-5 md:px-6 pb-5 md:pb-6 space-y-5">
       <div id="toppedSection"></div>
       <div id="featuredSection"></div>
     </div>
   </details>
 
-  <footer class="text-center text-xs text-slate-400 py-4">
-    資料每日凌晨 01:30 自動更新 · 來源：591 廣告管家（Mac Mini SQLite）
+  <footer class="text-center text-xs text-slate-400 py-6">
+    資料每日凌晨 01:30 自動更新 · 來源：591 廣告管家（Mac Mini）
   </footer>
 </div>
 
 <script>
 const DATA_URL = './data/591-dashboard.json?v=' + Date.now();
 
-function urgencyClass(days){
-  if(days <= 0) return 'urgent-0';
-  if(days === 1) return 'urgent-1';
-  if(days <= 3) return 'urgent-soon';
-  return 'urgent-safe';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function urgencyBadge(days){
+  if(days <= 0) return {cls:'bg-red-100 text-red-700 border-red-200', label:'今天到期'};
+  if(days === 1) return {cls:'bg-red-50 text-red-700 border-red-200', label:`剩 1 天`};
+  if(days <= 3) return {cls:'bg-amber-50 text-amber-700 border-amber-200', label:`剩 ${days} 天`};
+  if(days <= 7) return {cls:'bg-yellow-50 text-yellow-700 border-yellow-200', label:`剩 ${days} 天`};
+  return {cls:'bg-slate-50 text-slate-600 border-slate-200', label:`剩 ${days} 天`};
 }
-function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function renderTags(it){
-  const t=[];
-  if(it.featured) t.push('<span class="tag-featured px-1.5 py-0.5 rounded text-[10px] font-semibold">精選</span>');
-  if(it.topped === '超級置頂') t.push('<span class="tag-super px-1.5 py-0.5 rounded text-[10px] font-semibold">超級置頂</span>');
-  else if(it.topped) t.push('<span class="tag-topped px-1.5 py-0.5 rounded text-[10px] font-semibold">'+escapeHtml(it.topped)+'</span>');
-  return t.join(' ');
+
+function itemTags(it){
+  const tags = [];
+  if(it.featured) tags.push('<span class="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">精選</span>');
+  if(it.topped === '超級置頂') tags.push('<span class="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">超級置頂</span>');
+  else if(it.topped) tags.push(`<span class="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-pink-50 text-pink-700 border border-pink-200">${esc(it.topped)}</span>`);
+  return tags.join(' ');
 }
+
 function itemRow(it){
-  const days = it.days;
-  const dayLabel = days <= 0 ? '今天到期' : `剩 ${days} 天`;
+  const u = urgencyBadge(it.days);
   return `
-    <a href="${escapeHtml(it.href)}" target="_blank" rel="noopener" class="item-link flex items-center gap-2 px-2 py-1.5 rounded border border-slate-100 text-sm">
-      <span class="${urgencyClass(days)} px-2 py-0.5 rounded text-xs whitespace-nowrap">${dayLabel}</span>
-      <span class="text-[11px] text-slate-400 whitespace-nowrap">#${it.package_num}</span>
-      <span class="flex-1 text-slate-700 truncate">${escapeHtml(it.title)}</span>
-      <span class="flex items-center gap-1">${renderTags(it)}</span>
-      <span class="text-xs text-slate-500 whitespace-nowrap">${escapeHtml(it.owner)}</span>
+    <a href="${esc(it.href)}" target="_blank" rel="noopener"
+       class="item-link group flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-100">
+      <span class="shrink-0 inline-flex items-center justify-center num text-[11px] font-semibold px-2 py-1 rounded border ${u.cls} min-w-[62px] text-center">${u.label}</span>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm text-slate-800 truncate font-medium">${esc(it.title)}</div>
+        <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
+          <span>套餐 #${it.package_num}</span>
+          <span>·</span>
+          <span class="text-slate-700 font-medium">${esc(it.owner)}</span>
+          ${itemTags(it) ? '<span>·</span>' + itemTags(it) : ''}
+        </div>
+      </div>
+      <svg class="text-slate-300 group-hover:text-slate-500 shrink-0" width="14" height="14"><use href="#i-external"/></svg>
     </a>`;
 }
+
 function disappearedRow(d){
   return `
-    <a href="${escapeHtml(d.href)}" target="_blank" rel="noopener" class="item-link flex items-center gap-2 px-2 py-1.5 rounded border border-slate-100 text-sm">
-      <span class="bg-orange-100 text-orange-800 px-2 py-0.5 rounded text-xs whitespace-nowrap font-semibold">浪費 ${d.waste_days} 天</span>
-      <span class="text-[11px] text-slate-400 whitespace-nowrap">#${d.package_num}</span>
-      <span class="flex-1 text-slate-700 truncate">${escapeHtml(d.title)}</span>
-      <span class="text-xs text-slate-500 whitespace-nowrap">${escapeHtml(d.owner)}</span>
+    <a href="${esc(d.href)}" target="_blank" rel="noopener"
+       class="item-link group flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-100">
+      <span class="shrink-0 inline-flex items-center justify-center num text-[11px] font-semibold px-2 py-1 rounded bg-orange-50 text-orange-700 border border-orange-200 min-w-[70px] text-center">浪費 ${d.waste_days} 天</span>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm text-slate-800 truncate font-medium">${esc(d.title)}</div>
+        <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
+          <span>套餐 #${d.package_num}</span>
+          <span>·</span>
+          <span class="text-slate-700 font-medium">${esc(d.owner)}</span>
+          <span>·</span>
+          <span>${esc(d.prev_date)}消失</span>
+        </div>
+      </div>
+      <svg class="text-slate-300 group-hover:text-slate-500 shrink-0" width="14" height="14"><use href="#i-external"/></svg>
     </a>`;
 }
+
 function groupBy(arr, key){
   const m = new Map();
-  for(const it of arr){ const k=it[key]||'未知'; if(!m.has(k)) m.set(k,[]); m.get(k).push(it); }
-  return Array.from(m.entries()).sort((a,b)=>b[1].length-a[1].length);
+  for(const it of arr){ const k = it[key] || '未知'; if(!m.has(k)) m.set(k, []); m.get(k).push(it); }
+  return [...m.entries()].sort((a,b) => b[1].length - a[1].length);
 }
-function renderOwnerGroup(owner, items, rowFn){
-  const rows = items.map(rowFn).join('');
+
+function renderOwnerGroup(owner, items, rowFn, accent){
   return `
     <div>
-      <div class="flex items-center gap-2 mb-1.5">
-        <span class="owner-chip px-2.5 py-1 rounded-full text-sm font-semibold text-slate-700">${escapeHtml(owner)}</span>
-        <span class="text-xs text-slate-500">${items.length} 筆</span>
+      <div class="flex items-center gap-2 mb-2">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${accent} text-xs font-semibold">
+          <span>${esc(owner)}</span>
+          <span class="num bg-white/70 px-1.5 rounded-full text-[10px]">${items.length}</span>
+        </span>
       </div>
-      <div class="space-y-1 pl-1">${rows}</div>
+      <div class="space-y-1">${items.map(rowFn).join('')}</div>
+    </div>`;
+}
+
+function topOwnersSummary(items){
+  if(!items.length) return '<span class="text-emerald-600 font-medium">沒有，全員達標 ✓</span>';
+  const groups = groupBy(items, 'owner').slice(0, 3);
+  return groups.map(([o, arr]) => `<span class="inline-flex items-center gap-1 mr-3 mb-1"><span class="font-semibold text-slate-800">${esc(o)}</span><span class="num text-slate-500">${arr.length}</span></span>`).join('');
+}
+
+function packageRow(p){
+  const total = p.active + p.vacant;
+  const pct = total > 0 ? (p.active / total * 100) : 0;
+  const full = p.vacant === 0 && p.active > 0;
+  const barColor = full ? 'bg-emerald-500' : pct >= 70 ? 'bg-blue-500' : 'bg-amber-500';
+  return `
+    <div>
+      <div class="flex items-center justify-between mb-1.5 text-sm">
+        <span class="font-semibold text-slate-800">套餐 #${p.num}</span>
+        <span class="num text-slate-500">
+          <span class="font-semibold text-slate-900">${p.active}</span>
+          <span class="text-slate-400"> / ${total}</span>
+          ${p.vacant > 0 ? `<span class="ml-2 text-amber-600 font-semibold">${p.vacant} 空位</span>` : ''}
+          ${p.expired > 0 ? `<span class="ml-2 text-red-600 font-semibold">${p.expired} 到期</span>` : ''}
+        </span>
+      </div>
+      <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+        <div class="bar-fill h-full ${barColor} rounded-full" style="width:${pct}%"></div>
+      </div>
+    </div>`;
+}
+
+function ownerStatusDot(o){
+  if(o.expiring > 0 || o.disappeared > 0) return 'bg-red-500';
+  if(o.vacant_share > 0) return 'bg-amber-400';
+  return 'bg-emerald-500';
+}
+
+function ownerBoardRow(o){
+  const dot = ownerStatusDot(o);
+  const issues = (o.expiring || 0) + (o.disappeared || 0);
+  return `
+    <div class="owner-row flex items-center gap-3 px-2 py-2.5 rounded-lg">
+      <span class="w-2 h-2 rounded-full ${dot} shrink-0"></span>
+      <span class="flex-1 min-w-0">
+        <span class="font-semibold text-slate-900 text-sm">${esc(o.name)}</span>
+      </span>
+      <span class="flex items-center gap-1.5 md:gap-3 text-xs num">
+        <span class="inline-flex flex-col items-center min-w-[36px]">
+          <span class="font-bold text-slate-900">${o.active}</span>
+          <span class="text-[10px] text-slate-500">在刊</span>
+        </span>
+        <span class="inline-flex flex-col items-center min-w-[36px]">
+          <span class="font-bold ${o.expiring>0?'text-red-600':'text-slate-400'}">${o.expiring||0}</span>
+          <span class="text-[10px] text-slate-500">到期</span>
+        </span>
+        <span class="inline-flex flex-col items-center min-w-[36px]">
+          <span class="font-bold ${o.disappeared>0?'text-orange-600':'text-slate-400'}">${o.disappeared||0}</span>
+          <span class="text-[10px] text-slate-500">未補</span>
+        </span>
+        <span class="inline-flex flex-col items-center min-w-[36px]">
+          <span class="font-bold ${(o.featured+o.topped)>0?'text-blue-600':'text-slate-400'}">${(o.featured||0)+(o.topped||0)}</span>
+          <span class="text-[10px] text-slate-500">加值</span>
+        </span>
+      </span>
     </div>`;
 }
 
 async function load(){
+  const loadingEl = document.getElementById('loading');
+  const errorEl = document.getElementById('error');
   try {
     const res = await fetch(DATA_URL);
-    if(!res.ok) throw new Error('HTTP '+res.status);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
     const d = await res.json();
 
     document.getElementById('scrapedDate').textContent = d.scraped_date;
     const dt = new Date(d.updated_at);
-    document.getElementById('updatedAt').textContent = dt.toLocaleString('zh-TW',{hour12:false});
+    document.getElementById('updatedAt').textContent = dt.toLocaleString('zh-TW', { hour12: false });
 
     const s = d.summary;
+
+    // Hero
+    document.getElementById('heroExpiring').textContent = s.total_expiring;
+    document.getElementById('heroExpiringOwners').innerHTML = topOwnersSummary(d.expiring);
+    document.getElementById('heroDisappeared').textContent = s.total_disappeared;
+    document.getElementById('heroDisappearedOwners').innerHTML = topOwnersSummary(d.disappeared);
+
+    // KPI
     document.getElementById('kpiActive').textContent = s.total_active;
     document.getElementById('kpiVacant').textContent = s.total_vacant;
-    document.getElementById('kpiExpiring').textContent = s.total_expiring;
-    document.getElementById('kpiDisappeared').textContent = s.total_disappeared;
     document.getElementById('kpiFeatured').textContent = s.featured_count;
-    document.getElementById('kpiTopped').textContent = s.super_top_count + s.normal_top_count;
+    document.getElementById('kpiTopped').textContent = (s.super_top_count || 0) + (s.normal_top_count || 0);
 
     // 套餐
-    document.getElementById('packageGrid').innerHTML = d.packages.map(p => `
-      <div class="border border-slate-200 rounded-lg p-3">
-        <div class="text-xs text-slate-500 mb-1">套餐 #${p.num}</div>
-        <div class="flex items-baseline gap-1.5 flex-wrap">
-          <span class="text-xl font-bold text-slate-800">${p.active}</span>
-          <span class="text-xs text-slate-500">在刊</span>
-          ${p.vacant ? `<span class="text-amber-600 text-sm font-semibold">/ ${p.vacant} 空</span>` : ''}
-          ${p.expired ? `<span class="text-red-600 text-sm font-semibold">/ ${p.expired} 到期</span>` : ''}
-        </div>
-      </div>`).join('');
+    document.getElementById('packageList').innerHTML = d.packages.map(packageRow).join('');
 
-    // 24h 內到期
-    document.getElementById('expiringCount').textContent = `共 ${d.expiring.length} 筆`;
-    const expGroups = groupBy(d.expiring, 'owner');
-    document.getElementById('expiringGroups').innerHTML =
-      expGroups.length
-        ? expGroups.map(([o,items]) => renderOwnerGroup(o, items, itemRow)).join('')
-        : '<div class="text-slate-400 text-sm py-2">✅ 沒有 24 小時內到期的物件</div>';
+    // 負責人記分板
+    document.getElementById('ownerCount').textContent = `${d.owners.length} 人`;
+    const sortedOwners = [...d.owners].sort((a,b) => {
+      const ai = (a.expiring||0) + (a.disappeared||0);
+      const bi = (b.expiring||0) + (b.disappeared||0);
+      if(bi !== ai) return bi - ai;
+      return (b.active||0) - (a.active||0);
+    });
+    document.getElementById('ownerBoard').innerHTML = sortedOwners.map(ownerBoardRow).join('');
 
-    // 到期未補
-    document.getElementById('disappearedCount').textContent = `共 ${d.disappeared.length} 筆`;
-    const dispGroups = groupBy(d.disappeared, 'owner');
-    document.getElementById('disappearedGroups').innerHTML =
-      dispGroups.length
-        ? dispGroups.map(([o,items]) => renderOwnerGroup(o, items, disappearedRow)).join('')
-        : '<div class="text-slate-400 text-sm py-2">✅ 沒有到期未補的物件</div>';
+    // 24h 明細
+    document.getElementById('expiringSubtitle').textContent = d.expiring.length ? `共 ${d.expiring.length} 筆，點開查看名單` : '目前沒有 24 小時內到期的物件';
+    document.getElementById('expiringGroups').innerHTML = d.expiring.length
+      ? groupBy(d.expiring, 'owner').map(([o, items]) => renderOwnerGroup(o, items, itemRow, 'bg-red-50 text-red-800 border border-red-100')).join('')
+      : '<div class="text-sm text-emerald-600 font-medium py-2">✓ 沒有即將到期的物件</div>';
 
-    // 全部在刊 + 負責人篩選
+    // 未補明細
+    document.getElementById('disappearedSubtitle').textContent = d.disappeared.length ? `共 ${d.disappeared.length} 筆，點開查看名單` : '目前沒有到期未補';
+    document.getElementById('disappearedGroups').innerHTML = d.disappeared.length
+      ? groupBy(d.disappeared, 'owner').map(([o, items]) => renderOwnerGroup(o, items, disappearedRow, 'bg-orange-50 text-orange-800 border border-orange-100')).join('')
+      : '<div class="text-sm text-emerald-600 font-medium py-2">✓ 大家都有補新物件</div>';
+
+    // 全部在刊 + filter
     document.getElementById('allItemsCount').textContent = `${d.items.length} 筆`;
-    const owners = d.owners.map(o => o.name);
     const filterEl = document.getElementById('ownerFilter');
     const listEl = document.getElementById('allItemsList');
+
+    const chipActiveCls = 'bg-slate-900 text-white border-slate-900';
+    const chipIdleCls = 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 hover:text-slate-900';
+
+    const chips = [{ name: '全部', count: d.items.length }, ...sortedOwners.map(o => ({ name: o.name, count: o.active || 0 }))];
+    filterEl.innerHTML = chips.map((c, i) => `
+      <button type="button" data-owner="${c.name === '全部' ? '' : esc(c.name)}"
+        class="chip num px-2.5 py-1 rounded-full text-xs border ${i === 0 ? chipActiveCls : chipIdleCls}">
+        ${esc(c.name)}<span class="ml-1 text-[10px] opacity-70">${c.count}</span>
+      </button>`).join('');
+
     const renderList = (filter) => {
       const arr = filter ? d.items.filter(it => it.owner === filter) : d.items;
-      listEl.innerHTML = arr.map(itemRow).join('');
+      listEl.innerHTML = arr.length ? arr.map(itemRow).join('') : '<div class="text-sm text-slate-400 py-4 text-center">無符合資料</div>';
     };
-    const chips = ['全部', ...owners].map((name, i) => {
-      const active = i === 0;
-      return `<button data-owner="${name==='全部'?'':escapeHtml(name)}" class="chip px-2.5 py-1 rounded-full text-xs ${active?'bg-blue-600 text-white':'bg-slate-100 text-slate-600 hover:bg-blue-100'}">${escapeHtml(name)}${name!=='全部'?' ('+d.owners.find(o=>o.name===name).active+')':''}</button>`;
-    }).join('');
-    filterEl.innerHTML = chips;
     filterEl.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-owner]');
       if(!btn) return;
-      filterEl.querySelectorAll('button').forEach(b => b.className = b.className.replace('bg-blue-600 text-white','bg-slate-100 text-slate-600 hover:bg-blue-100'));
-      btn.className = btn.className.replace('bg-slate-100 text-slate-600 hover:bg-blue-100','bg-blue-600 text-white');
+      filterEl.querySelectorAll('button').forEach(b => b.className = b.className.replace(chipActiveCls, chipIdleCls));
+      btn.className = btn.className.replace(chipIdleCls, chipActiveCls);
       renderList(btn.dataset.owner);
     });
     renderList('');
 
     // 精選置頂
-    document.getElementById('featuredSummary').textContent =
-      `精選 ${s.featured_count} / 置頂 ${s.super_top_count + s.normal_top_count}`;
+    document.getElementById('featuredSubtitle').textContent = `精選 ${s.featured_count} · 置頂 ${(s.super_top_count || 0) + (s.normal_top_count || 0)}`;
     document.getElementById('toppedSection').innerHTML = d.topped_list.length
-      ? `<h3 class="font-semibold text-slate-700 mb-2">🔝 置頂中（${d.topped_list.length}）</h3><div class="space-y-1">${d.topped_list.map(itemRow).join('')}</div>`
+      ? `<div class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">置頂中（${d.topped_list.length}）</div><div class="space-y-1">${d.topped_list.map(itemRow).join('')}</div>`
       : '';
     document.getElementById('featuredSection').innerHTML = d.featured_list.length
-      ? `<h3 class="font-semibold text-slate-700 mb-2">💎 精選中（${d.featured_list.length}）</h3><div class="space-y-1">${d.featured_list.map(itemRow).join('')}</div>`
-      : (d.topped_list.length ? '' : '<div class="text-slate-400 text-sm">目前沒有精選或置頂物件</div>');
+      ? `<div class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">精選中（${d.featured_list.length}）</div><div class="space-y-1">${d.featured_list.map(itemRow).join('')}</div>`
+      : (d.topped_list.length ? '' : '<div class="text-sm text-slate-400 py-2">目前沒有精選或置頂</div>');
 
-    document.getElementById('loading').classList.add('hidden');
-  } catch(e){
-    document.getElementById('loading').classList.add('hidden');
-    document.getElementById('errorMsg').textContent = e.message;
-    document.getElementById('error').classList.remove('hidden');
+  } catch(e) {
+    console.error('Dashboard load failed:', e);
+    document.getElementById('errorMsg').textContent = e.message || String(e);
+    errorEl.classList.remove('hidden');
+  } finally {
+    loadingEl.classList.add('hidden');
   }
 }
 load();
