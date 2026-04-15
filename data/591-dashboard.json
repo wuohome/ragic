@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-04-15T11:59:08+08:00",
+  "updated_at": "2026-04-15T12:13:09+08:00",
   "scraped_date": "2026-04-15",
   "prev_date": "2026-04-14",
   "summary": {
@@ -7,7 +7,7 @@
     "total_vacant": 10,
     "total_expired": 16,
     "total_expiring": 7,
-    "total_disappeared": 29,
+    "total_disappeared": 14,
     "featured_count": 0,
     "super_top_count": 37,
     "normal_top_count": 0,
@@ -948,14 +948,6 @@
       "waste_days": 4
     },
     {
-      "link_id": "20996085",
-      "title": "🎉三民高中站｜可租補｜新裝潢拎包入住｜🍀阿宣🍀",
-      "owner": "林宣佑",
-      "package_num": 4,
-      "prev_date": "2026-04-11",
-      "waste_days": 4
-    },
-    {
       "link_id": "20937324",
       "title": "三和國中丨可租補報稅丨雙衛浴丨使用空間大🌟Wei🌟",
       "owner": "蕭眞儀",
@@ -1020,54 +1012,6 @@
       "waste_days": 3
     },
     {
-      "link_id": "21041399",
-      "title": "三重丨邊間採光佳丨質感生活丨雙衛浴🌟忠豪🌟",
-      "owner": "張忠豪",
-      "package_num": 1,
-      "prev_date": "2026-04-12",
-      "waste_days": 3
-    },
-    {
-      "link_id": "21013378",
-      "title": "🎉三重站｜全新質感套房｜可租補｜靜寵可談🍀阿宣🍀",
-      "owner": "林宣佑",
-      "package_num": 1,
-      "prev_date": "2026-04-12",
-      "waste_days": 3
-    },
-    {
-      "link_id": "20852318",
-      "title": "⭐️三重國小站丨可寵可開伙三房",
-      "owner": "蕭靜芳",
-      "package_num": 4,
-      "prev_date": "2026-04-12",
-      "waste_days": 3
-    },
-    {
-      "link_id": "20998133",
-      "title": "三重國小丨可租補可寵丨兩房附傢俱丨電器",
-      "owner": "蕭靜芳",
-      "package_num": 4,
-      "prev_date": "2026-04-12",
-      "waste_days": 3
-    },
-    {
-      "link_id": "20998137",
-      "title": "c台北橋站丨含網路第四台丨獨立衛浴",
-      "owner": "蕭靜芳",
-      "package_num": 4,
-      "prev_date": "2026-04-12",
-      "waste_days": 3
-    },
-    {
-      "link_id": "20931861",
-      "title": "🌈捷運新埔站｜三猿廣場｜可租補｜低樓層｜莒光路☀️阿傳☀️",
-      "owner": "詹張傳",
-      "package_num": 4,
-      "prev_date": "2026-04-12",
-      "waste_days": 3
-    },
-    {
       "link_id": "20966347",
       "title": "幸福站｜美食商圈｜寵物友善｜拎包入住｜可租補💫小碩💫",
       "owner": "劉子碩",
@@ -1084,49 +1028,9 @@
       "waste_days": 2
     },
     {
-      "link_id": "20895859",
-      "title": "徐匯中學丨採光佳丨乾淨舒適丨使用空間大⭐Wei ⭐",
-      "owner": "張忠豪",
-      "package_num": 3,
-      "prev_date": "2026-04-13",
-      "waste_days": 2
-    },
-    {
       "link_id": "20973267",
       "title": "三重國小丨可租補丨可寵丨家俱齊全丨屋況佳🌟忠豪🌟",
       "owner": "張忠豪",
-      "package_num": 3,
-      "prev_date": "2026-04-13",
-      "waste_days": 2
-    },
-    {
-      "link_id": "21042942",
-      "title": "徐匯中學丨電梯可租補丨租金含水丨質感裝潢🌟忠豪🌟",
-      "owner": "張忠豪",
-      "package_num": 3,
-      "prev_date": "2026-04-13",
-      "waste_days": 2
-    },
-    {
-      "link_id": "21044389",
-      "title": "木柵路丨可租補丨質感裝潢丨採光佳🌟忠豪🌟",
-      "owner": "張忠豪",
-      "package_num": 2,
-      "prev_date": "2026-04-13",
-      "waste_days": 2
-    },
-    {
-      "link_id": "20895978",
-      "title": "新埔丨採光佳丨生活機能佳丨質感裝潢🌟Wei🌟",
-      "owner": "蕭眞儀",
-      "package_num": 3,
-      "prev_date": "2026-04-13",
-      "waste_days": 2
-    },
-    {
-      "link_id": "21010408",
-      "title": "三民高中丨專屬露台丨雙衛浴丨可另租車位⭐️Wei⭐️",
-      "owner": "蕭眞儀",
       "package_num": 3,
       "prev_date": "2026-04-13",
       "waste_days": 2
@@ -1136,30 +1040,6 @@
       "title": "中原丨可租補報稅丨質感裝潢丨系統收納🌟Wei🌟",
       "owner": "蕭眞儀",
       "package_num": 1,
-      "prev_date": "2026-04-13",
-      "waste_days": 2
-    },
-    {
-      "link_id": "20857420",
-      "title": "⭐️三重國小可租補可寵丨兩房附傢俱丨電器",
-      "owner": "蕭靜芳",
-      "package_num": 3,
-      "prev_date": "2026-04-13",
-      "waste_days": 2
-    },
-    {
-      "link_id": "20946795",
-      "title": "⭐️4/15三重菜寮丨可寵兩房可開伙附家具丨陽台",
-      "owner": "蕭靜芳",
-      "package_num": 3,
-      "prev_date": "2026-04-13",
-      "waste_days": 2
-    },
-    {
-      "link_id": "20853784",
-      "title": "🌈木柵路美寓｜可租補｜飯店式管理｜採光佳☀️阿傳☀️",
-      "owner": "詹張傳",
-      "package_num": 3,
       "prev_date": "2026-04-13",
       "waste_days": 2
     },
@@ -1587,7 +1467,7 @@
       "name": "張忠豪",
       "active": 16,
       "expiring": 1,
-      "disappeared": 8,
+      "disappeared": 4,
       "featured": 0,
       "topped": 12
     },
@@ -1603,7 +1483,7 @@
       "name": "蕭靜芳",
       "active": 10,
       "expiring": 3,
-      "disappeared": 5,
+      "disappeared": 0,
       "featured": 0,
       "topped": 7
     },
@@ -1611,7 +1491,7 @@
       "name": "林宣佑",
       "active": 9,
       "expiring": 0,
-      "disappeared": 2,
+      "disappeared": 0,
       "featured": 0,
       "topped": 4
     },
@@ -1619,7 +1499,7 @@
       "name": "蕭眞儀",
       "active": 7,
       "expiring": 1,
-      "disappeared": 4,
+      "disappeared": 2,
       "featured": 0,
       "topped": 0
     },
@@ -1635,7 +1515,7 @@
       "name": "詹張傳",
       "active": 5,
       "expiring": 0,
-      "disappeared": 3,
+      "disappeared": 1,
       "featured": 0,
       "topped": 2
     },
