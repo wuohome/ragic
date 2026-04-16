@@ -22,18 +22,19 @@
   .tab.active{border-bottom-color:#2563eb;color:#2563eb;font-weight:700;}
   .tab-panel{display:none;}
   .tab-panel.active{display:block;}
-  /* Dual-handle range slider（單條軌雙手柄）*/
-  .dual-range{position:relative;height:28px;}
+  /* Dual-handle range slider（單條軌雙手柄）—— 起球在軌道上方、迄球在軌道下方，永遠看得到是兩顆球 */
+  .dual-range{position:relative;height:44px;}
   .dual-range .track{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:6px;background:#e2e8f0;border-radius:9999px;}
   .dual-range .highlight{position:absolute;top:50%;transform:translateY(-50%);height:6px;background:linear-gradient(90deg,#3b82f6,#10b981);border-radius:9999px;}
-  .dual-range input[type=range]{position:absolute;left:0;right:0;top:0;width:100%;height:28px;-webkit-appearance:none;appearance:none;background:transparent;pointer-events:none;outline:none;margin:0;}
-  .dual-range input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:20px;height:20px;background:#fff;border:3px solid #3b82f6;border-radius:50%;cursor:grab;box-shadow:0 2px 6px rgba(0,0,0,.15);}
-  .dual-range input[type=range]::-moz-range-thumb{pointer-events:auto;width:20px;height:20px;background:#fff;border:3px solid #3b82f6;border-radius:50%;cursor:grab;box-shadow:0 2px 6px rgba(0,0,0,.15);}
+  .dual-range input[type=range]{position:absolute;left:0;right:0;width:100%;height:20px;-webkit-appearance:none;appearance:none;background:transparent;pointer-events:none;outline:none;margin:0;}
+  /* 起球：黏在軌道上方 */
+  .dual-range input[type=range]:not(.end-slider){top:4px;}
+  /* 迄球：黏在軌道下方 */
+  .dual-range input[type=range].end-slider{top:20px;}
+  .dual-range input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:18px;height:18px;background:#fff;border:3px solid #3b82f6;border-radius:50%;cursor:grab;box-shadow:0 2px 6px rgba(0,0,0,.15);}
+  .dual-range input[type=range]::-moz-range-thumb{pointer-events:auto;width:18px;height:18px;background:#fff;border:3px solid #3b82f6;border-radius:50%;cursor:grab;box-shadow:0 2px 6px rgba(0,0,0,.15);}
   .dual-range input[type=range].end-slider::-webkit-slider-thumb{border-color:#10b981;}
   .dual-range input[type=range].end-slider::-moz-range-thumb{border-color:#10b981;}
-  /* 起=迄時兩個 thumb 疊一起：顯示左藍右綠的雙色，一看就知「單月」*/
-  .dual-range.collapsed input[type=range]::-webkit-slider-thumb{background:linear-gradient(90deg,#3b82f6 50%,#10b981 50%);border-color:#fff;box-shadow:0 0 0 2px #94a3b8,0 2px 6px rgba(0,0,0,.2);}
-  .dual-range.collapsed input[type=range]::-moz-range-thumb{background:linear-gradient(90deg,#3b82f6 50%,#10b981 50%);border-color:#fff;box-shadow:0 0 0 2px #94a3b8,0 2px 6px rgba(0,0,0,.2);}
   #loadingOverlay{position:fixed;inset:0;background:rgba(248,250,252,.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;transition:opacity .4s;}
   #loadingOverlay.fade-out{opacity:0;pointer-events:none;}
 </style>
@@ -221,7 +222,10 @@
       <!-- Tier 2 時序曲線 -->
       <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-xl font-bold text-slate-900">📈 月度雙軸趨勢</h2>
+          <div>
+            <h2 class="text-xl font-bold text-slate-900">📈 月度雙軸趨勢</h2>
+            <p id="anaOnboardNote" class="text-xs text-slate-500 mt-1"></p>
+          </div>
           <p class="text-xs text-slate-400">長條=進案件數　折線=業績金額　虛線=3 個月滾動均</p>
         </div>
         <div class="relative" style="height:320px"><canvas id="anaTrendChart"></canvas></div>
@@ -990,6 +994,22 @@ async function fetchAllData() {
   for (const r of CLIENTS) addIfValid(r.staff);
   for (const n of EXCLUDE_DEVS) allStaff.delete(n);
   ACTIVE_STAFF = allStaff;
+
+  // 建立到職月份 map（供業務分析頁的時序曲線 x 軸起點用）
+  STAFF_ONBOARD_MONTH = {};
+  for (const rec of Object.values(rawHr)) {
+    const name = (rec['姓名'] || '').trim();
+    const onboard = (rec['到職日期'] || '').trim();
+    if (name && onboard && onboard.length >= 7) {
+      STAFF_ONBOARD_MONTH[name] = onboard.slice(0,7).replaceAll('/', '-');
+    }
+  }
+  // 夫妻檔合併：取較早到職
+  const a = STAFF_ONBOARD_MONTH['張忠豪'];
+  const b = STAFF_ONBOARD_MONTH['蕭眞儀'];
+  if (a && b) STAFF_ONBOARD_MONTH['張忠豪&蕭眞儀'] = a <= b ? a : b;
+  else if (a) STAFF_ONBOARD_MONTH['張忠豪&蕭眞儀'] = a;
+  else if (b) STAFF_ONBOARD_MONTH['張忠豪&蕭眞儀'] = b;
 }
 
 
@@ -1001,6 +1021,7 @@ let ACTIVE_STAFF = new Set();
 let AD591 = null;
 let PERF_GSHEET_AVAILABLE = false;
 let PERF_SNAPSHOT_TIME = '';
+let STAFF_ONBOARD_MONTH = {};  // { name: 'YYYY-MM' } 從 HR 到職日
 
 // ── 珊珊 GSheet CSV 解析（2026-04 起為當月業績事實來源）
 // 格式：英雄A班,業績,VS,英雄B班,業績 兩欄並排（歷史遺留 A/B PK 格式，實為個人累計）
@@ -1080,14 +1101,14 @@ function buildStaffSelector(){
   }
   sel.addEventListener('change',()=>{
     curStaff = sel.value;
-    document.getElementById('staffLabel').textContent = curStaff ? `顯示 ${curStaff} 的個人數據` : '';
+    document.getElementById('staffLabel').textContent = curStaff ? `🔬 業務分析選定：${curStaff}` : '';
     refreshAll();
     const url = new URL(window.location);
     if(curStaff) url.searchParams.set('staff', curStaff);
     else url.searchParams.delete('staff');
     history.replaceState(null, '', url);
   });
-  if(curStaff) document.getElementById('staffLabel').textContent = `顯示 ${curStaff} 的個人數據`;
+  if(curStaff) document.getElementById('staffLabel').textContent = `🔬 業務分析選定：${curStaff}`;
 }
 
 function refreshAll(){
@@ -1301,20 +1322,18 @@ function renderLastCase(){
 let perfMonths = [];
 
 function renderMonth(targetYm){
-  // ── 業績 ──
-  let perfRows = PERF.filter(r=>r.ym===targetYm);
-  if(curStaff) perfRows=perfRows.filter(r=>r.name===curStaff);
+  // ── 業績（全部門）──
+  const perfRows = PERF.filter(r=>r.ym===targetYm);
   const perfCounter = {};
   perfRows.forEach(r=>{ perfCounter[r.name]=(perfCounter[r.name]||0)+r.perf; });
   const perfTotal = Object.values(perfCounter).reduce((a,b)=>a+b,0);
 
-  // ── 進案量（月內進案件數）──
+  // ── 進案量（月內進案件數，全部門）──
   const [y, mo] = targetYm.split('-');
   const lastDay = new Date(parseInt(y), parseInt(mo), 0).getDate();
   const monthStart = `${targetYm}-01`;
   const monthEnd = `${targetYm}-${String(lastDay).padStart(2,'0')}`;
-  let intakeRows = INTAKE.filter(r=>r.date>=monthStart && r.date<=monthEnd);
-  if(curStaff) intakeRows = intakeRows.filter(r=>(r.devs||[]).some(d=>d.name===curStaff));
+  const intakeRows = INTAKE.filter(r=>r.date>=monthStart && r.date<=monthEnd);
   const intakeCounter = {};
   intakeRows.forEach(r=>(r.devs||[]).forEach(d=>{ intakeCounter[d.name]=(intakeCounter[d.name]||0)+d.ratio; }));
 
@@ -1443,8 +1462,6 @@ function updateAnaHighlight(){
   const rPct = (anaEndIdx / max) * 100;
   const hl = document.getElementById('anaRangeHighlight');
   if (hl) { hl.style.left = lPct + '%'; hl.style.width = (rPct - lPct) + '%'; }
-  const range = document.querySelector('.dual-range');
-  if (range) range.classList.toggle('collapsed', anaStartIdx === anaEndIdx);
 }
 
 function initAnaRangeUI(){
@@ -1572,14 +1589,42 @@ function renderAnalysis(){
   document.getElementById('anaKpiActive').textContent = daysAgo === '—' ? '—' : daysAgo;
   document.getElementById('anaKpiSilence').textContent = `歷史最長空窗 ${maxGap} 天（不受範圍影響）`;
 
-  // ── Tier 2 月度雙軸趨勢（用全歷史，標示選定範圍）──
+  // ── Tier 2 月度雙軸趨勢：從「報到月」開始到今天，連續填滿（看學習曲線）──
+  const onboardMonth = STAFF_ONBOARD_MONTH[curStaff] || '';
   const allIntakeMonths = new Set(allMyIntake.map(r => r.date.slice(0,7)));
   const allPerfMonths = new Set(allMyPerf.map(r => r.ym));
-  const months = [...new Set([...allIntakeMonths, ...allPerfMonths])].filter(Boolean).sort();
+  const dataMonths = [...new Set([...allIntakeMonths, ...allPerfMonths])].filter(Boolean).sort();
+  // 起點：報到月（若有）vs 最早資料月，取較早那個才不會漏資料
+  const thisYmVal = ym(new Date());
+  let startYm = onboardMonth || dataMonths[0] || thisYmVal;
+  if (dataMonths.length && dataMonths[0] < startYm) startYm = dataMonths[0];
+  // 生成 startYm → 今天的連續月份陣列（空月份補 0 才看得到「學習曲線」）
+  const months = [];
+  let curYm = startYm;
+  while (curYm && curYm <= thisYmVal) {
+    months.push(curYm);
+    const [yy, mm] = curYm.split('-').map(Number);
+    curYm = ym(new Date(yy, mm, 1));  // 下個月
+    if (months.length > 120) break;  // 保險 10 年上限
+  }
   const intakeByMonth = {};
   allMyIntake.forEach(r => { const m = r.date.slice(0,7); intakeByMonth[m] = (intakeByMonth[m]||0)+1; });
   const perfByMonth = {};
   allMyPerf.forEach(r => { perfByMonth[r.ym] = (perfByMonth[r.ym]||0)+r.perf; });
+  // 報到月註記
+  const onboardNote = document.getElementById('anaOnboardNote');
+  if (onboardNote) {
+    if (onboardMonth) {
+      const workedMonths = months.length;
+      const firstIntakeM = dataMonths[0] || '';
+      const hint = firstIntakeM && firstIntakeM > onboardMonth
+        ? ` · 第一筆進案 ${firstIntakeM}（報到 ${calcMonthsDiff(onboardMonth, firstIntakeM)} 個月後開胡）`
+        : '';
+      onboardNote.textContent = `報到月：${onboardMonth} · 在職 ${workedMonths} 個月${hint}`;
+    } else {
+      onboardNote.textContent = `（HR 無到職資料，圖表從最早資料月起算）`;
+    }
+  }
 
   const intakeSeries = months.map(m => intakeByMonth[m]||0);
   const perfSeries = months.map(m => perfByMonth[m]||0);
@@ -1750,6 +1795,13 @@ function renderAnalysis(){
   }
 }
 
+function calcMonthsDiff(ymA, ymB){
+  if (!ymA || !ymB) return 0;
+  const [ya, ma] = ymA.split('-').map(Number);
+  const [yb, mb] = ymB.split('-').map(Number);
+  return (yb-ya)*12 + (mb-ma);
+}
+
 function classifyLayout(layout){
   if (!layout) return '(未填)';
   // e.g. "3房2廳2衛1廚1陽" → 抓「X房」
@@ -1820,8 +1872,7 @@ function buildCompareChips(){
 let invTypeFilter = 'all';
 
 function renderInventory(){
-  let rows = INVENTORY;
-  if(curStaff) rows = rows.filter(r=>(r.devs||[]).some(d=>d.name===curStaff));
+  const rows = INVENTORY;
   document.getElementById('invTotal').textContent = rows.length;
   document.getElementById('invExcl').textContent  = rows.filter(r=>r.type==='專任出租案').length;
   document.getElementById('invGenl').textContent  = rows.filter(r=>r.type==='一般出租案').length;
@@ -1946,8 +1997,7 @@ function renderOutreach(){
   const start = document.getElementById('oStart').value;
   const end   = document.getElementById('oEnd').value;
   if(!start||!end||start>end) return;
-  let rows = OUTREACH.filter(r=>r.date>=start && r.date<=end);
-  if(curStaff) rows=rows.filter(r=>r.dev===curStaff);
+  const rows = OUTREACH.filter(r=>r.date>=start && r.date<=end);
   const total    = rows.length;
   const accepted = rows.filter(r=>r.status==='已接委託').length;
   const rate     = total > 0 ? (accepted/total*100).toFixed(1) : '0';
@@ -2008,8 +2058,7 @@ function renderClients(){
   const start = document.getElementById('clStart').value;
   const end   = document.getElementById('clEnd').value;
   if(!start||!end||start>end) return;
-  let rows = CLIENTS.filter(r=>r.date>=start && r.date<=end);
-  if(curStaff) rows=rows.filter(r=>r.staff===curStaff);
+  const rows = CLIENTS.filter(r=>r.date>=start && r.date<=end);
   document.getElementById('clTotal').textContent = rows.length;
   document.getElementById('clStaff').textContent = new Set(rows.map(r=>r.staff).filter(Boolean)).size;
 
