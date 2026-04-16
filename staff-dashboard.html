@@ -67,6 +67,7 @@
     <div class="tab pb-3 text-lg px-1" data-tab="outreach">📞 開發追蹤</div>
     <div class="tab pb-3 text-lg px-1" data-tab="clients">👥 客戶來源</div>
     <div class="tab pb-3 text-lg px-1" data-tab="year">📊 年度總覽</div>
+    <div class="tab pb-3 text-lg px-1" data-tab="analysis">🔬 業務分析</div>
     <div class="tab pb-3 text-lg px-1" data-tab="compare">⚖️ 資料比對</div>
   </div>
   <div id="tabDesc" class="text-sm text-slate-400 mb-6 mt-3">各業務在選定期間內新接了多少委託案件，以及距上次進案多久</div>
@@ -176,6 +177,111 @@
       <h2 class="text-xl font-bold text-slate-900 mb-6">📈 月度趨勢</h2>
       <div class="relative" style="height:300px"><canvas id="yTrendChart"></canvas></div>
     </section>
+  </div>
+
+  <!-- ── 業務分析 ── -->
+  <div class="tab-panel" id="panel-analysis">
+    <div id="anaEmpty" class="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center hidden">
+      <div class="text-4xl mb-3">👆</div>
+      <p class="text-amber-900 font-semibold text-lg">請在頂部選擇一位業務</p>
+      <p class="text-amber-700 text-sm mt-1">業務分析頁必須選定特定人員才能計算個人戰力側寫</p>
+    </div>
+
+    <div id="anaContent" class="hidden">
+      <!-- Tier 1 北極星 -->
+      <section class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="text-slate-500 text-sm mb-1">📦 累計進案</div>
+          <div class="flex items-baseline gap-2">
+            <div id="anaKpiIntake" class="text-4xl font-black text-blue-600">0</div>
+            <div class="text-slate-400">件</div>
+          </div>
+          <div id="anaKpiIntakeAvg" class="text-xs text-slate-400 mt-1">月均 — 件</div>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="text-slate-500 text-sm mb-1">💰 累計業績</div>
+          <div class="flex items-baseline gap-2">
+            <div id="anaKpiPerf" class="text-4xl font-black text-emerald-600">0</div>
+            <div class="text-slate-400">元</div>
+          </div>
+          <div id="anaKpiPerfAvg" class="text-xs text-slate-400 mt-1">月均 — 元</div>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="text-slate-500 text-sm mb-1">⚡ 最近進案距今</div>
+          <div class="flex items-baseline gap-2">
+            <div id="anaKpiActive" class="text-4xl font-black text-purple-600">—</div>
+            <div class="text-slate-400">天前</div>
+          </div>
+          <div id="anaKpiSilence" class="text-xs text-slate-400 mt-1">歷史最長斷炊 — 天</div>
+        </div>
+      </section>
+
+      <!-- Tier 2 時序曲線 -->
+      <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-bold text-slate-900">📈 月度雙軸趨勢</h2>
+          <p class="text-xs text-slate-400">長條=進案件數　折線=業績金額　虛線=3 個月滾動均</p>
+        </div>
+        <div class="relative" style="height:320px"><canvas id="anaTrendChart"></canvas></div>
+      </section>
+
+      <!-- Tier 3 偏好側寫 -->
+      <section class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+          <h2 class="text-xl font-bold text-slate-900 mb-4">🏠 房型偏好</h2>
+          <div class="relative" style="height:240px"><canvas id="anaLayoutChart"></canvas></div>
+        </div>
+        <div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+          <h2 class="text-xl font-bold text-slate-900 mb-4">📍 區域熱度 TOP 5</h2>
+          <div id="anaDistrict" class="space-y-2"></div>
+        </div>
+        <div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+          <h2 class="text-xl font-bold text-slate-900 mb-4">💵 價格帶分布</h2>
+          <div id="anaPriceBand" class="space-y-2"></div>
+        </div>
+        <div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+          <h2 class="text-xl font-bold text-slate-900 mb-4">📋 委託類別</h2>
+          <div class="relative" style="height:240px"><canvas id="anaLeaseChart"></canvas></div>
+        </div>
+      </section>
+
+      <!-- Tier 3 月租卡 -->
+      <section class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="text-slate-500 text-sm mb-1">平均月租（算術平均）</div>
+          <div class="flex items-baseline gap-2">
+            <div id="anaRentAvg" class="text-3xl font-black text-blue-600">0</div>
+            <div class="text-slate-400">元</div>
+          </div>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="text-slate-500 text-sm mb-1">中位數月租（抗離群值）</div>
+          <div class="flex items-baseline gap-2">
+            <div id="anaRentMed" class="text-3xl font-black text-indigo-600">0</div>
+            <div class="text-slate-400">元</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tier 5 協作動態 -->
+      <section class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+          <h2 class="text-xl font-bold text-slate-900 mb-4">🤝 最佳拍檔 TOP 3</h2>
+          <div id="anaPartners" class="space-y-3"></div>
+        </div>
+        <div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+          <h2 class="text-xl font-bold text-slate-900 mb-4">🎯 獨立 vs 協作</h2>
+          <div class="relative" style="height:240px"><canvas id="anaCollabChart"></canvas></div>
+          <p id="anaCollabNote" class="text-xs text-slate-400 text-center mt-2"></p>
+        </div>
+      </section>
+
+      <!-- Tier 6 零紀錄告警 -->
+      <section id="anaAlertSection" class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hidden">
+        <h2 class="text-xl font-bold text-slate-900 mb-3">🚨 預警</h2>
+        <div id="anaAlerts" class="space-y-2"></div>
+      </section>
+    </div>
   </div>
 
   <!-- ── 資料比對 ── -->
@@ -567,6 +673,9 @@ function toIntakeRecords(rawData) {
       city: c['縣市'] || '',
       district: normalizeDistrict(c['鄉鎮市區'] || ''),
       rent: fmtRent(c['月租金']),
+      rentNum: parseInt(parseFloat(c['月租金'] || 0)) || 0,
+      layout: (c['格局'] || '').trim(),
+      leaseType: (c['委託類別'] || '').trim(),
       people: peopleStr,
       devs: devs,
       status: (c['狀態'] || '').trim(),
@@ -970,6 +1079,7 @@ function refreshAll(){
   const d=new Date();
   const curMonthChip = document.querySelector('[data-m].active');
   if(curMonthChip) renderMonth(curMonthChip.dataset.m); else renderMonth(ym(d));
+  renderAnalysis();
   const curYearChip = document.querySelector('[data-y].active');
   if(curYearChip) renderYear(curYearChip.dataset.y); else if(allYears.length) renderYear(allYears[0]);
   renderInventory();
@@ -1138,6 +1248,7 @@ function ad591TopOwners(items,emptyText){
 const TAB_DESC = {
   month:'當月進案件數與業績金額對照，當月業績即時來自珊珊 GSheet、歷史來自 OB 業績表',
   year:'全年度各月業績趨勢與累計排行',
+  analysis:'單一業務戰力側寫：北極星 KPI、時序趨勢、接案偏好、協作動態',
   compare:'Ragic 資料與 OB 業績表的交叉比對，找出差異',
   inventory:'目前所有在架物件的庫存狀態，庫存越多代表待消化越多',
   outreach:'業務主動開發屋主的次數、轉化率與完整度追蹤',
@@ -1358,6 +1469,247 @@ function buildYearChips(){
     el.addEventListener('click',()=>renderYear(y));
     container.appendChild(el);
   });
+}
+
+// ════════════════════════════════════════
+// 🔬 業務分析
+// ════════════════════════════════════════
+function renderAnalysis(){
+  const empty = document.getElementById('anaEmpty');
+  const content = document.getElementById('anaContent');
+  if (!curStaff) {
+    empty.classList.remove('hidden');
+    content.classList.add('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  content.classList.remove('hidden');
+
+  // ── 此人的進案 + 業績資料 ──
+  const myIntake = INTAKE.filter(r => (r.devs||[]).some(d => d.name === curStaff));
+  const myPerf = PERF.filter(r => r.name === curStaff);
+
+  // ── Tier 1 北極星 ──
+  const intakeCount = myIntake.length;
+  const perfTotal = myPerf.reduce((a,r) => a+r.perf, 0);
+  const intakeMonths = new Set(myIntake.map(r => r.date.slice(0,7)));
+  const perfMonthsSet = new Set(myPerf.map(r => r.ym));
+  const intakeMoAvg = intakeMonths.size ? (intakeCount/intakeMonths.size).toFixed(1) : '—';
+  const perfMoAvg = perfMonthsSet.size ? Math.round(perfTotal/perfMonthsSet.size) : 0;
+
+  document.getElementById('anaKpiIntake').textContent = intakeCount;
+  document.getElementById('anaKpiIntakeAvg').textContent = `月均 ${intakeMoAvg} 件 · 共 ${intakeMonths.size} 個月有進案`;
+  document.getElementById('anaKpiPerf').textContent = fmtMoney(perfTotal);
+  document.getElementById('anaKpiPerfAvg').textContent = perfMonthsSet.size
+    ? `月均 ${fmtMoney(perfMoAvg)} 元 · 共 ${perfMonthsSet.size} 個月有業績`
+    : '尚無業績紀錄';
+
+  // ── 最近進案距今 + 最長斷炊 ──
+  const sortedDates = myIntake.map(r => r.date).sort();
+  const today = new Date(); today.setHours(0,0,0,0);
+  let daysAgo = '—', maxGap = '—';
+  if (sortedDates.length) {
+    const lastDate = new Date(sortedDates[sortedDates.length-1]);
+    daysAgo = Math.round((today - lastDate)/86400000);
+    let gap = 0;
+    for (let i=1; i<sortedDates.length; i++) {
+      const g = (new Date(sortedDates[i]) - new Date(sortedDates[i-1]))/86400000;
+      if (g > gap) gap = g;
+    }
+    maxGap = Math.round(gap);
+  }
+  document.getElementById('anaKpiActive').textContent = daysAgo === '—' ? '—' : daysAgo;
+  document.getElementById('anaKpiSilence').textContent = `歷史最長斷炊 ${maxGap} 天`;
+
+  // ── Tier 2 月度雙軸趨勢 ──
+  const allMonths = new Set([...intakeMonths, ...perfMonthsSet]);
+  const months = [...allMonths].sort();
+  const intakeByMonth = {};
+  myIntake.forEach(r => { const m = r.date.slice(0,7); intakeByMonth[m] = (intakeByMonth[m]||0)+1; });
+  const perfByMonth = {};
+  myPerf.forEach(r => { perfByMonth[r.ym] = (perfByMonth[r.ym]||0)+r.perf; });
+
+  const intakeSeries = months.map(m => intakeByMonth[m]||0);
+  const perfSeries = months.map(m => perfByMonth[m]||0);
+  // 滾動 3 個月均
+  const rolling = (arr, n) => arr.map((_, i) => {
+    const slice = arr.slice(Math.max(0,i-n+1), i+1);
+    return slice.reduce((a,b)=>a+b,0) / slice.length;
+  });
+  const intakeRoll = rolling(intakeSeries, 3);
+  const perfRoll = rolling(perfSeries, 3);
+
+  if (window._anaTrendChart) window._anaTrendChart.destroy();
+  window._anaTrendChart = new Chart(document.getElementById('anaTrendChart'), {
+    data: {
+      labels: months,
+      datasets: [
+        { type:'bar', label:'進案件數', data:intakeSeries, yAxisID:'y1', backgroundColor:'rgba(59,130,246,0.4)', borderColor:'#3b82f6', borderWidth:1, borderRadius:4 },
+        { type:'line', label:'件數 3M 均', data:intakeRoll, yAxisID:'y1', borderColor:'#60a5fa', borderWidth:1.5, borderDash:[4,4], pointRadius:0, fill:false },
+        { type:'line', label:'業績金額', data:perfSeries, yAxisID:'y2', borderColor:'#10b981', backgroundColor:'rgba(16,185,129,0.1)', borderWidth:2.5, tension:0.3, fill:false, pointRadius:3 },
+        { type:'line', label:'業績 3M 均', data:perfRoll, yAxisID:'y2', borderColor:'#34d399', borderWidth:1.5, borderDash:[4,4], pointRadius:0, fill:false },
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      scales:{
+        y1:{position:'left', beginAtZero:true, title:{display:true,text:'件數'}},
+        y2:{position:'right', beginAtZero:true, title:{display:true,text:'業績 (元)'}, grid:{drawOnChartArea:false}, ticks:{callback:v=>fmtMoney(v)}},
+      },
+      plugins:{legend:{position:'top'}}
+    }
+  });
+
+  // ── Tier 3 房型圓餅 ──
+  const layoutGroups = {};
+  myIntake.forEach(r => {
+    const key = classifyLayout(r.layout);
+    layoutGroups[key] = (layoutGroups[key]||0)+1;
+  });
+  const layoutEntries = Object.entries(layoutGroups).sort((a,b)=>b[1]-a[1]);
+  if (window._anaLayoutChart) window._anaLayoutChart.destroy();
+  window._anaLayoutChart = new Chart(document.getElementById('anaLayoutChart'), {
+    type:'doughnut',
+    data:{
+      labels: layoutEntries.map(e=>e[0]),
+      datasets:[{
+        data: layoutEntries.map(e=>e[1]),
+        backgroundColor:['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899','#6b7280'],
+      }]
+    },
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right'}}}
+  });
+
+  // ── Tier 3 區域 TOP 5 ──
+  const districtGroups = {};
+  myIntake.forEach(r => {
+    const key = `${r.city}${r.district}`.trim() || '(未填)';
+    districtGroups[key] = (districtGroups[key]||0)+1;
+  });
+  const districtTop = Object.entries(districtGroups).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const districtMax = districtTop[0]?.[1] || 1;
+  document.getElementById('anaDistrict').innerHTML = districtTop.length
+    ? districtTop.map(([k,v])=>`
+        <div>
+          <div class="flex justify-between text-sm mb-0.5"><span class="font-medium">${esc(k)}</span><span class="text-slate-500">${v} 件</span></div>
+          <div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full" style="width:${(v/districtMax*100)}%"></div></div>
+        </div>`).join('')
+    : '<div class="text-center text-slate-400 py-8">無資料</div>';
+
+  // ── Tier 3 價格帶 ──
+  const bands = [
+    {label:'< 1 萬', min:0, max:10000},
+    {label:'1-2 萬', min:10000, max:20000},
+    {label:'2-3 萬', min:20000, max:30000},
+    {label:'3-5 萬', min:30000, max:50000},
+    {label:'5 萬+', min:50000, max:Infinity},
+  ];
+  const bandCounts = bands.map(b => ({
+    label: b.label,
+    count: myIntake.filter(r => r.rentNum >= b.min && r.rentNum < b.max).length
+  }));
+  const bandMax = Math.max(1, ...bandCounts.map(b=>b.count));
+  document.getElementById('anaPriceBand').innerHTML = bandCounts.map(b=>`
+    <div>
+      <div class="flex justify-between text-sm mb-0.5"><span class="font-medium">${b.label}</span><span class="text-slate-500">${b.count} 件</span></div>
+      <div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-gradient-to-r from-emerald-500 to-teal-500 h-2 rounded-full" style="width:${(b.count/bandMax*100)}%"></div></div>
+    </div>`).join('');
+
+  // ── Tier 3 委託類別 ──
+  const leaseGroups = {};
+  myIntake.forEach(r => { const k = r.leaseType || '(未填)'; leaseGroups[k] = (leaseGroups[k]||0)+1; });
+  const leaseEntries = Object.entries(leaseGroups).sort((a,b)=>b[1]-a[1]);
+  if (window._anaLeaseChart) window._anaLeaseChart.destroy();
+  window._anaLeaseChart = new Chart(document.getElementById('anaLeaseChart'), {
+    type:'doughnut',
+    data:{
+      labels: leaseEntries.map(e=>e[0]),
+      datasets:[{
+        data: leaseEntries.map(e=>e[1]),
+        backgroundColor:['#f59e0b','#8b5cf6','#3b82f6','#10b981','#ec4899','#6b7280'],
+      }]
+    },
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right'}}}
+  });
+
+  // ── Tier 3 平均/中位數月租 ──
+  const rents = myIntake.map(r=>r.rentNum).filter(n=>n>0).sort((a,b)=>a-b);
+  const rentAvg = rents.length ? Math.round(rents.reduce((a,b)=>a+b,0)/rents.length) : 0;
+  const rentMed = rents.length ? (rents.length%2 ? rents[(rents.length-1)/2] : Math.round((rents[rents.length/2-1]+rents[rents.length/2])/2)) : 0;
+  document.getElementById('anaRentAvg').textContent = fmtMoney(rentAvg);
+  document.getElementById('anaRentMed').textContent = fmtMoney(rentMed);
+
+  // ── Tier 5 最佳拍檔 TOP 3 ──
+  const partnerCount = {};
+  myIntake.forEach(r => {
+    (r.devs||[]).forEach(d => {
+      if (d.name !== curStaff) partnerCount[d.name] = (partnerCount[d.name]||0)+1;
+    });
+  });
+  const partners = Object.entries(partnerCount).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  const partnerMax = partners[0]?.[1] || 1;
+  document.getElementById('anaPartners').innerHTML = partners.length
+    ? partners.map(([name,cnt],i)=>`
+        <div class="flex items-center gap-3">
+          <div class="w-8 text-2xl font-black text-center ${['text-amber-500','text-slate-400','text-orange-400'][i]}">${['🥇','🥈','🥉'][i]}</div>
+          <div class="flex-1">
+            <div class="flex justify-between text-sm mb-0.5"><span class="font-bold">${esc(name)}</span><span class="text-slate-500">協作 ${cnt} 件</span></div>
+            <div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-gradient-to-r from-amber-400 to-orange-500 h-2 rounded-full" style="width:${(cnt/partnerMax*100)}%"></div></div>
+          </div>
+        </div>`).join('')
+    : '<div class="text-center text-slate-400 py-6">獨立作戰：無協作紀錄</div>';
+
+  // ── Tier 5 獨立 vs 協作 ──
+  const soloCount = myIntake.filter(r => (r.devs||[]).length === 1).length;
+  const collabCount = myIntake.length - soloCount;
+  const collabPct = myIntake.length ? Math.round(collabCount/myIntake.length*100) : 0;
+  if (window._anaCollabChart) window._anaCollabChart.destroy();
+  window._anaCollabChart = new Chart(document.getElementById('anaCollabChart'), {
+    type:'doughnut',
+    data:{
+      labels:['獨立', '協作'],
+      datasets:[{ data:[soloCount, collabCount], backgroundColor:['#3b82f6','#f59e0b'] }]
+    },
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+  });
+  document.getElementById('anaCollabNote').textContent = myIntake.length
+    ? `協作比例 ${collabPct}%（${collabCount}/${myIntake.length} 件有夥伴）`
+    : '';
+
+  // ── Tier 6 預警 ──
+  const alerts = [];
+  if (daysAgo !== '—') {
+    if (daysAgo > 30) alerts.push({level:'red', text:`🔴 已 ${daysAgo} 天無進案（超過 30 天）`});
+    else if (daysAgo > 14) alerts.push({level:'yellow', text:`🟡 已 ${daysAgo} 天無進案（超過 14 天）`});
+  }
+  if (perfMonthsSet.size === 0 && intakeCount > 0) {
+    alerts.push({level:'yellow', text:`🟡 有 ${intakeCount} 件進案但尚無業績入帳`});
+  }
+  const alertSection = document.getElementById('anaAlertSection');
+  if (alerts.length) {
+    alertSection.classList.remove('hidden');
+    document.getElementById('anaAlerts').innerHTML = alerts.map(a=>{
+      const bg = a.level==='red' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-800';
+      return `<div class="border rounded-lg px-4 py-2 text-sm ${bg}">${a.text}</div>`;
+    }).join('');
+  } else {
+    alertSection.classList.add('hidden');
+  }
+}
+
+function classifyLayout(layout){
+  if (!layout) return '(未填)';
+  // e.g. "3房2廳2衛1廚1陽" → 抓「X房」
+  const m = layout.match(/(\d+)房/);
+  if (!m) return '(未填)';
+  const n = parseInt(m[1]);
+  if (n === 0) return '套房';
+  if (n === 1) return '1 房';
+  if (n === 2) return '2 房';
+  if (n === 3) return '3 房';
+  if (n === 4) return '4 房';
+  return '5 房以上';
 }
 
 // ════════════════════════════════════════
@@ -1680,6 +2032,7 @@ document.getElementById('clEnd').addEventListener('change',()=>{document.querySe
     applyOutreachPreset('thisMonth');
     applyClientPreset('thisMonth');
     renderAd591();
+    renderAnalysis();
 
     // Fade out loading
     const overlay = document.getElementById('loadingOverlay');
