@@ -87,10 +87,22 @@
   <!-- ── 進案量 & 業績 ── -->
   <div class="tab-panel active" id="panel-month">
     <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
-      <div class="flex flex-wrap gap-2">
-        <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-m="thisMonth">本月</span>
-        <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-m="lastMonth">上月</span>
-        <span id="mMonthChips" class="contents"></span>
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-500">起</label>
+          <input id="mStart" type="date" class="border border-slate-200 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-500">迄</label>
+          <input id="mEnd" type="date" class="border border-slate-200 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div class="flex flex-wrap gap-2 ml-auto">
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-m="thisWeek">本週</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-m="lastWeek">上週</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-m="thisMonth">本月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-m="lastMonth">上月</span>
+          <span id="mMonthChips" class="contents"></span>
+        </div>
       </div>
       <p id="mSourceNote" class="text-xs text-slate-400 mt-3"></p>
     </section>
@@ -701,16 +713,17 @@ function toPerfRecords(rawData) {
     const parts = dateStr.split('/');
     if (parts.length < 2) continue;
     const ym = `${parts[0]}-${String(parseInt(parts[1])).padStart(2, '0')}`;
+    const date = dateStr.slice(0,10).replaceAll('/', '-');
     for (const row of Object.values(rec['_subtable_1001701'] || {})) {
       if (PERF_SERVICE_TYPES_LANDLORD.has((row['類型']||'').trim())) {
         const amt = parseInt(parseFloat(row['金額'] || 0)) || 0;
-        if (amt > 0) records.push({ ym, name: staff, perf: amt });
+        if (amt > 0) records.push({ date, ym, name: staff, perf: amt });
       }
     }
     for (const row of Object.values(rec['_subtable_1000777'] || {})) {
       if (PERF_SERVICE_TYPES_TENANT.has((row['類型']||'').trim())) {
         const amt = parseInt(parseFloat(row['金額'] || 0)) || 0;
-        if (amt > 0) records.push({ ym, name: staff, perf: amt });
+        if (amt > 0) records.push({ date, ym, name: staff, perf: amt });
       }
     }
   }
@@ -1113,8 +1126,7 @@ function buildStaffSelector(){
 
 function refreshAll(){
   const d=new Date();
-  const curMonthChip = document.querySelector('[data-m].active');
-  if(curMonthChip) renderMonth(curMonthChip.dataset.m); else renderMonth(ym(d));
+  renderPerfIntake();
   renderAnalysis();
   renderInventory();
   renderOutreach();
@@ -1317,25 +1329,25 @@ function renderLastCase(){
 }
 
 // ════════════════════════════════════════
-// 進案量 & 業績（月）
+// 進案量 & 業績（日期範圍）
 // ════════════════════════════════════════
 let perfMonths = [];
 
-function renderMonth(targetYm){
-  // ── 業績（全部門）──
-  const perfRows = PERF.filter(r=>r.ym===targetYm);
-  const perfCounter = {};
-  perfRows.forEach(r=>{ perfCounter[r.name]=(perfCounter[r.name]||0)+r.perf; });
-  const perfTotal = Object.values(perfCounter).reduce((a,b)=>a+b,0);
+function renderPerfIntake(){
+  const start = document.getElementById('mStart').value;
+  const end = document.getElementById('mEnd').value;
+  if (!start || !end || start > end) return;
 
-  // ── 進案量（月內進案件數，全部門）──
-  const [y, mo] = targetYm.split('-');
-  const lastDay = new Date(parseInt(y), parseInt(mo), 0).getDate();
-  const monthStart = `${targetYm}-01`;
-  const monthEnd = `${targetYm}-${String(lastDay).padStart(2,'0')}`;
-  const intakeRows = INTAKE.filter(r=>r.date>=monthStart && r.date<=monthEnd);
+  // ── 業績（用 Ragic 逐日 payments/2 資料，讓週/日粒度精準）──
+  const perfRows = PERF_RAGIC.filter(r => r.date >= start && r.date <= end);
+  const perfCounter = {};
+  perfRows.forEach(r => { perfCounter[r.name] = (perfCounter[r.name]||0) + r.perf; });
+  const perfTotal = Object.values(perfCounter).reduce((a,b) => a+b, 0);
+
+  // ── 進案量（逐日 INTAKE）──
+  const intakeRows = INTAKE.filter(r => r.date >= start && r.date <= end);
   const intakeCounter = {};
-  intakeRows.forEach(r=>(r.devs||[]).forEach(d=>{ intakeCounter[d.name]=(intakeCounter[d.name]||0)+d.ratio; }));
+  intakeRows.forEach(r => (r.devs||[]).forEach(d => { intakeCounter[d.name] = (intakeCounter[d.name]||0) + d.ratio; }));
 
   // ── KPIs ──
   document.getElementById('mKpiIntake').textContent    = intakeRows.length;
@@ -1344,16 +1356,10 @@ function renderMonth(targetYm){
   document.getElementById('mKpiPerfPpl').textContent   = Object.keys(perfCounter).length;
 
   // ── 資料來源註記 ──
-  const thisYm = ym(new Date());
   const srcNote = document.getElementById('mSourceNote');
   if (srcNote) {
-    if (targetYm === thisYm && PERF_GSHEET_AVAILABLE) {
-      srcNote.innerHTML = `📊 業績：珊珊 GSheet 快照（${PERF_SNAPSHOT_TIME}）· 進案量：Ragic operation/4 即時`;
-    } else if (targetYm === thisYm) {
-      srcNote.innerHTML = `⚠️ 業績快照讀取失敗，暫以 Ragic payments/2 為準 · 進案量：Ragic operation/4 即時`;
-    } else {
-      srcNote.innerHTML = `📁 業績：OB 業績表（月底封存）· 進案量：Ragic operation/4 即時`;
-    }
+    const snapNote = PERF_SNAPSHOT_TIME ? `· 珊珊 GSheet 當月快照 ${PERF_SNAPSHOT_TIME}` : '';
+    srcNote.innerHTML = `📊 業績：Ragic payments/2 逐日收款紀錄（開會用精準到日）· 進案量：Ragic operation/4 逐日 ${snapNote}`;
   }
 
   // ── Rankings ──
@@ -1361,14 +1367,14 @@ function renderMonth(targetYm){
   const perfItems = Object.entries(perfCounter).sort((a,b)=>b[1]-a[1]);
   document.getElementById('mIntakeRanking').innerHTML = intakeItems.length
     ? rankHtml(intakeItems, fmtN, '間')
-    : '<div class="text-center text-slate-400 py-4">此月無進案</div>';
+    : '<div class="text-center text-slate-400 py-4">此區間無進案</div>';
   document.getElementById('mPerfRanking').innerHTML = perfItems.length
     ? rankHtml(perfItems, fmtMoney, '元')
-    : '<div class="text-center text-slate-400 py-4">此月無業績</div>';
+    : '<div class="text-center text-slate-400 py-4">此區間無業績</div>';
 
   // ── 進案明細 ──
   document.getElementById('mDetail').innerHTML = intakeRows.length===0
-    ? '<div class="text-center text-slate-400 py-8">此月無進案</div>'
+    ? '<div class="text-center text-slate-400 py-8">此區間無進案</div>'
     : `<table class="w-full"><thead><tr class="text-left text-xs font-semibold text-slate-500 uppercase border-b-2 border-slate-200"><th class="py-2 px-2">委託日</th><th class="py-2 px-2">案名</th><th class="py-2 px-2">狀態</th><th class="py-2 px-2">地區</th><th class="py-2 px-2 text-right">月租</th><th class="py-2 px-2">開發人員</th></tr></thead><tbody>${
       intakeRows.map(r=>{
         const off=r.status==='下架';
@@ -1377,12 +1383,18 @@ function renderMonth(targetYm){
         return `<tr class="border-b border-slate-100 hover:bg-slate-50 ${rowCls}"><td class="py-3 px-2 text-sm whitespace-nowrap">${esc(r.date)}</td><td class="py-3 px-2 font-medium ${off?'line-through':''}">${esc(r.name)}</td><td class="py-3 px-2">${tag}</td><td class="py-3 px-2 text-sm">${esc(r.city+' '+r.district)}</td><td class="py-3 px-2 text-right font-mono">${esc(r.rent)}</td><td class="py-3 px-2 text-sm">${esc(r.people)}</td></tr>`;
       }).join('')
     }</tbody></table>`;
+}
 
-  document.querySelectorAll('[data-m]').forEach(c=>c.classList.toggle('active', c.dataset.m===targetYm));
+function applyMonthPreset(name){
+  const [s,e] = datePresets[name]();
+  document.getElementById('mStart').value = ymd(s);
+  document.getElementById('mEnd').value = ymd(e);
+  document.querySelectorAll('[data-m]').forEach(c => c.classList.toggle('active', c.dataset.m === name));
+  renderPerfIntake();
 }
 
 function buildMonthChips(){
-  // 合併 PERF（含 GSheet 當月）+ INTAKE（進案當月）的所有月份
+  // 歷史月份快捷（INTAKE + PERF 的所有月份）
   const months = new Set(PERF.map(r=>r.ym));
   for (const r of INTAKE) if (r.date && r.date.length >= 7) months.add(r.date.slice(0,7));
   perfMonths = [...months].filter(Boolean).sort();
@@ -1393,17 +1405,32 @@ function buildMonthChips(){
     el.className='chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium';
     el.dataset.m = m;
     el.textContent = m;
-    el.addEventListener('click',()=>renderMonth(m));
+    el.addEventListener('click',()=>{
+      const [y, mo] = m.split('-').map(Number);
+      const firstDay = `${m}-01`;
+      const lastDayObj = new Date(y, mo, 0);
+      const lastDay = ymd(lastDayObj);
+      document.getElementById('mStart').value = firstDay;
+      document.getElementById('mEnd').value = lastDay;
+      document.querySelectorAll('[data-m]').forEach(c=>c.classList.remove('active'));
+      el.classList.add('active');
+      renderPerfIntake();
+    });
     container.appendChild(el);
   });
 }
 
-document.querySelectorAll('[data-m="thisMonth"]').forEach(c=>c.addEventListener('click',()=>{
-  const d=new Date(); renderMonth(ym(d));
-}));
-document.querySelectorAll('[data-m="lastMonth"]').forEach(c=>c.addEventListener('click',()=>{
-  const d=new Date(new Date().getFullYear(), new Date().getMonth()-1, 1); renderMonth(ym(d));
-}));
+document.querySelectorAll('[data-m="thisWeek"],[data-m="lastWeek"],[data-m="thisMonth"],[data-m="lastMonth"]').forEach(c =>
+  c.addEventListener('click', () => applyMonthPreset(c.dataset.m))
+);
+document.getElementById('mStart').addEventListener('change', () => {
+  document.querySelectorAll('[data-m]').forEach(c=>c.classList.remove('active'));
+  renderPerfIntake();
+});
+document.getElementById('mEnd').addEventListener('change', () => {
+  document.querySelectorAll('[data-m]').forEach(c=>c.classList.remove('active'));
+  renderPerfIntake();
+});
 
 // ════════════════════════════════════════
 // 🔬 業務分析
@@ -2125,7 +2152,7 @@ document.getElementById('clEnd').addEventListener('change',()=>{document.querySe
     buildMonthChips();
     buildCompareChips();
     renderLastCase();
-    (()=>{const d=new Date(); renderMonth(ym(d));})();
+    applyMonthPreset('thisMonth');
     if(compareMonths.length) renderCompare(compareMonths[0]);
     renderInventory();
     applyOutreachPreset('thisMonth');
