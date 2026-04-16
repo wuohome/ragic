@@ -625,8 +625,8 @@ const API_KEY  = 'VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE
 const API_BASE = 'https://ap15.ragic.com/wuohome';
 const LOOKBACK_DAYS = 365;
 
-const PERF_SERVICE_TYPES_LANDLORD = new Set(['房東服務費']);
-const PERF_SERVICE_TYPES_TENANT   = new Set(['服務費', '定金轉服務費']);
+const PERF_SERVICE_TYPES_LANDLORD = new Set(['房東服務費', '退房東服務費']);
+const PERF_SERVICE_TYPES_TENANT   = new Set(['服務費', '定金轉服務費', '退定金', '退服務費']);
 
 const EXCLUDE_DEVS     = new Set(['張瓊安', 'minor', '孟書', '廖崇勝', '陳泳竹']);
 const EXCLUDE_KEYWORDS = ['測試'];
@@ -714,16 +714,20 @@ function toPerfRecords(rawData) {
     if (parts.length < 2) continue;
     const ym = `${parts[0]}-${String(parseInt(parts[1])).padStart(2, '0')}`;
     const date = dateStr.slice(0,10).replaceAll('/', '-');
+    // 業績 = 所有相關類型加總（含負數沖銷）：
+    //   房東端：房東服務費
+    //   租客端：服務費 / 定金轉服務費(負數沖銷) / 退定金(負數)
+    // 拿掉 amt > 0 過濾讓負數生效，業績才會正確扣除退定與沖銷
     for (const row of Object.values(rec['_subtable_1001701'] || {})) {
       if (PERF_SERVICE_TYPES_LANDLORD.has((row['類型']||'').trim())) {
         const amt = parseInt(parseFloat(row['金額'] || 0)) || 0;
-        if (amt > 0) records.push({ date, ym, name: staff, perf: amt });
+        if (amt !== 0) records.push({ date, ym, name: staff, perf: amt });
       }
     }
     for (const row of Object.values(rec['_subtable_1000777'] || {})) {
       if (PERF_SERVICE_TYPES_TENANT.has((row['類型']||'').trim())) {
         const amt = parseInt(parseFloat(row['金額'] || 0)) || 0;
-        if (amt > 0) records.push({ date, ym, name: staff, perf: amt });
+        if (amt !== 0) records.push({ date, ym, name: staff, perf: amt });
       }
     }
   }
