@@ -1338,13 +1338,15 @@ function renderPerfIntake(){
   const end = document.getElementById('mEnd').value;
   if (!start || !end || start > end) return;
 
-  // ── 業績（用 Ragic 逐日 payments/2 資料，讓週/日粒度精準）──
-  const perfRows = PERF_RAGIC.filter(r => r.date >= start && r.date <= end);
+  // ── 業績：用 PERF（GSheet 快照 + perf.md）取涵蓋月份的月累計，這樣心瑜 GSheet 記的 58,000 才撈得到 ──
+  const startYm = start.slice(0,7);
+  const endYm = end.slice(0,7);
+  const perfRows = PERF.filter(r => r.ym >= startYm && r.ym <= endYm);
   const perfCounter = {};
   perfRows.forEach(r => { perfCounter[r.name] = (perfCounter[r.name]||0) + r.perf; });
   const perfTotal = Object.values(perfCounter).reduce((a,b) => a+b, 0);
 
-  // ── 進案量（逐日 INTAKE）──
+  // ── 進案量（逐日 INTAKE，這個有日精度）──
   const intakeRows = INTAKE.filter(r => r.date >= start && r.date <= end);
   const intakeCounter = {};
   intakeRows.forEach(r => (r.devs||[]).forEach(d => { intakeCounter[d.name] = (intakeCounter[d.name]||0) + d.ratio; }));
@@ -1358,8 +1360,9 @@ function renderPerfIntake(){
   // ── 資料來源註記 ──
   const srcNote = document.getElementById('mSourceNote');
   if (srcNote) {
-    const snapNote = PERF_SNAPSHOT_TIME ? `· 珊珊 GSheet 當月快照 ${PERF_SNAPSHOT_TIME}` : '';
-    srcNote.innerHTML = `📊 業績：Ragic payments/2 逐日收款紀錄（開會用精準到日）· 進案量：Ragic operation/4 逐日 ${snapNote}`;
+    const coveredMonths = startYm === endYm ? startYm : `${startYm} ~ ${endYm}`;
+    const snapNote = PERF_SNAPSHOT_TIME ? `（珊珊 GSheet 快照 ${PERF_SNAPSHOT_TIME}）` : '';
+    srcNote.innerHTML = `📊 業績：涵蓋月份 ${coveredMonths} 的月累計 ${snapNote} · 進案量：滑軌區間逐日`;
   }
 
   // ── Rankings ──
