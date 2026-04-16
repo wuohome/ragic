@@ -148,20 +148,35 @@
     </div>
 
     <div id="anaContent" class="hidden">
-      <!-- 月份選擇器（slider + chips）-->
+      <!-- 時間範圍：起始 / 結束 雙滑軌 -->
       <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
-        <div class="flex items-center gap-4 mb-3">
+        <div class="flex items-center gap-4 mb-4">
           <div class="text-slate-500 text-sm">📅 時間範圍</div>
           <div id="anaRangeLabel" class="text-lg font-bold text-slate-900">—</div>
           <div id="anaRangeStat" class="text-xs text-slate-400 ml-auto"></div>
         </div>
-        <input id="anaRangeSlider" type="range" min="0" max="0" value="0" step="1" class="w-full accent-blue-600 mb-3" />
+
+        <div class="mb-3">
+          <div class="flex justify-between text-xs text-slate-500 mb-1">
+            <span>起始月份</span>
+            <span id="anaStartLabel" class="font-mono text-slate-700">—</span>
+          </div>
+          <input id="anaStartSlider" type="range" min="0" max="0" value="0" step="1" class="w-full accent-blue-600" />
+        </div>
+
+        <div class="mb-4">
+          <div class="flex justify-between text-xs text-slate-500 mb-1">
+            <span>結束月份</span>
+            <span id="anaEndLabel" class="font-mono text-slate-700">—</span>
+          </div>
+          <input id="anaEndSlider" type="range" min="0" max="0" value="0" step="1" class="w-full accent-emerald-600" />
+        </div>
+
         <div class="flex flex-wrap gap-2">
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-ana-preset="thisMonth">本月</span>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-ana-preset="lastMonth">上月</span>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-ana-preset="3M">近 3 個月</span>
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-ana-preset="6M">近 6 個月</span>
-          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-ana-preset="all">全部歷史</span>
           <span id="anaMonthChips" class="contents"></span>
         </div>
       </section>
@@ -942,16 +957,29 @@ async function fetchAllData() {
     PERF_GSHEET_AVAILABLE = true;
   }
 
-  // Build active staff set
+  // Build active staff set：只接受 HR 在職員工本名 + 白名單合併名
+  // 避免下拉選單出現「吳惠慈、關宗宇」「張忠豪、蕭眞儀、詹張傳」這種混合字串
+  const hrValid = new Set();
+  for (const rec of Object.values(rawHr)) {
+    const name = (rec['姓名'] || '').trim();
+    const status = (rec['在職狀態'] || rec['狀態'] || '').trim();
+    if (name && (status === '在職' || status === '試用')) hrValid.add(name);
+  }
+  const MERGED_NAMES = new Set(['張忠豪&蕭眞儀']);  // 合法合併
+  const validNames = new Set([...hrValid, ...MERGED_NAMES]);
+
   const allStaff = new Set();
-  for (const r of INTAKE) for (const d of (r.devs||[])) allStaff.add(d.name);
-  for (const r of perfOb) allStaff.add(r.name);
-  for (const r of INVENTORY) for (const d of (r.devs||[])) allStaff.add(d.name);
-  for (const r of OUTREACH) if (r.dev) allStaff.add(r.dev);
-  for (const r of CLIENTS) if (r.staff) allStaff.add(r.staff);
-  for (const n of inactive) allStaff.delete(n);
+  const addIfValid = (n) => {
+    if (!n) return;
+    const norm = normalizeName(String(n).trim());
+    if (validNames.has(norm)) allStaff.add(norm);
+  };
+  for (const r of INTAKE) for (const d of (r.devs||[])) addIfValid(d.name);
+  for (const r of perfOb) addIfValid(r.name);
+  for (const r of INVENTORY) for (const d of (r.devs||[])) addIfValid(d.name);
+  for (const r of OUTREACH) addIfValid(r.dev);
+  for (const r of CLIENTS) addIfValid(r.staff);
   for (const n of EXCLUDE_DEVS) allStaff.delete(n);
-  allStaff.delete(''); allStaff.delete('合計');
   ACTIVE_STAFF = allStaff;
 }
 
@@ -1352,26 +1380,51 @@ document.querySelectorAll('[data-m="lastMonth"]').forEach(c=>c.addEventListener(
 // ════════════════════════════════════════
 // 🔬 業務分析
 // ════════════════════════════════════════
-let anaRange = { type: 'thisMonth', ym: '' };
 let anaAllMonths = [];
+let anaStartIdx = 0;
+let anaEndIdx = 0;
 
 function getAnaBounds(){
+  const start = anaAllMonths[anaStartIdx] || '';
+  const end = anaAllMonths[anaEndIdx] || '';
+  const label = (start === end) ? start : `${start} ~ ${end}`;
+  return { start, end, label };
+}
+
+function setAnaPreset(type){
+  if (!anaAllMonths.length) return;
   const today = new Date();
   const thisYm = ym(today);
-  if (anaRange.type === 'all') return { start:'0000-00', end:'9999-99', label:'全部歷史' };
-  if (anaRange.type === 'specific') return { start:anaRange.ym, end:anaRange.ym, label:anaRange.ym };
-  if (anaRange.type === 'thisMonth') return { start:thisYm, end:thisYm, label:`本月 ${thisYm}` };
-  if (anaRange.type === 'lastMonth') {
-    const d = new Date(today.getFullYear(), today.getMonth()-1, 1);
-    const m = ym(d);
-    return { start:m, end:m, label:`上月 ${m}` };
+  const thisIdx = anaAllMonths.indexOf(thisYm);
+  const lastMonthDate = new Date(today.getFullYear(), today.getMonth()-1, 1);
+  const lastYm = ym(lastMonthDate);
+  const lastIdx = anaAllMonths.indexOf(lastYm);
+
+  if (type === 'thisMonth') {
+    const i = thisIdx >= 0 ? thisIdx : anaAllMonths.length - 1;
+    anaStartIdx = i; anaEndIdx = i;
+  } else if (type === 'lastMonth') {
+    const i = lastIdx >= 0 ? lastIdx : Math.max(0, anaAllMonths.length - 2);
+    anaStartIdx = i; anaEndIdx = i;
+  } else if (type === '3M' || type === '6M') {
+    const n = type === '3M' ? 3 : 6;
+    const startDate = new Date(today.getFullYear(), today.getMonth()-n+1, 1);
+    const startYmVal = ym(startDate);
+    // 找大於等於 startYmVal 的第一個 index
+    let s = 0;
+    for (let i = 0; i < anaAllMonths.length; i++) {
+      if (anaAllMonths[i] >= startYmVal) { s = i; break; }
+    }
+    anaStartIdx = s;
+    anaEndIdx = thisIdx >= 0 ? thisIdx : anaAllMonths.length - 1;
   }
-  if (anaRange.type === '3M' || anaRange.type === '6M') {
-    const n = anaRange.type === '3M' ? 3 : 6;
-    const d = new Date(today.getFullYear(), today.getMonth()-n+1, 1);
-    return { start:ym(d), end:thisYm, label:`近 ${n} 個月` };
-  }
-  return { start:'0000-00', end:'9999-99', label:'全部歷史' };
+  syncSlidersFromRange();
+  renderAnalysis();
+}
+
+function syncSlidersFromRange(){
+  document.getElementById('anaStartSlider').value = anaStartIdx;
+  document.getElementById('anaEndSlider').value = anaEndIdx;
 }
 
 function initAnaRangeUI(){
@@ -1380,13 +1433,22 @@ function initAnaRangeUI(){
   for (const r of INTAKE) if (r.date?.length >= 7) months.add(r.date.slice(0,7));
   for (const r of PERF) if (r.ym) months.add(r.ym);
   anaAllMonths = [...months].filter(Boolean).sort();
+  if (!anaAllMonths.length) return;
 
-  // slider max = months.length - 1
-  const slider = document.getElementById('anaRangeSlider');
-  slider.max = Math.max(0, anaAllMonths.length - 1);
-  slider.value = slider.max;  // 預設最新月份
+  const startSlider = document.getElementById('anaStartSlider');
+  const endSlider = document.getElementById('anaEndSlider');
+  startSlider.max = anaAllMonths.length - 1;
+  endSlider.max = anaAllMonths.length - 1;
 
-  // 月份 chips（除了已硬編的 preset 外，加最近 6 個月的具體月份）
+  // 預設「本月」
+  const thisYm = ym(new Date());
+  const thisIdx = anaAllMonths.indexOf(thisYm);
+  const defaultIdx = thisIdx >= 0 ? thisIdx : anaAllMonths.length - 1;
+  anaStartIdx = defaultIdx;
+  anaEndIdx = defaultIdx;
+  syncSlidersFromRange();
+
+  // 月份 chips（最近 6 個月）
   const container = document.getElementById('anaMonthChips');
   container.innerHTML = '';
   anaAllMonths.slice().reverse().slice(0, 6).forEach(m => {
@@ -1395,35 +1457,27 @@ function initAnaRangeUI(){
     el.dataset.anaMonth = m;
     el.textContent = m;
     el.addEventListener('click', () => {
-      anaRange = { type:'specific', ym:m };
-      const idx = anaAllMonths.indexOf(m);
-      if (idx >= 0) slider.value = idx;
-      renderAnalysis();
+      const i = anaAllMonths.indexOf(m);
+      if (i >= 0) { anaStartIdx = i; anaEndIdx = i; syncSlidersFromRange(); renderAnalysis(); }
     });
     container.appendChild(el);
   });
 
   // Preset chips
   document.querySelectorAll('[data-ana-preset]').forEach(c => {
-    c.addEventListener('click', () => {
-      anaRange = { type: c.dataset.anaPreset, ym: '' };
-      // Slider 移到對應位置
-      if (anaRange.type === 'thisMonth' || anaRange.type === '3M' || anaRange.type === '6M' || anaRange.type === 'all') {
-        slider.value = slider.max;
-      } else if (anaRange.type === 'lastMonth' && anaAllMonths.length >= 2) {
-        slider.value = anaAllMonths.length - 2;
-      }
-      renderAnalysis();
-    });
+    c.addEventListener('click', () => setAnaPreset(c.dataset.anaPreset));
   });
 
-  // Slider 拖動
-  slider.addEventListener('input', () => {
-    const idx = parseInt(slider.value);
-    if (anaAllMonths[idx]) {
-      anaRange = { type:'specific', ym: anaAllMonths[idx] };
-      renderAnalysis();
-    }
+  // 雙滑軌：拖動時自動保證 start <= end
+  startSlider.addEventListener('input', () => {
+    anaStartIdx = parseInt(startSlider.value);
+    if (anaStartIdx > anaEndIdx) { anaEndIdx = anaStartIdx; endSlider.value = anaEndIdx; }
+    renderAnalysis();
+  });
+  endSlider.addEventListener('input', () => {
+    anaEndIdx = parseInt(endSlider.value);
+    if (anaEndIdx < anaStartIdx) { anaStartIdx = anaEndIdx; startSlider.value = anaStartIdx; }
+    renderAnalysis();
   });
 }
 
@@ -1454,11 +1508,13 @@ function renderAnalysis(){
   document.getElementById('anaRangeStat').textContent =
     `範圍內 ${myIntake.length} 件進案 · ${fmtMoney(myPerf.reduce((a,r)=>a+r.perf,0))} 元業績`;
 
-  // Preset / month chips 的 active 狀態
-  document.querySelectorAll('[data-ana-preset]').forEach(c =>
-    c.classList.toggle('active', c.dataset.anaPreset === anaRange.type));
+  // 顯示起始/結束月份 label
+  document.getElementById('anaStartLabel').textContent = bounds.start || '—';
+  document.getElementById('anaEndLabel').textContent = bounds.end || '—';
+
+  // Month chips 的 active 狀態（單月選中時）
   document.querySelectorAll('[data-ana-month]').forEach(c =>
-    c.classList.toggle('active', anaRange.type === 'specific' && c.dataset.anaMonth === anaRange.ym));
+    c.classList.toggle('active', bounds.start === bounds.end && c.dataset.anaMonth === bounds.start));
 
   // ── Tier 1 北極星 ──
   const intakeCount = myIntake.length;
