@@ -66,7 +66,6 @@
     <div class="tab pb-3 text-lg px-1" data-tab="ad591">📢 591 廣告</div>
     <div class="tab pb-3 text-lg px-1" data-tab="outreach">📞 開發追蹤</div>
     <div class="tab pb-3 text-lg px-1" data-tab="clients">👥 客戶來源</div>
-    <div class="tab pb-3 text-lg px-1" data-tab="year">📊 年度總覽</div>
     <div class="tab pb-3 text-lg px-1" data-tab="analysis">🔬 業務分析</div>
     <div class="tab pb-3 text-lg px-1" data-tab="compare">⚖️ 資料比對</div>
   </div>
@@ -140,45 +139,6 @@
   </div>
 
   <!-- ── 年度總覽 ── -->
-  <div class="tab-panel" id="panel-year">
-    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
-      <div class="flex flex-wrap gap-2" id="yYearChips"></div>
-    </section>
-
-    <section class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-        <div class="text-slate-500 text-sm mb-1">年度全店業績</div>
-        <div class="flex items-baseline gap-2">
-          <div id="yKpiPerf" class="text-4xl font-black text-blue-600">0</div>
-          <div class="text-slate-400">元</div>
-        </div>
-      </div>
-      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-        <div class="text-slate-500 text-sm mb-1">年度進案量</div>
-        <div class="flex items-baseline gap-2">
-          <div id="yKpiIntake" class="text-4xl font-black text-purple-600">0</div>
-          <div class="text-slate-400">件</div>
-        </div>
-      </div>
-    </section>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-      <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
-        <h2 class="text-xl font-bold text-slate-900 mb-6">💰 業績排行</h2>
-        <div id="yPerfRanking" class="space-y-3"></div>
-      </section>
-      <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
-        <h2 class="text-xl font-bold text-slate-900 mb-6">📦 開發量排行</h2>
-        <div id="yIntakeRanking" class="space-y-3"></div>
-      </section>
-    </div>
-
-    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
-      <h2 class="text-xl font-bold text-slate-900 mb-6">📈 月度趨勢</h2>
-      <div class="relative" style="height:300px"><canvas id="yTrendChart"></canvas></div>
-    </section>
-  </div>
-
   <!-- ── 業務分析 ── -->
   <div class="tab-panel" id="panel-analysis">
     <div id="anaEmpty" class="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center hidden">
@@ -188,10 +148,28 @@
     </div>
 
     <div id="anaContent" class="hidden">
+      <!-- 月份選擇器（slider + chips）-->
+      <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+        <div class="flex items-center gap-4 mb-3">
+          <div class="text-slate-500 text-sm">📅 時間範圍</div>
+          <div id="anaRangeLabel" class="text-lg font-bold text-slate-900">—</div>
+          <div id="anaRangeStat" class="text-xs text-slate-400 ml-auto"></div>
+        </div>
+        <input id="anaRangeSlider" type="range" min="0" max="0" value="0" step="1" class="w-full accent-blue-600 mb-3" />
+        <div class="flex flex-wrap gap-2">
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-ana-preset="thisMonth">本月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-ana-preset="lastMonth">上月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-ana-preset="3M">近 3 個月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-ana-preset="6M">近 6 個月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-ana-preset="all">全部歷史</span>
+          <span id="anaMonthChips" class="contents"></span>
+        </div>
+      </section>
+
       <!-- Tier 1 北極星 -->
       <section class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
         <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-          <div class="text-slate-500 text-sm mb-1">📦 累計進案</div>
+          <div class="text-slate-500 text-sm mb-1">📦 進案件數</div>
           <div class="flex items-baseline gap-2">
             <div id="anaKpiIntake" class="text-4xl font-black text-blue-600">0</div>
             <div class="text-slate-400">件</div>
@@ -199,7 +177,7 @@
           <div id="anaKpiIntakeAvg" class="text-xs text-slate-400 mt-1">月均 — 件</div>
         </div>
         <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-          <div class="text-slate-500 text-sm mb-1">💰 累計業績</div>
+          <div class="text-slate-500 text-sm mb-1">💰 業績金額</div>
           <div class="flex items-baseline gap-2">
             <div id="anaKpiPerf" class="text-4xl font-black text-emerald-600">0</div>
             <div class="text-slate-400">元</div>
@@ -1080,8 +1058,6 @@ function refreshAll(){
   const curMonthChip = document.querySelector('[data-m].active');
   if(curMonthChip) renderMonth(curMonthChip.dataset.m); else renderMonth(ym(d));
   renderAnalysis();
-  const curYearChip = document.querySelector('[data-y].active');
-  if(curYearChip) renderYear(curYearChip.dataset.y); else if(allYears.length) renderYear(allYears[0]);
   renderInventory();
   renderOutreach();
   renderClients();
@@ -1247,7 +1223,6 @@ function ad591TopOwners(items,emptyText){
 // ── Tab ──
 const TAB_DESC = {
   month:'當月進案件數與業績金額對照，當月業績即時來自珊珊 GSheet、歷史來自 OB 業績表',
-  year:'全年度各月業績趨勢與累計排行',
   analysis:'單一業務戰力側寫：北極星 KPI、時序趨勢、接案偏好、協作動態',
   compare:'Ragic 資料與 OB 業績表的交叉比對，找出差異',
   inventory:'目前所有在架物件的庫存狀態，庫存越多代表待消化越多',
@@ -1375,105 +1350,83 @@ document.querySelectorAll('[data-m="lastMonth"]').forEach(c=>c.addEventListener(
 }));
 
 // ════════════════════════════════════════
-// 年度總覽
-// ════════════════════════════════════════
-let allYears = [];
-
-function renderYear(year){
-  let perfRows = PERF.filter(r=>r.ym.startsWith(year));
-  if(curStaff) perfRows=perfRows.filter(r=>r.name===curStaff);
-  const perfCounter = {};
-  perfRows.forEach(r=>{ perfCounter[r.name]=(perfCounter[r.name]||0)+r.perf; });
-  const perfTotal = Object.values(perfCounter).reduce((a,b)=>a+b,0);
-  let intakeRows = INTAKE.filter(r=>r.date.startsWith(year));
-  if(curStaff) intakeRows=intakeRows.filter(r=>(r.devs||[]).some(d=>d.name===curStaff));
-  const intakeCounter = {};
-  intakeRows.forEach(r=>(r.devs||[]).forEach(d=>{ intakeCounter[d.name]=(intakeCounter[d.name]||0)+d.ratio; }));
-  document.getElementById('yKpiPerf').textContent   = fmtMoney(perfTotal);
-  document.getElementById('yKpiIntake').textContent = intakeRows.length;
-  const perfItems   = Object.entries(perfCounter).sort((a,b)=>b[1]-a[1]);
-  const intakeItems = Object.entries(intakeCounter).sort((a,b)=>b[1]-a[1]);
-  document.getElementById('yPerfRanking').innerHTML   = rankHtml(perfItems,   fmtMoney,'元');
-  document.getElementById('yIntakeRanking').innerHTML = rankHtml(intakeItems, fmtN,    '間');
-
-  const SYSTEM_START = '2025-12';
-  const months=[];
-  for(let m=1;m<=12;m++) months.push(`${year}-${String(m).padStart(2,'0')}`);
-  const perfData   = months.map(m=>PERF.filter(r=>r.ym===m).reduce((a,r)=>a+r.perf,0));
-  const intakeData = months.map(m=>m<SYSTEM_START ? null : INTAKE.filter(r=>r.date.startsWith(m)).length);
-  const labels     = months.map(m=>m.slice(5)+'月');
-  const noDataPlugin = {
-    id:'noData',
-    beforeDraw(chart){
-      const {ctx, chartArea, scales} = chart;
-      if(!chartArea) return;
-      const xs = scales.x;
-      const preIdxs = months.reduce((a,m,i)=>{ if(m<SYSTEM_START) a.push(i); return a; },[]);
-      if(!preIdxs.length) return;
-      const barW = xs.width / months.length;
-      ctx.save();
-      ctx.fillStyle = 'rgba(148,163,184,0.13)';
-      preIdxs.forEach(i=>{
-        const cx = xs.getPixelForValue(i);
-        ctx.fillRect(cx-barW/2, chartArea.top, barW, chartArea.height);
-      });
-      const midI = preIdxs[Math.floor(preIdxs.length/2)];
-      const midX = xs.getPixelForValue(midI);
-      const midY = chartArea.top + chartArea.height/2;
-      ctx.fillStyle = 'rgba(100,116,139,0.55)';
-      ctx.font = 'bold 12px "Noto Sans TC",sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('進案量無資料', midX, midY);
-      ctx.restore();
-    }
-  };
-  if(window._trendChart) window._trendChart.destroy();
-  window._trendChart = new Chart(document.getElementById('yTrendChart'),{
-    type:'line',
-    data:{
-      labels,
-      datasets:[
-        {label:'業績（元）',data:perfData,borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,0.08)',fill:true,tension:0.35,pointRadius:4,pointHoverRadius:6,spanGaps:false,yAxisID:'yPerf'},
-        {type:'bar',label:'進案量（間）',data:intakeData,backgroundColor:'rgba(16,185,129,0.25)',borderColor:'#10b981',borderWidth:1.5,borderRadius:4,yAxisID:'yIntake'}
-      ]
-    },
-    plugins:[noDataPlugin],
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
-      plugins:{
-        legend:{position:'top',labels:{font:{size:13}}},
-        tooltip:{filter:item=>item.parsed.y!==null,callbacks:{label:ctx=>ctx.dataset.yAxisID==='yPerf'?'業績 '+fmtMoney(ctx.parsed.y):'進案 '+fmtN(ctx.parsed.y)+'間'}}
-      },
-      scales:{
-        yPerf:{type:'linear',position:'left',ticks:{callback:v=>v===0?'0':fmtMoney(v),font:{size:11}},grid:{color:'rgba(0,0,0,0.05)'}},
-        yIntake:{type:'linear',position:'right',ticks:{callback:v=>v+'間',stepSize:1,font:{size:11}},grid:{drawOnChartArea:false}}
-      }
-    }
-  });
-  document.querySelectorAll('[data-y]').forEach(c=>c.classList.toggle('active',c.dataset.y===year));
-}
-
-function buildYearChips(){
-  const intakeYears = [...new Set(INTAKE.map(r=>r.date.slice(0,4)))].sort();
-  const perfYears   = [...new Set(PERF.map(r=>r.ym.slice(0,4)))].sort();
-  allYears = [...new Set([...intakeYears,...perfYears])].sort().reverse();
-  const container = document.getElementById('yYearChips');
-  container.innerHTML = '';
-  allYears.forEach(y=>{
-    const el=document.createElement('span');
-    el.className='chip px-4 py-2 bg-slate-100 rounded-full text-sm font-medium';
-    el.dataset.y=y;
-    el.textContent=y+'年';
-    el.addEventListener('click',()=>renderYear(y));
-    container.appendChild(el);
-  });
-}
-
-// ════════════════════════════════════════
 // 🔬 業務分析
 // ════════════════════════════════════════
+let anaRange = { type: 'thisMonth', ym: '' };
+let anaAllMonths = [];
+
+function getAnaBounds(){
+  const today = new Date();
+  const thisYm = ym(today);
+  if (anaRange.type === 'all') return { start:'0000-00', end:'9999-99', label:'全部歷史' };
+  if (anaRange.type === 'specific') return { start:anaRange.ym, end:anaRange.ym, label:anaRange.ym };
+  if (anaRange.type === 'thisMonth') return { start:thisYm, end:thisYm, label:`本月 ${thisYm}` };
+  if (anaRange.type === 'lastMonth') {
+    const d = new Date(today.getFullYear(), today.getMonth()-1, 1);
+    const m = ym(d);
+    return { start:m, end:m, label:`上月 ${m}` };
+  }
+  if (anaRange.type === '3M' || anaRange.type === '6M') {
+    const n = anaRange.type === '3M' ? 3 : 6;
+    const d = new Date(today.getFullYear(), today.getMonth()-n+1, 1);
+    return { start:ym(d), end:thisYm, label:`近 ${n} 個月` };
+  }
+  return { start:'0000-00', end:'9999-99', label:'全部歷史' };
+}
+
+function initAnaRangeUI(){
+  // 收集所有月份（INTAKE + PERF）
+  const months = new Set();
+  for (const r of INTAKE) if (r.date?.length >= 7) months.add(r.date.slice(0,7));
+  for (const r of PERF) if (r.ym) months.add(r.ym);
+  anaAllMonths = [...months].filter(Boolean).sort();
+
+  // slider max = months.length - 1
+  const slider = document.getElementById('anaRangeSlider');
+  slider.max = Math.max(0, anaAllMonths.length - 1);
+  slider.value = slider.max;  // 預設最新月份
+
+  // 月份 chips（除了已硬編的 preset 外，加最近 6 個月的具體月份）
+  const container = document.getElementById('anaMonthChips');
+  container.innerHTML = '';
+  anaAllMonths.slice().reverse().slice(0, 6).forEach(m => {
+    const el = document.createElement('span');
+    el.className = 'chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium';
+    el.dataset.anaMonth = m;
+    el.textContent = m;
+    el.addEventListener('click', () => {
+      anaRange = { type:'specific', ym:m };
+      const idx = anaAllMonths.indexOf(m);
+      if (idx >= 0) slider.value = idx;
+      renderAnalysis();
+    });
+    container.appendChild(el);
+  });
+
+  // Preset chips
+  document.querySelectorAll('[data-ana-preset]').forEach(c => {
+    c.addEventListener('click', () => {
+      anaRange = { type: c.dataset.anaPreset, ym: '' };
+      // Slider 移到對應位置
+      if (anaRange.type === 'thisMonth' || anaRange.type === '3M' || anaRange.type === '6M' || anaRange.type === 'all') {
+        slider.value = slider.max;
+      } else if (anaRange.type === 'lastMonth' && anaAllMonths.length >= 2) {
+        slider.value = anaAllMonths.length - 2;
+      }
+      renderAnalysis();
+    });
+  });
+
+  // Slider 拖動
+  slider.addEventListener('input', () => {
+    const idx = parseInt(slider.value);
+    if (anaAllMonths[idx]) {
+      anaRange = { type:'specific', ym: anaAllMonths[idx] };
+      renderAnalysis();
+    }
+  });
+}
+
 function renderAnalysis(){
   const empty = document.getElementById('anaEmpty');
   const content = document.getElementById('anaContent');
@@ -1485,9 +1438,27 @@ function renderAnalysis(){
   empty.classList.add('hidden');
   content.classList.remove('hidden');
 
-  // ── 此人的進案 + 業績資料 ──
-  const myIntake = INTAKE.filter(r => (r.devs||[]).some(d => d.name === curStaff));
-  const myPerf = PERF.filter(r => r.name === curStaff);
+  const bounds = getAnaBounds();
+  document.getElementById('anaRangeLabel').textContent = bounds.label;
+
+  // 全歷史（Tier 2 時序用）
+  const allMyIntake = INTAKE.filter(r => (r.devs||[]).some(d => d.name === curStaff));
+  const allMyPerf = PERF.filter(r => r.name === curStaff);
+
+  // 範圍篩選後（Tier 1/3/5 用）
+  const inRange = ymStr => ymStr >= bounds.start && ymStr <= bounds.end;
+  const myIntake = allMyIntake.filter(r => inRange(r.date.slice(0,7)));
+  const myPerf = allMyPerf.filter(r => inRange(r.ym));
+
+  // 範圍統計註記
+  document.getElementById('anaRangeStat').textContent =
+    `範圍內 ${myIntake.length} 件進案 · ${fmtMoney(myPerf.reduce((a,r)=>a+r.perf,0))} 元業績`;
+
+  // Preset / month chips 的 active 狀態
+  document.querySelectorAll('[data-ana-preset]').forEach(c =>
+    c.classList.toggle('active', c.dataset.anaPreset === anaRange.type));
+  document.querySelectorAll('[data-ana-month]').forEach(c =>
+    c.classList.toggle('active', anaRange.type === 'specific' && c.dataset.anaMonth === anaRange.ym));
 
   // ── Tier 1 北極星 ──
   const intakeCount = myIntake.length;
@@ -1498,14 +1469,16 @@ function renderAnalysis(){
   const perfMoAvg = perfMonthsSet.size ? Math.round(perfTotal/perfMonthsSet.size) : 0;
 
   document.getElementById('anaKpiIntake').textContent = intakeCount;
-  document.getElementById('anaKpiIntakeAvg').textContent = `月均 ${intakeMoAvg} 件 · 共 ${intakeMonths.size} 個月有進案`;
+  document.getElementById('anaKpiIntakeAvg').textContent = intakeMonths.size
+    ? `月均 ${intakeMoAvg} 件 · 範圍內 ${intakeMonths.size} 個月有進案`
+    : '範圍內無進案';
   document.getElementById('anaKpiPerf').textContent = fmtMoney(perfTotal);
   document.getElementById('anaKpiPerfAvg').textContent = perfMonthsSet.size
-    ? `月均 ${fmtMoney(perfMoAvg)} 元 · 共 ${perfMonthsSet.size} 個月有業績`
-    : '尚無業績紀錄';
+    ? `月均 ${fmtMoney(perfMoAvg)} 元 · 範圍內 ${perfMonthsSet.size} 個月有業績`
+    : '範圍內無業績';
 
-  // ── 最近進案距今 + 最長斷炊 ──
-  const sortedDates = myIntake.map(r => r.date).sort();
+  // ── 最近進案距今 + 最長斷炊（永遠用全歷史，不受範圍影響）──
+  const sortedDates = allMyIntake.map(r => r.date).sort();
   const today = new Date(); today.setHours(0,0,0,0);
   let daysAgo = '—', maxGap = '—';
   if (sortedDates.length) {
@@ -1519,15 +1492,16 @@ function renderAnalysis(){
     maxGap = Math.round(gap);
   }
   document.getElementById('anaKpiActive').textContent = daysAgo === '—' ? '—' : daysAgo;
-  document.getElementById('anaKpiSilence').textContent = `歷史最長斷炊 ${maxGap} 天`;
+  document.getElementById('anaKpiSilence').textContent = `歷史最長斷炊 ${maxGap} 天（不受範圍影響）`;
 
-  // ── Tier 2 月度雙軸趨勢 ──
-  const allMonths = new Set([...intakeMonths, ...perfMonthsSet]);
-  const months = [...allMonths].sort();
+  // ── Tier 2 月度雙軸趨勢（用全歷史，標示選定範圍）──
+  const allIntakeMonths = new Set(allMyIntake.map(r => r.date.slice(0,7)));
+  const allPerfMonths = new Set(allMyPerf.map(r => r.ym));
+  const months = [...new Set([...allIntakeMonths, ...allPerfMonths])].filter(Boolean).sort();
   const intakeByMonth = {};
-  myIntake.forEach(r => { const m = r.date.slice(0,7); intakeByMonth[m] = (intakeByMonth[m]||0)+1; });
+  allMyIntake.forEach(r => { const m = r.date.slice(0,7); intakeByMonth[m] = (intakeByMonth[m]||0)+1; });
   const perfByMonth = {};
-  myPerf.forEach(r => { perfByMonth[r.ym] = (perfByMonth[r.ym]||0)+r.perf; });
+  allMyPerf.forEach(r => { perfByMonth[r.ym] = (perfByMonth[r.ym]||0)+r.perf; });
 
   const intakeSeries = months.map(m => intakeByMonth[m]||0);
   const perfSeries = months.map(m => perfByMonth[m]||0);
@@ -2022,16 +1996,15 @@ document.getElementById('clEnd').addEventListener('change',()=>{document.querySe
     // Build UI
     buildStaffSelector();
     buildMonthChips();
-    buildYearChips();
     buildCompareChips();
     renderLastCase();
     (()=>{const d=new Date(); renderMonth(ym(d));})();
-    if(allYears.length) renderYear(allYears[0]);
     if(compareMonths.length) renderCompare(compareMonths[0]);
     renderInventory();
     applyOutreachPreset('thisMonth');
     applyClientPreset('thisMonth');
     renderAd591();
+    initAnaRangeUI();
     renderAnalysis();
 
     // Fade out loading
