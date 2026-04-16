@@ -31,6 +31,9 @@
   .dual-range input[type=range]::-moz-range-thumb{pointer-events:auto;width:20px;height:20px;background:#fff;border:3px solid #3b82f6;border-radius:50%;cursor:grab;box-shadow:0 2px 6px rgba(0,0,0,.15);}
   .dual-range input[type=range].end-slider::-webkit-slider-thumb{border-color:#10b981;}
   .dual-range input[type=range].end-slider::-moz-range-thumb{border-color:#10b981;}
+  /* 起=迄時兩個 thumb 疊一起：顯示左藍右綠的雙色，一看就知「單月」*/
+  .dual-range.collapsed input[type=range]::-webkit-slider-thumb{background:linear-gradient(90deg,#3b82f6 50%,#10b981 50%);border-color:#fff;box-shadow:0 0 0 2px #94a3b8,0 2px 6px rgba(0,0,0,.2);}
+  .dual-range.collapsed input[type=range]::-moz-range-thumb{background:linear-gradient(90deg,#3b82f6 50%,#10b981 50%);border-color:#fff;box-shadow:0 0 0 2px #94a3b8,0 2px 6px rgba(0,0,0,.2);}
   #loadingOverlay{position:fixed;inset:0;background:rgba(248,250,252,.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;transition:opacity .4s;}
   #loadingOverlay.fade-out{opacity:0;pointer-events:none;}
 </style>
@@ -1440,6 +1443,8 @@ function updateAnaHighlight(){
   const rPct = (anaEndIdx / max) * 100;
   const hl = document.getElementById('anaRangeHighlight');
   if (hl) { hl.style.left = lPct + '%'; hl.style.width = (rPct - lPct) + '%'; }
+  const range = document.querySelector('.dual-range');
+  if (range) range.classList.toggle('collapsed', anaStartIdx === anaEndIdx);
 }
 
 function initAnaRangeUI(){
