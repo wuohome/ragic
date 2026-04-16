@@ -238,7 +238,7 @@
             <h2 class="text-xl font-bold text-slate-900">📈 月度雙軸趨勢</h2>
             <p id="anaOnboardNote" class="text-xs text-slate-500 mt-1"></p>
           </div>
-          <p class="text-xs text-slate-400">長條=進案件數　折線=業績金額　虛線=3 個月滾動均</p>
+          <p class="text-xs text-slate-400">長條=進案件數　折線=業績金額</p>
         </div>
         <div class="relative" style="height:320px"><canvas id="anaTrendChart"></canvas></div>
       </section>
@@ -1616,19 +1616,29 @@ function renderAnalysis(){
   document.getElementById('anaKpiActive').textContent = daysAgo === '—' ? '—' : daysAgo;
   document.getElementById('anaKpiSilence').textContent = `歷史最長空窗 ${maxGap} 天（不受範圍影響）`;
 
-  // ── Tier 2 月度雙軸趨勢：從「報到月」開始到今天，連續填滿（看學習曲線）──
+  // ── Tier 2 月度雙軸趨勢 ──
+  // 預設顯示最近 12 個月（以滑軌 end 為終點往回推），滑軌範圍超過 12 個月時跟著延伸
   const onboardMonth = STAFF_ONBOARD_MONTH[curStaff] || '';
   const allIntakeMonths = new Set(allMyIntake.map(r => r.date.slice(0,7)));
   const allPerfMonths = new Set(allMyPerf.map(r => r.ym));
   const dataMonths = [...new Set([...allIntakeMonths, ...allPerfMonths])].filter(Boolean).sort();
-  // 起點：報到月（若有）vs 最早資料月，取較早那個才不會漏資料
   const thisYmVal = ym(new Date());
-  let startYm = onboardMonth || dataMonths[0] || thisYmVal;
-  if (dataMonths.length && dataMonths[0] < startYm) startYm = dataMonths[0];
-  // 生成 startYm → 今天的連續月份陣列（空月份補 0 才看得到「學習曲線」）
+  const rangeMonthsCount = anaEndIdx - anaStartIdx + 1;
+  const chartEndYm = anaAllMonths[anaEndIdx] || thisYmVal;
+  let startYm;
+  if (rangeMonthsCount >= 12) {
+    startYm = anaAllMonths[anaStartIdx];
+  } else {
+    const [ey, em] = chartEndYm.split('-').map(Number);
+    const startDateObj = new Date(ey, em - 12, 1);  // 往回 11 個月 = 12 個月窗口
+    startYm = ym(startDateObj);
+  }
+  // 不早於報到月（新人看不到報到前的空月份）
+  if (onboardMonth && startYm < onboardMonth) startYm = onboardMonth;
+  // 生成 startYm → chartEndYm 的連續月份陣列（空月補 0）
   const months = [];
   let curYm = startYm;
-  while (curYm && curYm <= thisYmVal) {
+  while (curYm && curYm <= chartEndYm) {
     months.push(curYm);
     const [yy, mm] = curYm.split('-').map(Number);
     curYm = ym(new Date(yy, mm, 1));  // 下個月
@@ -1638,30 +1648,23 @@ function renderAnalysis(){
   allMyIntake.forEach(r => { const m = r.date.slice(0,7); intakeByMonth[m] = (intakeByMonth[m]||0)+1; });
   const perfByMonth = {};
   allMyPerf.forEach(r => { perfByMonth[r.ym] = (perfByMonth[r.ym]||0)+r.perf; });
-  // 報到月註記
+  // 圖表範圍 + 報到月註記
   const onboardNote = document.getElementById('anaOnboardNote');
   if (onboardNote) {
+    const rangeText = `圖表：${months[0] || '—'} ~ ${months[months.length-1] || '—'}（${months.length} 個月${rangeMonthsCount >= 12 ? '，跟隨上方滑軌' : '，預設最近 12 個月'}）`;
     if (onboardMonth) {
-      const workedMonths = months.length;
       const firstIntakeM = dataMonths[0] || '';
       const hint = firstIntakeM && firstIntakeM > onboardMonth
         ? ` · 第一筆進案 ${firstIntakeM}（報到 ${calcMonthsDiff(onboardMonth, firstIntakeM)} 個月後開胡）`
         : '';
-      onboardNote.textContent = `報到月：${onboardMonth} · 在職 ${workedMonths} 個月${hint}`;
+      onboardNote.textContent = `${rangeText} · 報到月 ${onboardMonth}${hint}`;
     } else {
-      onboardNote.textContent = `（HR 無到職資料，圖表從最早資料月起算）`;
+      onboardNote.textContent = `${rangeText}（HR 無到職資料）`;
     }
   }
 
   const intakeSeries = months.map(m => intakeByMonth[m]||0);
   const perfSeries = months.map(m => perfByMonth[m]||0);
-  // 滾動 3 個月均
-  const rolling = (arr, n) => arr.map((_, i) => {
-    const slice = arr.slice(Math.max(0,i-n+1), i+1);
-    return slice.reduce((a,b)=>a+b,0) / slice.length;
-  });
-  const intakeRoll = rolling(intakeSeries, 3);
-  const perfRoll = rolling(perfSeries, 3);
 
   if (window._anaTrendChart) window._anaTrendChart.destroy();
   window._anaTrendChart = new Chart(document.getElementById('anaTrendChart'), {
@@ -1669,9 +1672,7 @@ function renderAnalysis(){
       labels: months,
       datasets: [
         { type:'bar', label:'進案件數', data:intakeSeries, yAxisID:'y1', backgroundColor:'rgba(59,130,246,0.4)', borderColor:'#3b82f6', borderWidth:1, borderRadius:4 },
-        { type:'line', label:'件數 3M 均', data:intakeRoll, yAxisID:'y1', borderColor:'#60a5fa', borderWidth:1.5, borderDash:[4,4], pointRadius:0, fill:false },
         { type:'line', label:'業績金額', data:perfSeries, yAxisID:'y2', borderColor:'#10b981', backgroundColor:'rgba(16,185,129,0.1)', borderWidth:2.5, tension:0.3, fill:false, pointRadius:3 },
-        { type:'line', label:'業績 3M 均', data:perfRoll, yAxisID:'y2', borderColor:'#34d399', borderWidth:1.5, borderDash:[4,4], pointRadius:0, fill:false },
       ]
     },
     options: {
