@@ -260,70 +260,12 @@ def to_inventory_records(rows):
 
 
 # ── 1c. Ragic 開發募集 ────────────────────────────────────────────────
+# sheet 17 = 潛在屋主 view（含 開發人員 欄位，不含已接委託）
+# sheet 25 = 完整屋主表（含 _subtable_1000121 委託物件，開發人員在子表內）
 
-OUTREACH_BASE = "https://ap15.ragic.com/wuohome/property-data-kept/17"
+OUTREACH_BASE   = "https://ap15.ragic.com/wuohome/property-data-kept/17"
+COMMISSION_BASE = "https://ap15.ragic.com/wuohome/property-data-kept/25"
 
-
-def _normalize_phone(p):
-    """Extract last 10 digits from phone number for matching."""
-    if not p:
-        return ""
-    return re.sub(r'[^\d]', '', str(p))[-10:]
-
-
-def _normalize_addr(a):
-    """Normalize address for fuzzy comparison."""
-    if not a:
-        return ""
-    a = str(a).strip()
-    a = a.translate(str.maketrans('０１２３４５６７８９', '0123456789'))
-    a = re.sub(r'[\s\-\u3000]', '', a)
-    a = re.sub(r'^\d{3,5}', '', a)
-    a = re.sub(r'^台[灣湾]', '', a)
-    return a
-
-
-def cross_match_conversion(outreach_raw, inventory_raw):
-    """Cross-match 開發募集 vs 物件總表 by phone + fuzzy address.
-
-    Returns set of outreach record keys whose owner appears in 物件總表.
-    """
-    prop_phones = set()
-    prop_addrs = set()
-    for rec in inventory_raw.values():
-        ph = _normalize_phone(rec.get("屋主手機號碼") or "")
-        if ph:
-            prop_phones.add(ph)
-        ad = _normalize_addr(rec.get("地址") or "")
-        if ad:
-            prop_addrs.add(ad)
-
-    matched = set()
-    for key, rec in outreach_raw.items():
-        # 1) Phone match
-        ph = _normalize_phone(rec.get("手機號碼") or "")
-        if ph and ph in prop_phones:
-            matched.add(key)
-            continue
-        # 2) Fuzzy address match (591 subtable + 所有物件地址)
-        addrs = []
-        for sr in (rec.get("_subtable_1000637") or {}).values():
-            a = (sr.get("地址") or "").strip()
-            if a:
-                addrs.append(a)
-        all_addr = (rec.get("所有物件地址") or "").strip()
-        if all_addr:
-            addrs.extend(l.strip() for l in all_addr.split("\n") if l.strip())
-        for a in addrs:
-            na = _normalize_addr(a)
-            if na and len(na) >= 4:
-                for pa in prop_addrs:
-                    if na in pa or pa in na:
-                        matched.add(key)
-                        break
-            if key in matched:
-                break
-    return matched
 
 def fetch_outreach():
     qs = "api=&subtables=true&limit=10000"
@@ -334,13 +276,22 @@ def fetch_outreach():
     return json.loads(urllib.request.urlopen(req, timeout=120).read())
 
 
-def to_outreach_records(rows, converted_keys=None):
+def fetch_commission():
+    qs = "api=&subtables=true&limit=10000"
+    req = urllib.request.Request(
+        f"{COMMISSION_BASE}?{qs}",
+        headers={"Authorization": "Basic " + API_KEY},
+    )
+    return json.loads(urllib.request.urlopen(req, timeout=120).read())
+
+
+def to_outreach_records(rows):
+    """潛在屋主 → sheet 17（開發人員欄位在記錄級）"""
     out = []
     for key, c in rows.items():
         created = (c.get("建立日期", "") or "").strip()
         if not created:
             continue
-        # 建立日期格式: yyyy/MM/dd HH:mm:ss
         created_date = created[:10].replace("/", "-")
         dev_name = normalize_name((c.get("開發人員", "") or "").strip())
         if not dev_name:
@@ -350,14 +301,9 @@ def to_outreach_records(rows, converted_keys=None):
         owner_name = (c.get("屋主姓名", "") or "").strip()
         phone      = (c.get("手機號碼", "") or "").strip()
         status     = (c.get("屋主狀態", "") or "").strip()
-        # Override status with cross-match result
-        if converted_keys and key in converted_keys:
-            status = "已接委託"
         accepted   = int(float(c.get("已接委託數量") or 0))
-        # 經營紀錄子表
         logs = c.get("_subtable_1000271") or {}
         log_count = len(logs)
-        # 完整度：姓名+電話+至少1筆經營紀錄 → 🟢；部分 → 🟡；空 → 🔴
         filled = sum([bool(owner_name), bool(phone), log_count > 0])
         completeness = "green" if filled == 3 else ("yellow" if filled >= 1 else "red")
         out.append({
@@ -369,6 +315,42 @@ def to_outreach_records(rows, converted_keys=None):
             "accepted":     accepted,
             "logCount":     log_count,
             "completeness": completeness,
+        })
+    out.sort(key=lambda x: x["date"], reverse=True)
+    return out
+
+
+def to_accepted_records(commission_rows):
+    """已接委託 → sheet 25（開發人員在 _subtable_1000121 子表內）"""
+    out = []
+    for key, c in commission_rows.items():
+        if (c.get("屋主狀態") or "").strip() != "已接委託":
+            continue
+        sub121 = c.get("_subtable_1000121") or {}
+        if not sub121:
+            continue
+        first = next(iter(sub121.values()))
+        dev_name = normalize_name((first.get("開發人員") or "").strip())
+        if not dev_name:
+            dev_name = normalize_name((first.get("負責人1") or "").strip())
+        if not dev_name or dev_name in EXCLUDE_DEVS or any(k in dev_name for k in EXCLUDE_KEYWORDS):
+            continue
+        owner_name = (c.get("屋主姓名") or "").strip()
+        phone      = (c.get("手機號碼") or "").strip()
+        # 日期優先委託起始日，fallback 建立日期
+        commit_start = (first.get("委託時間(起)") or "").strip()
+        created      = (c.get("建立日期") or "").strip()
+        date_str = (commit_start or created)[:10].replace("/", "-")
+        logs = c.get("_subtable_1000271") or {}
+        out.append({
+            "date":         date_str,
+            "dev":          dev_name,
+            "owner":        owner_name,
+            "phone":        "有" if phone else "",
+            "status":       "已接委託",
+            "accepted":     1,
+            "logCount":     len(logs),
+            "completeness": "green",
         })
     out.sort(key=lambda x: x["date"], reverse=True)
     return out
@@ -1537,15 +1519,17 @@ def main():
     inventory = to_inventory_records(inv_rows)
     print(f"  {len(inventory)} 件")
 
-    print("抓取 Ragic 開發募集...")
+    print("抓取 Ragic 開發募集（sheet 17 潛在屋主）...")
     out_rows  = fetch_outreach()
+    outreach  = to_outreach_records(out_rows)
+    print(f"  {len(outreach)} 筆潛在屋主")
 
-    print("交叉比對 開發募集 ↔ 物件總表（手機+地址）...")
-    converted = cross_match_conversion(out_rows, inv_rows)
-    print(f"  配對成功: {len(converted)} 筆")
-
-    outreach  = to_outreach_records(out_rows, converted)
-    print(f"  {len(outreach)} 筆")
+    print("抓取 Ragic 委託屋主（sheet 25 已接委託）...")
+    com_rows  = fetch_commission()
+    accepted  = to_accepted_records(com_rows)
+    print(f"  {len(accepted)} 筆已接委託")
+    outreach.extend(accepted)
+    outreach.sort(key=lambda x: x["date"], reverse=True)
 
     print("抓取 Ragic 租客需求（客戶來源）...")
     cli_rows = fetch_clients()
