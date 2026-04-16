@@ -753,8 +753,9 @@ async function ragicFetch(path, params = '') {
 
 let _loadDone = 0;
 const _loadTotal = 8;
-const _loadLabels = ['進案量','業績','庫存','開發追蹤','委託屋主','客戶來源','人事資料','業績比對','當月GSheet'];
-const PERF_GSHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQMZq6T_6FgypxM2PEaBmIshN0WYlObLo0cVwnCydE6Ou-M3eetzRUaIC8_McxPG-UAjS6VQAYdBWMr/pub?output=csv';
+const _loadLabels = ['進案量','業績','庫存','開發追蹤','委託屋主','客戶來源','人事資料','業績比對','業績快照'];
+// 業績快照由 GitHub Actions 每天 20:00 Asia/Taipei 跑 scripts/fetch_perf_snapshot.py 生成
+const PERF_SNAPSHOT_URL = 'data/perf-snapshots.json?v=' + Date.now();
 function setProgress(label) {
   _loadDone++;
   const pct = Math.round(_loadDone / _loadTotal * 100);
@@ -774,7 +775,7 @@ async function fetchAllData() {
 
   const intakeParams = `subtables=true&where=${encodeURIComponent(`1000260,gte,${fmtDate(dataStart)}`)}&where=${encodeURIComponent(`1000260,lte,${fmtDate(dataEnd)}`)}&limit=10000`;
 
-  const [rawIntake, rawPayments, rawInventory, rawOutreach, rawCommission, rawClients, rawHr, perfMdText, perfCsvText] = await Promise.all([
+  const [rawIntake, rawPayments, rawInventory, rawOutreach, rawCommission, rawClients, rawHr, perfMdText, perfSnapshots] = await Promise.all([
     ragicFetch('operation/4', intakeParams).then(r => { setProgress('進案量'); return r; }),
     ragicFetch('payments/2', 'subtables=true&limit=10000').then(r => { setProgress('業績'); return r; }),
     ragicFetch('operation/4', 'subtables=true&limit=10000').then(r => { setProgress('庫存'); return r; }),
@@ -783,7 +784,7 @@ async function fetchAllData() {
     ragicFetch('property-data-kept/8', 'limit=10000').then(r => { setProgress('客戶來源'); return r; }),
     ragicFetch('ragicforms4/20004', 'limit=200').then(r => { setProgress('人事資料'); return r; }),
     fetch('data/perf.md').then(r => r.ok ? r.text() : '').catch(() => '').then(r => { setProgress('業績比對'); return r; }),
-    fetch(PERF_GSHEET_URL).then(r => r.ok ? r.text() : '').catch(() => '').then(r => { setProgress('當月GSheet'); return r; }),
+    fetch(PERF_SNAPSHOT_URL).then(r => r.ok ? r.json() : null).catch(() => null).then(r => { setProgress('業績快照'); return r; }),
     fetch('data/591-dashboard.json?v=' + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null).then(r => { setProgress('591 廣告'); AD591 = r; return r; }),
   ]);
 
@@ -842,12 +843,15 @@ async function fetchAllData() {
   PERF    = perfOb.length > 0 ? perfOb : PERF_RAGIC;
   COMPARE = buildCompare(PERF_RAGIC, perfOb);
 
-  // 當月業績：珊珊 GSheet（即時更新）取代 perf.md 的當月資料
-  const perfGSheet = parsePerfCSV(perfCsvText);
-  if (perfGSheet.length) {
-    const thisYm = ym(new Date());
-    PERF = PERF.filter(r => r.ym !== thisYm);
-    PERF.push(...perfGSheet);
+  // 當月業績：讀最新一筆快照（由 GitHub Actions 每天 20:00 Asia/Taipei 抓 GSheet 寫入）
+  if (perfSnapshots && Array.isArray(perfSnapshots) && perfSnapshots.length) {
+    const latest = perfSnapshots[perfSnapshots.length - 1];
+    PERF_SNAPSHOT_TIME = latest.timestamp || '';
+    const snapshotYm = latest.ym || ym(new Date());
+    PERF = PERF.filter(r => r.ym !== snapshotYm);
+    for (const r of (latest.data || [])) {
+      if (r.name && r.perf > 0) PERF.push({ ym: snapshotYm, name: r.name, perf: r.perf });
+    }
     PERF_GSHEET_AVAILABLE = true;
   }
 
@@ -872,6 +876,7 @@ let INTAKE = [], PERF = [], PERF_RAGIC = [], COMPARE = {}, INVENTORY = [], OUTRE
 let ACTIVE_STAFF = new Set();
 let AD591 = null;
 let PERF_GSHEET_AVAILABLE = false;
+let PERF_SNAPSHOT_TIME = '';
 
 // ── 珊珊 GSheet CSV 解析（2026-04 起為當月業績事實來源）
 // 格式：英雄A班,業績,VS,英雄B班,業績 兩欄並排（歷史遺留 A/B PK 格式，實為個人累計）
@@ -1201,11 +1206,11 @@ function renderMonth(targetYm){
   const srcNote = document.getElementById('mSourceNote');
   if (srcNote) {
     if (targetYm === thisYm && PERF_GSHEET_AVAILABLE) {
-      srcNote.innerHTML = `📊 業績：當月即時 GSheet（珊珊每日核對更新） · 進案量：Ragic operation/4`;
+      srcNote.innerHTML = `📊 業績：珊珊 GSheet 快照（${PERF_SNAPSHOT_TIME}）· 進案量：Ragic operation/4 即時`;
     } else if (targetYm === thisYm) {
-      srcNote.innerHTML = `⚠️ GSheet 讀取失敗，業績暫時以 Ragic payments/2 為準 · 進案量：Ragic operation/4`;
+      srcNote.innerHTML = `⚠️ 業績快照讀取失敗，暫以 Ragic payments/2 為準 · 進案量：Ragic operation/4 即時`;
     } else {
-      srcNote.innerHTML = `📁 業績：OB 業績表（月底封存）· 進案量：Ragic operation/4`;
+      srcNote.innerHTML = `📁 業績：OB 業績表（月底封存）· 進案量：Ragic operation/4 即時`;
     }
   }
 
@@ -1656,7 +1661,10 @@ document.getElementById('clEnd').addEventListener('change',()=>{document.querySe
     // Update status
     const now = new Date();
     const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-    document.getElementById('updateStatus').textContent = `即時資料　${ts}（${elapsed}s）`;
+    const perfNote = PERF_SNAPSHOT_TIME
+      ? `　•　💰 業績快照：${PERF_SNAPSHOT_TIME}（每天 20:00 自動更新）`
+      : '';
+    document.getElementById('updateStatus').innerHTML = `即時資料　${ts}（${elapsed}s）${perfNote}`;
     document.getElementById('refreshBtn').classList.remove('hidden');
 
     // Build UI
