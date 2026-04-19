@@ -402,6 +402,15 @@
     }
     if (recordId) recordId = recordId.trim();
 
+    // 防呆：Ragic A1 公式若在建單時尚未 recalc，F19（RAGIC_ID）可能是空或 "1"，
+    // 導致生出 ?code=1 或 ?code= 的壞連結。這邊攔下，給租客明確提示去找業務。
+    function isSuspiciousCode(c) {
+      if (!c) return true;
+      if (c === "1" || c === "{RAGIC_ID}") return true;
+      if (!/^\d+$/.test(c)) return false; // 允許非純數字的業務自訂（若有）
+      return false;
+    }
+
     function getValue(rec, keys) {
       if (!Array.isArray(keys)) keys = [keys];
       for (let k of keys) { if (rec[k] !== undefined && rec[k] !== null && rec[k] !== "") return rec[k]; }
@@ -459,7 +468,7 @@
       currentRecord = findExactRecord(data, recordId);
       
       if (!currentRecord) {
-        $("loader-text").innerText = "找不到編號 " + recordId + " 的資料";
+        $("loader-text").innerHTML = "找不到編號 <b>" + recordId + "</b> 的資料。<br><br>請聯繫為您服務的窩的家業務確認連結是否正確，或請業務重發連結。";
         return;
       }
       
@@ -658,6 +667,10 @@
       $("btn-next").onclick = () => goStep(2); $("btn-back").onclick = () => goStep(1);
       $("btn-clear").onclick = () => signaturePad.clear(); $("btn-submit").onclick = () => submitData();
       if (!recordId) { $("loader-spinner").classList.add('hidden'); $("loader-text").innerText = "請輸入 Record ID"; $("test-mode-ui").classList.remove('hidden'); }
+      else if (isSuspiciousCode(recordId)) {
+        $("loader-spinner").classList.add('hidden');
+        $("loader-text").innerHTML = "⚠️ 此連結異常（編號 <b>" + recordId + "</b>），無法顯示定金收據。<br><br>請聯繫為您服務的窩的家業務，**請業務重新傳送確認連結**。<br><br><span style='color:#888;font-size:13px'>（業務端排查：Ragic 建單後請先按「公式全部重跑」再複製 A1 訊息）</span>";
+      }
       else { executeLoad(); }
     };
   </script>
