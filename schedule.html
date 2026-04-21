@@ -152,19 +152,42 @@ const App = () => {
         setLoading(true);
         try {
             const empJson = await SC.apiFetch(CONFIG.EMP_PATH);
+            // 樓層累計次數：從歷史值日紀錄即時計算（員工表 FL 欄位已不可寫）
+            // 起算點：2026/03/30（平安街樓層制度啟用）
+            const histEnd = `${year}/${String(month).padStart(2,"0")}/${String(new Date(year, month, 0).getDate()).padStart(2,"0")}`;
+            const fcHistJson = await SC.apiFetch(CONFIG.LEAVE_PATH
+                + `?where=${CONFIG.F_LEAVE.TYPE},eq,${encodeURIComponent("值日")}`
+                + `&where=${CONFIG.F_LEAVE.DATE},gte,2026/03/30`
+                + `&where=${CONFIG.F_LEAVE.DATE},lte,${histEnd}`);
+            const fcHist = {};
+            Object.entries(fcHistJson)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([id, f]) => {
+                    const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
+                    if (isAuto === "未掃") return;
+                    const name = f[CONFIG.F_LEAVE.EMP] || "";
+                    const note = f[CONFIG.F_LEAVE.NOTE] || "";
+                    const floor = /^(1F|2F|3F)$/.test(note) ? note : null;
+                    if (!name || !floor) return;
+                    if (!fcHist[name]) fcHist[name] = {"1F":0,"2F":0,"3F":0};
+                    fcHist[name][floor]++;
+                });
             const allEmps = Object.entries(empJson)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
-                .map(([id, f]) => ({
-                    ragicId: id,
-                    name: f[CONFIG.F_EMP.NAME] || "",
-                    display: f[CONFIG.F_EMP.NAME] || "",
-                    dept: f[CONFIG.F_EMP.DEPT] || "",
-                    status: f[CONFIG.F_EMP.STATUS] || "",
-                    hire: f[CONFIG.F_EMP.HIRE] || "",
-                    hireDate: f[CONFIG.F_EMP.HIRE_DATE] || "9999/12/31",
-                    birthday: f[CONFIG.F_EMP.BIRTHDAY] || "",
-                    fc: { "1F": parseInt(f[CONFIG.F_EMP.FL1])||0, "2F": parseInt(f[CONFIG.F_EMP.FL2])||0, "3F": parseInt(f[CONFIG.F_EMP.FL3])||0 }
-                }))
+                .map(([id, f]) => {
+                    const name = f[CONFIG.F_EMP.NAME] || "";
+                    return {
+                        ragicId: id,
+                        name,
+                        display: name,
+                        dept: f[CONFIG.F_EMP.DEPT] || "",
+                        status: f[CONFIG.F_EMP.STATUS] || "",
+                        hire: f[CONFIG.F_EMP.HIRE] || "",
+                        hireDate: f[CONFIG.F_EMP.HIRE_DATE] || "9999/12/31",
+                        birthday: f[CONFIG.F_EMP.BIRTHDAY] || "",
+                        fc: fcHist[name] ? {...fcHist[name]} : {"1F":0,"2F":0,"3F":0}
+                    };
+                })
                 .filter(e => e.status === "在職" && e.dept !== "經營階層");
             setAllEmployees(allEmps.filter(e => e.hire !== "兼職").sort((a,b) => a.dept.localeCompare(b.dept) || a.hireDate.localeCompare(b.hireDate)));
 
@@ -340,14 +363,7 @@ const App = () => {
                                 body: params.toString()
                             });
                             if (floor && empObj) {
-                                const newCount = (empObj.fc[floor] || 0) + 1;
-                                const flField = floor === "1F" ? CONFIG.F_EMP.FL1 : floor === "2F" ? CONFIG.F_EMP.FL2 : CONFIG.F_EMP.FL3;
-                                await SC.apiFetch(`${CONFIG.EMP_PATH}/${empObj.ragicId}`, {
-                                    method: "POST",
-                                    headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                                    body: new URLSearchParams({ [flField]: String(newCount) }).toString()
-                                });
-                                empObj.fc[floor] = newCount;
+                                empObj.fc[floor] = (empObj.fc[floor] || 0) + 1;
                             }
                             setDuties(d => ({...d, [dateStr]: [...(d[dateStr]||[]), {ragicId: String(res.ragicId), empName, isAuto: "No", note: floor, floor}]}));
                             showToast(`${dateStr} ${empName} 加排 ${floor}`);
@@ -358,12 +374,6 @@ const App = () => {
                             const lastDuty = myDuties[myDuties.length - 1];
                             await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${lastDuty.ragicId}`, { method: "DELETE" });
                             if (lastDuty.floor && empObj) {
-                                const flField = lastDuty.floor === "1F" ? CONFIG.F_EMP.FL1 : lastDuty.floor === "2F" ? CONFIG.F_EMP.FL2 : CONFIG.F_EMP.FL3;
-                                await SC.apiFetch(`${CONFIG.EMP_PATH}/${empObj.ragicId}`, {
-                                    method: "POST",
-                                    headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                                    body: new URLSearchParams({ [flField]: String(Math.max(0, (empObj.fc[lastDuty.floor]||0) - 1)) }).toString()
-                                });
                                 empObj.fc[lastDuty.floor] = Math.max(0, (empObj.fc[lastDuty.floor]||0) - 1);
                             }
                             setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => x.ragicId !== lastDuty.ragicId)}));
@@ -379,12 +389,6 @@ const App = () => {
                         // 未掃 → 再點 = 清除
                         await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${lastDuty.ragicId}`, { method: "DELETE" });
                         if (lastDuty.floor && empObj) {
-                            const flField = lastDuty.floor === "1F" ? CONFIG.F_EMP.FL1 : lastDuty.floor === "2F" ? CONFIG.F_EMP.FL2 : CONFIG.F_EMP.FL3;
-                            await SC.apiFetch(`${CONFIG.EMP_PATH}/${empObj.ragicId}`, {
-                                method: "POST",
-                                headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                                body: new URLSearchParams({ [flField]: String(Math.max(0, (empObj.fc[lastDuty.floor]||0) - 1)) }).toString()
-                            });
                             empObj.fc[lastDuty.floor] = Math.max(0, (empObj.fc[lastDuty.floor]||0) - 1);
                         }
                         setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => x.ragicId !== lastDuty.ragicId)}));
@@ -427,16 +431,9 @@ const App = () => {
                         headers: {"Content-Type":"application/x-www-form-urlencoded"},
                         body: params.toString()
                     });
-                    // 更新員工表樓層次數
+                    // 更新本地樓層次數（員工表 FL 欄位不可寫，僅記憶體內追蹤）
                     if (floor && empObj) {
-                        const newCount = (empObj.fc[floor] || 0) + 1;
-                        const flField = floor === "1F" ? CONFIG.F_EMP.FL1 : floor === "2F" ? CONFIG.F_EMP.FL2 : CONFIG.F_EMP.FL3;
-                        await SC.apiFetch(`${CONFIG.EMP_PATH}/${empObj.ragicId}`, {
-                            method: "POST",
-                            headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                            body: new URLSearchParams({ [flField]: String(newCount) }).toString()
-                        });
-                        empObj.fc[floor] = newCount;
+                        empObj.fc[floor] = (empObj.fc[floor] || 0) + 1;
                     }
                     setDuties(d => ({...d, [dateStr]: [...(d[dateStr]||[]), {ragicId: String(res.ragicId), empName, isAuto: "No", note: floor || "手動變更", floor}]}));
                     showToast(`${dateStr} 值日生：${empName}${floor ? " ("+floor+")" : ""}`);
@@ -756,7 +753,8 @@ const App = () => {
                 if (zhibanAvailable) chosen.unshift(todayZhiban);
 
                 // 分配樓層：僅分配未被手動佔用的樓層，難易度 1F>3F>2F，次數最少的人掃該層
-                const remaining = [...chosen];
+                // 先洗牌（當 fc 全同時，順序隨機；穩定排序會保留 tie 時的隨機序）
+                const remaining = [...chosen].sort(() => Math.random() - 0.5);
                 const assignments = [];
                 for (const floor of availFloors) {
                     if (remaining.length === 0) break;
@@ -819,29 +817,10 @@ const App = () => {
             });
             const results = batchMeta.map((m, i) => ({ ...m, ragicId: batchRes[i]?.ragicId || "" }));
 
-            setProgress({ text: "更新員工樓層統計...", current: 0, total: 0 });
-            // Batch 寫回員工表的累計樓層打掃次數
+            // 員工表 FL1/2/3 欄位已移除、不可寫。樓層累計次數改由 load() 直接從 LEAVE 歷史計算。
+            // 僅更新記憶體：changedEmps 的 fc 值會透過下方 setAllEmployees 同步到 state。
             const changedEmps = new Set();
             Object.values(newDuties).forEach(arr => arr.forEach(a => changedEmps.add(a.empName)));
-            const empBatch = {};
-            for (const name of changedEmps) {
-                const rid = empRagicIds[name];
-                if (!rid) continue;
-                const fc = fcMap[name];
-                empBatch[rid] = {
-                    [CONFIG.F_EMP.FL1]: String(fc["1F"] || 0),
-                    [CONFIG.F_EMP.FL2]: String(fc["2F"] || 0),
-                    [CONFIG.F_EMP.FL3]: String(fc["3F"] || 0)
-                };
-            }
-            // 員工表用逐筆更新（每人不同 record ID）
-            for (const [rid, fields] of Object.entries(empBatch)) {
-                await SC.apiFetch(`${CONFIG.EMP_PATH}/${rid}`, {
-                    method: "POST",
-                    headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                    body: new URLSearchParams(fields).toString()
-                });
-            }
 
             const dmap = {};
             Object.entries(duties).forEach(([dateStr, arr]) => {
