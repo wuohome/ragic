@@ -245,7 +245,10 @@ const App = () => {
                         const missed = isAuto === "未掃";
                         dmap[date].push({ ragicId: id, empName: emp, isAuto, note, floor, missed });
                     } else {
-                        lmap[`${emp}|${date}`] = { ragicId: id, type };
+                        // leaves[key] 為陣列，支援同日多種類型（如 排休+值班）
+                        const k = `${emp}|${date}`;
+                        if (!lmap[k]) lmap[k] = [];
+                        lmap[k].push({ ragicId: id, type });
                     }
                 });
             setLeaves(lmap);
@@ -446,13 +449,17 @@ const App = () => {
             return;
         }
 
-        // 排休/請假/值班模式
+        // 排休/請假/值班/特休模式：每種類型獨立 toggle，可同日並存（如 排休+值班）
         const key = `${empName}|${dateStr}`;
         if (saving[key]) return;
+        const existingList = leaves[key] || [];
+        const sameTypeEntry = existingList.find(e => e.type === mode);
 
-        // 排休上限 8 天警告
-        if (mode === "排休" && !leaves[key]) {
-            const count = Object.entries(leaves).filter(([k,v]) => k.startsWith(empName + "|") && v.type === "排休").length;
+        // 排休上限 8 天警告（只在新增時檢查）
+        if (mode === "排休" && !sameTypeEntry) {
+            const count = Object.entries(leaves).filter(([k,arr]) =>
+                k.startsWith(empName + "|") && Array.isArray(arr) && arr.some(e => e.type === "排休")
+            ).length;
             if (count >= 8) {
                 if (!window.confirm(`${empName} 本月已排休 ${count} 天，超過 8 天上限，確定要繼續？`)) return;
             }
@@ -460,18 +467,24 @@ const App = () => {
 
         // 禁休日排休/特休需確認（請假不擋）
         const nrInfo = noRest[dateStr];
-        if (nrInfo && (mode === "排休" || mode === "特休")) {
-            const existing = leaves[key];
-            if (!existing) {
-                if (!window.confirm(`${dateStr} 為禁休日${nrInfo.reason ? "（" + nrInfo.reason + "）" : ""}，確定要排${mode}？`)) return;
-            }
+        if (nrInfo && (mode === "排休" || mode === "特休") && !sameTypeEntry) {
+            if (!window.confirm(`${dateStr} 為禁休日${nrInfo.reason ? "（" + nrInfo.reason + "）" : ""}，確定要排${mode}？`)) return;
         }
 
         setSaving(s => ({...s, [key]: true}));
         try {
-            const existing = leaves[key];
-            if (!existing) {
-                // 空格 → 寫入當前模式
+            if (sameTypeEntry) {
+                // 同類型已存在 → 清除（保留其他類型）
+                await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${sameTypeEntry.ragicId}`, { method:"DELETE" });
+                setLeaves(l => {
+                    const newList = (l[key] || []).filter(e => e.ragicId !== sameTypeEntry.ragicId);
+                    const n = {...l};
+                    if (newList.length === 0) delete n[key]; else n[key] = newList;
+                    return n;
+                });
+                showToast(`${empName} ${dateStr} ${mode}已清除`);
+            } else {
+                // 新增當前類型（不影響其他類型紀錄）
                 const params = new URLSearchParams();
                 params.append(CONFIG.F_LEAVE.EMP, empName);
                 params.append(CONFIG.F_LEAVE.DATE, dateStr);
@@ -485,23 +498,7 @@ const App = () => {
                     headers: {"Content-Type":"application/x-www-form-urlencoded"},
                     body: params.toString()
                 });
-                setLeaves(l => ({...l, [key]: {ragicId: String(res.ragicId), type: mode}}));
-                showToast(`${empName} ${dateStr} ${mode}`);
-            } else if (existing.type === mode) {
-                // 同模式再點 = 清除
-                await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, { method:"DELETE" });
-                setLeaves(l => { const n = {...l}; delete n[key]; return n; });
-                showToast(`${empName} ${dateStr} 已清除`);
-            } else {
-                // 不同模式 → 更新
-                const params = new URLSearchParams();
-                params.append(CONFIG.F_LEAVE.TYPE, mode);
-                await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, {
-                    method: "POST",
-                    headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                    body: params.toString()
-                });
-                setLeaves(l => ({...l, [key]: {...existing, type: mode}}));
+                setLeaves(l => ({...l, [key]: [...(l[key] || []), { ragicId: String(res.ragicId), type: mode }]}));
                 showToast(`${empName} ${dateStr} ${mode}`);
             }
         } catch(e) {
@@ -673,8 +670,9 @@ const App = () => {
                 const isWknd = d.getDay()===0||d.getDay()===6;
                 const weekNum = getWeekNum(day);
                 const onLeaveToday = new Set();
-                Object.entries(leaves).forEach(([k,v]) => {
-                    if (k.endsWith("|" + dateStr) && v.type !== "值班") onLeaveToday.add(k.split("|")[0]);
+                Object.entries(leaves).forEach(([k, arr]) => {
+                    if (!k.endsWith("|" + dateStr)) return;
+                    if (Array.isArray(arr) && arr.some(e => e.type !== "值班")) onLeaveToday.add(k.split("|")[0]);
                 });
                 if (!noRest[dateStr] && isGovHoliday(dateStr, isWknd)) {
                     GOV_REST_EMPLOYEES.forEach(name => onLeaveToday.add(name));
@@ -896,8 +894,9 @@ const App = () => {
                 const d = new Date(year, month-1, day);
                 const isWknd = d.getDay()===0||d.getDay()===6;
                 const onLeave = new Set();
-                Object.entries(leaves).forEach(([k,v]) => {
-                    if (k.endsWith("|" + dateStr) && v.type !== "值班") onLeave.add(k.split("|")[0]);
+                Object.entries(leaves).forEach(([k, arr]) => {
+                    if (!k.endsWith("|" + dateStr)) return;
+                    if (Array.isArray(arr) && arr.some(e => e.type !== "值班")) onLeave.add(k.split("|")[0]);
                 });
                 if (!noRest[dateStr] && isGovHoliday(dateStr, isWknd)) {
                     GOV_REST_EMPLOYEES.forEach(n => onLeave.add(n));
@@ -938,19 +937,26 @@ const App = () => {
             const zBatchRes = await apiBatchCreate(CONFIG.LEAVE_PATH, zBatchRecords, (cur, tot) => {
                 setProgress({ text: "寫入值班紀錄...", current: cur, total: tot });
             });
-            const newLeaves = {};
+            const newZhibanEntries = []; // [{key, entry}]
             zBatchMeta.forEach((m, i) => {
-                newLeaves[`${m.empName}|${m.dateStr}`] = { ragicId: zBatchRes[i]?.ragicId || "", type: "值班" };
+                newZhibanEntries.push({
+                    key: `${m.empName}|${m.dateStr}`,
+                    entry: { ragicId: String(zBatchRes[i]?.ragicId || ""), type: "值班" }
+                });
             });
-            // 更新 state
+            // 更新 state：從每個 key 的陣列移除被刪的 ragicId，再加入新的 值班 entry
+            const deletedIds = new Set(toDelete.map(([id]) => id));
             setLeaves(prev => {
-                const next = {...prev};
-                for (const [id] of toDelete) {
-                    for (const [k, v] of Object.entries(next)) {
-                        if (v.ragicId === id) { delete next[k]; break; }
-                    }
+                const next = {};
+                for (const [k, arr] of Object.entries(prev)) {
+                    const filtered = (arr || []).filter(e => !deletedIds.has(e.ragicId));
+                    if (filtered.length > 0) next[k] = filtered;
                 }
-                return {...next, ...newLeaves};
+                newZhibanEntries.forEach(({ key, entry }) => {
+                    if (!next[key]) next[key] = [];
+                    next[key].push(entry);
+                });
+                return next;
             });
             showToast(`已完成自動預排值班 ${Object.keys(newZhiban).length} 天`);
         } catch(e) {
@@ -978,13 +984,14 @@ const App = () => {
 
     const getStats = (empName) => {
         let paixiu = 0, texiu = 0, qingjia = 0, zhiban = 0, f1 = 0, f2 = 0, f3 = 0, dutyOther = 0;
-        Object.entries(leaves).forEach(([k,v]) => {
-            if (k.startsWith(empName + "|")) {
+        Object.entries(leaves).forEach(([k, arr]) => {
+            if (!k.startsWith(empName + "|") || !Array.isArray(arr)) return;
+            arr.forEach(v => {
                 if (v.type === "排休") paixiu++;
                 else if (v.type === "特休") texiu++;
                 else if (v.type === "值班") zhiban++;
                 else qingjia++;
-            }
+            });
         });
         let missed = 0;
         Object.values(duties).forEach(arr => {
@@ -1256,53 +1263,62 @@ const App = () => {
                                         </td>
                                         {employees.map(emp => {
                                             const key = `${emp.name}|${dateStr}`;
-                                            const leave = leaves[key];
+                                            const leaveList = leaves[key] || [];
                                             const myDuties = dutyList.filter(d => d.empName === emp.name);
                                             const myDuty = myDuties[0] || null;
                                             const hasMultiFloor = myDuties.length > 1;
-                                            // 禁休日覆蓋見紅休（設計部+瓊安也要上班）
                                             const isGovRest = !nrInfo && GOV_REST_EMPLOYEES.has(emp.name) && isGovHoliday(dateStr, isWeekend);
                                             const savingKey = mode === "值日" ? `duty|${dateStr}` : key;
                                             const cellSaving = saving[savingKey];
                                             const floorLabel = hasMultiFloor
                                                 ? myDuties.map(d => d.floor || "值").join("+")
                                                 : myDuty ? (myDuty.floor || "值") : "";
-                                            // 多層漸層背景
-                                            const multiFloorBg = hasMultiFloor
-                                                ? "linear-gradient(135deg, " + myDuties.map((d, i) => {
-                                                    const c = FLOOR_COLORS[d.floor] || "#3b82f6";
-                                                    const pct1 = Math.round(i / myDuties.length * 100);
-                                                    const pct2 = Math.round((i + 1) / myDuties.length * 100);
-                                                    return c + " " + pct1 + "%, " + c + " " + pct2 + "%";
-                                                  }).join(", ") + ")"
-                                                : null;
-                                            // 生日判斷：比對月/日
+                                            // 組合所有彩色段：每個 leave 類型 + 值日（若有）
+                                            const leaveColor = (t) => t === "排休" ? "#22c55e" : t === "特休" ? "#eab308" : t === "值班" ? "#f97316" : "#dc2626";
+                                            const leaveShort = (t) => t === "排休" ? "休" : t === "特休" ? "特" : t === "值班" ? "班" : "假";
+                                            const segments = [];
+                                            leaveList.forEach(l => segments.push({ color: leaveColor(l.type), label: l.type, short: leaveShort(l.type) }));
+                                            if (myDuty && !myDuties.some(d => d.missed)) {
+                                                if (hasMultiFloor) {
+                                                    myDuties.forEach(d => segments.push({ color: FLOOR_COLORS[d.floor] || "#3b82f6", label: d.floor || "值", short: d.floor || "值" }));
+                                                } else {
+                                                    segments.push({ color: FLOOR_COLORS[myDuty.floor] || "#3b82f6", label: myDuty.floor || "值", short: myDuty.floor || "值" });
+                                                }
+                                            }
+                                            const nSeg = segments.length;
+                                            const bg = nSeg === 0 ? null :
+                                                nSeg === 1 ? segments[0].color :
+                                                "linear-gradient(135deg, " + segments.map((s, i) => {
+                                                    const p1 = (i / nSeg * 100).toFixed(1);
+                                                    const p2 = ((i + 1) / nSeg * 100).toFixed(1);
+                                                    return s.color + " " + p1 + "%, " + s.color + " " + p2 + "%";
+                                                }).join(", ") + ")";
+                                            // 文字：單段用全名，多段用簡短
+                                            const label = nSeg === 0 ? "" : nSeg === 1 ? segments[0].label : segments.map(s => s.short).join("");
+                                            const textSizeClass = nSeg >= 3 ? "text-[9px]" : nSeg === 2 ? "text-[10px]" : "text-xs";
+                                            // 生日判斷
                                             const isBirthday = SC.isBirthday(emp, month, day);
                                             const birthdayStyle = isBirthday
-                                                ? {outline:"2px dashed #eab308", outlineOffset:"-2px", ...((!leave && !myDuty && !isGovRest) ? {background:"#fef9c3"} : {})}
+                                                ? {outline:"2px dashed #eab308", outlineOffset:"-2px", ...((nSeg === 0 && !isGovRest) ? {background:"#fef9c3"} : {})}
+                                                : undefined;
+                                            const titleText = isBirthday ? `🎂 ${emp.name} 生日`
+                                                : nSeg > 1 ? `${emp.name}：${segments.map(s => s.label).join(" + ")}`
+                                                : hasMultiFloor ? `${emp.name} 值日：${floorLabel}`
                                                 : undefined;
                                             return (
                                                 <td key={key}
                                                     onClick={() => !IS_READONLY && !isGovRest && mode !== "禁休" && handleClick(emp.name, dateStr)}
                                                     className={`emp-cell p-0 text-center transition-colors select-none ${isGovRest ? "cursor-default" : mode === "禁休" ? "cursor-default" : "cursor-pointer hover:bg-gray-100"} ${cellSaving ? "opacity-50" : ""}`}
-                                                    style={{...(nrInfo && !leave && !myDuty && !isGovRest ? {background:"#fff1f2"} : undefined), ...birthdayStyle}}
-                                                    title={isBirthday ? `🎂 ${emp.name} 生日` : hasMultiFloor ? `${emp.name} 值日：${floorLabel}` : undefined}>
+                                                    style={{...(nrInfo && nSeg === 0 && !isGovRest ? {background:"#fff1f2"} : undefined), ...birthdayStyle}}
+                                                    title={titleText}>
                                                     {cellSaving ? (
                                                         <span className="cell-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full"></span>
                                                     ) : isGovRest ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-gray-400 bg-gray-100">休</span>
-                                                    ) : leave && myDuty ? (
-                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background:"linear-gradient(135deg, " + (leave.type === "排休" ? "#22c55e" : leave.type === "特休" ? "#eab308" : leave.type === "值班" ? "#f97316" : "#dc2626") + " 50%, " + (hasMultiFloor ? (FLOOR_COLORS[myDuties[0].floor] || "#3b82f6") : (FLOOR_COLORS[myDuty.floor] || "#3b82f6")) + " 50%)"}}>
-                                                            {leave.type === "排休" ? "排休" : leave.type === "特休" ? "特休" : leave.type === "值班" ? "值班" : "請假"}{floorLabel}
-                                                        </span>
-                                                    ) : leave ? (
-                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background: leave.type === "排休" ? "#22c55e" : leave.type === "特休" ? "#eab308" : leave.type === "值班" ? "#f97316" : "#dc2626"}}>
-                                                            {leave.type === "排休" ? "排休" : leave.type === "特休" ? "特休" : leave.type === "值班" ? "值班" : "請假"}
-                                                        </span>
                                                     ) : myDuties.some(d => d.missed) ? (
                                                         <span className="inline-block w-full leading-[32px] text-[10px] font-bold" style={{background:"#fff1f2", color:"#be123c", border:"2px dashed #f87171"}}>{floorLabel}未掃</span>
-                                                    ) : myDuty ? (
-                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-white" style={{background: hasMultiFloor ? multiFloorBg : (FLOOR_COLORS[myDuty.floor] || "#3b82f6")}}>{floorLabel}</span>
+                                                    ) : nSeg > 0 ? (
+                                                        <span className={`inline-block w-full leading-[32px] ${textSizeClass} font-bold text-white`} style={{background: bg}}>{label}</span>
                                                     ) : isBirthday ? (
                                                         <span className="inline-block w-full leading-[32px] text-sm">🎂</span>
                                                     ) : null}
