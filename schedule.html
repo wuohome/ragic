@@ -852,6 +852,7 @@ const App = () => {
             const eligible = employees.filter(e => {
                 if (e.hire !== "承攬") return false;
                 if (e.dept === "社宅部") return false; // 社宅部不值班
+                if (e.dept === "設計部") return false; // 設計部不值班
                 if (!e.hireDate || e.hireDate === "9999/12/31") return false;
                 const p = e.hireDate.split("/");
                 const hired = new Date(+p[0], +p[1]-1, +p[2]);
