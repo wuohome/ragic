@@ -1250,14 +1250,43 @@ const App = () => {
                                 const isDutySaving = saving[dutyKey];
                                 const noRestSaving = saving[`norest|${dateStr}`];
 
+                                // 每日驗證：值日每樓層 1 人、值班每天 1 人
+                                const warnMsgs = [];
+                                if (!nrInfo) {
+                                    const floorGroup = { "1F": [], "2F": [], "3F": [], "_none": [] };
+                                    dutyList.forEach(d => {
+                                        const slot = ["1F","2F","3F"].includes(d.floor) ? d.floor : "_none";
+                                        floorGroup[slot].push(d.empName);
+                                    });
+                                    ["1F","2F","3F"].forEach(f => {
+                                        const n = floorGroup[f].length;
+                                        if (n === 0) warnMsgs.push(`缺 ${f} 值日`);
+                                        else if (n > 1) warnMsgs.push(`${f} 多排：${floorGroup[f].join("、")}`);
+                                    });
+                                    if (floorGroup["_none"].length > 0) warnMsgs.push(`未註樓層：${floorGroup["_none"].join("、")}`);
+                                }
+                                const zhibanEmps = [];
+                                Object.entries(leaves).forEach(([k, arr]) => {
+                                    if (!k.endsWith("|" + dateStr) || !Array.isArray(arr)) return;
+                                    arr.forEach(e => { if (e.type === "值班") zhibanEmps.push(k.split("|")[0]); });
+                                });
+                                if (zhibanEmps.length === 0) warnMsgs.push("缺值班");
+                                else if (zhibanEmps.length > 1) warnMsgs.push(`值班多排：${zhibanEmps.join("、")}`);
+                                const hasWarn = warnMsgs.length > 0;
+                                const dateTitle = [
+                                    nrInfo ? "禁休：" + (nrInfo.reason || "無原因") : holidayName || "",
+                                    hasWarn ? "⚠ " + warnMsgs.join("；") : ""
+                                ].filter(Boolean).join("\n");
+
                                 return (
                                     <tr key={day} className={rowBg} style={nrInfo ? {background:"#fff1f2", outline:"2px solid #fda4af", outlineOffset:"-1px"} : undefined}>
-                                        <td className={`sticky-left p-2 text-center font-medium whitespace-nowrap ${nrInfo ? "text-rose-700" : isToday ? "bg-yellow-50" : isHoliday ? "bg-blue-50" : "bg-white"} ${!nrInfo && isHoliday ? "text-red-500" : !nrInfo ? "text-gray-700" : ""} ${mode === "禁休" && !IS_READONLY ? "cursor-pointer hover:bg-rose-100" : ""}`}
-                                            style={nrInfo ? {background:"#ffe4e6", borderLeft:"3px solid #e11d48"} : undefined}
+                                        <td className={`sticky-left p-2 text-center font-medium whitespace-nowrap ${nrInfo ? "text-rose-700" : isToday ? "bg-yellow-50" : hasWarn ? "bg-amber-100" : isHoliday ? "bg-blue-50" : "bg-white"} ${!nrInfo && isHoliday ? "text-red-500" : !nrInfo ? "text-gray-700" : ""} ${mode === "禁休" && !IS_READONLY ? "cursor-pointer hover:bg-rose-100" : ""}`}
+                                            style={nrInfo ? {background:"#ffe4e6", borderLeft:"3px solid #e11d48"} : hasWarn && !isToday ? {borderLeft:"3px solid #f59e0b"} : undefined}
                                             onClick={() => mode === "禁休" && handleNoRest(dateStr)}
-                                            title={nrInfo ? "禁休：" + (nrInfo.reason || "無原因") : holidayName || ""}>
+                                            title={dateTitle}>
                                             <span className="text-sm">{day}</span>
                                             <span className="text-xs ml-1 text-gray-400">({dow})</span>
+                                            {hasWarn && <span className="ml-1 text-amber-600" title={warnMsgs.join("\n")}>⚠</span>}
                                             {holidayName && !nrInfo && <span className="block text-[9px] text-red-400 font-medium leading-tight">{holidayName}</span>}
                                             {nrInfo && <span className="block text-[9px] text-rose-600 font-bold leading-tight mt-0.5">🚫{nrInfo.reason ? " "+nrInfo.reason : ""}</span>}
                                         </td>
