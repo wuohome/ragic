@@ -574,20 +574,33 @@ const App = () => {
             console.log("新人(用平均):", newNames?.join(", ") || "無");
             console.log("老員工數:", veteranNames?.length || "N/A");
 
-            // 先扣除本月舊的自動排班紀錄的樓層次數
+            // 掃描當月值日：保留手動(isAuto=No)並登記佔用樓層/人，其他(Yes/未掃)列入刪除
             setProgress({ text: "清除舊紀錄...", current: 0, total: 0 });
-            const toDelete = Object.entries(allLeaveForDuty)
+            const manualByDate = {}; // dateStr -> [{ empName, floor }]
+            const toDelete = [];
+            Object.entries(allLeaveForDuty)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
-                .filter(([id, f]) => {
+                .forEach(([id, f]) => {
                     const type = f[CONFIG.F_LEAVE.TYPE] || "";
-                    if (type !== "值日") return false;
+                    if (type !== "值日") return;
                     const date = f[CONFIG.F_LEAVE.DATE] || "";
-                    const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
-                    if (!date) return false;
+                    if (!date) return;
                     const parts = date.replace(/\//g,"-").split("-");
                     const y = parseInt(parts[0]), m = parseInt(parts[1]);
-                    return y === year && m === month && isAuto !== "No";
+                    if (y !== year || m !== month) return;
+                    const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
+                    if (isAuto === "No") {
+                        const empName = f[CONFIG.F_LEAVE.EMP] || "";
+                        const note = f[CONFIG.F_LEAVE.NOTE] || "";
+                        const floor = /^(1F|2F|3F)$/.test(note) ? note : "";
+                        if (!manualByDate[date]) manualByDate[date] = [];
+                        manualByDate[date].push({ empName, floor });
+                        if (empName) countMap[empName] = (countMap[empName] || 0) + 1;
+                    } else {
+                        toDelete.push([id, f]);
+                    }
                 });
+            console.log("保留手動值日天數:", Object.keys(manualByDate).length);
             for (let di = 0; di < toDelete.length; di++) {
                 const [id, f] = toDelete[di];
                 setProgress({ text: "清除舊值日紀錄", current: di + 1, total: toDelete.length });
@@ -652,6 +665,13 @@ const App = () => {
                 // 禁休日不排值日生（全員打掃）
                 if (noRest[dateStr]) continue;
 
+                // 尊重手動值日：跳過已被手動佔用的樓層與人員
+                const todayManual = manualByDate[dateStr] || [];
+                const manualFloors = new Set(todayManual.map(m => m.floor).filter(f => f));
+                const manualEmps = new Set(todayManual.map(m => m.empName).filter(n => n));
+                const availFloors = ["1F", "3F", "2F"].filter(f => !manualFloors.has(f));
+                if (availFloors.length === 0) continue; // 全部手動排完，無需自動補
+
                 const d = new Date(year, month-1, day);
                 const isWknd = d.getDay()===0||d.getDay()===6;
                 const weekNum = getWeekNum(day);
@@ -666,6 +686,8 @@ const App = () => {
                 allEmployees.forEach(e => {
                     if (SC.isBirthday(e, month, day)) onLeaveToday.add(e.name);
                 });
+                // 手動已排的人今天不重複排
+                manualEmps.forEach(n => onLeaveToday.add(n));
 
                 // 值班+值日重疊（夫妻也適用，已預算進 countMap）
                 const todayZhiban = zhibanByDate[dateStr] || "";
@@ -676,7 +698,8 @@ const App = () => {
                     if (wk && wk.has(weekNum)) s += 5;
                     return s;
                 };
-                const needCount = zhibanAvailable ? 2 : 3;
+                // 自動需補人數 = 可用樓層數 -（是否會 unshift 值班者）
+                const needCount = Math.max(0, availFloors.length - (zhibanAvailable ? 1 : 0));
 
                 // 非夫妻個人候選（按 score 排序）
                 const mkIndiv = (filterFn) => allEmployees
@@ -732,10 +755,11 @@ const App = () => {
                 }
                 if (zhibanAvailable) chosen.unshift(todayZhiban);
 
-                // 分配樓層：難易度 1F>3F>2F（1F 人流最多最難），次數最少的人掃該層
+                // 分配樓層：僅分配未被手動佔用的樓層，難易度 1F>3F>2F，次數最少的人掃該層
                 const remaining = [...chosen];
                 const assignments = [];
-                for (const floor of ["1F", "3F", "2F"]) {
+                for (const floor of availFloors) {
+                    if (remaining.length === 0) break;
                     remaining.sort((a, b) => (fcMap[a][floor]||0) - (fcMap[b][floor]||0));
                     const pick = remaining.shift();
                     assignments.push({ empName: pick, floor });
@@ -748,6 +772,12 @@ const App = () => {
                     lastAssigned.add(a.empName);
                     if (!weeklyAssigned[a.empName]) weeklyAssigned[a.empName] = new Set();
                     weeklyAssigned[a.empName].add(weekNum);
+                });
+                // 手動已排的人也算今日有排班，避免明天連續
+                manualEmps.forEach(n => {
+                    lastAssigned.add(n);
+                    if (!weeklyAssigned[n]) weeklyAssigned[n] = new Set();
+                    weeklyAssigned[n].add(weekNum);
                 });
                 newDuties[dateStr] = assignments;
             }
