@@ -250,6 +250,27 @@
       </button>
       <p class="text-slate-400 text-sm md:text-xl italic font-medium">※ 下載後請至手機的「檔案」或「下載管理」查看</p>
     </div>
+
+    <!-- 第三步（備案）：上傳失敗 -->
+    <div id="step-failed" class="hidden bg-white rounded-3xl md:rounded-[3rem] shadow-2xl p-6 md:p-16 text-center border-t-[10px] md:border-t-[16px] border-red-500">
+      <div class="text-6xl md:text-[120px] mb-4 md:mb-6">⚠️</div>
+      <h1 class="text-2xl md:text-5xl font-black text-red-600 mb-3 md:mb-6">上傳沒有成功</h1>
+      <p class="text-slate-700 text-base md:text-2xl mb-2 md:mb-4 font-bold">您的簽名已完成，但上傳到系統失敗。</p>
+      <p class="text-slate-500 text-sm md:text-xl mb-6 md:mb-10 leading-relaxed">
+        可能是網路不穩造成的。<br>
+        <span class="text-red-600 font-bold">請點下方按鈕下載收據 PDF，傳給您的業務即可完成。</span>
+      </p>
+
+      <button onclick="downloadReceiptPDF()" class="w-full bg-red-600 hover:bg-red-700 text-white font-black py-5 md:py-9 rounded-2xl md:rounded-[2.5rem] text-xl md:text-4xl shadow-xl big-btn flex items-center justify-center gap-2 md:gap-4 mb-3 md:mb-6">
+        📥 下載收據 PDF
+      </button>
+      <p class="text-slate-600 text-sm md:text-lg font-bold mb-6 md:mb-10">下載完請在 LINE 傳給您的業務</p>
+
+      <button onclick="retryUpload()" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-3 md:py-6 rounded-xl md:rounded-2xl text-base md:text-2xl big-btn mb-2 md:mb-4">
+        🔄 再試一次上傳
+      </button>
+      <p id="failed-detail" class="text-slate-400 text-xs md:text-sm italic mt-4 md:mt-6">錯誤代碼：-</p>
+    </div>
   </div>
 
   <!-- PDF 生成區域 (隱藏) -->
@@ -602,12 +623,13 @@
         }
     }
 
-    // 【修正】提交資料：先產生 PDF，放入 input，再送出
+    // 2026-04-23：送出後回頭查 Ragic 驗證資料真的有寫入。
+    // 寫入失敗時切到 step-failed，引導房客下載 PDF 傳給業務，避免「以為成功其實沒進系統」。
     async function submitData() {
       if (!signaturePad || signaturePad.isEmpty()) { alert("請先完成簽名喔！"); return; }
       if (!recordId) { alert("系統錯誤：無法取得單號 (Record ID)，無法存檔。請重新載入。"); return; }
 
-      $("loader").classList.remove('hidden'); 
+      $("loader").classList.remove('hidden');
       $("loader-text").innerText = "正在生成收據 PDF 並上傳...";
 
       try {
@@ -616,7 +638,7 @@
           if($("pdf_signature_img")) $("pdf_signature_img").src = sigData;
           if($("hidden_signature")) $("hidden_signature").value = sigData;
 
-          // 2. 等待圖片渲染 (雖然 src 是同步的，但稍微緩衝比較保險)
+          // 2. 等待圖片渲染
           await new Promise(r => setTimeout(r, 100));
 
           // 3. 生成 PDF Blob
@@ -626,7 +648,6 @@
           const fileInput = $("hidden_pdf_input");
           const dataTransfer = new DataTransfer();
           const fileName = `不動產要約定金收據_${$("show_final_name").innerText}.pdf`;
-          // 建立檔案物件
           const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
           dataTransfer.items.add(pdfFile);
           fileInput.files = dataTransfer.files;
@@ -636,19 +657,85 @@
           form.action = `${RAGIC_BASE_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_API_KEY)}`;
           form.submit();
 
-          // 6. 顯示成功
-          setTimeout(() => { 
-              $("loader").classList.add('hidden'); 
-              $("step-2").classList.add('hidden'); 
-              $("step-success").classList.remove('hidden'); 
-              window.scrollTo(0, 0); 
-          }, 4000); // 延長時間給檔案上傳
+          // 6. 切到驗證中畫面，3 秒後打 API 確認 Ragic 真的有收到
+          $("loader-text").innerText = "驗證中，請稍候...";
+          setTimeout(() => verifyUpload(), 3000);
 
       } catch (e) {
           console.error("PDF 生成或上傳失敗", e);
-          alert("自動上傳 PDF 失敗，但文字資料可能已送出。請手動下載 PDF 備份。");
-          $("loader").classList.add('hidden');
+          showFailed("PDF_GEN_" + (e.name || "ERROR"));
       }
+    }
+
+    // 驗證 Ragic 是否真的收到資料（姓名必填、簽名長度 > 500 判為有效）
+    function verifyUpload(attempt) {
+      attempt = attempt || 1;
+      const MAX_ATTEMPTS = 3;
+      const expectedName = ($("input_name").value || "").trim();
+
+      const cbName = "verifyCb_" + Date.now() + "_" + attempt;
+      let timed = false;
+      const timer = setTimeout(() => {
+        timed = true;
+        if (attempt < MAX_ATTEMPTS) verifyUpload(attempt + 1);
+        else showFailed("VERIFY_TIMEOUT");
+      }, 8000);
+
+      window[cbName] = function(data) {
+        if (timed) return;
+        clearTimeout(timer);
+        try {
+          const rec = findExactRecord(data, recordId) || {};
+          const gotName = (rec["1000792"] || rec["租客姓名"] || rec["1001091"] || "").toString().trim();
+          const sig = (rec["1000816"] || rec["租客簽名"] || "").toString();
+          const nameOk = expectedName ? gotName === expectedName : gotName.length > 0;
+          const sigOk = sig.length > 500;
+
+          if (nameOk && sigOk) {
+              $("loader").classList.add('hidden');
+              $("step-2").classList.add('hidden');
+              $("step-failed").classList.add('hidden');
+              $("step-success").classList.remove('hidden');
+              window.scrollTo(0, 0);
+          } else if (attempt < MAX_ATTEMPTS) {
+              // 再等 3 秒重試一次（Ragic 有時會延遲入庫）
+              setTimeout(() => verifyUpload(attempt + 1), 3000);
+          } else {
+              showFailed("VERIFY_MISSING_" + (!nameOk ? "NAME" : "SIG"));
+          }
+        } catch (err) {
+          console.error("verify parse error", err);
+          showFailed("VERIFY_PARSE");
+        } finally {
+          try { delete window[cbName]; } catch(_) {}
+        }
+      };
+
+      const script = document.createElement('script');
+      script.src = `${RAGIC_BASE_URL}/${recordId}.json?api&APIKey=${encodeURIComponent(RAGIC_API_KEY)}&callback=${cbName}&_=${Date.now()}`;
+      script.onerror = () => {
+        if (timed) return;
+        clearTimeout(timer);
+        if (attempt < MAX_ATTEMPTS) verifyUpload(attempt + 1);
+        else showFailed("VERIFY_NET");
+      };
+      document.body.appendChild(script);
+    }
+
+    function showFailed(code) {
+      $("loader").classList.add('hidden');
+      $("step-2").classList.add('hidden');
+      $("step-success").classList.add('hidden');
+      $("step-failed").classList.remove('hidden');
+      if ($("failed-detail")) $("failed-detail").innerText = "錯誤代碼：" + (code || "UNKNOWN");
+      window.scrollTo(0, 0);
+    }
+
+    function retryUpload() {
+      $("step-failed").classList.add('hidden');
+      $("step-2").classList.remove('hidden');
+      // 不清簽名，讓房客直接再按送出
+      window.scrollTo(0, document.body.scrollHeight);
     }
 
     function showFieldIds() {
