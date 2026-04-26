@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>租賃物件 — 窩的家</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+    .fade-in { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+  <div id="app"></div>
+
+  <script type="module">
+    import {
+      ensureAuth, renderUserBadge, isManager, ragicGet, ragicPost,
+      normalizeName, isExcluded, showToast, showLoading, confirmDialog,
+      escHtml, renderAddressInput, fetchStaffList,
+    } from './js/shared.js';
+
+    const app = document.getElementById('app');
+    const user = await ensureAuth(app);
+
+    // ── operation/4 inline helpers (來自 staff-dashboard.html) ──
+    const TYPE_MAP = {
+      '專任':'專任出租案','一般':'一般出租案',
+      '包租':'包租案','包租代管':'包租案',
+      '代管':'代管案','專任(含代管)':'代管案','一般(含代管)':'代管案',
+      '帶看同意':'帶看同意','社會住宅':'社會住宅',
+    };
+    const TYPE_OPTIONS = ['專任','一般','包租','包租代管','代管','專任(含代管)','一般(含代管)','帶看同意','社會住宅'];
+    const STATUS_OPTIONS = ['輸入中','代租中','已收定','整理中','維修中','已成交','下架'];
+    const STATUS_COLORS = {
+      '輸入中':'bg-slate-100 text-slate-600',
+      '代租中':'bg-red-100 text-red-700',
+      '已收定':'bg-blue-100 text-blue-700',
+      '整理中':'bg-amber-100 text-amber-700',
+      '維修中':'bg-amber-100 text-amber-700',
+      '已成交':'bg-emerald-100 text-emerald-700',
+      '下架':'bg-gray-200 text-gray-500',
+    };
+
+    function normalizeDistrict(d) { return (d && d.includes('|')) ? d.split('|')[1] : (d || ''); }
+    function fmtRent(v) {
+      const n = parseInt(parseFloat(v));
+      return isNaN(n) ? (v || '—') : n.toLocaleString();
+    }
+    function extractDevs(record) {
+      const sub = record['_subtable_1000254'] || {};
+      const out = [];
+      for (const [subId, row] of Object.entries(sub)) {
+        const name = (row['開發人員'] || '').trim();
+        if (!name) continue;
+        let ratio = 0;
+        try { ratio = parseFloat(row['比例'] || 0); } catch (e) {}
+        out.push({ subId, name, ratio, role: (row['合作角色'] || '').trim() });
+      }
+      return out;
+    }
+
+    // ── State ──
+    let allRecords = [];
+    let filtered = [];
+    let currentTypeFilter = 'all';   // all / 專任 / 一般 / 包租 / 代管 / 帶看同意 / 社會住宅
+    let currentStatusFilter = 'active'; // active(非下架) / all / 代租中 / 已收定 / 整理中 / 已成交 / 下架
+    let currentRoleFilter = 'mine';  // mine | all
+    let searchQuery = '';
+    let editingId = null; // null = list, 'new' = new, or record id
+
+    // ── Load ──
+    async function loadData() {
+      showLoading(app, '載入物件總表（近 365 天）...');
+      const today = new Date();
+      const yearAgo = new Date(today.getTime() - 365 * 86400000);
+      const fmt = d => `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+      const params = `subtables=true&where=${encodeURIComponent(`1000260,gte,${fmt(yearAgo)}`)}&limit=10000`;
+      const raw = await ragicGet('operation/4', params);
+      allRecords = [];
+      for (const [id, rec] of Object.entries(raw)) {
+        const devs = extractDevs(rec);
+        const devNames = devs.map(d => normalizeName(d.name));
+        allRecords.push({
+          id,
+          caseName: (rec['案名'] || '').trim(),
+          city: (rec['縣市'] || '').trim(),
+          district: normalizeDistrict(rec['鄉鎮市區'] || ''),
+          address: (rec['地址'] || '').trim(),
+          rent: rec['月租金'] || '',
+          rentNum: parseInt(parseFloat(rec['月租金'] || 0)) || 0,
+          status: (rec['狀態'] || '').trim(),
+          type: (rec['委託類型'] || '').trim(),
+          typeNorm: TYPE_MAP[(rec['委託類型'] || '').trim()] || '未分類',
+          layout: (rec['格局'] || '').trim(),
+          startDate: (rec['委託時間(起)'] || '').trim(),
+          devs,
+          devNames,
+          _raw: rec,
+        });
+      }
+      // 預設依委託時間倒序
+      allRecords.sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
+      applyFilters();
+    }
+
+    // ── Filter ──
+    function applyFilters() {
+      filtered = allRecords;
+
+      // role
+      if (currentRoleFilter === 'mine' && !isManager(user.name)) {
+        filtered = filtered.filter(r => r.devNames.includes(user.name));
+      }
+
+      // type
+      if (currentTypeFilter !== 'all') {
+        filtered = filtered.filter(r => {
+          const t = r.type;
+          if (currentTypeFilter === '包租') return ['包租','包租代管'].includes(t);
+          if (currentTypeFilter === '代管') return ['代管','專任(含代管)','一般(含代管)'].includes(t);
+          return t === currentTypeFilter;
+        });
+      }
+
+      // status
+      if (currentStatusFilter === 'active') {
+        filtered = filtered.filter(r => r.status !== '下架');
+      } else if (currentStatusFilter !== 'all') {
+        filtered = filtered.filter(r => r.status === currentStatusFilter);
+      }
+
+      // search
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        filtered = filtered.filter(r =>
+          (r.caseName || '').toLowerCase().includes(q) ||
+          (r.address || '').toLowerCase().includes(q) ||
+          (r.district || '').includes(q) ||
+          r.devNames.some(n => n.includes(q))
+        );
+      }
+
+      renderList();
+    }
+
+    // ── List ──
+    function renderList() {
+      const totalRent = filtered.reduce((s, r) => s + r.rentNum, 0);
+
+      app.innerHTML = `
+        <div class="max-w-7xl mx-auto px-4 py-4">
+          <div class="flex items-center gap-3 mb-3">
+            <a href="index.html" class="text-gray-500 hover:text-gray-700 text-sm">← 返回</a>
+            <button id="addBtn" class="bg-emerald-600 text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-emerald-700">+ 新增物件</button>
+            <div id="userBadge" class="ml-auto"></div>
+          </div>
+
+          <h1 class="text-2xl font-bold text-gray-900 mb-2">租賃物件</h1>
+          <p class="text-xs text-gray-400 mb-3">共 ${filtered.length} 筆 ｜ 月租總額 ${fmtRent(totalRent)} 元</p>
+
+          <!-- Search -->
+          <div class="flex gap-2 mb-2 items-center">
+            <input id="searchInput" type="text" placeholder="搜尋案名、地址、行政區、開發人..." value="${escHtml(searchQuery)}"
+              class="flex-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+          </div>
+
+          <!-- Role + Type filter chips -->
+          <div class="flex flex-wrap gap-1 mb-2 items-center">
+            <span class="text-xs text-gray-500 mr-1">範圍：</span>
+            ${['mine','all'].map(f => {
+              const labels = { mine: '我的', all: '全部' };
+              const active = currentRoleFilter === f;
+              return `<button data-role="${f}" class="role-chip px-3 py-1 text-xs font-medium border ${active ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}">${labels[f]}</button>`;
+            }).join('')}
+            <span class="text-xs text-gray-500 ml-3 mr-1">類型：</span>
+            ${['all','專任','一般','包租','代管','帶看同意','社會住宅'].map(f => {
+              const active = currentTypeFilter === f;
+              const label = f === 'all' ? '全部' : f;
+              return `<button data-type="${f}" class="type-chip px-3 py-1 text-xs font-medium border ${active ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}">${label}</button>`;
+            }).join('')}
+          </div>
+
+          <!-- Status filter chips -->
+          <div class="flex flex-wrap gap-1 mb-3 items-center">
+            <span class="text-xs text-gray-500 mr-1">狀態：</span>
+            ${['active','all','代租中','已收定','整理中','已成交','下架'].map(f => {
+              const active = currentStatusFilter === f;
+              const labels = { active: '使用中', all: '全部' };
+              const label = labels[f] || f;
+              return `<button data-status="${f}" class="status-chip px-3 py-1 text-xs font-medium border ${active ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}">${label}</button>`;
+            }).join('')}
+          </div>
+
+          <!-- Table -->
+          <table class="w-full border border-gray-300 text-sm">
+            <thead>
+              <tr class="bg-emerald-700 text-white text-xs">
+                <th class="py-2 px-3 text-left font-medium border-r border-emerald-600">委託日</th>
+                <th class="py-2 px-3 text-left font-medium border-r border-emerald-600">案名</th>
+                <th class="py-2 px-3 text-left font-medium border-r border-emerald-600">行政區 / 地址</th>
+                <th class="py-2 px-3 text-right font-medium border-r border-emerald-600 w-24">月租</th>
+                <th class="py-2 px-3 text-left font-medium border-r border-emerald-600 w-24">委託類型</th>
+                <th class="py-2 px-3 text-left font-medium border-r border-emerald-600 w-20">狀態</th>
+                <th class="py-2 px-3 text-left font-medium">開發人員</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filtered.length === 0
+                ? '<tr><td colspan="7" class="text-center text-gray-400 py-8">沒有符合條件的物件</td></tr>'
+                : filtered.map(r => {
+                  const isOff = r.status === '下架';
+                  const rowCls = isOff ? 'text-gray-400 line-through' : '';
+                  const peopleStr = r.devs
+                    .filter(d => d.ratio > 0)
+                    .map(d => `${normalizeName(d.name)} ${Math.round(d.ratio*100)}%`)
+                    .join('、');
+                  const statusCls = STATUS_COLORS[r.status] || 'bg-gray-100 text-gray-600';
+                  return `
+                    <tr class="border-b border-gray-200 hover:bg-emerald-50 cursor-pointer ${rowCls}" data-id="${r.id}">
+                      <td class="py-2 px-3 border-r border-gray-200 text-gray-500 whitespace-nowrap text-xs">${(r.startDate || '—').slice(0, 10)}</td>
+                      <td class="py-2 px-3 border-r border-gray-200 font-bold text-gray-900">${escHtml(r.caseName) || '—'}</td>
+                      <td class="py-2 px-3 border-r border-gray-200">
+                        <div class="font-medium text-gray-700">${escHtml(r.district)}</div>
+                        <div class="text-xs text-gray-400 truncate max-w-xs">${escHtml(r.address)}</div>
+                      </td>
+                      <td class="py-2 px-3 border-r border-gray-200 text-right">${fmtRent(r.rent)}</td>
+                      <td class="py-2 px-3 border-r border-gray-200 text-xs">${escHtml(r.type) || '—'}</td>
+                      <td class="py-2 px-3 border-r border-gray-200">
+                        <span class="px-2 py-0.5 rounded text-xs font-medium ${statusCls}">${escHtml(r.status) || '—'}</span>
+                      </td>
+                      <td class="py-2 px-3 text-xs text-gray-600">${escHtml(peopleStr) || '—'}</td>
+                    </tr>`;
+                }).join('')}
+            </tbody>
+          </table>
+        </div>`;
+
+      renderUserBadge(document.getElementById('userBadge'), user);
+
+      document.getElementById('searchInput').addEventListener('input', e => {
+        searchQuery = e.target.value.trim();
+        applyFilters();
+      });
+
+      document.querySelectorAll('.role-chip').forEach(btn => {
+        btn.addEventListener('click', () => { currentRoleFilter = btn.dataset.role; applyFilters(); });
+      });
+      document.querySelectorAll('.type-chip').forEach(btn => {
+        btn.addEventListener('click', () => { currentTypeFilter = btn.dataset.type; applyFilters(); });
+      });
+      document.querySelectorAll('.status-chip').forEach(btn => {
+        btn.addEventListener('click', () => { currentStatusFilter = btn.dataset.status; applyFilters(); });
+      });
+
+      document.getElementById('addBtn').addEventListener('click', () => {
+        editingId = 'new';
+        renderEditPage();
+      });
+
+      document.querySelectorAll('tr[data-id]').forEach(row => {
+        row.addEventListener('click', () => {
+          editingId = row.dataset.id;
+          renderEditPage();
+        });
+      });
+
+      // Manager 預設看全部
+      if (isManager(user.name) && currentRoleFilter === 'mine') {
+        currentRoleFilter = 'all';
+        applyFilters();
+      }
+    }
+
+    // ── Edit Page ──
+    function renderEditPage() {
+      const rec = editingId === 'new' ? null : allRecords.find(r => r.id === editingId);
+      const isNew = !rec;
+
+      app.innerHTML = `
+        <div class="max-w-5xl mx-auto px-4 py-4 fade-in">
+          <div class="flex items-center gap-3 mb-3">
+            <button id="backBtn" class="text-gray-500 hover:text-gray-700 text-sm">← 返回</button>
+            <button id="saveBtn" class="bg-emerald-600 text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-emerald-700 ml-auto">儲存</button>
+          </div>
+
+          <h1 class="text-2xl font-bold text-gray-900 mb-3">${isNew ? '新增租賃物件' : '編輯租賃物件'}</h1>
+
+          ${!isNew ? `
+          <div class="flex justify-end mb-2 gap-2">
+            <a href="https://ap15.ragic.com/wuohome/operation/4/${rec.id}" target="_blank" class="text-xs text-blue-600 hover:underline">在 Ragic 開啟 ↗</a>
+          </div>` : ''}
+
+          <!-- 物件基本資料 -->
+          <div class="bg-emerald-700 text-white text-center py-1.5 text-sm font-medium">物件基本資料</div>
+          <table class="w-full border border-gray-300 text-sm mb-0">
+            <tr class="border-b border-gray-300">
+              <td class="bg-gray-100 text-gray-600 px-3 py-2 w-24 border-r border-gray-300">案名</td>
+              <td class="px-2 py-1 border-r border-gray-300" colspan="3">
+                <input id="fCaseName" class="w-full px-2 py-1 text-base font-bold focus:outline-none focus:ring-1 focus:ring-emerald-400" value="${escHtml(rec?.caseName || '')}" />
+              </td>
+              <td class="bg-gray-100 text-gray-600 px-3 py-2 w-24 border-r border-gray-300">委託時間(起)</td>
+              <td class="px-2 py-1">
+                <input id="fStartDate" type="date" class="w-full px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-400" value="${(rec?.startDate || '').slice(0,10).replace(/\//g,'-')}" />
+              </td>
+            </tr>
+            <tr class="border-b border-gray-300">
+              <td class="bg-gray-100 text-gray-600 px-3 py-2 border-r border-gray-300">地址</td>
+              <td class="px-2 py-1 border-r border-gray-300" colspan="5">
+                <div id="addrInput"></div>
+              </td>
+            </tr>
+            <tr class="border-b border-gray-300">
+              <td class="bg-gray-100 text-gray-600 px-3 py-2 border-r border-gray-300">月租金</td>
+              <td class="px-2 py-1 border-r border-gray-300">
+                <input id="fRent" type="number" class="w-full px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-emerald-400" value="${rec?.rent || ''}" />
+              </td>
+              <td class="bg-gray-100 text-gray-600 px-3 py-2 w-24 border-r border-gray-300">格局</td>
+              <td class="px-2 py-1 border-r border-gray-300">
+                <input id="fLayout" class="w-full px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-400" value="${escHtml(rec?.layout || '')}" placeholder="3房2廳" />
+              </td>
+              <td class="bg-gray-100 text-gray-600 px-3 py-2 border-r border-gray-300">委託類型</td>
+              <td class="px-2 py-1">
+                <select id="fType" class="w-full px-1 py-1 focus:outline-none">
+                  <option value="">— 請選擇 —</option>
+                  ${TYPE_OPTIONS.map(t => `<option value="${t}" ${rec?.type === t ? 'selected' : ''}>${t}</option>`).join('')}
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td class="bg-gray-100 text-gray-600 px-3 py-2 border-r border-gray-300">狀態</td>
+              <td class="px-2 py-1 border-r border-gray-300" colspan="5">
+                <select id="fStatus" class="px-2 py-1 focus:outline-none border border-gray-200 rounded">
+                  ${STATUS_OPTIONS.map(s => `<option value="${s}" ${rec?.status === s ? 'selected' : (isNew && s === '輸入中' ? 'selected' : '')}>${s}</option>`).join('')}
+                </select>
+              </td>
+            </tr>
+          </table>
+
+          <!-- 開發業務子表 -->
+          <div class="bg-gray-700 text-white text-center py-1.5 text-sm font-medium mt-4">開發業務（多人協作可填多筆，比例加總建議 ≤ 100%）</div>
+          <table class="w-full border border-gray-300 text-sm mb-0">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-300">
+                <th class="text-left px-3 py-2 text-gray-600 font-medium border-r border-gray-200 w-48">開發人員</th>
+                <th class="text-left px-3 py-2 text-gray-600 font-medium border-r border-gray-200 w-28">比例</th>
+                <th class="text-left px-3 py-2 text-gray-600 font-medium border-r border-gray-200">合作角色（可選）</th>
+                <th class="text-center px-2 py-2 text-gray-600 font-medium w-12"></th>
+              </tr>
+            </thead>
+            <tbody id="devList"></tbody>
+          </table>
+          <div class="border border-t-0 border-gray-300 px-3 py-1.5 bg-gray-50">
+            <button id="addDevBtn" class="text-blue-600 hover:text-blue-800 text-sm">+ 新增開發人</button>
+            <span id="devSum" class="text-xs text-gray-500 ml-3"></span>
+          </div>
+
+          ${!isNew ? `
+          <div class="flex gap-8 mt-4 text-sm text-gray-500 border-t border-gray-200 pt-3">
+            <span>建立日期　${rec._raw['建立日期'] || ''}</span>
+            <span>最後修改時間　${rec._raw['最後修改時間'] || ''}</span>
+          </div>` : ''}
+        </div>`;
+
+      // 結構化地址
+      const fullAddr = rec ? `${rec.city}${rec.district}${rec.address.replace(rec.city, '').replace(rec.district, '')}` : '';
+      const addrInputApi = renderAddressInput(document.getElementById('addrInput'), fullAddr);
+
+      // 開發人下拉資料
+      const staffPromise = fetchStaffList();
+
+      // 開發人 state
+      const devState = isNew
+        ? [{ subId: null, name: user.name, ratio: '1.00', role: '主開發' }]
+        : (rec.devs.length
+            ? rec.devs.map(d => ({ subId: d.subId, name: d.name, ratio: String(d.ratio || ''), role: d.role || '' }))
+            : [{ subId: null, name: user.name, ratio: '1.00', role: '主開發' }]);
+
+      async function renderDevs() {
+        const staff = await staffPromise;
+        const container = document.getElementById('devList');
+        container.innerHTML = devState.map((d, i) => `
+          <tr class="border-b border-gray-200 hover:bg-gray-50">
+            <td class="px-2 py-1.5 border-r border-gray-200">
+              <select class="dev-name w-full px-1 py-1 text-sm focus:outline-none" data-i="${i}">
+                <option value="">— 選擇 —</option>
+                ${staff.map(s => `<option value="${escHtml(s.name)}" ${d.name === s.name ? 'selected' : ''}>${s.name}（${s.dept}）</option>`).join('')}
+              </select>
+            </td>
+            <td class="px-2 py-1.5 border-r border-gray-200">
+              <input class="dev-ratio w-full px-1 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-400" data-i="${i}" type="number" min="0" max="1" step="0.05" value="${escHtml(d.ratio)}" placeholder="0~1" />
+            </td>
+            <td class="px-2 py-1.5 border-r border-gray-200">
+              <input class="dev-role w-full px-1 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" data-i="${i}" value="${escHtml(d.role)}" placeholder="主開發 / 協開 / 牽線" />
+            </td>
+            <td class="text-center py-1.5">
+              ${devState.length > 1 ? `<button class="del-dev text-gray-300 hover:text-red-500 text-sm" data-i="${i}">×</button>` : ''}
+            </td>
+          </tr>
+        `).join('');
+
+        container.querySelectorAll('.dev-name').forEach(el => el.addEventListener('change', () => {
+          devState[+el.dataset.i].name = el.value; updateSum();
+        }));
+        container.querySelectorAll('.dev-ratio').forEach(el => el.addEventListener('input', () => {
+          devState[+el.dataset.i].ratio = el.value; updateSum();
+        }));
+        container.querySelectorAll('.dev-role').forEach(el => el.addEventListener('input', () => {
+          devState[+el.dataset.i].role = el.value;
+        }));
+        container.querySelectorAll('.del-dev').forEach(btn => btn.addEventListener('click', () => {
+          devState.splice(+btn.dataset.i, 1); renderDevs();
+        }));
+        updateSum();
+      }
+
+      function updateSum() {
+        const sum = devState.reduce((s, d) => s + (parseFloat(d.ratio) || 0), 0);
+        const el = document.getElementById('devSum');
+        if (!el) return;
+        const pct = Math.round(sum * 100);
+        let cls = 'text-gray-500';
+        if (pct > 100) cls = 'text-red-600 font-bold';
+        else if (pct === 100) cls = 'text-emerald-600 font-medium';
+        else if (pct < 100 && pct > 0) cls = 'text-amber-600';
+        el.className = `text-xs ${cls} ml-3`;
+        el.textContent = `比例加總 ${pct}%`;
+      }
+
+      renderDevs();
+
+      document.getElementById('addDevBtn').addEventListener('click', () => {
+        devState.push({ subId: null, name: '', ratio: '', role: '' });
+        renderDevs();
+      });
+
+      document.getElementById('backBtn').addEventListener('click', () => {
+        editingId = null; applyFilters();
+      });
+
+      // ── Save ──
+      document.getElementById('saveBtn').addEventListener('click', async () => {
+        const caseName = document.getElementById('fCaseName').value.trim();
+        if (!caseName) { showToast('請填寫案名', 'error'); return; }
+
+        const addr = addrInputApi.getAddress();
+        // 從 addr 拆 city/district（renderAddressInput 內部結構化）
+        const cityMatch = addr.match(/^(.+?[市縣])/);
+        const distMatch = addr.match(/[市縣](.+?[區鎮鄉])/);
+        const city = cityMatch ? cityMatch[1] : '';
+        const dist = distMatch ? distMatch[1] : '';
+        const streetOnly = addr.replace(city, '').replace(dist, '');
+
+        const fStartDate = document.getElementById('fStartDate').value;
+        const startDateStr = fStartDate ? fStartDate.replace(/-/g, '/') : '';
+
+        const fields = {
+          '1000050': caseName,
+          '1000051': city,
+          '1000052': dist,
+          '1000055': addr,
+          '1000076': document.getElementById('fRent').value,
+          '1000248': document.getElementById('fType').value,
+          '1000707': document.getElementById('fStatus').value,
+        };
+        if (startDateStr) fields['1000260'] = startDateStr;
+        const layout = document.getElementById('fLayout').value.trim();
+        // 注意：格局欄位在 staff-dashboard 用 '格局' 中文 key 讀，但寫入 field id 待後續確認；先以中文鍵名 fallback
+        // 暫不寫格局 field id，等確認
+
+        const saveBtn = document.getElementById('saveBtn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = '儲存中...';
+
+        try {
+          let recordId;
+          if (isNew) {
+            const result = await ragicPost('operation/4', fields);
+            recordId = result.ragicId;
+          } else {
+            await ragicPost(`operation/4/${editingId}`, fields);
+            recordId = editingId;
+          }
+
+          // 開發業務子表
+          for (const d of devState) {
+            if (!d.name) continue;
+            const ratio = parseFloat(d.ratio) || 0;
+            if (d.subId) {
+              await ragicPost(`operation/4/${recordId}`, {
+                [`1000251_${d.subId}`]: d.name,
+                [`1000253_${d.subId}`]: String(ratio),
+                [`1000255_${d.subId}`]: d.role || '',
+              });
+            } else if (ratio > 0) {
+              await ragicPost(`operation/4/${recordId}`, {
+                '1000251_NEW_0': d.name,
+                '1000253_NEW_0': String(ratio),
+                '1000255_NEW_0': d.role || '',
+              });
+            }
+          }
+
+          showToast(isNew ? '新增成功！' : '儲存成功！');
+          editingId = null;
+          await loadData();
+        } catch (err) {
+          showToast('儲存失敗：' + err.message, 'error');
+          saveBtn.disabled = false;
+          saveBtn.textContent = '儲存';
+        }
+      });
+    }
+
+    // ── Init ──
+    await loadData();
+  </script>
+</body>
+</html>

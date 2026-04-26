@@ -602,28 +602,51 @@
           const owner = document.getElementById('fOwner').value.trim();
           const phone = document.getElementById('fPhone').value.trim();
           const mainDev = document.getElementById('fMainDev').value;
+          const subDev = document.getElementById('fSubDev').value;
+
+          // 從地址抽縣市/區（renderAddressInput 內部結構化但拼接後 inline）
+          const cityMatch = addr.match(/^(.+?[市縣])/);
+          const distMatch = addr.match(/[市縣](.+?[區鎮鄉])/);
+          const city = cityMatch ? cityMatch[1] : '';
+          const dist = distMatch ? distMatch[1] : '';
 
           // 1. Create 物件總表 record
           const propFields = {
             '1000050': p.caseName,       // 案名
+            '1000051': city,             // 縣市
+            '1000052': dist,             // 鄉鎮市區
             '1000055': addr,             // 地址
             '1000076': p.rent,           // 月租金
             '1000707': '輸入中',         // 狀態 = 輸入中
+            '1000260': new Date().toISOString().slice(0,10).replace(/-/g,'/'),  // 委託時間(起) = 今天
           };
           const result = await ragicPost('operation/4', propFields);
           const newPropId = result.ragicId;
 
-          // 2. Update 開發募集 subtable 1000121 (link to property)
-          if (editingId && editingId !== 'new') {
-            await ragicPost(`property-data-kept/17/${editingId}`, {
-              '1000050_NEW_0': p.caseName,  // 案名
-              '1000076_NEW_0': p.rent,      // 月租金
+          // 2. 寫主開發人到開發業務子表（_subtable_1000254）
+          if (mainDev) {
+            await ragicPost(`operation/4/${newPropId}`, {
+              '1000251_NEW_0': mainDev,
+              '1000253_NEW_0': '1',
+              '1000255_NEW_0': '主開發',
+            });
+          }
+          if (subDev && subDev !== mainDev) {
+            await ragicPost(`operation/4/${newPropId}`, {
+              '1000251_NEW_1': subDev,
+              '1000253_NEW_1': '0',
+              '1000255_NEW_1': '協開',
             });
           }
 
-          showToast(`已建立租賃物件 — ${p.caseName}`);
+          // 3. 標記本筆 propState 已轉入，UI 刷新
+          p._convertedTo = newPropId;
+          showToast(`已建立租賃物件 — ${p.caseName}（屋主 ${owner} ${phone}）。請到 Ragic 補屋主連結。`);
 
-          // Refresh
+          // 開新分頁打開 Ragic 該筆，方便業務補屋主關聯
+          window.open(`https://ap15.ragic.com/wuohome/operation/4/${newPropId}`, '_blank');
+
+          // 重新整理當前編輯頁，顯示「已轉入」狀態
           await loadData();
           if (editingId) renderEditPage();
         } catch (err) {
