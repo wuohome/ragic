@@ -103,6 +103,23 @@ SC.leaveWhere = (fromY, fromM, toY, toM) => {
     return `?where=${SC.F_LEAVE.DATE},gte,${from}&where=${SC.F_LEAVE.DATE},lte,${to}`;
 };
 
+// ── Ragic silent fail 偵測（DELETE / POST 共用） ──
+// Ragic 會回 HTTP 200 + status:"SUCCESS" 但 msg 含 "Field id ... not found" 之類警告，
+// 實際操作沒生效。三層檢查：status / msg 警告字眼 / error 欄位
+SC._checkRagicResponse = (parsed, opLabel) => {
+    if (!parsed || typeof parsed !== "object") return;
+    // 1. status 不是 SUCCESS → 失敗
+    if (parsed.status && String(parsed.status).toUpperCase() !== "SUCCESS") {
+        throw new Error(`${opLabel} failed: ${JSON.stringify(parsed)}`);
+    }
+    // 2. SUCCESS 但 msg 含警告字眼 → silent fail
+    if (parsed.msg && /not found|invalid|Field id|Form Index/i.test(parsed.msg)) {
+        throw new Error(`${opLabel} silent fail: ${parsed.msg}`);
+    }
+    // 3. 有 error 欄位 → 失敗
+    if (parsed.error) throw new Error(`${opLabel} error: ${parsed.error}`);
+};
+
 // ── API 呼叫（含重試）──
 SC.apiFetch = async (path, opts = {}, retries = 3) => {
     const sep = path.includes("?") ? "&" : "?";
@@ -115,13 +132,21 @@ SC.apiFetch = async (path, opts = {}, retries = 3) => {
         }
         if (!res.ok) throw new Error(`API ${res.status}`);
         if (opts.method === "DELETE") {
-            // Ragic DELETE silent fail 防呆：必須解析 body 檢查 error / 非 SUCCESS
-            // 系統預排紀錄 DELETE 可能回 200 但實際沒刪，導致前端 state 漂移
+            // Ragic DELETE silent fail 防呆（200 + SUCCESS 但其實沒刪）
             const body = await res.text();
-            if (body && body.includes('"error"')) throw new Error("DELETE failed: " + body);
-            return {};
+            if (!body) return {};
+            let parsed;
+            try { parsed = JSON.parse(body); } catch { return {}; }
+            SC._checkRagicResponse(parsed, "DELETE");
+            return parsed;
         }
-        return res.json();
+        // GET/POST：解析 JSON 後也檢查 silent fail
+        // POST 成功時 ragicId 會帶回；status 非 SUCCESS / msg 警告 / error 都要擋
+        const parsed = await res.json();
+        if (opts.method === "POST") {
+            SC._checkRagicResponse(parsed, "POST");
+        }
+        return parsed;
     }
 };
 
