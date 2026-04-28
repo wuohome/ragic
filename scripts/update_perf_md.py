@@ -40,7 +40,7 @@ NAME_ALIASES = {
     'jerry': '曾正煌', 'Jerry': '曾正煌', 'JERRY': '曾正煌', '煌': '曾正煌',
     '慧慧': '張玉慧', '惠惠': '張玉慧',
     'sussana': '謝佳芬', 'Sussana': '謝佳芬',
-    '勁豪': '朱勁豪',
+    '勁豪': '陳勁豪',  # FIX-2026-04-28-jinghao-alias: Ragic 人事表是陳勁豪不是朱勁豪
     '偉民': '林偉民',
     '李維': '李維',
 }
@@ -134,32 +134,35 @@ def parse_employee_sheet(rows: list) -> tuple:
 
 
 def fetch_all_perf() -> dict:
-    """抓所有 gid，解析員工 sheet 業績，回傳 {本名: 業績}（已套綽號 + 合併夫妻檔 + 排除）"""
+    """每個 gid 都跑同一套解析（找成交案源表後第一個總計 row 業績欄）。
+       不挑 sheet — 結構不對的自然抓 0；結構對的就有值。每張都印 log 透明化。"""
     gids = discover_gids()
-    print(f"發現 {len(gids)} 個 sheet")
+    print(f"發現 {len(gids)} 個 sheet（全部都會解析，不挑）")
+    print(f"{'GID':>15}  {'NAME':<14}  {'PERF':>10}")
+    print('-' * 45)
     raw = {}
-    skipped = 0
     for gid in gids:
         url = f'https://docs.google.com/spreadsheets/d/e/{PUBKEY}/pub?gid={gid}&single=true&output=csv'
         try:
             text = fetch(url, timeout=20)
             rows = list(csv.reader(io.StringIO(text)))
         except Exception as e:
-            print(f"  gid={gid} fetch fail: {e}", file=sys.stderr)
+            print(f"{gid:>15}  fetch fail: {e}", file=sys.stderr)
             continue
 
         name_raw, perf = parse_employee_sheet(rows)
-        if name_raw is None:
-            skipped += 1
-            continue
+        display_name = name_raw or '(非員工 sheet)'
+        print(f"{gid:>15}  {display_name:<14}  {perf:>10,}")
 
+        if name_raw is None:
+            continue
         name = normalize_name(name_raw)
         if not name or name in EXCLUDE_DEVS or '測試' in name:
             continue
-
         raw[name] = raw.get(name, 0) + perf
 
-    print(f"  解析員工 {len(raw)} 人，跳過非員工 sheet {skipped} 張")
+    print('-' * 45)
+    print(f"員工解析人數：{len(raw)}（合計 {sum(raw.values()):,}）")
     return raw
 
 
