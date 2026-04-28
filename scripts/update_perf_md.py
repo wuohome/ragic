@@ -16,6 +16,7 @@ import sys
 import urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from typing import Optional
 
 CSV_URL = (
     'https://docs.google.com/spreadsheets/d/e/'
@@ -50,7 +51,7 @@ def normalize_name(name: str) -> str:
     return NAME_ALIASES.get(name, name)
 
 
-def parse_csv(text: str) -> list[dict]:
+def parse_csv(text: str) -> list:
     """解析 GSheet CSV，回傳 [{'name': ..., 'perf': int}, ...]，依業績降序"""
     lines = text.split('\n')[1:]  # 跳過表頭
     raw = []
@@ -77,7 +78,7 @@ def parse_csv(text: str) -> list[dict]:
             raw.append({'raw': raw_name, 'name': name, 'perf': amount})
 
     # 合併同名（張忠豪 + WEIWEI 都 normalize 成張忠豪&蕭眞儀）
-    merged: dict[str, int] = {}
+    merged = {}  # type: dict
     for r in raw:
         merged[r['name']] = merged.get(r['name'], 0) + r['perf']
 
@@ -98,7 +99,7 @@ def fmt_num(n: int) -> str:
     return f"{n:,}"
 
 
-def build_section(ym_label: str, data: list[dict], total_perf: int) -> str:
+def build_section(ym_label: str, data: list, total_perf: int) -> str:
     """
     產出完整的月份 section，格式與歷史月份一致：
 
@@ -133,7 +134,7 @@ def build_section(ym_label: str, data: list[dict], total_perf: int) -> str:
     return "\n".join(lines)
 
 
-def section_hash(text: str, h2_title: str) -> str | None:
+def section_hash(text: str, h2_title: str) -> Optional[str]:
     """計算指定 ## 標題 section 的 MD5（不含當月，用來驗算其他月份不被動到）"""
     pattern = re.compile(r'^## ', re.MULTILINE)
     matches = list(pattern.finditer(text))
@@ -160,7 +161,7 @@ def update_vault_md(vault_md_path: Path, ym_label: str, new_section: str) -> boo
 
     # 收集其他月份（民國年格式 NNN/MM）的 hash
     roc_h2 = re.compile(r'^## \d{3}/\d{2}\s*$')
-    other_hashes: dict[str, str] = {}
+    other_hashes = {}  # type: dict
     for i, m in enumerate(matches):
         line_end = original.index('\n', m.start())
         title = original[m.start():line_end].strip()
