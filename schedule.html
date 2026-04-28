@@ -455,6 +455,25 @@ const App = () => {
         const existingList = leaves[key] || [];
         const sameTypeEntry = existingList.find(e => e.type === mode);
 
+        // 值班模式：當天每人最多 1 位，點別人 = 換值班（原子操作）
+        // 找出當天已有的其他人值班（不含自己）
+        let otherZhibanEntries = [];
+        if (mode === "值班" && !sameTypeEntry) {
+            Object.entries(leaves).forEach(([k, arr]) => {
+                if (!k.endsWith("|" + dateStr)) return;
+                const otherEmp = k.split("|")[0];
+                if (otherEmp === empName) return;
+                if (!Array.isArray(arr)) return;
+                arr.forEach(e => {
+                    if (e.type === "值班") otherZhibanEntries.push({ key: k, empName: otherEmp, ragicId: e.ragicId });
+                });
+            });
+            if (otherZhibanEntries.length > 0) {
+                const oldNames = otherZhibanEntries.map(e => e.empName).join("、");
+                if (!window.confirm(`${dateStr} 目前值班是 ${oldNames}，要換成 ${empName} 嗎？`)) return;
+            }
+        }
+
         // 排休上限 8 天警告（只在新增時檢查）
         if (mode === "排休" && !sameTypeEntry) {
             const count = Object.entries(leaves).filter(([k,arr]) =>
@@ -472,6 +491,14 @@ const App = () => {
         }
 
         setSaving(s => ({...s, [key]: true}));
+        // 值班換人：把舊值班所有人的 key 也鎖住，避免同時點
+        if (otherZhibanEntries.length > 0) {
+            setSaving(s => {
+                const n = {...s};
+                otherZhibanEntries.forEach(e => { n[e.key] = true; });
+                return n;
+            });
+        }
         try {
             if (sameTypeEntry) {
                 // 同類型已存在 → 清除（保留其他類型）
@@ -484,6 +511,31 @@ const App = () => {
                 });
                 showToast(`${empName} ${dateStr} ${mode}已清除`);
             } else {
+                // 換值班原子操作：先 DELETE 所有舊值班紀錄，全部成功才 POST 新人
+                // 任一 DELETE 失敗 → throw → 不更新 state、不 POST 新人，避免狀態漂移
+                if (otherZhibanEntries.length > 0) {
+                    for (const oldZ of otherZhibanEntries) {
+                        try {
+                            await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${oldZ.ragicId}`, { method:"DELETE" });
+                        } catch (delErr) {
+                            // DELETE 失敗：alert 並中止，不 POST 新人，state 維持原樣
+                            const msg = `換值班失敗：舊紀錄（${oldZ.empName}）沒刪掉。請重新整理頁面後再試，或聯絡 Joan 處理。\n\n錯誤：${delErr.message}`;
+                            window.alert(msg);
+                            throw new Error(`DELETE old 值班 ${oldZ.empName}/${oldZ.ragicId} 失敗：${delErr.message}`);
+                        }
+                        await sleep(150);
+                    }
+                    // DELETE 都成功 → 從 state 移除舊值班
+                    setLeaves(l => {
+                        const n = {...l};
+                        otherZhibanEntries.forEach(oldZ => {
+                            const newList = (n[oldZ.key] || []).filter(e => e.ragicId !== oldZ.ragicId);
+                            if (newList.length === 0) delete n[oldZ.key]; else n[oldZ.key] = newList;
+                        });
+                        return n;
+                    });
+                }
+
                 // 新增當前類型（不影響其他類型紀錄）
                 const params = new URLSearchParams();
                 params.append(CONFIG.F_LEAVE.EMP, empName);
@@ -492,20 +544,51 @@ const App = () => {
                 params.append(CONFIG.F_LEAVE.MONTH, String(month));
                 params.append(CONFIG.F_LEAVE.TYPE, mode);
                 const empObj = employees.find(e => e.name === empName);
-                if (empObj && empObj.dept) params.append(CONFIG.F_LEAVE.DEPT, empObj.dept);
-                const res = await SC.apiFetch(CONFIG.LEAVE_PATH, {
-                    method: "POST",
-                    headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                    body: params.toString()
-                });
+                // 換值班預設標記為「手動變更」，跟系統預排區分
+                if (mode === "值班" && otherZhibanEntries.length > 0) {
+                    params.append(CONFIG.F_LEAVE.DEPT, "手動變更");
+                } else if (empObj && empObj.dept) {
+                    params.append(CONFIG.F_LEAVE.DEPT, empObj.dept);
+                }
+                let res;
+                try {
+                    res = await SC.apiFetch(CONFIG.LEAVE_PATH, {
+                        method: "POST",
+                        headers: {"Content-Type":"application/x-www-form-urlencoded"},
+                        body: params.toString()
+                    });
+                } catch (postErr) {
+                    // POST 新人失敗：舊值班已刪、新值班沒進去 → 警告 Joan
+                    if (otherZhibanEntries.length > 0) {
+                        const oldNames = otherZhibanEntries.map(e => e.empName).join("、");
+                        window.alert(`換值班只完成一半：${oldNames} 已從 Ragic 刪除，但 ${empName} 沒寫進去。\n請重新整理頁面後再點 ${empName} 一次。\n\n錯誤：${postErr.message}`);
+                    }
+                    throw postErr;
+                }
+                if (!res || !res.ragicId) {
+                    if (otherZhibanEntries.length > 0) {
+                        const oldNames = otherZhibanEntries.map(e => e.empName).join("、");
+                        window.alert(`換值班疑似失敗：${oldNames} 已刪、但 ${empName} 寫入沒拿到 ragicId。請重新整理確認資料狀態。`);
+                    }
+                    throw new Error("POST 沒拿到 ragicId");
+                }
                 setLeaves(l => ({...l, [key]: [...(l[key] || []), { ragicId: String(res.ragicId), type: mode }]}));
-                showToast(`${empName} ${dateStr} ${mode}`);
+                if (otherZhibanEntries.length > 0) {
+                    showToast(`${dateStr} 值班已換成 ${empName}`);
+                } else {
+                    showToast(`${empName} ${dateStr} ${mode}`);
+                }
             }
         } catch(e) {
             console.error(e);
             showToast("儲存失敗: " + e.message, false);
         }
-        setSaving(s => { const n = {...s}; delete n[key]; return n; });
+        setSaving(s => {
+            const n = {...s};
+            delete n[key];
+            otherZhibanEntries.forEach(oz => { delete n[oz.key]; });
+            return n;
+        });
     };
 
     const handleAutoSchedule = async () => {
