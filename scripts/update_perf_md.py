@@ -84,7 +84,7 @@ def parse_csv(text: str) -> list:
 
     return sorted(
         [{'name': n, 'perf': p} for n, p in merged.items()],
-        key=lambda x: -x[1]
+        key=lambda x: -x['perf']
     )
 
 
