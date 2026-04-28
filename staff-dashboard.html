@@ -918,7 +918,8 @@ async function fetchAllData() {
 
   ]);
   // 591 廣告另外抓（arch: vault md 已含當月 GSheet）
-  fetch('data/591-dashboard.json?v=' + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null).then(r => { AD591 = r; });
+  // FIX-2026-04-28-591-render-guard: fetch 完成後 trigger render，否則資料來了 panel 也不更新
+  fetch('data/591-dashboard.json?v=' + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null).then(r => { AD591 = r; if (typeof renderAd591 === 'function') try { renderAd591(); } catch(_) {} });
 
   document.getElementById('loadingText').textContent = '資料轉換中…';
   document.getElementById('progressBar').style.width = '100%';
@@ -1141,11 +1142,16 @@ function refreshAll(){
 // 591 廣告
 // ════════════════════════════════════════
 function renderAd591(){
-  const panel = document.getElementById('panel-ad591');
+  // FIX-2026-04-28-591-render-guard: hero element 在 panel 外，用 getElementById 並加 null guard
   if(!AD591 || !AD591.summary){
-    panel.querySelector('#adHeroExpiring').textContent = '—';
-    panel.querySelector('#adHeroDisappeared').textContent = '—';
-    panel.querySelector('#adHeroExpiringOwners').innerHTML = '<span class="text-slate-500">資料尚未生成，請稍後再試</span>';
+    const set = (id, val, asHtml) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (asHtml) el.innerHTML = val; else el.textContent = val;
+    };
+    set('adHeroExpiring', '—');
+    set('adHeroDisappeared', '—');
+    set('adHeroExpiringOwners', '<span class="text-slate-500">資料尚未生成，請稍後再試</span>', true);
     return;
   }
   const d = AD591, s = d.summary;
