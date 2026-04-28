@@ -984,8 +984,8 @@ async function fetchAllData() {
 
 
 
+  // FIX-2026-04-28-loading: 移除孤立 } (原 if perfSnapshots block 殘骸)
   PERF_GSHEET_AVAILABLE = true;
-  }
 
   // Build active staff set：只接受 HR 在職員工本名 + 白名單合併名
   // 避免下拉選單出現「吳惠慈、關宗宇」「張忠豪、蕭眞儀、詹張傳」這種混合字串
@@ -1365,8 +1365,7 @@ function renderPerfIntake(){
   const srcNote = document.getElementById('mSourceNote');
   if (srcNote) {
     const coveredMonths = startYm === endYm ? startYm : `${startYm} ~ ${endYm}`;
-
-
+    srcNote.innerHTML = `📊 業績：涵蓋月份 ${coveredMonths} 的月累計 · 進案量：滑軌區間逐日`;
   }
 
   // ── Rankings ──
@@ -2149,10 +2148,8 @@ document.getElementById('clEnd').addEventListener('change',()=>{document.querySe
     // Update status
     const now = new Date();
     const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-
-      ? `　•　💰 業績快照：${PERF_SNAPSHOT_TIME}（每天 20:00 自動更新）`
-      : '';
-
+    // FIX-2026-04-28-loading: 移除 perfNote 殘骸，直接寫入時間戳
+    document.getElementById('updateStatus').innerHTML = `即時資料　${ts}（${elapsed}s）`;
     document.getElementById('refreshBtn').classList.remove('hidden');
 
     // Build UI
