@@ -114,7 +114,13 @@ SC.apiFetch = async (path, opts = {}, retries = 3) => {
             continue;
         }
         if (!res.ok) throw new Error(`API ${res.status}`);
-        if (opts.method === "DELETE") return {};
+        if (opts.method === "DELETE") {
+            // Ragic DELETE silent fail 防呆：必須解析 body 檢查 error / 非 SUCCESS
+            // 系統預排紀錄 DELETE 可能回 200 但實際沒刪，導致前端 state 漂移
+            const body = await res.text();
+            if (body && body.includes('"error"')) throw new Error("DELETE failed: " + body);
+            return {};
+        }
         return res.json();
     }
 };
