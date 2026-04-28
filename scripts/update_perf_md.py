@@ -165,8 +165,8 @@ def build_merged_section(ym_label: str, gsheet_data: dict, existing_rows: dict) 
             row = {'業務獎金': None, '業績': None, '管理獎金': None,
                    '續約獎金': None, '跳%': None, '獎金合計': None}
 
-        if name in gsheet_data:
-            row['業績'] = gsheet_data[name]  # 只更新業績欄
+        if name in gsheet_data and gsheet_data[name] > 0:
+            row['業績'] = gsheet_data[name]  # 只更新業績欄（0 視為無業績，不覆蓋）
 
         merged[name] = row
 
