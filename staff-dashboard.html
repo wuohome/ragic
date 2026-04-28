@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
@@ -885,9 +885,7 @@ async function ragicFetch(path, params = '') {
 
 let _loadDone = 0;
 const _loadTotal = 8;
-const _loadLabels = ['進案量','業績','庫存','開發追蹤','委託屋主','客戶來源','人事資料','業績比對','業績快照'];
-// 業績快照由 GitHub Actions 每天 20:00 Asia/Taipei 跑 scripts/fetch_perf_snapshot.py 生成
-const PERF_SNAPSHOT_URL = 'data/perf-snapshots.json?v=' + Date.now();
+const _loadLabels = ['進案量','業績','庫存','開發追蹤','委託屋主','客戶來源','人事資料','業績比對'];
 function setProgress(label) {
   _loadDone++;
   const pct = Math.round(_loadDone / _loadTotal * 100);
@@ -907,7 +905,7 @@ async function fetchAllData() {
 
   const intakeParams = `subtables=true&where=${encodeURIComponent(`1000260,gte,${fmtDate(dataStart)}`)}&where=${encodeURIComponent(`1000260,lte,${fmtDate(dataEnd)}`)}&limit=10000`;
 
-  const [rawIntake, rawPayments, rawInventory, rawOutreach, rawCommission, rawClients, rawHr, perfMdText, perfSnapshots] = await Promise.all([
+  const [rawIntake, rawPayments, rawInventory, rawOutreach, rawCommission, rawClients, rawHr, perfMdText] = await Promise.all([
     ragicFetch('operation/4', intakeParams).then(r => { setProgress('進案量'); return r; }),
     ragicFetch('payments/2', 'subtables=true&limit=10000').then(r => { setProgress('業績'); return r; }),
     ragicFetch('operation/4', 'subtables=true&limit=10000').then(r => { setProgress('庫存'); return r; }),
@@ -916,9 +914,11 @@ async function fetchAllData() {
     ragicFetch('property-data-kept/8', 'limit=10000').then(r => { setProgress('客戶來源'); return r; }),
     ragicFetch('ragicforms4/20004', 'limit=200').then(r => { setProgress('人事資料'); return r; }),
     fetch('data/perf.md').then(r => r.ok ? r.text() : '').catch(() => '').then(r => { setProgress('業績比對'); return r; }),
-    fetch(PERF_SNAPSHOT_URL).then(r => r.ok ? r.json() : null).catch(() => null).then(r => { setProgress('業績快照'); return r; }),
-    fetch('data/591-dashboard.json?v=' + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null).then(r => { setProgress('591 廣告'); AD591 = r; return r; }),
+
+
   ]);
+  // 591 廣告另外抓（arch: vault md 已含當月 GSheet）
+  fetch('data/591-dashboard.json?v=' + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null).then(r => { AD591 = r; });
 
   document.getElementById('loadingText').textContent = '資料轉換中…';
   document.getElementById('progressBar').style.width = '100%';
@@ -975,16 +975,16 @@ async function fetchAllData() {
   PERF    = perfOb.length > 0 ? perfOb : PERF_RAGIC;
   COMPARE = buildCompare(PERF_RAGIC, perfOb);
 
-  // 當月業績：讀最新一筆快照（由 GitHub Actions 每天 20:00 Asia/Taipei 抓 GSheet 寫入）
-  if (perfSnapshots && Array.isArray(perfSnapshots) && perfSnapshots.length) {
-    const latest = perfSnapshots[perfSnapshots.length - 1];
-    PERF_SNAPSHOT_TIME = latest.timestamp || '';
-    const snapshotYm = latest.ym || ym(new Date());
-    PERF = PERF.filter(r => r.ym !== snapshotYm);
-    for (const r of (latest.data || [])) {
-      if (r.name && r.perf > 0) PERF.push({ ym: snapshotYm, name: r.name, perf: r.perf });
-    }
-    PERF_GSHEET_AVAILABLE = true;
+  // 當月業績：perf.md 直接包含當月 GSheet 資料（Mac Mini launchd 每天 20:00 更新）
+
+
+
+
+
+
+
+
+  PERF_GSHEET_AVAILABLE = true;
   }
 
   // Build active staff set：只接受 HR 在職員工本名 + 白名單合併名
@@ -1037,7 +1037,7 @@ let INTAKE = [], PERF = [], PERF_RAGIC = [], COMPARE = {}, INVENTORY = [], OUTRE
 let ACTIVE_STAFF = new Set();
 let AD591 = null;
 let PERF_GSHEET_AVAILABLE = false;
-let PERF_SNAPSHOT_TIME = '';
+
 let STAFF_ONBOARD_MONTH = {};  // { name: 'YYYY-MM' } 從 HR 到職日
 
 // ── 珊珊 GSheet CSV 解析（2026-04 起為當月業績事實來源）
@@ -1365,8 +1365,8 @@ function renderPerfIntake(){
   const srcNote = document.getElementById('mSourceNote');
   if (srcNote) {
     const coveredMonths = startYm === endYm ? startYm : `${startYm} ~ ${endYm}`;
-    const snapNote = PERF_SNAPSHOT_TIME ? `（珊珊 GSheet 快照 ${PERF_SNAPSHOT_TIME}）` : '';
-    srcNote.innerHTML = `📊 業績：涵蓋月份 ${coveredMonths} 的月累計 ${snapNote} · 進案量：滑軌區間逐日`;
+
+
   }
 
   // ── Rankings ──
@@ -2149,10 +2149,10 @@ document.getElementById('clEnd').addEventListener('change',()=>{document.querySe
     // Update status
     const now = new Date();
     const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-    const perfNote = PERF_SNAPSHOT_TIME
+
       ? `　•　💰 業績快照：${PERF_SNAPSHOT_TIME}（每天 20:00 自動更新）`
       : '';
-    document.getElementById('updateStatus').innerHTML = `即時資料　${ts}（${elapsed}s）${perfNote}`;
+
     document.getElementById('refreshBtn').classList.remove('hidden');
 
     // Build UI
