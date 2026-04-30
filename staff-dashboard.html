@@ -974,7 +974,7 @@ async function fetchAllData() {
   // perf.md 最後 commit 時間 = GSheet 快照時間（Mac Mini launchd 每日 20:00 push）
   if (perfCommits && perfCommits[0]?.commit?.committer?.date) {
     const d = new Date(perfCommits[0].commit.committer.date);
-    PERF_GSHEET_UPDATED = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    PERF_GSHEET_UPDATED = d.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\//g, '-');
   }
   const perfOb   = parsePerfMd(perfMdText);
 
