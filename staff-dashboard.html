@@ -970,8 +970,9 @@ async function fetchAllData() {
   OUTREACH.sort((a, b) => (b.date||'').localeCompare(a.date||''));
 
   const inactive = getInactiveStaff(rawHr);
-  const fmUpdated = perfMdText.match(/^updated:\s*(\S+)/m);
-  PERF_GSHEET_UPDATED = fmUpdated ? fmUpdated[1] : '';
+  // 取 perf.md 最末月份標題（民國年/月），frontmatter updated: 欄位不被腳本維護故不用
+  const allYmMatches = [...perfMdText.matchAll(/^##\s+(\d{3}\/\d{2})\s*$/mg)];
+  PERF_GSHEET_UPDATED = allYmMatches.length ? allYmMatches[allYmMatches.length - 1][1] : '';
   const perfOb   = parsePerfMd(perfMdText);
 
   // For month perf tab + year tab: prefer OB perf (has historical data), fallback to Ragic
@@ -2159,7 +2160,7 @@ document.getElementById('clEnd').addEventListener('change',()=>{document.querySe
     const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     // FIX-2026-04-28-loading: 移除 perfNote 殘骸，直接寫入時間戳
     const gsheetNote = PERF_GSHEET_UPDATED
-      ? `　<span class="text-slate-400">・</span>　GSheet 業績更新至 <span class="font-semibold text-amber-700">${PERF_GSHEET_UPDATED}</span>（每日 20:00 自動更新）`
+      ? `　<span class="text-slate-400">・</span>　GSheet 業績涵蓋至 <span class="font-semibold text-emerald-700">${PERF_GSHEET_UPDATED}</span>`
       : '';
     document.getElementById('updateStatus').innerHTML = `即時資料　${ts}（${elapsed}s）${gsheetNote}`;
     document.getElementById('refreshBtn').classList.remove('hidden');
