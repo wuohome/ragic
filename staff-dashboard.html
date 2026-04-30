@@ -884,8 +884,8 @@ async function ragicFetch(path, params = '') {
 }
 
 let _loadDone = 0;
-const _loadTotal = 8;
-const _loadLabels = ['進案量','業績','庫存','開發追蹤','委託屋主','客戶來源','人事資料','業績比對'];
+const _loadTotal = 9;
+const _loadLabels = ['進案量','業績','庫存','開發追蹤','委託屋主','客戶來源','人事資料','業績比對','GSheet時間'];
 function setProgress(label) {
   _loadDone++;
   const pct = Math.round(_loadDone / _loadTotal * 100);
@@ -905,7 +905,7 @@ async function fetchAllData() {
 
   const intakeParams = `subtables=true&where=${encodeURIComponent(`1000260,gte,${fmtDate(dataStart)}`)}&where=${encodeURIComponent(`1000260,lte,${fmtDate(dataEnd)}`)}&limit=10000`;
 
-  const [rawIntake, rawPayments, rawInventory, rawOutreach, rawCommission, rawClients, rawHr, perfMdText] = await Promise.all([
+  const [rawIntake, rawPayments, rawInventory, rawOutreach, rawCommission, rawClients, rawHr, perfMdText, perfCommits] = await Promise.all([
     ragicFetch('operation/4', intakeParams).then(r => { setProgress('進案量'); return r; }),
     ragicFetch('payments/2', 'subtables=true&limit=10000').then(r => { setProgress('業績'); return r; }),
     ragicFetch('operation/4', 'subtables=true&limit=10000').then(r => { setProgress('庫存'); return r; }),
@@ -914,8 +914,9 @@ async function fetchAllData() {
     ragicFetch('property-data-kept/8', 'limit=10000').then(r => { setProgress('客戶來源'); return r; }),
     ragicFetch('ragicforms4/20004', 'limit=200').then(r => { setProgress('人事資料'); return r; }),
     fetch('data/perf.md').then(r => r.ok ? r.text() : '').catch(() => '').then(r => { setProgress('業績比對'); return r; }),
-
-
+    fetch('https://api.github.com/repos/wuohome/ragic/commits?path=data/perf.md&per_page=1')
+      .then(r => r.ok ? r.json() : null).catch(() => null)
+      .then(r => { setProgress('GSheet時間'); return r; }),
   ]);
   // 591 廣告另外抓（arch: vault md 已含當月 GSheet）
   // FIX-2026-04-28-591-render-guard: fetch 完成後 trigger render，否則資料來了 panel 也不更新
@@ -970,9 +971,11 @@ async function fetchAllData() {
   OUTREACH.sort((a, b) => (b.date||'').localeCompare(a.date||''));
 
   const inactive = getInactiveStaff(rawHr);
-  // 取 perf.md 最末月份標題（民國年/月），frontmatter updated: 欄位不被腳本維護故不用
-  const allYmMatches = [...perfMdText.matchAll(/^##\s+(\d{3}\/\d{2})\s*$/mg)];
-  PERF_GSHEET_UPDATED = allYmMatches.length ? allYmMatches[allYmMatches.length - 1][1] : '';
+  // perf.md 最後 commit 時間 = GSheet 快照時間（Mac Mini launchd 每日 20:00 push）
+  if (perfCommits && perfCommits[0]?.commit?.committer?.date) {
+    const d = new Date(perfCommits[0].commit.committer.date);
+    PERF_GSHEET_UPDATED = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
   const perfOb   = parsePerfMd(perfMdText);
 
   // For month perf tab + year tab: prefer OB perf (has historical data), fallback to Ragic
@@ -2160,7 +2163,7 @@ document.getElementById('clEnd').addEventListener('change',()=>{document.querySe
     const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     // FIX-2026-04-28-loading: 移除 perfNote 殘骸，直接寫入時間戳
     const gsheetNote = PERF_GSHEET_UPDATED
-      ? `　<span class="text-slate-400">・</span>　GSheet 業績涵蓋至 <span class="font-semibold text-emerald-700">${PERF_GSHEET_UPDATED}</span>`
+      ? `　<span class="text-slate-400">・</span>　GSheet 快照 <span class="font-semibold text-emerald-700">${PERF_GSHEET_UPDATED}</span>`
       : '';
     document.getElementById('updateStatus').innerHTML = `即時資料　${ts}（${elapsed}s）${gsheetNote}`;
     document.getElementById('refreshBtn').classList.remove('hidden');
