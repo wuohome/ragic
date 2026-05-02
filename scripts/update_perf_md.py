@@ -1,12 +1,16 @@
 """
-每日更新 vault 業績 md（架構：Windows Task Scheduler 直寫 vault）
+每日更新 vault 業績 md — V2 SA 版（不再 hardcoded PUBKEY）
 
 觸發時機：Windows Task Scheduler 每天 20:00 Asia/Taipei
-流程：抓 GSheet 全部員工 sheet → 套綽號 / 合併夫妻檔 / 排除 → idempotent merge 到 vault 全店每月業績表.md 當月區塊
+流程：用 SA + Drive API 列 mirror folder → 找當月「{roc}年{月}月業績表」sheet
+      → 用 Sheets API 抓所有 tabs → 套綽號 / 合併夫妻檔 / 排除
+      → idempotent merge 到 vault 全店每月業績表.md 當月區塊
       → wrapper script cp 到 repo data/perf.md → git push
 
-# FIX-2026-04-28-multisheet: 改抓所有員工 sheet 的成交明細總計（含房東+房客方），不再單抓 PK 排行 sheet
+# FIX-2026-04-28-multisheet: 改抓所有員工 sheet 的成交明細總計（含房東+房客方）
 # FIX-2026-04-28-perf-flow: idempotent merge，保留 Joan 已填的獎金欄
+# FIX-2026-05-03-mirror-folder: 移除 hardcoded PUBKEY (鎖死 4 月 sheet → 抓到的數字被當當月寫，造成 5/2 跑時 4 月新增業績寫進 115/05)
+#                                改 SA + mirror folder 動態找「{roc}年{當月}月業績表」
 """
 import argparse
 import csv
@@ -19,8 +23,16 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
-PUBKEY = '2PACX-1vQMZq6T_6FgypxM2PEaBmIshN0WYlObLo0cVwnCydE6Ou-M3eetzRUaIC8_McxPG-UAjS6VQAYdBWMr'
-PUBHTML_URL = f'https://docs.google.com/spreadsheets/d/e/{PUBKEY}/pubhtml'
+# === SA + mirror folder ===
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+
+SA_KEY = Path(r'C:\Users\Joan\.claude\scripts\perf-sa-key.json')
+MIRROR_FOLDER_ID = '1s_2wWYcRAiFV-nwIYA0-hHSKsL_DMqsw'
+SA_SCOPES = [
+    'https://www.googleapis.com/auth/drive.readonly',
+    'https://www.googleapis.com/auth/spreadsheets.readonly',
+]
 
 # 綽號 → 本名
 NAME_ALIASES = {
@@ -58,10 +70,36 @@ def fetch(url: str, timeout: int = 30) -> str:
         return resp.read().decode('utf-8', errors='replace')
 
 
-def discover_gids() -> list:
-    """從 pubhtml 抓所有 sheet 的 gid"""
-    html = fetch(PUBHTML_URL)
-    return sorted(set(re.findall(r'gid=(\d+)', html)))
+def get_sa_clients():
+    """建 SA + Drive/Sheets API client"""
+    creds = service_account.Credentials.from_service_account_file(str(SA_KEY), scopes=SA_SCOPES)
+    return (
+        build('drive', 'v3', credentials=creds, cache_discovery=False),
+        build('sheets', 'v4', credentials=creds, cache_discovery=False),
+    )
+
+
+def find_month_sheet(drive, roc_year: int, month: int) -> Optional[dict]:
+    """從 mirror folder 找「{roc}年{月}月業績表」sheet（fuzzy 含月份字樣 + 業績表）"""
+    resp = drive.files().list(
+        q=f"'{MIRROR_FOLDER_ID}' in parents and trashed=false and mimeType='application/vnd.google-apps.spreadsheet'",
+        fields='files(id,name,modifiedTime)',
+        pageSize=200,
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+    ).execute()
+    files = resp.get('files', [])
+    # 命名 fuzzy: {roc}年{0?}{month}月...業績表
+    pat = re.compile(rf'{roc_year}\s*年\s*0?{month}\s*月.*業績表')
+    matches = [f for f in files if pat.search(f['name'])]
+    if not matches:
+        print(f"⚠️  mirror folder 內找不到 {roc_year}年{month}月業績表")
+        print(f"   現有檔: {[f['name'] for f in files]}")
+        return None
+    if len(matches) > 1:
+        print(f"⚠️  多筆 match {[f['name'] for f in matches]}，取最新 modifiedTime")
+        matches.sort(key=lambda x: x.get('modifiedTime', ''), reverse=True)
+    return matches[0]
 
 
 def to_int(s) -> int:
@@ -133,26 +171,40 @@ def parse_employee_sheet(rows: list) -> tuple:
     return (name_raw, perf)
 
 
-def fetch_all_perf() -> dict:
-    """每個 gid 都跑同一套解析（找成交案源表後第一個總計 row 業績欄）。
-       不挑 sheet — 結構不對的自然抓 0；結構對的就有值。每張都印 log 透明化。"""
-    gids = discover_gids()
-    print(f"發現 {len(gids)} 個 sheet（全部都會解析，不挑）")
-    print(f"{'GID':>15}  {'NAME':<14}  {'PERF':>10}")
+def fetch_all_perf(roc_year: int, month: int) -> Optional[dict]:
+    """從 mirror folder 找當月 sheet → SA + Sheets API 抓所有 tabs → 解析。
+       回 None = 找不到當月 sheet（珊珊還沒建 / 還沒月結），呼叫端應 skip。
+       回 {} = 找到 sheet 但解析 0 筆有效員工（異常，需檢查）。"""
+    drive, sheets = get_sa_clients()
+    f = find_month_sheet(drive, roc_year, month)
+    if not f:
+        return None
+    sheet_id = f['id']
+    sheet_name = f['name']
+    print(f"✅ 找到當月 sheet: {sheet_name} (id={sheet_id[:20]}…)")
+
+    # 列所有 tabs
+    meta = sheets.spreadsheets().get(spreadsheetId=sheet_id, includeGridData=False).execute()
+    tabs = [s['properties']['title'] for s in meta['sheets']]
+    print(f"{len(tabs)} 個 tabs")
+    print(f"{'TAB':<14}  {'NAME':<14}  {'PERF':>10}")
     print('-' * 45)
+
     raw = {}
-    for gid in gids:
-        url = f'https://docs.google.com/spreadsheets/d/e/{PUBKEY}/pub?gid={gid}&single=true&output=csv'
+    for tab in tabs:
         try:
-            text = fetch(url, timeout=20)
-            rows = list(csv.reader(io.StringIO(text)))
+            data = sheets.spreadsheets().values().get(
+                spreadsheetId=sheet_id,
+                range=f"'{tab}'!A1:N100"
+            ).execute()
+            rows = data.get('values', [])
         except Exception as e:
-            print(f"{gid:>15}  fetch fail: {e}", file=sys.stderr)
+            print(f"{tab:<14}  fetch fail: {e}", file=sys.stderr)
             continue
 
         name_raw, perf = parse_employee_sheet(rows)
         display_name = name_raw or '(非員工 sheet)'
-        print(f"{gid:>15}  {display_name:<14}  {perf:>10,}")
+        print(f"{tab:<14}  {display_name:<14}  {perf:>10,}")
 
         if name_raw is None:
             continue
@@ -334,6 +386,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--vault-md', required=True, help='vault 業績 md 完整路徑')
     parser.add_argument('--dry-run', action='store_true', help='只印不寫')
+    parser.add_argument('--target-month', default=None,
+                        help='手動指定 ROC 月份「{roc}/{月}」如 115/04，預設用當下系統時間')
     args = parser.parse_args()
 
     vault_md = Path(args.vault_md)
@@ -341,14 +395,29 @@ def main():
         print(f"❌ vault md 不存在：{vault_md}", file=sys.stderr)
         sys.exit(1)
 
-    taipei = timezone(timedelta(hours=8))
-    now = datetime.now(taipei)
-    ym_label = taiwan_year_month(now)
+    if args.target_month:
+        m = re.match(r'^(\d{3})/(\d{1,2})$', args.target_month.strip())
+        if not m:
+            print(f"❌ --target-month 格式錯（要 ROC 年/月，如 115/04），收到 {args.target_month}", file=sys.stderr)
+            sys.exit(1)
+        roc_year = int(m.group(1))
+        month = int(m.group(2))
+        ym_label = f"{roc_year}/{month:02d}"
+    else:
+        taipei = timezone(timedelta(hours=8))
+        now = datetime.now(taipei)
+        roc_year = now.year - 1911
+        month = now.month
+        ym_label = taiwan_year_month(now)
     print(f"目標月份：{ym_label}")
 
-    gsheet_data = fetch_all_perf()
+    gsheet_data = fetch_all_perf(roc_year, month)
+    if gsheet_data is None:
+        # 找不到當月 sheet（珊珊還沒月結）→ skip 不寫，但 exit 0 cron 不報錯
+        print(f"⏭  skip：當月 sheet 還沒建（珊珊未月結）— 不寫 markdown，留待下輪")
+        sys.exit(0)
     if not gsheet_data:
-        print("❌ 解析到 0 筆有效員工業績，abort", file=sys.stderr)
+        print("❌ 解析到 0 筆有效員工業績（sheet 找到但解析空），abort", file=sys.stderr)
         sys.exit(1)
 
     total_perf = sum(gsheet_data.values())
