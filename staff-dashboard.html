@@ -1023,7 +1023,7 @@ async function fetchAllData() {
   STAFF_ONBOARD_MONTH = {};
   for (const rec of Object.values(rawHr)) {
     const name = (rec['姓名'] || '').trim();
-    const onboard = (rec['到職日期'] || '').trim();
+    const onboard = (rec['到職日期'] || rec['到職日'] || rec['入職日'] || '').trim();
     if (name && onboard && onboard.length >= 7) {
       STAFF_ONBOARD_MONTH[name] = onboard.slice(0,7).replaceAll('/', '-');
     }
