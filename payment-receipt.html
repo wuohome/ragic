@@ -99,6 +99,18 @@
       .readonly-field { font-size: 1.875rem; padding: 1rem 1.5rem; border-radius: 1.5rem; }
     }
 
+    /* 租客付款方式 chip */
+    .pay-chip {
+      flex: 1; padding: 14px 0; border: 3px solid #cbd5e1; border-radius: 1rem;
+      font-size: 1.25rem; font-weight: 800; background: #fff; color: #475569;
+      cursor: pointer; transition: all 0.15s; -webkit-tap-highlight-color: transparent;
+    }
+    .pay-chip:active { transform: scale(0.97); }
+    .pay-chip.selected { border-color: #2563eb; background: #2563eb; color: #fff; }
+    @media (min-width: 768px) {
+      .pay-chip { padding: 22px 0; font-size: 1.75rem; border-radius: 1.5rem; }
+    }
+
     /* 子表格樣式（預覽） */
     .subtable { border-collapse: collapse; width: 100%; }
     .subtable th { background: #000; color: #fff; font-weight: 900; text-align: center; padding: 8px 6px; border: 1.5px solid #000; font-size: 0.88rem; }
@@ -176,6 +188,24 @@
         <div>
           <label class="block text-base md:text-2xl font-black text-slate-600 mb-1 md:mb-3">物件地址</label>
           <div id="display_addr" class="readonly-field">-</div>
+        </div>
+
+        <!-- 租客付款方式 + 匯款後五碼（僅租客模式顯示，業務不用幫填） -->
+        <div id="tenant_pay_section" class="hidden space-y-5 md:space-y-8 pt-2 md:pt-4 border-t-2 border-dashed border-slate-200">
+          <div>
+            <label class="block text-base md:text-2xl font-black text-slate-600 mb-2 md:mb-3">付款方式（可複選）</label>
+            <div class="flex gap-3 md:gap-5">
+              <button type="button" data-pay="現金" class="pay-chip">💵 現金</button>
+              <button type="button" data-pay="匯款" class="pay-chip">🏦 匯款</button>
+            </div>
+            <input type="hidden" id="hidden_pay_method" value="">
+          </div>
+          <div>
+            <label class="block text-base md:text-2xl font-black text-slate-600 mb-1 md:mb-3">匯款後五碼</label>
+            <input type="text" id="input_remit_code" inputmode="numeric" maxlength="10"
+                   placeholder="如有匯款請填寫"
+                   class="grandpa-input w-full text-xl md:text-3xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-5 outline-none font-bold bg-yellow-50 shadow-inner">
+          </div>
         </div>
 
         <!-- 簽名欄位 (Hidden) - 依 ROLE 動態 name -->
@@ -800,6 +830,32 @@
       sigInput.name = getSigFieldId();
       pdfInput.name = getPdfFieldId();
 
+      // 租客模式：開啟付款方式 + 後五碼 input；房東模式：保持隱藏 + 不送 name 避免污染
+      const tenantPaySection = $("tenant_pay_section");
+      const payHidden = $("hidden_pay_method");
+      const remitInput = $("input_remit_code");
+      if (ROLE === "租客") {
+        tenantPaySection.classList.remove("hidden");
+        payHidden.name = FIELDS.tenant_pay;     // 1000785
+        remitInput.name = FIELDS.tenant_remit;  // 1000780
+        // 預填：業務若已先填，chip / input 顯示既有值
+        const existingPay = formatPayMethod(getValue(currentRecord, getPayField())); // "現金、匯款"
+        const existingRemit = (getValue(currentRecord, getRemitField()) || "").toString().trim();
+        document.querySelectorAll('.pay-chip').forEach(c => c.classList.remove('selected'));
+        if (existingPay) {
+          existingPay.split("、").forEach(opt => {
+            const chip = document.querySelector(`.pay-chip[data-pay="${opt}"]`);
+            if (chip) chip.classList.add('selected');
+          });
+        }
+        remitInput.value = existingRemit;
+        syncPayMethodHidden();
+      } else {
+        tenantPaySection.classList.add("hidden");
+        payHidden.removeAttribute("name");
+        remitInput.removeAttribute("name");
+      }
+
       // Step 1 唯讀展示
       const personName = getValue(currentRecord, getNameField());
       const personPhone = getValue(currentRecord, getPhoneField());
@@ -896,12 +952,52 @@
 
     function goStep(n) {
       if (n === 2) {
+        // 租客模式：把 chip 選擇 + 後五碼即時反映到 Step 2 預覽
+        applyTenantChoicesToPreview();
         setTimeout(initSignature, 250);
       }
       $("step-1").classList.add('hidden');
       $("step-2").classList.add('hidden');
       $("step-" + n).classList.remove('hidden');
       window.scrollTo(0, 0);
+    }
+
+    // 把租客 Step 1 填的付款方式同步到 hidden input（form POST 時送 Ragic）
+    function syncPayMethodHidden() {
+      const selected = Array.from(document.querySelectorAll('.pay-chip.selected'))
+                            .map(c => c.dataset.pay);
+      $("hidden_pay_method").value = selected.join("|");
+    }
+
+    // 把租客 Step 1 填的選擇即時反映到 Step 2 預覽 + PDF area（送出前 source of truth）
+    function applyTenantChoicesToPreview() {
+      if (ROLE !== "租客") return;
+      const payText = formatPayMethod($("hidden_pay_method").value);
+      const remitVal = ($("input_remit_code").value || "").trim();
+      if ($("show_pay")) $("show_pay").innerText = payText || "—";
+      if ($("pdf_pay")) $("pdf_pay").innerText = payText || "—";
+      if ($("show_remit")) $("show_remit").innerText = remitVal || "—";
+      if ($("pdf_remit")) $("pdf_remit").innerText = remitVal || "—";
+    }
+
+    // Step 1 → Step 2 驗證：租客選了「匯款」必填後五碼
+    function validateAndGoStep2() {
+      if (ROLE === "租客") {
+        const selectedPay = $("hidden_pay_method").value;
+        if (!selectedPay) {
+          alert("請選擇付款方式（現金或匯款，可複選）。");
+          return;
+        }
+        if (selectedPay.includes("匯款")) {
+          const remitVal = ($("input_remit_code").value || "").trim();
+          if (!remitVal) {
+            alert("您選了「匯款」，請填寫匯款後五碼。");
+            $("input_remit_code").focus();
+            return;
+          }
+        }
+      }
+      goStep(2);
     }
 
     // 產生 PDF Blob
@@ -1098,8 +1194,15 @@
         $("test-mode-ui").classList.add('hidden');
         executeLoad();
       };
-      $("btn-next").onclick = () => goStep(2);
+      $("btn-next").onclick = validateAndGoStep2;
       $("btn-back").onclick = () => goStep(1);
+      // 付款方式 chip 多選 toggle
+      document.querySelectorAll('.pay-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          chip.classList.toggle('selected');
+          syncPayMethodHidden();
+        });
+      });
       $("btn-clear").onclick = () => signaturePad.clear();
       $("btn-submit").onclick = () => submitData();
 
