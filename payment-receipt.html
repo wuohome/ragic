@@ -14,28 +14,28 @@
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
     body { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; }
 
-    /* 預覽頁面表格樣式 - 手機版優化 */
+    /* 預覽頁面主表格樣式 */
     .receipt-table { border-collapse: collapse; width: 100%; border: 2.5px solid #000; }
-    .receipt-table th, .receipt-table td { border: 1.5px solid #000; padding: 12px; vertical-align: middle; }
-    .receipt-table th { background-color: #f8fafc; font-weight: 900; width: 130px; color: #000; font-size: 1.1rem; text-align: center; }
+    .receipt-table th, .receipt-table td { border: 1.5px solid #000; padding: 10px 12px; vertical-align: middle; }
+    .receipt-table th { background-color: #f0f4f8; font-weight: 900; color: #000; font-size: 0.95rem; text-align: center; white-space: nowrap; }
 
-    /* 手機版表格微調 (螢幕小於 768px 時觸發) */
+    /* 收付款憑單 header（憑單編號左、收付日期右） */
+    .voucher-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; font-weight: 700; margin-bottom: 6px; }
+    @media (min-width: 768px) { .voucher-header { font-size: 1rem; margin-bottom: 10px; } }
+
+    /* 收付款明細黑底白字 section header */
+    .section-header { background: #000; color: #fff; text-align: center; font-weight: 900; padding: 8px 12px; font-size: 0.95rem; border: 1.5px solid #000; }
+    @media (min-width: 768px) { .section-header { padding: 10px 16px; font-size: 1rem; } }
+
+    /* 手機版表格微調 */
     @media (max-width: 768px) {
-        .receipt-table th, .receipt-table td { padding: 8px 4px; font-size: 0.95rem; }
-        .receipt-table th { width: 90px; font-size: 1rem; }
-    }
-
-    /* PDF 專用樣式 (保持原樣，確保列印品質) */
-    .pdf-table th, .pdf-table td {
-        vertical-align: middle !important;
-        padding: 15px 20px !important;
-        line-height: 1.4 !important;
+        .receipt-table th, .receipt-table td { padding: 7px 6px; font-size: 0.88rem; }
     }
 
     .big-btn { transition: all 0.2s; cursor: pointer; }
     .big-btn:active { transform: scale(0.96); opacity: 0.9; }
 
-    /* 簽名板高度在手機上稍微縮小，避免佔據太多空間 */
+    /* 簽名板 */
     #signature-pad { background: #ffffff; border: 3px dashed #3b82f6; border-radius: 20px; width: 100%; height: 250px; touch-action: none; }
     @media (min-width: 768px) {
         #signature-pad { height: 320px; }
@@ -45,22 +45,20 @@
     .debug-box { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 12px; font-size: 14px; margin-top: 20px; text-align: left; overflow-x: auto; display: none; border: 2px solid #333; max-height: 300px; overflow-y: auto; }
     .grandpa-input:focus { border-color: #2563eb; box-shadow: 0 0 0 10px rgba(37, 99, 235, 0.1); background-color: #fff; }
 
-    #pdf-export-area { width: 850px; padding: 40px; background: white; position: absolute; left: -9999px; top: 0; }
-    .pdf-title { font-size: 36px; font-weight: 900; text-align: center; margin-bottom: 25px; color: #000; }
-    .pdf-header-info { text-align: right; font-size: 18px; margin-bottom: 12px; font-weight: bold; }
+    #pdf-export-area { width: 850px; padding: 40px; background: white; position: absolute; left: -9999px; top: 0; font-family: 'Noto Sans TC', sans-serif; }
 
-    /* 水印專用樣式 */
-    .watermark-bg { position: relative; z-index: 0; }
-    .watermark-bg::before {
+    /* 水印：只套在子表格區域 */
+    .watermark-subtable-wrap { position: relative; }
+    .watermark-subtable-wrap::before {
       content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       background-image: url('https://raw.githubusercontent.com/wuohome/ragic/refs/heads/main/logooo.png');
-      background-position: center center; background-repeat: no-repeat; background-size: 300px auto;
-      opacity: 0.15; pointer-events: none; z-index: -1;
+      background-position: center center; background-repeat: no-repeat; background-size: 220px auto;
+      opacity: 0.15; pointer-events: none; z-index: 0;
     }
     @media (min-width: 768px) {
-        .watermark-bg::before { background-size: 500px auto; }
+        .watermark-subtable-wrap::before { background-size: 320px auto; }
     }
-    .watermark-bg > * { position: relative; z-index: 1; }
+    .watermark-subtable-wrap > * { position: relative; z-index: 1; }
 
     /* 唯讀欄位展示樣式 */
     .readonly-field {
@@ -76,18 +74,14 @@
       .readonly-field { font-size: 1.875rem; padding: 1rem 1.5rem; border-radius: 1.5rem; }
     }
 
-    /* 子表格樣式 */
-    .subtable { border-collapse: collapse; width: 100%; margin-top: 4px; }
-    .subtable th { background: #e2e8f0; font-weight: 900; text-align: center; padding: 8px 6px; border: 1.5px solid #94a3b8; font-size: 0.95rem; }
-    .subtable td { border: 1.5px solid #94a3b8; padding: 8px 6px; text-align: center; font-size: 0.95rem; }
-    .subtable tr:nth-child(even) td { background: #f8fafc; }
+    /* 子表格樣式（預覽） */
+    .subtable { border-collapse: collapse; width: 100%; }
+    .subtable th { background: #000; color: #fff; font-weight: 900; text-align: center; padding: 8px 6px; border: 1.5px solid #000; font-size: 0.88rem; }
+    .subtable td { border: 1.5px solid #000; padding: 7px 6px; text-align: center; font-size: 0.88rem; min-height: 28px; }
+    .subtable .subtable-total td { border-top: 2px solid #000; font-weight: 900; text-align: right; padding-right: 12px; }
     @media (min-width: 768px) {
-      .subtable th, .subtable td { padding: 10px 14px; font-size: 1.05rem; }
+      .subtable th, .subtable td { padding: 9px 12px; font-size: 0.95rem; }
     }
-    /* PDF 子表格 */
-    .pdf-subtable { border-collapse: collapse; width: 100%; margin-top: 4px; }
-    .pdf-subtable th { background: #e2e8f0; font-weight: 900; text-align: center; padding: 10px 14px; border: 1.5px solid #94a3b8; font-size: 16px; }
-    .pdf-subtable td { border: 1.5px solid #94a3b8; padding: 10px 14px; text-align: center; font-size: 16px; }
   </style>
 </head>
 
@@ -125,23 +119,28 @@
     <!-- 第一步：核對資料 (唯讀展示) -->
     <div id="step-1" class="hidden bg-white rounded-3xl md:rounded-[3rem] shadow-2xl p-5 md:p-14 border-t-[10px] md:border-t-[16px] border-blue-600">
       <h1 id="step1-title" class="text-2xl md:text-5xl font-black text-blue-700 mb-3 md:mb-6 text-center md:text-left">請確認資料</h1>
-      <p class="text-slate-500 mb-6 md:mb-12 text-base md:text-2xl font-medium text-center md:text-left">您好，請確認以下資料無誤後繼續。</p>
+      <p class="text-slate-500 mb-6 md:mb-12 text-base md:text-2xl font-medium text-center md:text-left">請確認以下資料正確，如有誤請聯繫業務。</p>
 
       <!--
         表單設定：
         1. target="hidden_iframe" -> 避免頁面跳轉
         2. enctype="multipart/form-data" -> 支援檔案上傳 (PDF)
       -->
-      <form id="ragicForm" method="POST" target="hidden_iframe" accept-charset="UTF-8" enctype="multipart/form-data" class="space-y-6 md:space-y-10">
+      <form id="ragicForm" method="POST" target="hidden_iframe" accept-charset="UTF-8" enctype="multipart/form-data" class="space-y-5 md:space-y-8">
         <!-- 姓名唯讀展示 -->
         <div>
-          <label class="block text-lg md:text-3xl font-black text-slate-700 mb-2 md:mb-4" id="label-name">姓名</label>
+          <label class="block text-base md:text-2xl font-black text-slate-600 mb-1 md:mb-3" id="label-name">姓名</label>
           <div id="display_name" class="readonly-field">-</div>
         </div>
         <!-- 電話唯讀展示 -->
         <div>
-          <label class="block text-lg md:text-3xl font-black text-slate-700 mb-2 md:mb-4">聯絡電話</label>
+          <label class="block text-base md:text-2xl font-black text-slate-600 mb-1 md:mb-3">聯絡電話</label>
           <div id="display_phone" class="readonly-field">-</div>
+        </div>
+        <!-- 地址唯讀展示 -->
+        <div>
+          <label class="block text-base md:text-2xl font-black text-slate-600 mb-1 md:mb-3">物件地址</label>
+          <div id="display_addr" class="readonly-field">-</div>
         </div>
 
         <!-- 簽名欄位 (Hidden) - 依 ROLE 動態 name -->
@@ -161,93 +160,101 @@
 
     <!-- 第二步：預覽收款憑單 -->
     <div id="step-2" class="hidden bg-white rounded-3xl md:rounded-[3rem] shadow-2xl p-4 md:p-10 border-t-[10px] md:border-t-[16px] border-green-600">
-      <div id="receipt-preview-container" class="watermark-bg">
-        <div class="text-right mb-2 md:mb-4 font-bold text-lg md:text-2xl">編號：<span id="show_no">-</span></div>
-        <h1 class="text-2xl md:text-4xl font-black text-center mb-5 md:mb-8 text-slate-900">租押金/服務費收款憑單</h1>
+      <div id="receipt-preview-container">
 
-        <table class="receipt-table mb-4 md:mb-6 text-base md:text-lg">
-          <tr>
-            <th>收款日期</th>
-            <td colspan="3" id="show_date" class="font-bold">-</td>
-          </tr>
-          <tr>
-            <th>案名</th>
-            <td colspan="3" id="show_case" class="font-bold break-all">-</td>
-          </tr>
-          <tr>
-            <th>地址</th>
-            <td colspan="3" id="show_addr" class="font-bold break-all">-</td>
-          </tr>
-        </table>
-
-        <!-- 收付款明細子表格 -->
-        <div class="mb-4 md:mb-6">
-          <p class="text-base md:text-xl font-black text-slate-700 mb-2">收付款明細</p>
-          <div id="show_subtable_container">
-            <table class="subtable">
-              <thead>
-                <tr>
-                  <th>類型</th>
-                  <th>項目</th>
-                  <th>金額</th>
-                </tr>
-              </thead>
-              <tbody id="show_subtable_body">
-                <tr><td colspan="3" class="text-slate-400">（無明細）</td></tr>
-              </tbody>
-            </table>
-          </div>
+        <!-- 頂部 header：憑單編號左、收付日期右 -->
+        <div class="voucher-header mb-1">
+          <span>憑單編號：<span id="show_no" class="font-black">-</span></span>
+          <span>收付日期：<span id="show_date" class="font-black">-</span></span>
         </div>
 
-        <table class="receipt-table mb-6 md:mb-8 text-base md:text-lg">
-          <tr>
-            <th>金額合計</th>
-            <td colspan="3" id="show_total" class="font-black text-xl md:text-2xl text-red-600">-</td>
-          </tr>
-          <tr>
-            <th>付款方式</th>
-            <td colspan="3" id="show_pay_method" class="font-bold">-</td>
-          </tr>
-          <tr id="row_remit" class="hidden">
-            <th>匯款後五碼</th>
-            <td colspan="3" id="show_remit_code" class="font-bold">-</td>
-          </tr>
-          <tr>
-            <th>備註</th>
-            <td colspan="3" id="show_remark" class="font-bold">-</td>
-          </tr>
-          <tr>
-            <th>經辦人員</th>
-            <td colspan="3" id="show_agent" class="font-bold">-</td>
-          </tr>
+        <!-- 大標題 -->
+        <h1 class="text-2xl md:text-4xl font-black text-center my-3 md:my-5 text-slate-900 tracking-wide">收付款憑單</h1>
+
+        <!-- 主資訊表格 -->
+        <table class="receipt-table mb-0 text-sm md:text-base">
+          <colgroup>
+            <col style="width:50%">
+            <col style="width:50%">
+          </colgroup>
+          <tbody>
+            <tr>
+              <td class="font-bold">金額：<span id="show_amount" class="font-black">-</span></td>
+              <td class="font-bold">分類：<span id="show_category" class="font-black">-</span></td>
+            </tr>
+            <tr>
+              <td>付款人：<span id="show_payer_name" class="font-bold">-</span></td>
+              <td>收款人：<span id="show_payee_name" class="font-bold">-</span></td>
+            </tr>
+            <tr>
+              <td>付款人電話：<span id="show_payer_phone" class="font-bold">-</span></td>
+              <td>收款人電話：<span id="show_payee_phone" class="font-bold">-</span></td>
+            </tr>
+            <tr>
+              <td colspan="2">地址：<span id="show_addr" class="font-bold break-all">-</span></td>
+            </tr>
+          </tbody>
         </table>
 
-        <!-- 簽名區 -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 px-2 md:px-6 mb-8 md:mb-12 border-b-2 pb-6 md:pb-10">
-          <div class="space-y-2 md:space-y-4">
-            <p class="text-lg md:text-2xl font-bold"><span id="show_role_label">簽名方</span>（簽名）：<span id="show_final_name" class="underline px-2 md:px-4">-</span></p>
-            <p class="text-base md:text-xl">電話：<span id="show_final_phone">-</span></p>
-          </div>
-          <div class="text-right space-y-2 md:space-y-4">
-            <p class="text-sm md:text-base font-bold text-slate-500">優式租售管理 - 窩的家三重加盟店</p>
-            <p class="text-lg md:text-2xl font-bold">經辦人員：<span id="show_final_agent">-</span></p>
-          </div>
+        <!-- 收付款明細 section -->
+        <table class="receipt-table mt-0 mb-0 text-sm md:text-base">
+          <tbody>
+            <tr>
+              <td colspan="2" class="section-header">收付款明細</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- 子表格（帶水印） -->
+        <div class="watermark-subtable-wrap">
+          <table class="subtable">
+            <thead>
+              <tr>
+                <th style="width:33%">費用類別</th>
+                <th style="width:37%">項目</th>
+                <th style="width:30%">金額</th>
+              </tr>
+            </thead>
+            <tbody id="show_subtable_body">
+              <tr><td colspan="3" class="text-slate-400 text-center py-3">（無明細）</td></tr>
+            </tbody>
+            <tfoot>
+              <tr class="subtable-total">
+                <td colspan="3" style="text-align:right; font-weight:900; padding: 8px 10px; border: 1.5px solid #000; border-top: 2px solid #000;">
+                  金額合計：<span id="show_total" class="font-black">-</span>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
+
+        <!-- 簽名 section header -->
+        <table class="receipt-table mt-3 md:mt-4 mb-0 text-sm md:text-base">
+          <tbody>
+            <tr>
+              <td colspan="2" class="section-header" id="show_sig_section_label">租客簽名</td>
+            </tr>
+          </tbody>
+        </table>
 
         <!-- 簽名板 -->
-        <div class="px-2 md:px-4">
-          <p class="text-center text-xl md:text-3xl font-black text-slate-700 mb-3 md:mb-6">
-            請在下方空白處簽名
-          </p>
+        <div class="border border-t-0 border-black px-3 md:px-5 pt-4 pb-3 mb-3">
           <canvas id="signature-pad"></canvas>
-          <div class="flex gap-3 md:gap-6 mt-5 md:mt-8">
-            <button id="btn-back" class="big-btn flex-1 bg-slate-200 text-slate-700 font-black py-3 md:py-6 rounded-2xl md:rounded-3xl text-lg md:text-2xl">← 上一頁</button>
-            <button id="btn-clear" class="big-btn flex-none bg-yellow-100 text-yellow-800 font-black py-3 md:py-6 px-4 md:px-8 rounded-2xl md:rounded-3xl text-lg md:text-2xl border-2 border-yellow-300">清除</button>
-          </div>
-          <button id="btn-submit" class="big-btn w-full mt-4 md:mt-8 bg-green-600 hover:bg-green-700 text-white text-xl md:text-4xl font-black py-4 md:py-9 rounded-2xl md:rounded-[2.5rem] shadow-2xl">
-            確認簽名並送出
-          </button>
         </div>
+
+        <!-- 法律聲明 -->
+        <div class="border border-black px-4 py-3 text-xs md:text-sm text-slate-700 leading-relaxed mb-5 md:mb-8">
+          本憑單採電子簽名方式簽署，簽署人確認並同意以電子方式簽署本文件，其法律效力與本人親自簽名相同。
+        </div>
+
+        <!-- 操作按鈕 -->
+        <div class="flex gap-3 md:gap-6 mt-2">
+          <button id="btn-back" class="big-btn flex-1 bg-slate-200 text-slate-700 font-black py-3 md:py-6 rounded-2xl md:rounded-3xl text-lg md:text-2xl">← 上一頁</button>
+          <button id="btn-clear" class="big-btn flex-none bg-yellow-100 text-yellow-800 font-black py-3 md:py-6 px-4 md:px-8 rounded-2xl md:rounded-3xl text-lg md:text-2xl border-2 border-yellow-300">清除</button>
+        </div>
+        <button id="btn-submit" class="big-btn w-full mt-4 md:mt-8 bg-green-600 hover:bg-green-700 text-white text-xl md:text-4xl font-black py-4 md:py-9 rounded-2xl md:rounded-[2.5rem] shadow-2xl">
+          確認簽名並送出
+        </button>
       </div>
     </div>
 
@@ -281,81 +288,113 @@
 
   <!-- PDF 匯出區（隱藏在視圖外） -->
   <div id="pdf-export-area">
-    <div style="position: relative;">
+    <!-- 頂部 header：憑單編號左、收付日期右 -->
+    <div style="display:flex; justify-content:space-between; align-items:center; font-size:15px; font-weight:700; margin-bottom:8px;">
+      <span>憑單編號：<span id="pdf_no">-</span></span>
+      <span>收付日期：<span id="pdf_date">-</span></span>
+    </div>
+
+    <!-- 大標題 -->
+    <div style="font-size:34px; font-weight:900; text-align:center; margin-bottom:20px; color:#000; letter-spacing:2px;">收付款憑單</div>
+
+    <!-- 主資訊表格：4 rows × 2 cols -->
+    <table style="border-collapse:collapse; width:100%; border:2.5px solid #000; margin-bottom:0;">
+      <colgroup>
+        <col style="width:50%">
+        <col style="width:50%">
+      </colgroup>
+      <tbody>
+        <tr>
+          <td style="border:1.5px solid #000; padding:11px 16px; font-size:16px; vertical-align:middle;">
+            金額：<strong id="pdf_amount">-</strong>
+          </td>
+          <td style="border:1.5px solid #000; padding:11px 16px; font-size:16px; vertical-align:middle;">
+            分類：<strong id="pdf_category">-</strong>
+          </td>
+        </tr>
+        <tr>
+          <td style="border:1.5px solid #000; padding:11px 16px; font-size:16px; vertical-align:middle;">
+            付款人：<span id="pdf_payer_name">-</span>
+          </td>
+          <td style="border:1.5px solid #000; padding:11px 16px; font-size:16px; vertical-align:middle;">
+            收款人：<span id="pdf_payee_name">-</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="border:1.5px solid #000; padding:11px 16px; font-size:16px; vertical-align:middle;">
+            付款人電話：<span id="pdf_payer_phone">-</span>
+          </td>
+          <td style="border:1.5px solid #000; padding:11px 16px; font-size:16px; vertical-align:middle;">
+            收款人電話：<span id="pdf_payee_phone">-</span>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="2" style="border:1.5px solid #000; padding:11px 16px; font-size:16px; vertical-align:middle;">
+            地址：<span id="pdf_addr">-</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- 收付款明細 section header（黑底白字） -->
+    <table style="border-collapse:collapse; width:100%; border:2.5px solid #000; border-top:0; margin-bottom:0;">
+      <tbody>
+        <tr>
+          <td colspan="3" style="background:#000; color:#fff; text-align:center; font-weight:900; padding:10px 16px; font-size:16px; border:1.5px solid #000;">
+            收付款明細
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- 子表格（帶水印） -->
+    <div style="position:relative;">
       <!-- 水印 -->
-      <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 0;">
-        <img src="https://raw.githubusercontent.com/wuohome/ragic/refs/heads/main/logooo.png" style="max-width: 400px; opacity: 0.12;">
+      <div style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:0;">
+        <img src="https://raw.githubusercontent.com/wuohome/ragic/refs/heads/main/logooo.png" style="max-width:350px; opacity:0.15;">
       </div>
-      <div style="position: relative; z-index: 1;">
-        <div class="pdf-header-info">編號：<span id="pdf_no">-</span></div>
-        <div class="pdf-title">租押金/服務費收款憑單</div>
-
-        <table class="pdf-table receipt-table" style="border-collapse: collapse; width: 100%; border: 2.5px solid #000; margin-bottom: 20px;">
-          <tr>
-            <th style="border: 1.5px solid #000; padding: 15px 20px; background: #f8fafc; font-weight: 900; width: 130px; text-align: center; vertical-align: middle;">收款日期</th>
-            <td colspan="3" id="pdf_date" style="border: 1.5px solid #000; padding: 15px 20px; font-weight: bold; vertical-align: middle;">-</td>
-          </tr>
-          <tr>
-            <th style="border: 1.5px solid #000; padding: 15px 20px; background: #f8fafc; font-weight: 900; width: 130px; text-align: center; vertical-align: middle;">案名</th>
-            <td colspan="3" id="pdf_case" style="border: 1.5px solid #000; padding: 15px 20px; font-weight: bold; vertical-align: middle;">-</td>
-          </tr>
-          <tr>
-            <th style="border: 1.5px solid #000; padding: 15px 20px; background: #f8fafc; font-weight: 900; width: 130px; text-align: center; vertical-align: middle;">地址</th>
-            <td colspan="3" id="pdf_addr" style="border: 1.5px solid #000; padding: 15px 20px; font-weight: bold; vertical-align: middle;">-</td>
-          </tr>
-        </table>
-
-        <!-- PDF 子表格 -->
-        <p style="font-weight: 900; font-size: 18px; margin-bottom: 8px;">收付款明細</p>
-        <table class="pdf-subtable" style="border-collapse: collapse; width: 100%; margin-bottom: 20px;">
+      <div style="position:relative; z-index:1;">
+        <table style="border-collapse:collapse; width:100%; border:2.5px solid #000; border-top:0; margin-bottom:0;">
           <thead>
             <tr>
-              <th style="border: 1.5px solid #94a3b8; background: #e2e8f0; font-weight: 900; text-align: center; padding: 10px 14px; font-size: 16px;">類型</th>
-              <th style="border: 1.5px solid #94a3b8; background: #e2e8f0; font-weight: 900; text-align: center; padding: 10px 14px; font-size: 16px;">項目</th>
-              <th style="border: 1.5px solid #94a3b8; background: #e2e8f0; font-weight: 900; text-align: center; padding: 10px 14px; font-size: 16px;">金額</th>
+              <th style="border:1.5px solid #000; background:#000; color:#fff; font-weight:900; text-align:center; padding:10px 14px; font-size:15px; width:33%;">費用類別</th>
+              <th style="border:1.5px solid #000; background:#000; color:#fff; font-weight:900; text-align:center; padding:10px 14px; font-size:15px; width:37%;">項目</th>
+              <th style="border:1.5px solid #000; background:#000; color:#fff; font-weight:900; text-align:center; padding:10px 14px; font-size:15px; width:30%;">金額</th>
             </tr>
           </thead>
           <tbody id="pdf_subtable_body">
-            <tr><td colspan="3" style="text-align: center; color: #94a3b8; padding: 10px; border: 1.5px solid #94a3b8;">（無明細）</td></tr>
+            <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:12px; border:1.5px solid #000;">（無明細）</td></tr>
           </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" style="border:1.5px solid #000; border-top:2px solid #000; padding:10px 16px; text-align:right; font-weight:900; font-size:17px;">
+                金額合計：<span id="pdf_total">-</span>
+              </td>
+            </tr>
+          </tfoot>
         </table>
-
-        <table class="pdf-table receipt-table" style="border-collapse: collapse; width: 100%; border: 2.5px solid #000; margin-bottom: 20px;">
-          <tr>
-            <th style="border: 1.5px solid #000; padding: 15px 20px; background: #f8fafc; font-weight: 900; width: 130px; text-align: center; vertical-align: middle;">金額合計</th>
-            <td colspan="3" id="pdf_total" style="border: 1.5px solid #000; padding: 15px 20px; font-weight: 900; font-size: 26px; color: #c00; vertical-align: middle;">-</td>
-          </tr>
-          <tr>
-            <th style="border: 1.5px solid #000; padding: 15px 20px; background: #f8fafc; font-weight: 900; width: 130px; text-align: center; vertical-align: middle;">付款方式</th>
-            <td colspan="3" id="pdf_pay_method" style="border: 1.5px solid #000; padding: 15px 20px; font-weight: bold; vertical-align: middle;">-</td>
-          </tr>
-          <tr id="pdf_row_remit">
-            <th style="border: 1.5px solid #000; padding: 15px 20px; background: #f8fafc; font-weight: 900; width: 130px; text-align: center; vertical-align: middle;">匯款後五碼</th>
-            <td colspan="3" id="pdf_remit_code" style="border: 1.5px solid #000; padding: 15px 20px; font-weight: bold; vertical-align: middle;">-</td>
-          </tr>
-          <tr>
-            <th style="border: 1.5px solid #000; padding: 15px 20px; background: #f8fafc; font-weight: 900; width: 130px; text-align: center; vertical-align: middle;">備註</th>
-            <td colspan="3" id="pdf_remark" style="border: 1.5px solid #000; padding: 15px 20px; font-weight: bold; vertical-align: middle;">-</td>
-          </tr>
-          <tr>
-            <th style="border: 1.5px solid #000; padding: 15px 20px; background: #f8fafc; font-weight: 900; width: 130px; text-align: center; vertical-align: middle;">經辦人員</th>
-            <td colspan="3" id="pdf_agent" style="border: 1.5px solid #000; padding: 15px 20px; font-weight: bold; vertical-align: middle;">-</td>
-          </tr>
-        </table>
-
-        <div style="display: flex; justify-content: space-between; margin-top: 40px; padding: 0 10px; border-top: 3px solid #000; padding-top: 30px;">
-          <div style="width: 55%;">
-            <p style="font-size: 24px; font-weight: bold; margin-bottom: 25px;">
-              <span id="pdf_role_label">簽名方</span>（簽名）：<img id="pdf_signature_img" style="display: inline-block; vertical-align: middle; max-height: 90px;">
-            </p>
-            <p style="font-size: 18px;">電話：<span id="pdf_phone">-</span></p>
-          </div>
-          <div style="text-align: right; width: 45%;">
-            <p style="font-size: 14px; font-weight: bold; color: #555; margin-bottom: 5px;">優式租售管理 - 窩的家三重加盟店</p>
-            <p style="font-size: 24px; font-weight: bold; margin-bottom: 35px;">經辦人員：<span id="pdf_agent_bottom">-</span></p>
-          </div>
-        </div>
       </div>
+    </div>
+
+    <!-- 簽名 section header（黑底白字，依 ROLE） -->
+    <table style="border-collapse:collapse; width:100%; border:2.5px solid #000; border-top:0; margin-top:18px; margin-bottom:0;">
+      <tbody>
+        <tr>
+          <td colspan="2" style="background:#000; color:#fff; text-align:center; font-weight:900; padding:10px 16px; font-size:16px; border:1.5px solid #000;" id="pdf_sig_section_label">
+            租客簽名
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- 簽名圖區域 -->
+    <div style="border:2.5px solid #000; border-top:0; padding:22px 16px 18px; min-height:120px; display:flex; align-items:center; justify-content:center;">
+      <img id="pdf_signature_img" style="max-height:100px; display:block; margin:0 auto;">
+    </div>
+
+    <!-- 法律聲明 -->
+    <div style="border:2.5px solid #000; border-top:0; padding:12px 16px; font-size:13px; color:#333; line-height:1.7;">
+      本憑單採電子簽名方式簽署，簽署人確認並同意以電子方式簽署本文件，其法律效力與本人親自簽名相同。
     </div>
   </div>
 
@@ -441,9 +480,12 @@
     }
 
     function formatCurrency(val) {
-      if (!val) return "$ 0";
-      const digits = String(val).replace(/[^\d]/g, "");
-      return "$ " + Number(digits).toLocaleString("zh-TW");
+      if (val === null || val === undefined || val === "") return "$ 0";
+      const s = String(val).trim();
+      const isNeg = /^-/.test(s) || /^\$\s*-/.test(s);
+      const digits = s.replace(/[^\d]/g, "");
+      if (!digits) return "$ 0";
+      return (isNeg ? "-$ " : "$ ") + Number(digits).toLocaleString("zh-TW");
     }
 
     // 依 ROLE 取對應欄位 ID
@@ -502,26 +544,38 @@
       return false;
     }
 
-    // 渲染子表格到 tbody
+    const MIN_SUBTABLE_ROWS = 8;  // 至少預留行數
+
+    // 渲染子表格到 tbody（preview 版）
     function renderSubtable(tbodyId, subtableData, typeKey, itemKey, amtKey) {
       const tbody = $(tbodyId);
       if (!tbody) return;
       tbody.innerHTML = "";
 
-      if (!subtableData || typeof subtableData !== 'object' || Object.keys(subtableData).length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:10px; border: 1.5px solid #94a3b8;">（無明細）</td></tr>';
-        return;
+      const dataRows = [];
+      if (subtableData && typeof subtableData === 'object') {
+        const keys = Object.keys(subtableData).sort((a, b) => Number(a) - Number(b));
+        for (const k of keys) {
+          const row = subtableData[k];
+          if (!row || typeof row !== 'object') continue;
+          const type = row[typeKey] || row["類型"] || "";
+          const item = row[itemKey] || row["項目"] || "";
+          const amt  = row[amtKey]  || row["金額"] || "";
+          if (type || item || amt) dataRows.push({ type, item, amt });
+        }
       }
 
-      const keys = Object.keys(subtableData).sort((a, b) => Number(a) - Number(b));
-      for (const k of keys) {
-        const row = subtableData[k];
-        if (!row || typeof row !== 'object') continue;
-        const type = row[typeKey] || row["類型"] || "";
-        const item = row[itemKey] || row["項目"] || "";
-        const amt = row[amtKey] || row["金額"] || "";
+      for (const r of dataRows) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${type}</td><td>${item}</td><td>${formatCurrency(amt)}</td>`;
+        tr.innerHTML = `<td>${r.type}</td><td>${r.item}</td><td>${formatCurrency(r.amt)}</td>`;
+        tbody.appendChild(tr);
+      }
+
+      // 補空行到 MIN_SUBTABLE_ROWS
+      const padCount = Math.max(0, MIN_SUBTABLE_ROWS - dataRows.length);
+      for (let i = 0; i < padCount; i++) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td style="height:28px;">&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>`;
         tbody.appendChild(tr);
       }
     }
@@ -532,23 +586,38 @@
       if (!tbody) return;
       tbody.innerHTML = "";
 
-      if (!subtableData || typeof subtableData !== 'object' || Object.keys(subtableData).length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#94a3b8;padding:10px;border:1.5px solid #94a3b8;">（無明細）</td></tr>';
-        return;
+      const dataRows = [];
+      if (subtableData && typeof subtableData === 'object') {
+        const keys = Object.keys(subtableData).sort((a, b) => Number(a) - Number(b));
+        for (const k of keys) {
+          const row = subtableData[k];
+          if (!row || typeof row !== 'object') continue;
+          const type = row[typeKey] || row["類型"] || "";
+          const item = row[itemKey] || row["項目"] || "";
+          const amt  = row[amtKey]  || row["金額"] || "";
+          if (type || item || amt) dataRows.push({ type, item, amt });
+        }
       }
 
-      const keys = Object.keys(subtableData).sort((a, b) => Number(a) - Number(b));
-      for (const k of keys) {
-        const row = subtableData[k];
-        if (!row || typeof row !== 'object') continue;
-        const type = row[typeKey] || row["類型"] || "";
-        const item = row[itemKey] || row["項目"] || "";
-        const amt = row[amtKey] || row["金額"] || "";
+      const cellStyle = "border:1.5px solid #000; padding:9px 14px; text-align:center; font-size:15px;";
+      for (const r of dataRows) {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td style="border:1.5px solid #94a3b8;padding:10px 14px;text-align:center;font-size:16px;">${type}</td>
-          <td style="border:1.5px solid #94a3b8;padding:10px 14px;text-align:center;font-size:16px;">${item}</td>
-          <td style="border:1.5px solid #94a3b8;padding:10px 14px;text-align:center;font-size:16px;">${formatCurrency(amt)}</td>
+          <td style="${cellStyle}">${r.type}</td>
+          <td style="${cellStyle}">${r.item}</td>
+          <td style="${cellStyle}">${formatCurrency(r.amt)}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      // 補空行到 MIN_SUBTABLE_ROWS
+      const padCount = Math.max(0, MIN_SUBTABLE_ROWS - dataRows.length);
+      for (let i = 0; i < padCount; i++) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td style="${cellStyle} height:28px;">&nbsp;</td>
+          <td style="${cellStyle}">&nbsp;</td>
+          <td style="${cellStyle}">&nbsp;</td>
         `;
         tbody.appendChild(tr);
       }
@@ -601,52 +670,57 @@
       // Step 1 唯讀展示
       const personName = getValue(currentRecord, getNameField());
       const personPhone = getValue(currentRecord, getPhoneField());
+      const addr = getValue(currentRecord, [FIELDS.addr, "地址"]) ||
+                   getValue(currentRecord, [FIELDS.addr2, "公司件地址"]);
+
       $("display_name").innerText = personName || "（未填寫）";
       $("display_phone").innerText = personPhone || "（未填寫）";
+      if ($("display_addr")) $("display_addr").innerText = addr || "（未填寫）";
       if ($("step1-title")) $("step1-title").innerText = "請確認" + ROLE + "資料";
       if ($("label-name")) $("label-name").innerText = (ROLE === "房東" ? "屋主姓名" : "租客姓名");
 
-      // 角色標籤
-      const roleLabel = ROLE === "房東" ? "房東" : "租客";
-      if ($("show_role_label")) $("show_role_label").innerText = roleLabel;
-      if ($("pdf_role_label")) $("pdf_role_label").innerText = roleLabel;
-
-      // 通用欄位
-      const caseName = getValue(currentRecord, [FIELDS.case_name, "案名"]) ||
-                       getValue(currentRecord, [FIELDS.case_name2, "公司件案名"]);
-      const addr = getValue(currentRecord, [FIELDS.addr, "地址"]) ||
-                   getValue(currentRecord, [FIELDS.addr2, "公司件地址"]);
+      // 角色相關值
       const agentVal = getValue(currentRecord, [FIELDS.agent, "經辦人員"]);
+      const totalVal = formatCurrency(getValue(currentRecord, getTotalField()));
+      const category = ROLE === "租客" ? "租客" : "房東";
 
+      // 依 ROLE 設付款人 / 收款人
+      let payerName, payerPhone, payeeName, payeePhone;
+      if (ROLE === "租客") {
+        payerName  = getValue(currentRecord, [FIELDS.tenant_name,    "租客姓名"]);
+        payerPhone = getValue(currentRecord, [FIELDS.tenant_phone,   "電話"]);
+        payeeName  = getValue(currentRecord, [FIELDS.landlord_name,  "屋主姓名"]);
+        payeePhone = getValue(currentRecord, [FIELDS.landlord_phone, "屋主手機號碼"]);
+      } else {
+        payerName  = getValue(currentRecord, [FIELDS.landlord_name,  "屋主姓名"]);
+        payerPhone = getValue(currentRecord, [FIELDS.landlord_phone, "屋主手機號碼"]);
+        payeeName  = "優式租售管理-窩的家三重加盟店";
+        payeePhone = getValue(currentRecord, [FIELDS.agent, "經辦人員"]);
+      }
+
+      // 簽名 section 標題
+      const sigSectionLabel = ROLE === "租客" ? "租客簽名" : "房東簽名";
+      if ($("show_sig_section_label")) $("show_sig_section_label").innerText = sigSectionLabel;
+      if ($("pdf_sig_section_label"))  $("pdf_sig_section_label").innerText  = sigSectionLabel;
+
+      // 統一 mapping（s=preview id, p=pdf id, v=值）
       const mapping = [
         { s: "show_no",          p: "pdf_no",          v: getValue(currentRecord, [FIELDS.no, "憑單編號"]) },
         { s: "show_date",        p: "pdf_date",        v: getValue(currentRecord, [FIELDS.date, "收款日期"]) },
-        { s: "show_case",        p: "pdf_case",        v: caseName },
         { s: "show_addr",        p: "pdf_addr",        v: addr },
-        { s: "show_remark",      p: "pdf_remark",      v: getValue(currentRecord, [FIELDS.remark, "備註"]) || "-" },
-        { s: "show_agent",       p: "pdf_agent",       v: agentVal },
-        { s: "show_final_agent", p: "pdf_agent_bottom",v: agentVal },
-        { s: "show_total",       p: "pdf_total",       v: formatCurrency(getValue(currentRecord, getTotalField())) },
+        { s: "show_amount",      p: "pdf_amount",      v: totalVal },
+        { s: "show_total",       p: "pdf_total",       v: totalVal },
+        { s: "show_category",    p: "pdf_category",    v: category },
+        { s: "show_payer_name",  p: "pdf_payer_name",  v: payerName  || "-" },
+        { s: "show_payer_phone", p: "pdf_payer_phone", v: payerPhone || "-" },
+        { s: "show_payee_name",  p: "pdf_payee_name",  v: payeeName  || "-" },
+        { s: "show_payee_phone", p: "pdf_payee_phone", v: payeePhone || "-" },
       ];
 
       mapping.forEach(m => {
         if (m.s && $(m.s)) $(m.s).innerText = m.v;
         if (m.p && $(m.p)) $(m.p).innerText = m.v;
       });
-
-      // 付款方式
-      const payVal = getValue(currentRecord, getPayField());
-      const payDisplay = payVal ? payVal.replace(/\|/g, "、") : "-";
-      if ($("show_pay_method")) $("show_pay_method").innerText = payDisplay;
-      if ($("pdf_pay_method")) $("pdf_pay_method").innerText = payDisplay;
-
-      // 匯款後五碼（有值才顯示）
-      const remitCode = getValue(currentRecord, getRemitField());
-      const showRemit = remitCode && remitCode.trim() !== "";
-      if ($("show_remit_code")) $("show_remit_code").innerText = remitCode;
-      if ($("row_remit")) $("row_remit").classList.toggle("hidden", !showRemit);
-      if ($("pdf_remit_code")) $("pdf_remit_code").innerText = remitCode;
-      if ($("pdf_row_remit")) $("pdf_row_remit").style.display = showRemit ? "" : "none";
 
       // 子表格渲染
       const subtableData = currentRecord[getSubtableKey()];
@@ -655,11 +729,6 @@
       const amtKey  = getSubAmtKey();
       renderSubtable("show_subtable_body", subtableData, typeKey, itemKey, amtKey);
       renderPdfSubtable(subtableData, typeKey, itemKey, amtKey);
-
-      // Step 2 顯示姓名/電話
-      if ($("show_final_name")) $("show_final_name").innerText = personName || "-";
-      if ($("show_final_phone")) $("show_final_phone").innerText = personPhone || "-";
-      if ($("pdf_phone")) $("pdf_phone").innerText = personPhone || "-";
     }
 
     function initSignature() {
