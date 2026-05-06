@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>租押金/服務費收款憑單簽署系統</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+  <!-- 引入 PDF 產生套件 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+    body { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; }
+
+    /* 預覽頁面表格樣式 - 手機版優化 */
+    .receipt-table { border-collapse: collapse; width: 100%; border: 2.5px solid #000; }
+    .receipt-table th, .receipt-table td { border: 1.5px solid #000; padding: 12px; vertical-align: middle; }
+    .receipt-table th { background-color: #f8fafc; font-weight: 900; width: 130px; color: #000; font-size: 1.1rem; text-align: center; }
+
+    /* 手機版表格微調 (螢幕小於 768px 時觸發) */
+    @media (max-width: 768px) {
+        .receipt-table th, .receipt-table td { padding: 8px 4px; font-size: 0.95rem; }
+        .receipt-table th { width: 90px; font-size: 1rem; }
+    }
+
+    /* PDF 專用樣式 (保持原樣，確保列印品質) */
+    .pdf-table th, .pdf-table td {
+        vertical-align: middle !important;
+        padding: 15px 20px !important;
+        line-height: 1.4 !important;
+    }
+
+    .big-btn { transition: all 0.2s; cursor: pointer; }
+    .big-btn:active { transform: scale(0.96); opacity: 0.9; }
+
+    /* 簽名板高度在手機上稍微縮小，避免佔據太多空間 */
+    #signature-pad { background: #ffffff; border: 3px dashed #3b82f6; border-radius: 20px; width: 100%; height: 250px; touch-action: none; }
+    @media (min-width: 768px) {
+        #signature-pad { height: 320px; }
+    }
+
+    #loader { background: rgba(255, 255, 255, 0.98); z-index: 100; }
+    .debug-box { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 12px; font-size: 14px; margin-top: 20px; text-align: left; overflow-x: auto; display: none; border: 2px solid #333; max-height: 300px; overflow-y: auto; }
+    .grandpa-input:focus { border-color: #2563eb; box-shadow: 0 0 0 10px rgba(37, 99, 235, 0.1); background-color: #fff; }
+
+    #pdf-export-area { width: 850px; padding: 40px; background: white; position: absolute; left: -9999px; top: 0; }
+    .pdf-title { font-size: 36px; font-weight: 900; text-align: center; margin-bottom: 25px; color: #000; }
+    .pdf-header-info { text-align: right; font-size: 18px; margin-bottom: 12px; font-weight: bold; }
+
+    /* 水印專用樣式 */
+    .watermark-bg { position: relative; z-index: 0; }
+    .watermark-bg::before {
+      content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background-image: url('https://raw.githubusercontent.com/wuohome/ragic/refs/heads/main/logooo.png');
+      background-position: center center; background-repeat: no-repeat; background-size: 300px auto;
+      opacity: 0.15; pointer-events: none; z-index: -1;
+    }
+    @media (min-width: 768px) {
+        .watermark-bg::before { background-size: 500px auto; }
+    }
+    .watermark-bg > * { position: relative; z-index: 1; }
+
+    /* 唯讀欄位展示樣式 */
+    .readonly-field {
+      background: #f8fafc;
+      border: 2px solid #e2e8f0;
+      border-radius: 1rem;
+      padding: 0.75rem 1.25rem;
+      font-weight: 700;
+      color: #1e293b;
+      font-size: 1.25rem;
+    }
+    @media (min-width: 768px) {
+      .readonly-field { font-size: 1.875rem; padding: 1rem 1.5rem; border-radius: 1.5rem; }
+    }
+
+    /* 子表格樣式 */
+    .subtable { border-collapse: collapse; width: 100%; margin-top: 4px; }
+    .subtable th { background: #e2e8f0; font-weight: 900; text-align: center; padding: 8px 6px; border: 1.5px solid #94a3b8; font-size: 0.95rem; }
+    .subtable td { border: 1.5px solid #94a3b8; padding: 8px 6px; text-align: center; font-size: 0.95rem; }
+    .subtable tr:nth-child(even) td { background: #f8fafc; }
+    @media (min-width: 768px) {
+      .subtable th, .subtable td { padding: 10px 14px; font-size: 1.05rem; }
+    }
+    /* PDF 子表格 */
+    .pdf-subtable { border-collapse: collapse; width: 100%; margin-top: 4px; }
+    .pdf-subtable th { background: #e2e8f0; font-weight: 900; text-align: center; padding: 10px 14px; border: 1.5px solid #94a3b8; font-size: 16px; }
+    .pdf-subtable td { border: 1.5px solid #94a3b8; padding: 10px 14px; text-align: center; font-size: 16px; }
+  </style>
+</head>
+
+<body class="bg-slate-100 min-h-screen">
+
+  <div id="loader" class="fixed inset-0 flex flex-col items-center justify-center p-6 text-center">
+    <div id="loader-spinner" class="animate-spin rounded-full h-16 w-16 md:h-20 md:w-20 border-t-4 border-b-4 border-blue-600 mb-6"></div>
+    <p id="loader-text" class="text-xl md:text-3xl font-black text-slate-800">正在讀取 Ragic 資料...</p>
+
+    <div id="test-mode-ui" class="hidden mt-8 bg-white p-6 md:p-10 rounded-3xl md:rounded-[3rem] shadow-2xl max-w-sm w-full border-4 border-blue-500">
+      <h2 class="text-2xl md:text-3xl font-black text-blue-600 mb-4 md:mb-6 text-center">測試模式</h2>
+      <p class="text-slate-500 mb-3 md:mb-4 text-lg md:text-xl font-medium text-left">請輸入正確的 Record ID：</p>
+      <input type="number" id="test-id-input" placeholder="1"
+        class="w-full text-center text-4xl md:text-6xl p-4 md:p-6 border-4 border-slate-200 rounded-2xl md:rounded-3xl mb-6 md:mb-8 outline-none font-bold bg-slate-50">
+      <button id="btn-test" class="w-full bg-blue-600 text-white font-black py-4 md:py-7 rounded-2xl md:rounded-3xl text-xl md:text-3xl shadow-xl big-btn">
+        開始載入
+      </button>
+    </div>
+
+    <div id="debug-area" class="debug-box w-full max-w-lg">
+      <p class="text-white font-bold mb-2">【系統診斷】</p>
+      <div id="debug-content" class="font-mono whitespace-pre-wrap">等待連線中...</div>
+    </div>
+
+    <button id="retry-btn" onclick="location.reload()" class="hidden mt-8 bg-slate-800 text-white px-8 md:px-10 py-3 md:py-4 rounded-xl md:rounded-2xl font-black text-lg md:text-xl">
+      重新載入
+    </button>
+  </div>
+
+  <!-- 隱藏 iframe 用於接收表單提交 -->
+  <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+
+  <div class="max-w-4xl mx-auto p-3 md:p-8">
+
+    <!-- 第一步：核對資料 (唯讀展示) -->
+    <div id="step-1" class="hidden bg-white rounded-3xl md:rounded-[3rem] shadow-2xl p-5 md:p-14 border-t-[10px] md:border-t-[16px] border-blue-600">
+      <h1 id="step1-title" class="text-2xl md:text-5xl font-black text-blue-700 mb-3 md:mb-6 text-center md:text-left">請確認資料</h1>
+      <p class="text-slate-500 mb-6 md:mb-12 text-base md:text-2xl font-medium text-center md:text-left">您好，請確認以下資料無誤後繼續。</p>
+
+      <!--
+        表單設定：
+        1. target="hidden_iframe" -> 避免頁面跳轉
+        2. enctype="multipart/form-data" -> 支援檔案上傳 (PDF)
+      -->
+      <form id="ragicForm" method="POST" target="hidden_iframe" accept-charset="UTF-8" enctype="multipart/form-data" class="space-y-6 md:space-y-10">
+        <!-- 姓名唯讀展示 -->
+        <div>
+          <label class="block text-lg md:text-3xl font-black text-slate-700 mb-2 md:mb-4" id="label-name">姓名</label>
+          <div id="display_name" class="readonly-field">-</div>
+        </div>
+        <!-- 電話唯讀展示 -->
+        <div>
+          <label class="block text-lg md:text-3xl font-black text-slate-700 mb-2 md:mb-4">聯絡電話</label>
+          <div id="display_phone" class="readonly-field">-</div>
+        </div>
+
+        <!-- 簽名欄位 (Hidden) - 依 ROLE 動態 name -->
+        <input type="hidden" id="hidden_signature">
+
+        <!-- PDF 自動上傳欄位 (Hidden File Input) - 依 ROLE 動態 name -->
+        <input type="file" id="hidden_pdf_input" style="display:none;">
+      </form>
+
+      <button id="btn-next" class="big-btn w-full mt-8 md:mt-14 bg-blue-600 hover:bg-blue-700 text-white text-xl md:text-4xl font-black py-4 md:py-9 rounded-2xl md:rounded-[2.5rem] shadow-2xl">資料正確，下一頁 →</button>
+
+      <!-- 診斷按鈕 -->
+      <div class="mt-6 md:mt-8 text-center">
+        <button onclick="showFieldIds()" class="text-slate-300 text-xs md:text-sm underline">顯示所有欄位 ID (除錯用)</button>
+      </div>
+    </div>
+
+    <!-- 第二步：預覽收款憑單 -->
+    <div id="step-2" class="hidden bg-white rounded-3xl md:rounded-[3rem] shadow-2xl p-4 md:p-10 border-t-[10px] md:border-t-[16px] border-green-600">
+      <div id="receipt-preview-container" class="watermark-bg">
+        <div class="text-right mb-2 md:mb-4 font-bold text-lg md:text-2xl">編號：<span id="show_no">-</span></div>
+        <h1 class="text-2xl md:text-4xl font-black text-center mb-5 md:mb-8 text-slate-900">租押金/服務費收款憑單</h1>
+
+        <table class="receipt-table mb-4 md:mb-6 text-base md:text-lg">
+          <tr>
+            <th>收款日期</th>
+            <td colspan="3" id="show_date" class="font-bold">-</td>
+          </tr>
+          <tr>
+            <th>案名</th>
+            <td colspan="3" id="show_case" class="font-bold break-all">-</td>
+          </tr>
+          <tr>
+            <th>地址</th>
+            <td colspan="3" id="show_addr" class="font-bold break-all">-</td>
+          </tr>
+        </table>
+
+        <!-- 收付款明細子表格 -->
+        <div class="mb-4 md:mb-6">
+          <p class="text-base md:text-xl font-black text-slate-700 mb-2">收付款明細</p>
+          <div id="show_subtable_container">
+            <table class="subtable">
+              <thead>
+                <tr>
+                  <th>類型</th>
+                  <th>項目</th>
+                  <th>金額</th>
+                </tr>
+              </thead>
+              <tbody id="show_subtable_body">
+                <tr><td colspan="3" class="text-slate-400">（無明細）</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <table class="receipt-table mb-6 md:mb-8 text-base md:text-lg">
+          <tr>
+            <th>金額合計</th>
+            <td colspan="3" id="show_total" class="font-black text-xl md:text-2xl text-red-600">-</td>
+          </tr>
+          <tr>
+            <th>付款方式</th>
+            <td colspan="3" id="show_pay_method" class="font-bold">-</td>
+          </tr>
+          <tr id="row_remit" class="hidden">
+            <th>匯款後五碼</th>
+            <td colspan="3" id="show_remit_code" class="font-bold">-</td>
+          </tr>
+          <tr>
+            <th>備註</th>
+            <td colspan="3" id="show_remark" class="font-bold">-</td>
+          </tr>
+          <tr>
+            <th>經辦人員</th>
+            <td colspan="3" id="show_agent" class="font-bold">-</td>
+          </tr>
+        </table>
+
+        <!-- 簽名區 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 px-2 md:px-6 mb-8 md:mb-12 border-b-2 pb-6 md:pb-10">
+          <div class="space-y-2 md:space-y-4">
+            <p class="text-lg md:text-2xl font-bold"><span id="show_role_label">簽名方</span>（簽名）：<span id="show_final_name" class="underline px-2 md:px-4">-</span></p>
+            <p class="text-base md:text-xl">電話：<span id="show_final_phone">-</span></p>
+          </div>
+          <div class="text-right space-y-2 md:space-y-4">
+            <p class="text-sm md:text-base font-bold text-slate-500">優式租售管理 - 窩的家三重加盟店</p>
+            <p class="text-lg md:text-2xl font-bold">經辦人員：<span id="show_final_agent">-</span></p>
+          </div>
+        </div>
+
+        <!-- 簽名板 -->
+        <div class="px-2 md:px-4">
+          <p class="text-center text-xl md:text-3xl font-black text-slate-700 mb-3 md:mb-6">
+            請在下方空白處簽名
+          </p>
+          <canvas id="signature-pad"></canvas>
+          <div class="flex gap-3 md:gap-6 mt-5 md:mt-8">
+            <button id="btn-back" class="big-btn flex-1 bg-slate-200 text-slate-700 font-black py-3 md:py-6 rounded-2xl md:rounded-3xl text-lg md:text-2xl">← 上一頁</button>
+            <button id="btn-clear" class="big-btn flex-none bg-yellow-100 text-yellow-800 font-black py-3 md:py-6 px-4 md:px-8 rounded-2xl md:rounded-3xl text-lg md:text-2xl border-2 border-yellow-300">清除</button>
+          </div>
+          <button id="btn-submit" class="big-btn w-full mt-4 md:mt-8 bg-green-600 hover:bg-green-700 text-white text-xl md:text-4xl font-black py-4 md:py-9 rounded-2xl md:rounded-[2.5rem] shadow-2xl">
+            確認簽名並送出
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 成功畫面 -->
+    <div id="step-success" class="hidden bg-white rounded-3xl md:rounded-[3rem] shadow-2xl p-8 md:p-16 border-t-[10px] md:border-t-[16px] border-green-500 text-center">
+      <div class="text-6xl md:text-8xl mb-4 md:mb-8">✅</div>
+      <h1 class="text-2xl md:text-5xl font-black text-green-700 mb-4 md:mb-8">簽署完成！</h1>
+      <p class="text-slate-600 text-base md:text-2xl font-medium mb-8 md:mb-14">收款憑單已成功儲存。感謝您的配合。</p>
+      <button onclick="downloadReceiptPDF()" class="big-btn w-full bg-slate-700 hover:bg-slate-900 text-white font-black py-4 md:py-8 rounded-2xl md:rounded-[2.5rem] text-lg md:text-3xl shadow-xl">
+        下載備份 PDF
+      </button>
+    </div>
+
+    <!-- 失敗畫面 -->
+    <div id="step-failed" class="hidden bg-white rounded-3xl md:rounded-[3rem] shadow-2xl p-8 md:p-16 border-t-[10px] md:border-t-[16px] border-red-500 text-center">
+      <div class="text-6xl md:text-8xl mb-4 md:mb-8">⚠️</div>
+      <h1 class="text-2xl md:text-4xl font-black text-red-700 mb-4 md:mb-6">上傳異常</h1>
+      <p class="text-slate-600 text-base md:text-xl font-medium mb-4 md:mb-6">系統無法確認簽名是否成功儲存。<br>請先下載 PDF 備份，再聯絡業務確認。</p>
+      <p id="failed-detail" class="text-slate-400 text-xs md:text-sm mb-6 md:mb-10"></p>
+      <div class="space-y-4">
+        <button onclick="downloadReceiptPDF()" class="big-btn w-full bg-slate-700 hover:bg-slate-900 text-white font-black py-4 md:py-8 rounded-2xl md:rounded-3xl text-lg md:text-3xl shadow-xl">
+          下載備份 PDF
+        </button>
+        <button onclick="retryUpload()" class="big-btn w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 md:py-7 rounded-2xl md:rounded-3xl text-lg md:text-2xl shadow-lg">
+          重新上傳
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PDF 匯出區（隱藏在視圖外） -->
+  <div id="pdf-export-area">
+    <div style="position: relative;">
+      <!-- 水印 -->
+      <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 0;">
+        <img src="https://raw.githubusercontent.com/wuohome/ragic/refs/heads/main/logooo.png" style="max-width: 400px; opacity: 0.12;">
+      </div>
+      <div style="position: relative; z-index: 1;">
+        <div class="pdf-header-info">編號：<span id="pdf_no">-</span></div>
+        <div class="pdf-title">租押金/服務費收款憑單</div>
+
+        <table class="pdf-table receipt-table" style="border-collapse: collapse; width: 100%; border: 2.5px solid #000; margin-bottom: 20px;">
+          <tr>
+            <th style="border: 1.5px solid #000; padding: 15px 20px; background: #f8fafc; font-weight: 900; width: 130px; text-align: center; vertical-align: middle;">收款日期</th>
+            <td colspan="3" id="pdf_date" style="border: 1.5px solid #000; padding: 15px 20px; font-weight: bold; vertical-align: middle;">-</td>
+          </tr>
+          <tr>
+            <th style="border: 1.5px solid #000; padding: 15px 20px; background: #f8fafc; font-weight: 900; width: 130px; text-align: center; vertical-align: middle;">案名</th>
+            <td colspan="3" id="pdf_case" style="border: 1.5px solid #000; padding: 15px 20px; font-weight: bold; vertical-align: middle;">-</td>
+          </tr>
+          <tr>
+            <th style="border: 1.5px solid #000; padding: 15px 20px; background: #f8fafc; font-weight: 900; width: 130px; text-align: center; vertical-align: middle;">地址</th>
+            <td colspan="3" id="pdf_addr" style="border: 1.5px solid #000; padding: 15px 20px; font-weight: bold; vertical-align: middle;">-</td>
+          </tr>
+        </table>
+
+        <!-- PDF 子表格 -->
+        <p style="font-weight: 900; font-size: 18px; margin-bottom: 8px;">收付款明細</p>
+        <table class="pdf-subtable" style="border-collapse: collapse; width: 100%; margin-bottom: 20px;">
+          <thead>
+            <tr>
+              <th style="border: 1.5px solid #94a3b8; background: #e2e8f0; font-weight: 900; text-align: center; padding: 10px 14px; font-size: 16px;">類型</th>
+              <th style="border: 1.5px solid #94a3b8; background: #e2e8f0; font-weight: 900; text-align: center; padding: 10px 14px; font-size: 16px;">項目</th>
+              <th style="border: 1.5px solid #94a3b8; background: #e2e8f0; font-weight: 900; text-align: center; padding: 10px 14px; font-size: 16px;">金額</th>
+            </tr>
+          </thead>
+          <tbody id="pdf_subtable_body">
+            <tr><td colspan="3" style="text-align: center; color: #94a3b8; padding: 10px; border: 1.5px solid #94a3b8;">（無明細）</td></tr>
+          </tbody>
+        </table>
+
+        <table class="pdf-table receipt-table" style="border-collapse: collapse; width: 100%; border: 2.5px solid #000; margin-bottom: 20px;">
+          <tr>
+            <th style="border: 1.5px solid #000; padding: 15px 20px; background: #f8fafc; font-weight: 900; width: 130px; text-align: center; vertical-align: middle;">金額合計</th>
+            <td colspan="3" id="pdf_total" style="border: 1.5px solid #000; padding: 15px 20px; font-weight: 900; font-size: 26px; color: #c00; vertical-align: middle;">-</td>
+          </tr>
+          <tr>
+            <th style="border: 1.5px solid #000; padding: 15px 20px; background: #f8fafc; font-weight: 900; width: 130px; text-align: center; vertical-align: middle;">付款方式</th>
+            <td colspan="3" id="pdf_pay_method" style="border: 1.5px solid #000; padding: 15px 20px; font-weight: bold; vertical-align: middle;">-</td>
+          </tr>
+          <tr id="pdf_row_remit">
+            <th style="border: 1.5px solid #000; padding: 15px 20px; background: #f8fafc; font-weight: 900; width: 130px; text-align: center; vertical-align: middle;">匯款後五碼</th>
+            <td colspan="3" id="pdf_remit_code" style="border: 1.5px solid #000; padding: 15px 20px; font-weight: bold; vertical-align: middle;">-</td>
+          </tr>
+          <tr>
+            <th style="border: 1.5px solid #000; padding: 15px 20px; background: #f8fafc; font-weight: 900; width: 130px; text-align: center; vertical-align: middle;">備註</th>
+            <td colspan="3" id="pdf_remark" style="border: 1.5px solid #000; padding: 15px 20px; font-weight: bold; vertical-align: middle;">-</td>
+          </tr>
+          <tr>
+            <th style="border: 1.5px solid #000; padding: 15px 20px; background: #f8fafc; font-weight: 900; width: 130px; text-align: center; vertical-align: middle;">經辦人員</th>
+            <td colspan="3" id="pdf_agent" style="border: 1.5px solid #000; padding: 15px 20px; font-weight: bold; vertical-align: middle;">-</td>
+          </tr>
+        </table>
+
+        <div style="display: flex; justify-content: space-between; margin-top: 40px; padding: 0 10px; border-top: 3px solid #000; padding-top: 30px;">
+          <div style="width: 55%;">
+            <p style="font-size: 24px; font-weight: bold; margin-bottom: 25px;">
+              <span id="pdf_role_label">簽名方</span>（簽名）：<img id="pdf_signature_img" style="display: inline-block; vertical-align: middle; max-height: 90px;">
+            </p>
+            <p style="font-size: 18px;">電話：<span id="pdf_phone">-</span></p>
+          </div>
+          <div style="text-align: right; width: 45%;">
+            <p style="font-size: 14px; font-weight: bold; color: #555; margin-bottom: 5px;">優式租售管理 - 窩的家三重加盟店</p>
+            <p style="font-size: 24px; font-weight: bold; margin-bottom: 35px;">經辦人員：<span id="pdf_agent_bottom">-</span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const RAGIC_API_KEY = "VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==";
+    const RAGIC_BASE_URL = "https://ap15.ragic.com/wuohome/payments/2";
+
+    // 欄位對照表 - 全部以欄位 ID 為主
+    const FIELDS = {
+      // 通用欄位
+      role:        "1000782",  // 對象（房東/租客）
+      no:          "1000781",  // 憑單編號
+      date:        "1000772",  // 收款日期
+      case_name:   "1000597",  // 案名（連結欄位）
+      case_name2:  "1002052",  // 公司件案名（fallback）
+      addr:        "1000767",  // 地址
+      addr2:       "1002053",  // 公司件地址（fallback）
+      remark:      "1000773",  // 備註
+      agent:       "1000602",  // 經辦人員（email）
+
+      // 房東相關
+      landlord_name:     "1001706",  // 屋主姓名
+      landlord_phone:    "1001707",  // 屋主手機號碼
+      landlord_total:    "1001702",  // 房東金額合計
+      landlord_pay:      "1002076",  // 房東付款方式（單選 現金/匯款）
+      landlord_remit:    "1000603",  // 房東匯款後五碼
+      landlord_sig:      "1000786",  // 房東簽名（base64）
+      landlord_pdf:      "1000650",  // 房東 PDF 上傳欄位
+      landlord_subtable: "_subtable_1001701",  // 房東子表格
+      landlord_sub_type: "1001698",  // 子表格：類型
+      landlord_sub_item: "1001699",  // 子表格：項目
+      landlord_sub_amt:  "1001700",  // 子表格：金額
+
+      // 租客相關
+      tenant_name:     "1000599",  // 租客姓名
+      tenant_phone:    "1000779",  // 電話
+      tenant_total:    "1000778",  // 租客金額合計
+      tenant_pay:      "1000785",  // 租客付款方式（多選 現金|匯款）
+      tenant_remit:    "1000780",  // 租客匯款後五碼
+      tenant_sig:      "1000787",  // 租客簽名（base64）
+      tenant_pdf:      "1000784",  // 租客 PDF 上傳欄位
+      tenant_subtable: "_subtable_1000777",  // 租客子表格
+      tenant_sub_type: "1000774",  // 子表格：類型
+      tenant_sub_item: "1000776",  // 子表格：項目
+      tenant_sub_amt:  "1000775",  // 子表格：金額
+    };
+
+    let currentRecord = null;
+    let recordId = null;
+    let signaturePad = null;
+    let loadTimer = null;
+    let ROLE = null;  // "房東" | "租客"
+
+    const $ = (id) => document.getElementById(id);
+
+    // 解析 URL
+    const href = window.location.href;
+    const matchCode = href.match(/[?&]code=([^&#]+)/i);
+    const matchId = href.match(/[?&]id=([^&#]+)/i);
+    if (matchCode) recordId = matchCode[1];
+    else if (matchId) recordId = matchId[1];
+    else {
+      const urlParams = new URLSearchParams(window.location.search);
+      recordId = urlParams.get('code') || urlParams.get('id');
+    }
+    if (recordId) recordId = recordId.trim();
+
+    // 防呆：可疑 code 攔截
+    function isSuspiciousCode(c) {
+      if (!c) return true;
+      if (c === "1" || c === "{RAGIC_ID}") return true;
+      if (!/^\d+$/.test(c)) return false;
+      return false;
+    }
+
+    // 取欄位值（支援多 key fallback）
+    function getValue(rec, keys) {
+      if (!Array.isArray(keys)) keys = [keys];
+      for (let k of keys) {
+        if (rec[k] !== undefined && rec[k] !== null && rec[k] !== "") return rec[k];
+      }
+      return "";
+    }
+
+    function formatCurrency(val) {
+      if (!val) return "$ 0";
+      const digits = String(val).replace(/[^\d]/g, "");
+      return "$ " + Number(digits).toLocaleString("zh-TW");
+    }
+
+    // 依 ROLE 取對應欄位 ID
+    function getSigFieldId() {
+      return ROLE === "房東" ? FIELDS.landlord_sig : FIELDS.tenant_sig;
+    }
+    function getPdfFieldId() {
+      return ROLE === "房東" ? FIELDS.landlord_pdf : FIELDS.tenant_pdf;
+    }
+    function getSubtableKey() {
+      return ROLE === "房東" ? FIELDS.landlord_subtable : FIELDS.tenant_subtable;
+    }
+    function getSubTypeKey() {
+      return ROLE === "房東" ? FIELDS.landlord_sub_type : FIELDS.tenant_sub_type;
+    }
+    function getSubItemKey() {
+      return ROLE === "房東" ? FIELDS.landlord_sub_item : FIELDS.tenant_sub_item;
+    }
+    function getSubAmtKey() {
+      return ROLE === "房東" ? FIELDS.landlord_sub_amt : FIELDS.tenant_sub_amt;
+    }
+    function getNameField() {
+      return ROLE === "房東" ? FIELDS.landlord_name : FIELDS.tenant_name;
+    }
+    function getPhoneField() {
+      return ROLE === "房東" ? FIELDS.landlord_phone : FIELDS.tenant_phone;
+    }
+    function getTotalField() {
+      return ROLE === "房東" ? FIELDS.landlord_total : FIELDS.tenant_total;
+    }
+    function getPayField() {
+      return ROLE === "房東" ? FIELDS.landlord_pay : FIELDS.tenant_pay;
+    }
+    function getRemitField() {
+      return ROLE === "房東" ? FIELDS.landlord_remit : FIELDS.tenant_remit;
+    }
+
+    function findExactRecord(data, targetId) {
+      if (!data || typeof data !== 'object') return null;
+      if (isMatch(data, targetId)) return data;
+      if (data[targetId] && typeof data[targetId] === 'object') return data[targetId];
+      for (const k in data) {
+        const row = data[k];
+        if (typeof row === 'object' && row !== null) {
+          if (isMatch(row, targetId)) return row;
+        }
+      }
+      return null;
+    }
+
+    function isMatch(row, targetId) {
+      if (row["_ragicId"] == targetId) return true;
+      if (row["Record ID"] == targetId) return true;
+      let recNo = row[FIELDS.no] || row["憑單編號"];
+      if (recNo && recNo == targetId) return true;
+      return false;
+    }
+
+    // 渲染子表格到 tbody
+    function renderSubtable(tbodyId, subtableData, typeKey, itemKey, amtKey) {
+      const tbody = $(tbodyId);
+      if (!tbody) return;
+      tbody.innerHTML = "";
+
+      if (!subtableData || typeof subtableData !== 'object' || Object.keys(subtableData).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:10px; border: 1.5px solid #94a3b8;">（無明細）</td></tr>';
+        return;
+      }
+
+      const keys = Object.keys(subtableData).sort((a, b) => Number(a) - Number(b));
+      for (const k of keys) {
+        const row = subtableData[k];
+        if (!row || typeof row !== 'object') continue;
+        const type = row[typeKey] || row["類型"] || "";
+        const item = row[itemKey] || row["項目"] || "";
+        const amt = row[amtKey] || row["金額"] || "";
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${type}</td><td>${item}</td><td>${formatCurrency(amt)}</td>`;
+        tbody.appendChild(tr);
+      }
+    }
+
+    // PDF 子表格渲染（inline style 版）
+    function renderPdfSubtable(subtableData, typeKey, itemKey, amtKey) {
+      const tbody = $("pdf_subtable_body");
+      if (!tbody) return;
+      tbody.innerHTML = "";
+
+      if (!subtableData || typeof subtableData !== 'object' || Object.keys(subtableData).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#94a3b8;padding:10px;border:1.5px solid #94a3b8;">（無明細）</td></tr>';
+        return;
+      }
+
+      const keys = Object.keys(subtableData).sort((a, b) => Number(a) - Number(b));
+      for (const k of keys) {
+        const row = subtableData[k];
+        if (!row || typeof row !== 'object') continue;
+        const type = row[typeKey] || row["類型"] || "";
+        const item = row[itemKey] || row["項目"] || "";
+        const amt = row[amtKey] || row["金額"] || "";
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td style="border:1.5px solid #94a3b8;padding:10px 14px;text-align:center;font-size:16px;">${type}</td>
+          <td style="border:1.5px solid #94a3b8;padding:10px 14px;text-align:center;font-size:16px;">${item}</td>
+          <td style="border:1.5px solid #94a3b8;padding:10px 14px;text-align:center;font-size:16px;">${formatCurrency(amt)}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    window.ragicCallback = function(data) {
+      clearTimeout(loadTimer);
+      currentRecord = findExactRecord(data, recordId);
+
+      if (!currentRecord) {
+        $("loader-text").innerHTML = "找不到編號 <b>" + recordId + "</b> 的資料。<br><br>請聯繫為您服務的窩的家業務確認連結是否正確，或請業務重發連結。";
+        return;
+      }
+
+      if (currentRecord["_ragicId"]) {
+        recordId = currentRecord["_ragicId"];
+      }
+
+      // 角色路由
+      const roleRaw = getValue(currentRecord, [FIELDS.role, "對象"]);
+      if (roleRaw === "房東") {
+        ROLE = "房東";
+      } else if (roleRaw === "租客") {
+        ROLE = "租客";
+      } else {
+        $("loader-text").innerHTML = "⚠️ 資料異常（對象欄位值：「" + (roleRaw || "空") + "」），無法顯示收款憑單。<br><br>請聯繫業務確認後重新傳送連結。";
+        return;
+      }
+
+      renderData();
+      $("loader").classList.add('hidden');
+      $("step-1").classList.remove('hidden');
+    };
+
+    function executeLoad() {
+      $("loader-text").innerText = "開啟中...";
+      loadTimer = setTimeout(() => { if (!currentRecord) $("loader-text").innerText = "讀取逾時，請重新載入"; }, 10000);
+      const script = document.createElement('script');
+      script.src = `${RAGIC_BASE_URL}/${recordId}.json?api&APIKey=${encodeURIComponent(RAGIC_API_KEY)}&callback=ragicCallback`;
+      document.body.appendChild(script);
+    }
+
+    function renderData() {
+      // 設定表單 hidden input 的 name（依 ROLE）
+      const sigInput = $("hidden_signature");
+      const pdfInput = $("hidden_pdf_input");
+      sigInput.name = getSigFieldId();
+      pdfInput.name = getPdfFieldId();
+
+      // Step 1 唯讀展示
+      const personName = getValue(currentRecord, getNameField());
+      const personPhone = getValue(currentRecord, getPhoneField());
+      $("display_name").innerText = personName || "（未填寫）";
+      $("display_phone").innerText = personPhone || "（未填寫）";
+      if ($("step1-title")) $("step1-title").innerText = "請確認" + ROLE + "資料";
+      if ($("label-name")) $("label-name").innerText = (ROLE === "房東" ? "屋主姓名" : "租客姓名");
+
+      // 角色標籤
+      const roleLabel = ROLE === "房東" ? "房東" : "租客";
+      if ($("show_role_label")) $("show_role_label").innerText = roleLabel;
+      if ($("pdf_role_label")) $("pdf_role_label").innerText = roleLabel;
+
+      // 通用欄位
+      const caseName = getValue(currentRecord, [FIELDS.case_name, "案名"]) ||
+                       getValue(currentRecord, [FIELDS.case_name2, "公司件案名"]);
+      const addr = getValue(currentRecord, [FIELDS.addr, "地址"]) ||
+                   getValue(currentRecord, [FIELDS.addr2, "公司件地址"]);
+      const agentVal = getValue(currentRecord, [FIELDS.agent, "經辦人員"]);
+
+      const mapping = [
+        { s: "show_no",          p: "pdf_no",          v: getValue(currentRecord, [FIELDS.no, "憑單編號"]) },
+        { s: "show_date",        p: "pdf_date",        v: getValue(currentRecord, [FIELDS.date, "收款日期"]) },
+        { s: "show_case",        p: "pdf_case",        v: caseName },
+        { s: "show_addr",        p: "pdf_addr",        v: addr },
+        { s: "show_remark",      p: "pdf_remark",      v: getValue(currentRecord, [FIELDS.remark, "備註"]) || "-" },
+        { s: "show_agent",       p: "pdf_agent",       v: agentVal },
+        { s: "show_final_agent", p: "pdf_agent_bottom",v: agentVal },
+        { s: "show_total",       p: "pdf_total",       v: formatCurrency(getValue(currentRecord, getTotalField())) },
+      ];
+
+      mapping.forEach(m => {
+        if (m.s && $(m.s)) $(m.s).innerText = m.v;
+        if (m.p && $(m.p)) $(m.p).innerText = m.v;
+      });
+
+      // 付款方式
+      const payVal = getValue(currentRecord, getPayField());
+      const payDisplay = payVal ? payVal.replace(/\|/g, "、") : "-";
+      if ($("show_pay_method")) $("show_pay_method").innerText = payDisplay;
+      if ($("pdf_pay_method")) $("pdf_pay_method").innerText = payDisplay;
+
+      // 匯款後五碼（有值才顯示）
+      const remitCode = getValue(currentRecord, getRemitField());
+      const showRemit = remitCode && remitCode.trim() !== "";
+      if ($("show_remit_code")) $("show_remit_code").innerText = remitCode;
+      if ($("row_remit")) $("row_remit").classList.toggle("hidden", !showRemit);
+      if ($("pdf_remit_code")) $("pdf_remit_code").innerText = remitCode;
+      if ($("pdf_row_remit")) $("pdf_row_remit").style.display = showRemit ? "" : "none";
+
+      // 子表格渲染
+      const subtableData = currentRecord[getSubtableKey()];
+      const typeKey = getSubTypeKey();
+      const itemKey = getSubItemKey();
+      const amtKey  = getSubAmtKey();
+      renderSubtable("show_subtable_body", subtableData, typeKey, itemKey, amtKey);
+      renderPdfSubtable(subtableData, typeKey, itemKey, amtKey);
+
+      // Step 2 顯示姓名/電話
+      if ($("show_final_name")) $("show_final_name").innerText = personName || "-";
+      if ($("show_final_phone")) $("show_final_phone").innerText = personPhone || "-";
+      if ($("pdf_phone")) $("pdf_phone").innerText = personPhone || "-";
+    }
+
+    function initSignature() {
+      const canvas = $("signature-pad");
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      canvas.width = canvas.offsetWidth * ratio;
+      canvas.height = canvas.offsetHeight * ratio;
+      canvas.getContext("2d").scale(ratio, ratio);
+      signaturePad = new SignaturePad(canvas, { minWidth: 3, maxWidth: 8, penColor: "black" });
+    }
+
+    function goStep(n) {
+      if (n === 2) {
+        setTimeout(initSignature, 250);
+      }
+      $("step-1").classList.add('hidden');
+      $("step-2").classList.add('hidden');
+      $("step-" + n).classList.remove('hidden');
+      window.scrollTo(0, 0);
+    }
+
+    // 產生 PDF Blob
+    async function generatePDFBlob() {
+      const element = $("pdf-export-area");
+      const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', [imgWidth, imgHeight]);
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgWidth, imgHeight);
+      return pdf.output('blob');
+    }
+
+    // 下載備份 PDF
+    async function downloadReceiptPDF() {
+      const btn = event.currentTarget;
+      btn.innerText = "PDF 產生中...";
+      btn.disabled = true;
+      try {
+        const pdfBlob = await generatePDFBlob();
+        const url = URL.createObjectURL(pdfBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        const personName = $("display_name") ? $("display_name").innerText : "簽名方";
+        a.download = `收款憑單_${ROLE}_${personName}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error(err);
+        alert("下載失敗，請先截圖存檔。");
+      } finally {
+        btn.innerText = "下載備份 PDF";
+        btn.disabled = false;
+      }
+    }
+
+    async function submitData() {
+      if (!signaturePad || signaturePad.isEmpty()) {
+        alert("請先完成簽名喔！");
+        return;
+      }
+      if (!recordId) {
+        alert("系統錯誤：無法取得單號 (Record ID)，無法存檔。請重新載入。");
+        return;
+      }
+
+      $("loader").classList.remove('hidden');
+      $("loader-text").innerText = "正在生成收款憑單 PDF 並上傳...";
+
+      try {
+        // 1. 同步簽名到 PDF 區域
+        const sigData = signaturePad.toDataURL("image/png");
+        if ($("pdf_signature_img")) $("pdf_signature_img").src = sigData;
+        if ($("hidden_signature")) $("hidden_signature").value = sigData;
+
+        // 2. 等待圖片渲染
+        await new Promise(r => setTimeout(r, 100));
+
+        // 3. 生成 PDF Blob
+        const pdfBlob = await generatePDFBlob();
+
+        // 4. 將 PDF Blob 塞入隱藏的 File Input
+        const fileInput = $("hidden_pdf_input");
+        const dataTransfer = new DataTransfer();
+        const personName = $("display_name") ? $("display_name").innerText : "簽名方";
+        const fileName = `收款憑單_${ROLE}_${personName}.pdf`;
+        const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
+        dataTransfer.items.add(pdfFile);
+        fileInput.files = dataTransfer.files;
+
+        // 5. 送出表單
+        const form = $("ragicForm");
+        form.action = `${RAGIC_BASE_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_API_KEY)}`;
+        form.submit();
+
+        // 6. 3 秒後驗證
+        $("loader-text").innerText = "驗證中，請稍候...";
+        setTimeout(() => verifyUpload(), 3000);
+
+      } catch (e) {
+        console.error("PDF 生成或上傳失敗", e);
+        showFailed("PDF_GEN_" + (e.name || "ERROR"));
+      }
+    }
+
+    // 驗證 Ragic 是否真的收到資料（依 ROLE 檢查對應簽名欄位，長度 > 500 判為有效）
+    function verifyUpload(attempt) {
+      attempt = attempt || 1;
+      const MAX_ATTEMPTS = 3;
+
+      const cbName = "verifyCb_" + Date.now() + "_" + attempt;
+      let timed = false;
+      const timer = setTimeout(() => {
+        timed = true;
+        if (attempt < MAX_ATTEMPTS) verifyUpload(attempt + 1);
+        else showFailed("VERIFY_TIMEOUT");
+      }, 8000);
+
+      window[cbName] = function(data) {
+        if (timed) return;
+        clearTimeout(timer);
+        try {
+          const rec = findExactRecord(data, recordId) || {};
+          const sigFieldId = getSigFieldId();
+          const sig = (rec[sigFieldId] || "").toString();
+          const sigOk = sig.length > 500;
+
+          if (sigOk) {
+            $("loader").classList.add('hidden');
+            $("step-2").classList.add('hidden');
+            $("step-failed").classList.add('hidden');
+            $("step-success").classList.remove('hidden');
+            window.scrollTo(0, 0);
+          } else if (attempt < MAX_ATTEMPTS) {
+            setTimeout(() => verifyUpload(attempt + 1), 3000);
+          } else {
+            showFailed("VERIFY_MISSING_SIG_" + sigFieldId);
+          }
+        } catch (err) {
+          console.error("verify parse error", err);
+          showFailed("VERIFY_PARSE");
+        } finally {
+          try { delete window[cbName]; } catch (_) {}
+        }
+      };
+
+      const script = document.createElement('script');
+      script.src = `${RAGIC_BASE_URL}/${recordId}.json?api&APIKey=${encodeURIComponent(RAGIC_API_KEY)}&callback=${cbName}&_=${Date.now()}`;
+      script.onerror = () => {
+        if (timed) return;
+        clearTimeout(timer);
+        if (attempt < MAX_ATTEMPTS) verifyUpload(attempt + 1);
+        else showFailed("VERIFY_NET");
+      };
+      document.body.appendChild(script);
+    }
+
+    function showFailed(code) {
+      $("loader").classList.add('hidden');
+      $("step-2").classList.add('hidden');
+      $("step-success").classList.add('hidden');
+      $("step-failed").classList.remove('hidden');
+      if ($("failed-detail")) $("failed-detail").innerText = "錯誤代碼：" + (code || "UNKNOWN");
+      window.scrollTo(0, 0);
+    }
+
+    function retryUpload() {
+      $("step-failed").classList.add('hidden');
+      $("step-2").classList.remove('hidden');
+      window.scrollTo(0, document.body.scrollHeight);
+    }
+
+    function showFieldIds() {
+      if (!currentRecord) return alert("尚未載入資料");
+      $("debug-area").style.display = "block";
+      let output = "=== 所有欄位 ID 與內容 ===\nROLE: " + ROLE + "\n";
+      for (let key in currentRecord) {
+        const val = currentRecord[key];
+        if (typeof val === 'object') {
+          output += `ID: ${key} | 值: [object]\n`;
+        } else {
+          output += `ID: ${key} | 值: ${val}\n`;
+        }
+      }
+      $("debug-content").innerText = output;
+      const checkIds = [FIELDS.role, FIELDS.landlord_sig, FIELDS.tenant_sig, FIELDS.landlord_pdf, FIELDS.tenant_pdf];
+      alert("請查看頁面下方的黑色診斷框。\nROLE=" + ROLE + "\n檢查欄位：" + checkIds.join(", "));
+    }
+
+    window.onload = () => {
+      $("btn-test").onclick = () => {
+        recordId = $("test-id-input").value.trim();
+        $("test-mode-ui").classList.add('hidden');
+        executeLoad();
+      };
+      $("btn-next").onclick = () => goStep(2);
+      $("btn-back").onclick = () => goStep(1);
+      $("btn-clear").onclick = () => signaturePad.clear();
+      $("btn-submit").onclick = () => submitData();
+
+      if (!recordId) {
+        $("loader-spinner").classList.add('hidden');
+        $("loader-text").innerText = "請輸入 Record ID";
+        $("test-mode-ui").classList.remove('hidden');
+      } else if (isSuspiciousCode(recordId)) {
+        $("loader-spinner").classList.add('hidden');
+        $("loader-text").innerHTML = "⚠️ 此連結異常（編號 <b>" + recordId + "</b>），無法顯示收款憑單。<br><br>請聯繫為您服務的窩的家業務，請業務重新傳送確認連結。<br><br><span style='color:#888;font-size:13px'>（業務端排查：Ragic 建單後請先按「公式全部重跑」再複製連結）</span>";
+      } else {
+        executeLoad();
+      }
+    };
+  </script>
+</body>
+</html>
