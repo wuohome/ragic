@@ -861,7 +861,13 @@
       canvas.width = canvas.offsetWidth * ratio;
       canvas.height = canvas.offsetHeight * ratio;
       canvas.getContext("2d").scale(ratio, ratio);
-      signaturePad = new SignaturePad(canvas, { minWidth: 3, maxWidth: 8, penColor: "black" });
+      // 手指簽（房東/租客）筆觸偏細，配合 velocityFilterWeight 平滑曲線
+      signaturePad = new SignaturePad(canvas, {
+        minWidth: 0.8,
+        maxWidth: 2.2,
+        penColor: "black",
+        velocityFilterWeight: 0.7
+      });
     }
 
     function goStep(n) {
