@@ -508,13 +508,20 @@
       return ROLE === "房東" ? FIELDS.landlord_sub_amt : FIELDS.tenant_sub_amt;
     }
     function getNameField() {
-      return ROLE === "房東" ? FIELDS.landlord_name : FIELDS.tenant_name;
+      return ROLE === "房東"
+        ? [FIELDS.landlord_name, "屋主姓名"]
+        : [FIELDS.tenant_name, "租客姓名"];
     }
     function getPhoneField() {
-      return ROLE === "房東" ? FIELDS.landlord_phone : FIELDS.tenant_phone;
+      return ROLE === "房東"
+        ? [FIELDS.landlord_phone, "屋主手機號碼"]
+        : [FIELDS.tenant_phone, "電話"];
     }
     function getTotalField() {
-      return ROLE === "房東" ? FIELDS.landlord_total : FIELDS.tenant_total;
+      // Ragic 預設 API 用中文 key；同名「金額合計」由 Ragic 自動加 2 後綴避免衝突
+      return ROLE === "房東"
+        ? [FIELDS.landlord_total, "金額合計"]
+        : [FIELDS.tenant_total, "金額合計2"];
     }
     function getPayField() {
       return ROLE === "房東" ? FIELDS.landlord_pay : FIELDS.tenant_pay;
