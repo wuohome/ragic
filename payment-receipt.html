@@ -113,10 +113,10 @@
 
   <!-- 隱藏 iframe 用於接收表單提交 -->
   <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
-  <!-- 屋主總表（/operation/8）電話回填 iframe + form，房東模式且原電話空白才用 -->
-  <iframe name="hidden_owner_iframe" id="hidden_owner_iframe" style="display:none;"></iframe>
-  <form id="ownerUpdateForm" method="POST" target="hidden_owner_iframe" accept-charset="UTF-8" style="display:none;">
-    <input type="hidden" name="1001642" id="owner_phone_payload">
+  <!-- 源頭表電話回填 iframe + form：房東模式 → 屋主總表 /operation/8（欄位 1001642）；租客模式 → 定金/斡旋 /payments/1（欄位 1000808） -->
+  <iframe name="hidden_source_iframe" id="hidden_source_iframe" style="display:none;"></iframe>
+  <form id="sourcePhoneUpdateForm" method="POST" target="hidden_source_iframe" accept-charset="UTF-8" style="display:none;">
+    <input type="hidden" id="source_phone_payload">
   </form>
 
   <div class="max-w-4xl mx-auto p-3 md:p-8">
@@ -144,7 +144,7 @@
           <div id="phone_input_wrap" class="hidden">
             <input type="tel" id="input_owner_phone" inputmode="tel" placeholder="例：0912-345-678"
                    class="grandpa-input w-full text-xl md:text-3xl border-[3px] md:border-4 border-emerald-300 rounded-2xl md:rounded-3xl p-3 md:p-5 outline-none font-bold bg-emerald-50 shadow-inner">
-            <p class="text-emerald-700 text-sm md:text-base font-medium mt-2 md:mt-3">系統還沒登記您的電話，您可在這裡補上，會自動更新到屋主資料。</p>
+            <p id="phone_input_hint" class="text-emerald-700 text-sm md:text-base font-medium mt-2 md:mt-3">系統還沒登記您的電話，您可在這裡補上。</p>
           </div>
         </div>
         <!-- 地址唯讀展示 -->
@@ -425,10 +425,15 @@
       remark:      "1000773",  // 備註
       agent:       "1000602",  // 經辦人員（email）
 
-      // 屋主總表（/operation/8）— 用於電話回填
+      // 屋主總表（/operation/8）— 房東模式電話回填來源
       owner_sheet_path:  "/operation/8",
       owner_id_field:    "1000264",   // 屋主編號（unique，用 where=eq 反查 _ragicId）
       owner_phone_field: "1001642",   // 手機號碼（要寫入這個）
+
+      // 定金/斡旋（/payments/1）— 租客模式電話回填來源
+      tenant_src_sheet_path:  "/payments/1",
+      tenant_src_id_field:    "1000796",  // 定金單編號（unique，用 where=eq 反查）
+      tenant_src_phone_field: "1000808",  // 租客電話（要寫入這個）
 
       // 房東相關
       landlord_name:     "1001706",  // 屋主姓名
@@ -462,8 +467,10 @@
     let signaturePad = null;
     let loadTimer = null;
     let ROLE = null;  // "房東" | "租客"
-    let ownerCode = null;       // 從 record 抓的 屋主編號（OWN-XXX）
-    let ownerRagicId = null;    // 屋主總表內部 _ragicId（async 反查得到）
+    // 源頭電話回填用的反查結果：依 ROLE 各自反查
+    let sourceCode = null;       // 房東: 屋主編號 / 租客: 定金單編號
+    let sourceRagicId = null;    // 對應 sheet 的內部 _ragicId（async 反查）
+    let sourceConfig = null;     // { sheetPath, idField, phoneField, codeChineseKey } — renderData 時設好
 
     const $ = (id) => document.getElementById(id);
 
@@ -671,42 +678,62 @@
         return;
       }
 
-      // 房東模式才需要回填屋主總表電話：抓屋主編號並非同步反查 _ragicId
+      // 設定源頭表 config（依 ROLE 切）：房東→屋主總表；租客→定金/斡旋
       if (ROLE === "房東") {
-        ownerCode = (currentRecord["屋主編號"] || currentRecord["1001705"] || "").toString().trim();
-        if (ownerCode) lookupOwnerRagicId(ownerCode);
+        sourceConfig = {
+          sheetPath: FIELDS.owner_sheet_path,
+          idField: FIELDS.owner_id_field,
+          phoneField: FIELDS.owner_phone_field,
+          codeChineseKey: "屋主編號",
+          codeFieldId: "1001705",   // /payments/2 上的屋主編號連結欄位
+          friendlyLabel: "屋主資料"
+        };
+      } else {
+        sourceConfig = {
+          sheetPath: FIELDS.tenant_src_sheet_path,
+          idField: FIELDS.tenant_src_id_field,
+          phoneField: FIELDS.tenant_src_phone_field,
+          codeChineseKey: "定金單編號",
+          codeFieldId: "1000789",   // /payments/2 上的定金單編號連結欄位
+          friendlyLabel: "定金單資料"
+        };
       }
+      // 抓 source code 並非同步反查 _ragicId（兩模式皆做，input 才有資格出現）
+      sourceCode = (currentRecord[sourceConfig.codeChineseKey] ||
+                    currentRecord[sourceConfig.codeFieldId] || "").toString().trim();
+      if (sourceCode) lookupSourceRagicId(sourceCode);
 
       renderData();
       $("loader").classList.add('hidden');
       $("step-1").classList.remove('hidden');
     };
 
-    // 反查屋主總表 _ragicId（用屋主編號 unique 條件）
-    function lookupOwnerRagicId(code) {
-      const cb = "ownerLookupCb_" + Date.now();
+    // 反查源頭表 _ragicId（依 sourceConfig：房東→屋主總表 / 租客→定金/斡旋）
+    function lookupSourceRagicId(code) {
+      if (!sourceConfig) return;
+      const cb = "sourceLookupCb_" + Date.now();
       window[cb] = function(data) {
         try {
           if (data && typeof data === 'object') {
             for (const k in data) {
               const row = data[k];
               if (row && typeof row === 'object' &&
-                  (row["屋主編號"] === code || row[FIELDS.owner_id_field] === code)) {
-                ownerRagicId = row["_ragicId"];
+                  (row[sourceConfig.codeChineseKey] === code || row[sourceConfig.idField] === code)) {
+                sourceRagicId = row["_ragicId"];
                 break;
               }
             }
           }
-        } catch (e) { console.warn("ownerLookup parse error", e); }
+        } catch (e) { console.warn("sourceLookup parse error", e); }
         try { delete window[cb]; } catch (_) {}
       };
-      const url = `https://ap15.ragic.com/wuohome${FIELDS.owner_sheet_path}.json` +
-                  `?api&where=${FIELDS.owner_id_field},eq,${encodeURIComponent(code)}` +
+      const url = `https://ap15.ragic.com/wuohome${sourceConfig.sheetPath}.json` +
+                  `?api&where=${sourceConfig.idField},eq,${encodeURIComponent(code)}` +
                   `&APIKey=${encodeURIComponent(RAGIC_API_KEY)}` +
                   `&callback=${cb}&_=${Date.now()}`;
       const s = document.createElement('script');
       s.src = url;
-      s.onerror = () => { console.warn("ownerLookup network error"); try { delete window[cb]; } catch (_) {} };
+      s.onerror = () => { console.warn("sourceLookup network error"); try { delete window[cb]; } catch (_) {} };
       document.body.appendChild(s);
     }
 
@@ -734,11 +761,15 @@
       $("display_name").innerText = personName || "（未填寫）";
       if ($("display_addr")) $("display_addr").innerText = addr || "（未填寫）";
 
-      // 電話顯示：房東模式 + 原本空白 → 啟用 input 讓房東補填；其餘走唯讀
-      const phoneEditable = (ROLE === "房東" && !personPhone);
+      // 電話顯示：原本空白 → 啟用 input 讓本人補填（兩模式皆支援）；有值一律唯讀
+      const phoneEditable = !personPhone;
       if (phoneEditable) {
         $("display_phone").classList.add("hidden");
         $("phone_input_wrap").classList.remove("hidden");
+        const hint = $("phone_input_hint");
+        if (hint && sourceConfig) {
+          hint.innerText = `系統還沒登記您的電話，您可在這裡補上，會自動更新到${sourceConfig.friendlyLabel}。`;
+        }
       } else {
         $("display_phone").classList.remove("hidden");
         $("phone_input_wrap").classList.add("hidden");
@@ -889,18 +920,21 @@
         dataTransfer.items.add(pdfFile);
         fileInput.files = dataTransfer.files;
 
-        // 4.5 房東補填電話：先 POST 到屋主總表（連結載入會自動把值灌回 /payments/2）
-        const ownerPhoneInput = $("input_owner_phone");
-        const ownerPhoneVal = ownerPhoneInput && !ownerPhoneInput.classList.contains("hidden")
-          ? (ownerPhoneInput.value || "").trim()
-          : "";
-        if (ROLE === "房東" && ownerPhoneVal && ownerRagicId) {
-          $("owner_phone_payload").value = ownerPhoneVal;
-          const ownerForm = $("ownerUpdateForm");
-          ownerForm.action = `https://ap15.ragic.com/wuohome${FIELDS.owner_sheet_path}/${ownerRagicId}` +
-                             `?api&v=3&APIKey=${encodeURIComponent(RAGIC_API_KEY)}`;
-          ownerForm.submit();
-          // 等屋主總表先入庫，再送主表，連結載入才能帶到新值
+        // 4.5 補填電話：先 POST 到源頭 sheet（連結載入隨時同步會把值灌回 /payments/2）
+        // 房東 → 屋主總表 /operation/8；租客 → 定金/斡旋 /payments/1
+        const phoneInputEl = $("input_owner_phone");
+        const phoneInputWrap = $("phone_input_wrap");
+        const phoneInputVisible = phoneInputWrap && !phoneInputWrap.classList.contains("hidden");
+        const phoneVal = phoneInputVisible ? (phoneInputEl.value || "").trim() : "";
+        if (phoneVal && sourceRagicId && sourceConfig) {
+          const payload = $("source_phone_payload");
+          payload.name = sourceConfig.phoneField;
+          payload.value = phoneVal;
+          const srcForm = $("sourcePhoneUpdateForm");
+          srcForm.action = `https://ap15.ragic.com/wuohome${sourceConfig.sheetPath}/${sourceRagicId}` +
+                           `?api&v=3&APIKey=${encodeURIComponent(RAGIC_API_KEY)}`;
+          srcForm.submit();
+          // 等源頭表先入庫，再送主表，連結載入才能帶到新值
           await new Promise(r => setTimeout(r, 800));
         }
 
