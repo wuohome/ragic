@@ -113,6 +113,11 @@
 
   <!-- 隱藏 iframe 用於接收表單提交 -->
   <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+  <!-- 屋主總表（/operation/8）電話回填 iframe + form，房東模式且原電話空白才用 -->
+  <iframe name="hidden_owner_iframe" id="hidden_owner_iframe" style="display:none;"></iframe>
+  <form id="ownerUpdateForm" method="POST" target="hidden_owner_iframe" accept-charset="UTF-8" style="display:none;">
+    <input type="hidden" name="1001642" id="owner_phone_payload">
+  </form>
 
   <div class="max-w-4xl mx-auto p-3 md:p-8">
 
@@ -132,10 +137,15 @@
           <label class="block text-base md:text-2xl font-black text-slate-600 mb-1 md:mb-3" id="label-name">姓名</label>
           <div id="display_name" class="readonly-field">-</div>
         </div>
-        <!-- 電話唯讀展示 -->
+        <!-- 電話：預設唯讀展示；房東模式 + 原本空白 → 顯示為 input 讓房東補填 -->
         <div>
-          <label class="block text-base md:text-2xl font-black text-slate-600 mb-1 md:mb-3">聯絡電話</label>
+          <label class="block text-base md:text-2xl font-black text-slate-600 mb-1 md:mb-3" id="label-phone">聯絡電話</label>
           <div id="display_phone" class="readonly-field">-</div>
+          <div id="phone_input_wrap" class="hidden">
+            <input type="tel" id="input_owner_phone" inputmode="tel" placeholder="例：0912-345-678"
+                   class="grandpa-input w-full text-xl md:text-3xl border-[3px] md:border-4 border-emerald-300 rounded-2xl md:rounded-3xl p-3 md:p-5 outline-none font-bold bg-emerald-50 shadow-inner">
+            <p class="text-emerald-700 text-sm md:text-base font-medium mt-2 md:mt-3">系統還沒登記您的電話，您可在這裡補上，會自動更新到屋主資料。</p>
+          </div>
         </div>
         <!-- 地址唯讀展示 -->
         <div>
@@ -415,6 +425,11 @@
       remark:      "1000773",  // 備註
       agent:       "1000602",  // 經辦人員（email）
 
+      // 屋主總表（/operation/8）— 用於電話回填
+      owner_sheet_path:  "/operation/8",
+      owner_id_field:    "1000264",   // 屋主編號（unique，用 where=eq 反查 _ragicId）
+      owner_phone_field: "1001642",   // 手機號碼（要寫入這個）
+
       // 房東相關
       landlord_name:     "1001706",  // 屋主姓名
       landlord_phone:    "1001707",  // 屋主手機號碼
@@ -447,6 +462,8 @@
     let signaturePad = null;
     let loadTimer = null;
     let ROLE = null;  // "房東" | "租客"
+    let ownerCode = null;       // 從 record 抓的 屋主編號（OWN-XXX）
+    let ownerRagicId = null;    // 屋主總表內部 _ragicId（async 反查得到）
 
     const $ = (id) => document.getElementById(id);
 
@@ -654,10 +671,44 @@
         return;
       }
 
+      // 房東模式才需要回填屋主總表電話：抓屋主編號並非同步反查 _ragicId
+      if (ROLE === "房東") {
+        ownerCode = (currentRecord["屋主編號"] || currentRecord["1001705"] || "").toString().trim();
+        if (ownerCode) lookupOwnerRagicId(ownerCode);
+      }
+
       renderData();
       $("loader").classList.add('hidden');
       $("step-1").classList.remove('hidden');
     };
+
+    // 反查屋主總表 _ragicId（用屋主編號 unique 條件）
+    function lookupOwnerRagicId(code) {
+      const cb = "ownerLookupCb_" + Date.now();
+      window[cb] = function(data) {
+        try {
+          if (data && typeof data === 'object') {
+            for (const k in data) {
+              const row = data[k];
+              if (row && typeof row === 'object' &&
+                  (row["屋主編號"] === code || row[FIELDS.owner_id_field] === code)) {
+                ownerRagicId = row["_ragicId"];
+                break;
+              }
+            }
+          }
+        } catch (e) { console.warn("ownerLookup parse error", e); }
+        try { delete window[cb]; } catch (_) {}
+      };
+      const url = `https://ap15.ragic.com/wuohome${FIELDS.owner_sheet_path}.json` +
+                  `?api&where=${FIELDS.owner_id_field},eq,${encodeURIComponent(code)}` +
+                  `&APIKey=${encodeURIComponent(RAGIC_API_KEY)}` +
+                  `&callback=${cb}&_=${Date.now()}`;
+      const s = document.createElement('script');
+      s.src = url;
+      s.onerror = () => { console.warn("ownerLookup network error"); try { delete window[cb]; } catch (_) {} };
+      document.body.appendChild(s);
+    }
 
     function executeLoad() {
       $("loader-text").innerText = "開啟中...";
@@ -681,8 +732,18 @@
                    getValue(currentRecord, [FIELDS.addr2, "公司件地址"]);
 
       $("display_name").innerText = personName || "（未填寫）";
-      $("display_phone").innerText = personPhone || "（未填寫）";
       if ($("display_addr")) $("display_addr").innerText = addr || "（未填寫）";
+
+      // 電話顯示：房東模式 + 原本空白 → 啟用 input 讓房東補填；其餘走唯讀
+      const phoneEditable = (ROLE === "房東" && !personPhone);
+      if (phoneEditable) {
+        $("display_phone").classList.add("hidden");
+        $("phone_input_wrap").classList.remove("hidden");
+      } else {
+        $("display_phone").classList.remove("hidden");
+        $("phone_input_wrap").classList.add("hidden");
+        $("display_phone").innerText = personPhone || "（未填寫）";
+      }
       if ($("step1-title")) $("step1-title").innerText = "請確認" + ROLE + "資料";
       if ($("label-name")) $("label-name").innerText = (ROLE === "房東" ? "屋主姓名" : "租客姓名");
 
@@ -827,6 +888,21 @@
         const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
         dataTransfer.items.add(pdfFile);
         fileInput.files = dataTransfer.files;
+
+        // 4.5 房東補填電話：先 POST 到屋主總表（連結載入會自動把值灌回 /payments/2）
+        const ownerPhoneInput = $("input_owner_phone");
+        const ownerPhoneVal = ownerPhoneInput && !ownerPhoneInput.classList.contains("hidden")
+          ? (ownerPhoneInput.value || "").trim()
+          : "";
+        if (ROLE === "房東" && ownerPhoneVal && ownerRagicId) {
+          $("owner_phone_payload").value = ownerPhoneVal;
+          const ownerForm = $("ownerUpdateForm");
+          ownerForm.action = `https://ap15.ragic.com/wuohome${FIELDS.owner_sheet_path}/${ownerRagicId}` +
+                             `?api&v=3&APIKey=${encodeURIComponent(RAGIC_API_KEY)}`;
+          ownerForm.submit();
+          // 等屋主總表先入庫，再送主表，連結載入才能帶到新值
+          await new Promise(r => setTimeout(r, 800));
+        }
 
         // 5. 送出表單
         const form = $("ragicForm");
