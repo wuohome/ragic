@@ -226,6 +226,10 @@
               <td class="info-cell"><span class="info-label">收款人電話</span><span class="info-value" id="show_payee_phone"></span></td>
             </tr>
             <tr>
+              <td class="info-cell"><span class="info-label">付款方式</span><span class="info-value" id="show_pay"></span></td>
+              <td class="info-cell"><span class="info-label">匯款後五碼</span><span class="info-value" id="show_remit"></span></td>
+            </tr>
+            <tr>
               <td class="info-cell" colspan="2"><span class="info-label">地址</span><span class="info-value" id="show_addr"></span></td>
             </tr>
           </tbody>
@@ -361,6 +365,14 @@
           </td>
           <td style="border:1.5px solid #000; padding:11px 16px; font-size:16px; vertical-align:middle;">
             收款人電話：<span id="pdf_payee_phone">-</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="border:1.5px solid #000; padding:11px 16px; font-size:16px; vertical-align:middle;">
+            付款方式：<span id="pdf_pay">-</span>
+          </td>
+          <td style="border:1.5px solid #000; padding:11px 16px; font-size:16px; vertical-align:middle;">
+            匯款後五碼：<span id="pdf_remit">-</span>
           </td>
         </tr>
         <tr>
@@ -573,10 +585,21 @@
         : [FIELDS.tenant_total, "金額合計2"];
     }
     function getPayField() {
-      return ROLE === "房東" ? FIELDS.landlord_pay : FIELDS.tenant_pay;
+      // 同名「付款方式」由 Ragic 自動給租客加 2 後綴
+      return ROLE === "房東"
+        ? [FIELDS.landlord_pay, "付款方式"]
+        : [FIELDS.tenant_pay, "付款方式2"];
     }
     function getRemitField() {
-      return ROLE === "房東" ? FIELDS.landlord_remit : FIELDS.tenant_remit;
+      return ROLE === "房東"
+        ? [FIELDS.landlord_remit, "匯款後五碼"]
+        : [FIELDS.tenant_remit, "匯款後五碼2"];
+    }
+    // 多選付款方式（租客模式）會回陣列 `[現金, 匯款]` 或字串 `現金|匯款`，統一格式化
+    function formatPayMethod(val) {
+      if (!val) return "";
+      if (Array.isArray(val)) return val.filter(Boolean).join("、");
+      return String(val).replace(/\|/g, "、").trim();
     }
 
     function findExactRecord(data, targetId) {
@@ -839,6 +862,8 @@
         { s: "show_payer_phone", p: "pdf_payer_phone", v: payerPhone || "-" },
         { s: "show_payee_name",  p: "pdf_payee_name",  v: payeeName  || "-" },
         { s: "show_payee_phone", p: "pdf_payee_phone", v: payeePhone || "-" },
+        { s: "show_pay",         p: "pdf_pay",         v: formatPayMethod(getValue(currentRecord, getPayField())) || "—" },
+        { s: "show_remit",       p: "pdf_remit",       v: (getValue(currentRecord, getRemitField()) || "—").toString().trim() },
       ];
 
       mapping.forEach(m => {
