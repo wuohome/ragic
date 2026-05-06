@@ -223,7 +223,7 @@
             </tr>
             <tr>
               <td class="info-cell"><span class="info-label">付款人電話</span><span class="info-value" id="show_payer_phone"></span></td>
-              <td class="info-cell"><span class="info-label">收款人電話</span><span class="info-value" id="show_payee_phone"></span></td>
+              <td class="info-cell"><span class="info-label">承辦人</span><span class="info-value" id="show_payee_phone"></span></td>
             </tr>
             <tr>
               <td class="info-cell"><span class="info-label">付款方式</span><span class="info-value" id="show_pay"></span></td>
@@ -364,7 +364,7 @@
             付款人電話：<span id="pdf_payer_phone">-</span>
           </td>
           <td style="border:1.5px solid #000; padding:11px 16px; font-size:16px; vertical-align:middle;">
-            收款人電話：<span id="pdf_payee_phone">-</span>
+            承辦人：<span id="pdf_payee_phone">-</span>
           </td>
         </tr>
         <tr>
@@ -831,19 +831,18 @@
       const totalVal = formatCurrency(getValue(currentRecord, getTotalField()));
       const category = ROLE === "租客" ? "租客" : "房東";
 
-      // 依 ROLE 設付款人 / 收款人
+      // 付款人：依 ROLE 切（房東付服務費 / 租客付租押金）
+      // 收款人：兩模式統一為法人公司（個人不能收服務費）；payeePhone 欄位變成「承辦人」
       let payerName, payerPhone, payeeName, payeePhone;
       if (ROLE === "租客") {
         payerName  = getValue(currentRecord, [FIELDS.tenant_name,    "租客姓名"]);
         payerPhone = getValue(currentRecord, [FIELDS.tenant_phone,   "電話"]);
-        payeeName  = getValue(currentRecord, [FIELDS.landlord_name,  "屋主姓名"]);
-        payeePhone = getValue(currentRecord, [FIELDS.landlord_phone, "屋主手機號碼"]);
       } else {
         payerName  = getValue(currentRecord, [FIELDS.landlord_name,  "屋主姓名"]);
         payerPhone = getValue(currentRecord, [FIELDS.landlord_phone, "屋主手機號碼"]);
-        payeeName  = "優式租售管理-窩的家三重加盟店";
-        payeePhone = getValue(currentRecord, [FIELDS.agent, "經辦人員"]);
       }
+      payeeName  = "窩的家房屋租售有限公司";
+      payeePhone = getValue(currentRecord, [FIELDS.agent, "經辦人員"]);
 
       // 簽名 section 標題
       const sigSectionLabel = ROLE === "租客" ? "租客簽名" : "房東簽名";
