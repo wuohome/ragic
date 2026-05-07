@@ -7,7 +7,7 @@
 // CONFIG
 // ════════════════════════════════════════════════════════════════
 
-export const API_KEY = 'VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw==';
+export const API_KEY = 'VEZsOEwzYzVJdWdoWXRDM3ptS2YwRkllTFlXVXlwaEpEcG1IajBXM0NiU1A0emdURlN1WFZHMDRQS28zM2F1bA==';
 export const API_BASE = 'https://ap15.ragic.com/wuohome';
 
 export const MANAGERS = new Set(['吳彥廷', '韓珊珊', '張瓊安', '蕭靜芳']);
