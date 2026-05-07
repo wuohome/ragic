@@ -11,7 +11,7 @@ import os, sys, json, re, urllib.request, urllib.parse
 from datetime import date, timedelta, datetime
 from pathlib import Path
 
-API_KEY = os.environ.get("RAGIC_API_KEY") or "VEZsOEwzYzVJdWdoWXRDM3ptS2YwRytLV21BaWhPTDRLWXhPb2FLZ3VBUm1BZE90VzJtZzlTNjVlbCszRnZkRw=="
+API_KEY = os.environ.get("RAGIC_API_KEY") or "VEZsOEwzYzVJdWdoWXRDM3ptS2YwRkllTFlXVXlwaEpEcG1IajBXM0NiU1A0emdURlN1WFZHMDRQS28zM2F1bA=="
 BASE    = "https://ap15.ragic.com/wuohome/operation/4"
 FIELD_START = "1000260"
 PAYMENTS_BASE = "https://ap15.ragic.com/wuohome/payments/2"
