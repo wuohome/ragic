@@ -920,7 +920,7 @@ async function submit() {
     put('銀行', f['銀行']);
     put('分行', f['分行']);
     put('銀行帳號', f['銀行帳號']);
-    put('在職狀態', '試用');
+    put('在職狀態', '在職');
     put('到職日期', new Date().toISOString().slice(0,10).replace(/-/g,'/'));
 
     if(data.files['照片']) fd.append(MAIN_FIELDS['照片'], data.files['照片'], data.files['照片'].name);
