@@ -118,8 +118,8 @@
     // 1. 請填入 LINE Developers 的 LIFF ID (已幫您更新為正確 ID)
     const LIFF_ID = "2009098181-8kGzQhuZ"; 
     
-    // Ragic API 直連（取代 GAS）
-    const RAGIC_API_URL = "https://ap15.ragic.com/wuohome/lease-management/2?api&v=3&APIKey=VEZsOEwzYzVJdWdoWXRDM3ptS2YwTFA1M283aGxIUHM1ZjRORmNGbDNHNi9qSnVDNnlYWlhwUmJnMnJIWGo3RQ=="; 
+    // 2026-05-12: Cloudflare Worker proxy（取代 hardcoded Ragic API key）
+    const WORKER_API = "https://wuohome-ragic-proxy.wuohome.workers.dev/bindTenant";
     // ========================================================
 
     const els = {
@@ -224,29 +224,18 @@
         // 鎖定按鈕避免重複送出
         setSubmitting(true);
 
-        const combinedRoomInfo = `${addressPart} (${roomPart})`;
-
-        // 直接寫入 Ragic API（欄位 ID 對應 lease-management/2）
-        const ragicData = {
-            "1001382": name,
-            "1001379": phone,
-            "1001839": combinedRoomInfo,
-            "1001840": lineId,
-            "1001841": "已綁定"
-        };
-
-        console.log("正在傳送資料至 Ragic:", RAGIC_API_URL);
-
+        // 透過 Cloudflare Worker proxy 寫入（combine address+room 在 Worker 端做）
         try {
-            // fire-and-forget（no-cors 模式，不讀回應）
-            await fetch(RAGIC_API_URL, {
+            const resp = await fetch(WORKER_API, {
                 method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams(ragicData).toString()
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: lineId, name, phone, addressPart, roomPart })
             });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data.ok) {
+                throw new Error(data.error || data.msg || ('HTTP ' + resp.status));
+            }
             showSuccessUI(name);
-
         } catch (err) {
             console.error(err);
             showStatus(`綁定失敗: ${err.message}`, "error");
