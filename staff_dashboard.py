@@ -7,11 +7,14 @@
 用法：python staff_dashboard.py
 輸出：C:/Users/Joan/Downloads/全員儀表板.html
 """
-import os, sys, json, re, urllib.request, urllib.parse
+import os
+import sys, json, re, urllib.request, urllib.parse
 from datetime import date, timedelta, datetime
 from pathlib import Path
 
-API_KEY = os.environ.get("RAGIC_API_KEY") or "VEZsOEwzYzVJdWdoWXRDM3ptS2YwTFA1M283aGxIUHM1ZjRORmNGbDNHNi9qSnVDNnlYWlhwUmJnMnJIWGo3RQ=="
+API_KEY = os.environ.get("RAGIC_API_KEY")
+if not API_KEY:
+    sys.exit("❌ 請先設定環境變數 RAGIC_API_KEY（複製 .env.example 為 .env）")
 BASE    = "https://ap15.ragic.com/wuohome/operation/4"
 FIELD_START = "1000260"
 PAYMENTS_BASE = "https://ap15.ragic.com/wuohome/payments/2"
