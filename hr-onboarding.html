@@ -596,7 +596,7 @@
 
 <script>
 /* ========== 窩的家 人事資料表單 · Ragic form 20004 ========== */
-const RAGIC_URL = 'https://ap15.ragic.com/wuohome/ragicforms4/20004?api&APIKey=VEZsOEwzYzVJdWdoWXRDM3ptS2YwTFA1M283aGxIUHM1ZjRORmNGbDNHNi9qSnVDNnlYWlhwUmJnMnJIWGo3RQ==';
+const WORKER_API = 'https://wuohome-ragic-proxy.wuohome.workers.dev/submitHrOnboarding';
 
 const MAIN_FIELDS = {
   '姓名':'3000933','英文名稱':'3000947','身分證字號':'3001021','出生日期':'3000954',
@@ -947,8 +947,15 @@ async function submit() {
       if(cf) fd.append(`1000925_${i}`, cf, cf.name);
     });
 
-    // Fire-and-forget no-cors, same pattern as bind.html
-    await fetch(RAGIC_URL, { method:'POST', mode:'no-cors', body: fd });
+    const res = await fetch(WORKER_API, { method: 'POST', body: fd });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.ok) {
+      const msg = json.error || ('HTTP ' + res.status);
+      flash('送出失敗：' + msg);
+      btn.disabled = false;
+      btn.textContent = '✓ 確認送出';
+      return;
+    }
 
     localStorage.removeItem(LS_KEY);
     document.getElementById('successModal').classList.add('show');
