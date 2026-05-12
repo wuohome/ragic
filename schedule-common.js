@@ -6,7 +6,7 @@
 
 // ── API 設定 ──
 const SC = {
-    API_KEY: "VEZsOEwzYzVJdWdoWXRDM3ptS2YwRkllTFlXVXlwaEpEcG1IajBXM0NiU1A0emdURlN1WFZHMDRQS28zM2F1bA==",
+    API_KEY: "VEZsOEwzYzVJdWdoWXRDM3ptS2YwTFA1M283aGxIUHM1ZjRORmNGbDNHNi9qSnVDNnlYWlhwUmJnMnJIWGo3RQ==",
     BASE_URL: "https://ap15.ragic.com",
     EMP_PATH: "/wuohome/ragicforms4/20004",
     LEAVE_PATH: "/wuohome/ragicforms4/2",
