@@ -621,8 +621,7 @@
 // ════════════════════════════════════════════════════════════════════
 // CONFIG
 // ════════════════════════════════════════════════════════════════════
-const API_KEY  = 'VEZsOEwzYzVJdWdoWXRDM3ptS2YwTFA1M283aGxIUHM1ZjRORmNGbDNHNi9qSnVDNnlYWlhwUmJnMnJIWGo3RQ==';
-const API_BASE = 'https://ap15.ragic.com/wuohome';
+const WORKER_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
 const LOOKBACK_DAYS = 365;
 
 const PERF_SERVICE_TYPES_LANDLORD = new Set(['房東服務費', '退房東服務費']);
@@ -873,14 +872,16 @@ function buildCompare(ragicPerf, obPerf) {
 
 
 // ════════════════════════════════════════════════════════════════════
-// API FETCH
+// API FETCH — routes through Cloudflare Worker proxy (no API key in frontend)
 // ════════════════════════════════════════════════════════════════════
-async function ragicFetch(path, params = '') {
-  const sep = params ? '&' : '';
-  const url = `${API_BASE}/${path}?api${sep}${params}&APIKey=${encodeURIComponent(API_KEY)}`;
+async function ragicFetch(action, params = '') {
+  // params is a raw query string (may contain multiple &where=... segments)
+  const qs = params ? '?' + params : '';
+  const url = `${WORKER_BASE}/${action}${qs}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Ragic API ${res.status}: ${path}`);
-  return res.json();
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Worker ${action} ${res.status}: ${data?.error || res.statusText}`);
+  return data;
 }
 
 let _loadDone = 0;
@@ -906,13 +907,13 @@ async function fetchAllData() {
   const intakeParams = `subtables=true&where=${encodeURIComponent(`1000260,gte,${fmtDate(dataStart)}`)}&where=${encodeURIComponent(`1000260,lte,${fmtDate(dataEnd)}`)}&limit=10000`;
 
   const [rawIntake, rawPayments, rawInventory, rawOutreach, rawCommission, rawClients, rawHr, perfMdText, perfCommits] = await Promise.all([
-    ragicFetch('operation/4', intakeParams).then(r => { setProgress('進案量'); return r; }),
-    ragicFetch('payments/2', 'subtables=true&limit=10000').then(r => { setProgress('業績'); return r; }),
-    ragicFetch('operation/4', 'subtables=true&limit=10000').then(r => { setProgress('庫存'); return r; }),
-    ragicFetch('property-data-kept/17', 'subtables=true&limit=10000').then(r => { setProgress('開發追蹤'); return r; }),
-    ragicFetch('property-data-kept/25', 'subtables=true&limit=10000').then(r => { setProgress('委託屋主'); return r; }),
-    ragicFetch('property-data-kept/8', 'limit=10000').then(r => { setProgress('客戶來源'); return r; }),
-    ragicFetch('ragicforms4/20004', 'limit=200').then(r => { setProgress('人事資料'); return r; }),
+    ragicFetch('listIntake', intakeParams).then(r => { setProgress('進案量'); return r; }),
+    ragicFetch('listPayments', 'subtables=true&limit=10000').then(r => { setProgress('業績'); return r; }),
+    ragicFetch('listInventory', 'subtables=true&limit=10000').then(r => { setProgress('庫存'); return r; }),
+    ragicFetch('listOutreach', 'subtables=true&limit=10000').then(r => { setProgress('開發追蹤'); return r; }),
+    ragicFetch('listCommission', 'subtables=true&limit=10000').then(r => { setProgress('委託屋主'); return r; }),
+    ragicFetch('listClients', 'limit=10000').then(r => { setProgress('客戶來源'); return r; }),
+    ragicFetch('listStaff', 'limit=200').then(r => { setProgress('人事資料'); return r; }),
     fetch('data/perf.md').then(r => r.ok ? r.text() : '').catch(() => '').then(r => { setProgress('業績比對'); return r; }),
     fetch('https://api.github.com/repos/wuohome/ragic/commits?path=data/perf.md&per_page=1')
       .then(r => r.ok ? r.json() : null).catch(() => null)
