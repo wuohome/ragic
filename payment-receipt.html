@@ -148,13 +148,7 @@
     </button>
   </div>
 
-  <!-- 隱藏 iframe 用於接收表單提交 -->
-  <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
-  <!-- 源頭表電話回填 iframe + form：房東模式 → 屋主總表 /operation/8（欄位 1001642）；租客模式 → 定金/斡旋 /payments/1（欄位 1000808） -->
-  <iframe name="hidden_source_iframe" id="hidden_source_iframe" style="display:none;"></iframe>
-  <form id="sourcePhoneUpdateForm" method="POST" target="hidden_source_iframe" accept-charset="UTF-8" style="display:none;">
-    <input type="hidden" id="source_phone_payload">
-  </form>
+  <!-- (iframes removed — form submits replaced by fetch to CF Worker proxy) -->
 
   <div class="max-w-4xl mx-auto p-3 md:p-8">
 
@@ -165,10 +159,9 @@
 
       <!--
         表單設定：
-        1. target="hidden_iframe" -> 避免頁面跳轉
-        2. enctype="multipart/form-data" -> 支援檔案上傳 (PDF)
+        enctype="multipart/form-data" -> 支援 PDF 附件；submit 由 fetch(submitPaymentReceipt) 取代，不直接送出。
       -->
-      <form id="ragicForm" method="POST" target="hidden_iframe" accept-charset="UTF-8" enctype="multipart/form-data" class="space-y-5 md:space-y-8">
+      <form id="ragicForm" enctype="multipart/form-data" class="space-y-5 md:space-y-8">
         <!-- 姓名唯讀展示 -->
         <div>
           <label class="block text-base md:text-2xl font-black text-slate-600 mb-1 md:mb-3" id="label-name">姓名</label>
@@ -476,8 +469,9 @@
   </div>
 
   <script>
-    const RAGIC_API_KEY = "VEZsOEwzYzVJdWdoWXRDM3ptS2YwTFA1M283aGxIUHM1ZjRORmNGbDNHNi9qSnVDNnlYWlhwUmJnMnJIWGo3RQ==";
-    const RAGIC_BASE_URL = "https://ap15.ragic.com/wuohome/payments/2";
+    const WORKER_BASE = "https://wuohome-ragic-proxy.wuohome.workers.dev";
+    // SHEET_REGISTRY enum keys (must match worker SHEET_REGISTRY)
+    const SOURCE_SHEET_ENUM = { "/operation/8": "ownerSource", "/payments/1": "tenantSource" };
 
     // 欄位對照表 - 全部以欄位 ID 為主
     const FIELDS = {
@@ -532,7 +526,7 @@
     let currentRecord = null;
     let recordId = null;
     let signaturePad = null;
-    let loadTimer = null;
+    // (loadTimer removed — executeLoad now uses local async/await with Promise.race)
     let ROLE = null;  // "房東" | "租客"
     // 源頭電話回填用的反查結果：依 ROLE 各自反查
     let sourceCode = null;       // 房東: 屋主編號 / 租客: 定金單編號
@@ -732,8 +726,8 @@
       }
     }
 
-    window.ragicCallback = function(data) {
-      clearTimeout(loadTimer);
+    // 處理從 worker 取回的主記錄 JSON
+    function handleRecordData(data) {
       currentRecord = findExactRecord(data, recordId);
 
       if (!currentRecord) {
@@ -760,6 +754,7 @@
       if (ROLE === "房東") {
         sourceConfig = {
           sheetPath: FIELDS.owner_sheet_path,
+          sheetEnum: SOURCE_SHEET_ENUM[FIELDS.owner_sheet_path],  // "ownerSource"
           idField: FIELDS.owner_id_field,
           phoneField: FIELDS.owner_phone_field,
           codeChineseKey: "屋主編號",
@@ -769,6 +764,7 @@
       } else {
         sourceConfig = {
           sheetPath: FIELDS.tenant_src_sheet_path,
+          sheetEnum: SOURCE_SHEET_ENUM[FIELDS.tenant_src_sheet_path],  // "tenantSource"
           idField: FIELDS.tenant_src_id_field,
           phoneField: FIELDS.tenant_src_phone_field,
           codeChineseKey: "定金單編號",
@@ -784,43 +780,46 @@
       renderData();
       $("loader").classList.add('hidden');
       $("step-1").classList.remove('hidden');
-    };
-
-    // 反查源頭表 _ragicId（依 sourceConfig：房東→屋主總表 / 租客→定金/斡旋）
-    function lookupSourceRagicId(code) {
-      if (!sourceConfig) return;
-      const cb = "sourceLookupCb_" + Date.now();
-      window[cb] = function(data) {
-        try {
-          if (data && typeof data === 'object') {
-            for (const k in data) {
-              const row = data[k];
-              if (row && typeof row === 'object' &&
-                  (row[sourceConfig.codeChineseKey] === code || row[sourceConfig.idField] === code)) {
-                sourceRagicId = row["_ragicId"];
-                break;
-              }
-            }
-          }
-        } catch (e) { console.warn("sourceLookup parse error", e); }
-        try { delete window[cb]; } catch (_) {}
-      };
-      const url = `https://ap15.ragic.com/wuohome${sourceConfig.sheetPath}.json` +
-                  `?api&where=${sourceConfig.idField},eq,${encodeURIComponent(code)}` +
-                  `&APIKey=${encodeURIComponent(RAGIC_API_KEY)}` +
-                  `&callback=${cb}&_=${Date.now()}`;
-      const s = document.createElement('script');
-      s.src = url;
-      s.onerror = () => { console.warn("sourceLookup network error"); try { delete window[cb]; } catch (_) {} };
-      document.body.appendChild(s);
     }
 
-    function executeLoad() {
+    // 反查源頭表 _ragicId（依 sourceConfig：房東→屋主總表 / 租客→定金/斡旋）
+    async function lookupSourceRagicId(code) {
+      if (!sourceConfig) return;
+      try {
+        const url = `${WORKER_BASE}/getPaymentSource` +
+                    `?sheet=${encodeURIComponent(sourceConfig.sheetEnum)}` +
+                    `&where=${encodeURIComponent(sourceConfig.idField)},eq,${encodeURIComponent(code)}` +
+                    `&_=${Date.now()}`;
+        const res = await fetch(url);
+        if (!res.ok) { console.warn("sourceLookup HTTP error", res.status); return; }
+        const data = await res.json();
+        if (data && typeof data === 'object') {
+          for (const k in data) {
+            const row = data[k];
+            if (row && typeof row === 'object' &&
+                (row[sourceConfig.codeChineseKey] === code || row[sourceConfig.idField] === code)) {
+              sourceRagicId = row["_ragicId"];
+              break;
+            }
+          }
+        }
+      } catch (e) { console.warn("sourceLookup fetch error", e); }
+    }
+
+    async function executeLoad() {
       $("loader-text").innerText = "開啟中...";
-      loadTimer = setTimeout(() => { if (!currentRecord) $("loader-text").innerText = "讀取逾時，請重新載入"; }, 10000);
-      const script = document.createElement('script');
-      script.src = `${RAGIC_BASE_URL}/${recordId}.json?api&APIKey=${encodeURIComponent(RAGIC_API_KEY)}&callback=ragicCallback`;
-      document.body.appendChild(script);
+      const timer = setTimeout(() => { if (!currentRecord) $("loader-text").innerText = "讀取逾時，請重新載入"; }, 10000);
+      try {
+        const res = await fetch(`${WORKER_BASE}/getPaymentReceipt?rid=${encodeURIComponent(recordId)}&_=${Date.now()}`);
+        clearTimeout(timer);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        handleRecordData(data);
+      } catch (e) {
+        clearTimeout(timer);
+        console.error("executeLoad error", e);
+        $("loader-text").innerText = "讀取失敗，請重新載入頁面。";
+      }
     }
 
     function renderData() {
@@ -1078,23 +1077,31 @@
         const phoneInputVisible = phoneInputWrap && !phoneInputWrap.classList.contains("hidden");
         const phoneVal = phoneInputVisible ? (phoneInputEl.value || "").trim() : "";
         if (phoneVal && sourceRagicId && sourceConfig) {
-          const payload = $("source_phone_payload");
-          payload.name = sourceConfig.phoneField;
-          payload.value = phoneVal;
-          const srcForm = $("sourcePhoneUpdateForm");
-          srcForm.action = `https://ap15.ragic.com/wuohome${sourceConfig.sheetPath}/${sourceRagicId}` +
-                           `?api&v=3&APIKey=${encodeURIComponent(RAGIC_API_KEY)}`;
-          srcForm.submit();
+          // 4.5 電話回填 → submitPaymentSource via Worker proxy
+          const srcFd = new FormData();
+          srcFd.append("_sheet", sourceConfig.sheetEnum);
+          srcFd.append("_rid", String(sourceRagicId));
+          srcFd.append(sourceConfig.phoneField, phoneVal);
+          try {
+            await fetch(`${WORKER_BASE}/submitPaymentSource`, { method: "POST", body: srcFd });
+          } catch (srcErr) {
+            console.warn("源頭表電話回填失敗（非阻斷）", srcErr);
+          }
           // 等源頭表先入庫，再送主表，連結載入才能帶到新值
           await new Promise(r => setTimeout(r, 800));
         }
 
-        // 5. 送出表單
-        const form = $("ragicForm");
-        form.action = `${RAGIC_BASE_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_API_KEY)}`;
-        form.submit();
+        // 5. 送出主記錄 → submitPaymentReceipt via Worker proxy
+        $("loader-text").innerText = "正在上傳資料...";
+        const mainFd = new FormData($("ragicForm"));
+        mainFd.append("_rid", String(recordId));
+        const postRes = await fetch(`${WORKER_BASE}/submitPaymentReceipt`, { method: "POST", body: mainFd });
+        if (!postRes.ok) {
+          const errText = await postRes.text().catch(() => "");
+          throw new Error("SUBMIT_HTTP_" + postRes.status + (errText ? ": " + errText.slice(0, 100) : ""));
+        }
 
-        // 6. 3 秒後驗證
+        // 6. 驗證（等 Ragic 入庫）
         $("loader-text").innerText = "驗證中，請稍候...";
         setTimeout(() => verifyUpload(), 3000);
 
@@ -1105,55 +1112,40 @@
     }
 
     // 驗證 Ragic 是否真的收到資料（依 ROLE 檢查對應簽名欄位，長度 > 500 判為有效）
-    function verifyUpload(attempt) {
+    async function verifyUpload(attempt) {
       attempt = attempt || 1;
       const MAX_ATTEMPTS = 3;
+      try {
+        const res = await Promise.race([
+          fetch(`${WORKER_BASE}/verifyPaymentReceipt?rid=${encodeURIComponent(recordId)}&_=${Date.now()}`),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("TIMEOUT")), 8000))
+        ]);
+        if (!res.ok) throw new Error("HTTP_" + res.status);
+        const data = await res.json();
+        const rec = findExactRecord(data, recordId) || {};
+        const sigFieldId = getSigFieldId();
+        const sig = (rec[sigFieldId] || "").toString();
+        const sigOk = sig.length > 500;
 
-      const cbName = "verifyCb_" + Date.now() + "_" + attempt;
-      let timed = false;
-      const timer = setTimeout(() => {
-        timed = true;
-        if (attempt < MAX_ATTEMPTS) verifyUpload(attempt + 1);
-        else showFailed("VERIFY_TIMEOUT");
-      }, 8000);
-
-      window[cbName] = function(data) {
-        if (timed) return;
-        clearTimeout(timer);
-        try {
-          const rec = findExactRecord(data, recordId) || {};
-          const sigFieldId = getSigFieldId();
-          const sig = (rec[sigFieldId] || "").toString();
-          const sigOk = sig.length > 500;
-
-          if (sigOk) {
-            $("loader").classList.add('hidden');
-            $("step-2").classList.add('hidden');
-            $("step-failed").classList.add('hidden');
-            $("step-success").classList.remove('hidden');
-            window.scrollTo(0, 0);
-          } else if (attempt < MAX_ATTEMPTS) {
-            setTimeout(() => verifyUpload(attempt + 1), 3000);
-          } else {
-            showFailed("VERIFY_MISSING_SIG_" + sigFieldId);
-          }
-        } catch (err) {
-          console.error("verify parse error", err);
-          showFailed("VERIFY_PARSE");
-        } finally {
-          try { delete window[cbName]; } catch (_) {}
+        if (sigOk) {
+          $("loader").classList.add('hidden');
+          $("step-2").classList.add('hidden');
+          $("step-failed").classList.add('hidden');
+          $("step-success").classList.remove('hidden');
+          window.scrollTo(0, 0);
+        } else if (attempt < MAX_ATTEMPTS) {
+          setTimeout(() => verifyUpload(attempt + 1), 3000);
+        } else {
+          showFailed("VERIFY_MISSING_SIG_" + sigFieldId);
         }
-      };
-
-      const script = document.createElement('script');
-      script.src = `${RAGIC_BASE_URL}/${recordId}.json?api&APIKey=${encodeURIComponent(RAGIC_API_KEY)}&callback=${cbName}&_=${Date.now()}`;
-      script.onerror = () => {
-        if (timed) return;
-        clearTimeout(timer);
-        if (attempt < MAX_ATTEMPTS) verifyUpload(attempt + 1);
-        else showFailed("VERIFY_NET");
-      };
-      document.body.appendChild(script);
+      } catch (err) {
+        console.error("verify fetch error", err);
+        if (attempt < MAX_ATTEMPTS) {
+          setTimeout(() => verifyUpload(attempt + 1), 3000);
+        } else {
+          showFailed("VERIFY_" + (err.message || "NET"));
+        }
+      }
     }
 
     function showFailed(code) {
