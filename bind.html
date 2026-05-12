@@ -96,8 +96,8 @@
     // ==========================================
     // 參數設定區
     // ==========================================
-    // Ragic API 直連（取代 GAS）
-    const RAGIC_API = 'https://ap15.ragic.com/wuohome/operation/12?api&APIKey=VEZsOEwzYzVJdWdoWXRDM3ptS2YwTFA1M283aGxIUHM1ZjRORmNGbDNHNi9qSnVDNnlYWlhwUmJnMnJIWGo3RQ==';
+    // 2026-05-12: Cloudflare Worker proxy（取代 hardcoded Ragic API key）
+    const WORKER_API = 'https://wuohome-ragic-proxy.wuohome.workers.dev/bindOperator';
     
     const LIFF_ID = '2009040494-frTNmMZ7';
 
@@ -185,36 +185,23 @@
         btn.innerText = "資料傳送中...";
         status.innerText = "";
 
-        // 直接寫入 Ragic API
-        const now = new Date();
-        const timestamp = now.getFullYear() + '/' +
-            String(now.getMonth()+1).padStart(2,'0') + '/' +
-            String(now.getDate()).padStart(2,'0') + ' ' +
-            String(now.getHours()).padStart(2,'0') + ':' +
-            String(now.getMinutes()).padStart(2,'0') + ':' +
-            String(now.getSeconds()).padStart(2,'0');
-
-        const ragicData = {
-            "1002018": userLineId,
-            "1002019": name,
-            "1002020": phone,
-            "1002021": timestamp
-        };
-
-        // fire-and-forget（no-cors 模式，不讀回應）
-        fetch(RAGIC_API, {
+        // 透過 Cloudflare Worker proxy 寫入 Ragic（timestamp 在 Worker 端產生）
+        fetch(WORKER_API, {
             method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams(ragicData).toString()
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: userLineId, name, phone })
         })
-        .then(() => {
+        .then(async (resp) => {
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data.ok) {
+                throw new Error(data.error || data.msg || ('HTTP ' + resp.status));
+            }
             document.getElementById('formArea').style.display = 'none';
             document.getElementById('successArea').style.display = 'block';
         })
         .catch(err => {
             console.error(err);
-            status.innerText = "連線失敗，請稍後再試";
+            status.innerText = "連線失敗：" + (err.message || "請稍後再試");
             resetButton();
         });
     }
