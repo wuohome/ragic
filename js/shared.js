@@ -7,8 +7,7 @@
 // CONFIG
 // ════════════════════════════════════════════════════════════════
 
-export const API_KEY = 'VEZsOEwzYzVJdWdoWXRDM3ptS2YwTFA1M283aGxIUHM1ZjRORmNGbDNHNi9qSnVDNnlYWlhwUmJnMnJIWGo3RQ==';
-export const API_BASE = 'https://ap15.ragic.com/wuohome';
+export const WORKER_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
 
 export const MANAGERS = new Set(['吳彥廷', '韓珊珊', '張瓊安', '蕭靜芳']);
 export const EXCLUDE_DEVS = new Set(['張瓊安', 'minor', '孟書', '廖崇勝', '陳泳竹']);
@@ -31,27 +30,44 @@ export const NAME_ALIASES = {
 };
 
 // ════════════════════════════════════════════════════════════════
-// RAGIC API
+// WORKER PROXY API
 // ════════════════════════════════════════════════════════════════
 
-export async function ragicGet(path, params = '') {
-  const sep = params ? '&' : '';
-  const url = `${API_BASE}/${path}?api${sep}${params}&APIKey=${encodeURIComponent(API_KEY)}`;
+/**
+ * GET via Cloudflare Worker proxy.
+ * @param {string} action - worker action name (e.g. 'listStaff')
+ * @param {Record<string,string>} [params] - optional query params forwarded to worker
+ */
+export async function workerGet(action, params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  const url = `${WORKER_BASE}/${action}${qs ? '?' + qs : ''}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Ragic API ${res.status}: ${path}`);
-  return res.json();
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Worker ${action} ${res.status}: ${data?.error || res.statusText}`);
+  return data;
 }
 
-export async function ragicPost(path, data = {}) {
-  const url = `${API_BASE}/${path}?api&v=3&APIKey=${encodeURIComponent(API_KEY)}`;
+/**
+ * POST via Cloudflare Worker proxy.
+ * @param {string} action - worker action name (e.g. 'bindOperator')
+ * @param {Record<string,string>} data - form fields
+ */
+export async function workerPost(action, data = {}) {
+  const url = `${WORKER_BASE}/${action}`;
   const body = new URLSearchParams();
   for (const [k, v] of Object.entries(data)) {
     if (v !== undefined && v !== null) body.append(k, v);
   }
   const res = await fetch(url, { method: 'POST', body });
-  if (!res.ok) throw new Error(`Ragic POST ${res.status}: ${path}`);
-  return res.json();
+  const json = await res.json();
+  if (!res.ok) throw new Error(`Worker POST ${action} ${res.status}: ${json?.error || res.statusText}`);
+  return json;
 }
+
+// Backward-compat aliases used by files that still call ragicGet/ragicPost via shared.js
+// These now route through the worker instead of hitting Ragic directly.
+export const ragicGet  = (action, params = '') => workerGet(action, params ? Object.fromEntries(new URLSearchParams(params)) : {});
+export const ragicPost = (action, data = {})   => workerPost(action, data);
 
 // ════════════════════════════════════════════════════════════════
 // NAME UTILS
@@ -94,7 +110,7 @@ export async function fetchStaffList() {
   const cached = sessionStorage.getItem(key);
   if (cached) return JSON.parse(cached);
 
-  const raw = await ragicGet('ragicforms4/20004', 'limit=200');
+  const raw = await workerGet('listStaff', { limit: '200' });
   const list = [];
   for (const rec of Object.values(raw)) {
     const name = (rec['姓名'] || '').trim();
