@@ -6,10 +6,7 @@
 
 // ── API 設定 ──
 const SC = {
-    API_KEY: "VEZsOEwzYzVJdWdoWXRDM3ptS2YwTFA1M283aGxIUHM1ZjRORmNGbDNHNi9qSnVDNnlYWlhwUmJnMnJIWGo3RQ==",
-    BASE_URL: "https://ap15.ragic.com",
-    EMP_PATH: "/wuohome/ragicforms4/20004",
-    LEAVE_PATH: "/wuohome/ragicforms4/2",
+    PROXY_BASE: "https://wuohome-ragic-proxy.wuohome.workers.dev",
 
     // ── 員工表欄位 ID ──
     F_EMP: {
@@ -95,58 +92,31 @@ SC.getHolidayName = (y, m, d) => SC.HOLIDAYS_2026[SC.fmtDate(y, m, d)] || "";
 SC.isGovHoliday = (dateStr, isWeekend) => isWeekend || dateStr in SC.HOLIDAYS_2026;
 SC.isOpenPeriod = () => new Date().getDate() >= 20;
 
-// ── 日期範圍 where 條件（只拉需要的月份）──
-SC.leaveWhere = (fromY, fromM, toY, toM) => {
+// ── 日期範圍 query params（listLeaves 用）──
+SC.leaveQuery = (fromY, fromM, toY, toM) => {
     const from = `${fromY}/${String(fromM).padStart(2, "0")}/01`;
     const lastDay = new Date(toY, toM, 0).getDate();
     const to = `${toY}/${String(toM).padStart(2, "0")}/${String(lastDay).padStart(2, "0")}`;
-    return `?where=${SC.F_LEAVE.DATE},gte,${from}&where=${SC.F_LEAVE.DATE},lte,${to}`;
+    return `?dateFrom=${encodeURIComponent(from)}&dateTo=${encodeURIComponent(to)}`;
 };
 
-// ── Ragic silent fail 偵測（DELETE / POST 共用） ──
-// Ragic 會回 HTTP 200 + status:"SUCCESS" 但 msg 含 "Field id ... not found" 之類警告，
-// 實際操作沒生效。三層檢查：status / msg 警告字眼 / error 欄位
-SC._checkRagicResponse = (parsed, opLabel) => {
-    if (!parsed || typeof parsed !== "object") return;
-    // 1. status 不是 SUCCESS → 失敗
-    if (parsed.status && String(parsed.status).toUpperCase() !== "SUCCESS") {
-        throw new Error(`${opLabel} failed: ${JSON.stringify(parsed)}`);
-    }
-    // 2. SUCCESS 但 msg 含警告字眼 → silent fail
-    if (parsed.msg && /not found|invalid|Field id|Form Index/i.test(parsed.msg)) {
-        throw new Error(`${opLabel} silent fail: ${parsed.msg}`);
-    }
-    // 3. 有 error 欄位 → 失敗
-    if (parsed.error) throw new Error(`${opLabel} error: ${parsed.error}`);
-};
-
-// ── API 呼叫（含重試）──
-SC.apiFetch = async (path, opts = {}, retries = 3) => {
-    const sep = path.includes("?") ? "&" : "?";
-    const url = `${SC.BASE_URL}${path}${sep}api=true&v=3&naming=EID&APIKey=${encodeURIComponent(SC.API_KEY)}`;
+// ── Worker proxy 呼叫（GET/POST/DELETE 統一入口）──
+// Worker 回傳 envelope：成功 {ok:true, ...data} 或 {ok:true, ragicId:...} 或 data object
+// 失敗 4xx {error:"..."} — worker 已內建 detectUpstreamFailure，前端直接信任 HTTP status
+SC.proxyFetch = async (action, opts = {}, retries = 3) => {
+    const url = `${SC.PROXY_BASE}/${action}`;
     for (let i = 0; i < retries; i++) {
         const res = await fetch(url, opts);
         if (res.status === 403 && i < retries - 1) {
             await new Promise(r => setTimeout(r, 1000 * (i + 1)));
             continue;
         }
-        if (!res.ok) throw new Error(`API ${res.status}`);
-        if (opts.method === "DELETE") {
-            // Ragic DELETE silent fail 防呆（200 + SUCCESS 但其實沒刪）
-            const body = await res.text();
-            if (!body) return {};
-            let parsed;
-            try { parsed = JSON.parse(body); } catch { return {}; }
-            SC._checkRagicResponse(parsed, "DELETE");
-            return parsed;
+        if (!res.ok) {
+            let msg = `Proxy ${res.status}`;
+            try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
+            throw new Error(msg);
         }
-        // GET/POST：解析 JSON 後也檢查 silent fail
-        // POST 成功時 ragicId 會帶回；status 非 SUCCESS / msg 警告 / error 都要擋
-        const parsed = await res.json();
-        if (opts.method === "POST") {
-            SC._checkRagicResponse(parsed, "POST");
-        }
-        return parsed;
+        return res.json();
     }
 };
 

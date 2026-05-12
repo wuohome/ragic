@@ -56,7 +56,6 @@
 <script type="text/babel">
 
 /* ── Constants (from schedule-common.js) ───────────────────── */
-const API_P = `api=true&v=3&naming=EID&APIKey=${SC.API_KEY}`;
 const JIAN_HONG_NAMES = new Set(SC.GOV_REST_NAMES);
 const PUBLIC_HOLIDAYS_2026 = SC.HOLIDAYS_2026;
 
@@ -125,9 +124,7 @@ function getOrder(emp) {
 
 /* ── API ────────────────────────────────────────────────────── */
 async function loadEmployees() {
-  const res = await fetch(SC.BASE_URL + SC.EMP_PATH + '?' + API_P);
-  if (!res.ok) throw new Error('員工資料載入失敗 (' + res.status + ')');
-  const data = await res.json();
+  const data = await SC.proxyFetch('listEmployees');
   const raw = Object.entries(data)
     .filter(([, r]) => r && typeof r === 'object' && r[SC.F_EMP.NAME])
     .filter(([, r]) => {
@@ -157,12 +154,7 @@ async function loadEmployees() {
 }
 
 async function loadLeaves(year, month) {
-  const url = SC.BASE_URL + SC.LEAVE_PATH + '?' + API_P
-    + '&where=' + SC.F_LEAVE.YEAR + ',eq,' + year
-    + '&and=' + SC.F_LEAVE.MONTH + ',eq,' + month;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('排班資料載入失敗 (' + res.status + ')');
-  const data = await res.json();
+  const data = await SC.proxyFetch(`listLeaves?year=${year}&month=${month}`);
   // map: empName__date -> array of records (support multiple per cell)
   const map = {};
   for (const [rid, r] of Object.entries(data)) {
@@ -180,12 +172,7 @@ async function loadLeaves(year, month) {
 }
 
 async function loadDutiesAndNoRest(year, month) {
-  const url = SC.BASE_URL + SC.LEAVE_PATH + '?' + API_P
-    + '&where=' + SC.F_LEAVE.YEAR + ',eq,' + year
-    + '&and=' + SC.F_LEAVE.MONTH + ',eq,' + month;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('值日資料載入失敗 (' + res.status + ')');
-  const data = await res.json();
+  const data = await SC.proxyFetch(`listLeaves?year=${year}&month=${month}`);
   const duties = {};
   const noRest = {};
   for (const [rid, r] of Object.entries(data)) {
@@ -214,12 +201,7 @@ async function loadDutiesAndNoRest(year, month) {
 async function loadPrevStats(year, month) {
   const pm = month === 1 ? 12 : month - 1;
   const py = month === 1 ? year - 1 : year;
-  const url = SC.BASE_URL + SC.LEAVE_PATH + '?' + API_P
-    + '&where=' + SC.F_LEAVE.YEAR + ',eq,' + py
-    + '&and=' + SC.F_LEAVE.MONTH + ',eq,' + pm;
-  const res = await fetch(url);
-  if (!res.ok) return {};
-  const data = await res.json();
+  const data = await SC.proxyFetch(`listLeaves?year=${py}&month=${pm}`);
   const stats = {};
   for (const [rid, r] of Object.entries(data)) {
     if (!r || typeof r !== 'object' || !r[SC.F_LEAVE.DATE]) continue;
@@ -239,39 +221,30 @@ async function loadPrevStats(year, month) {
 
 /* ── Write API helpers ──────────────────────────────────────── */
 async function apiCreateLeave(empName, date, year, month, type) {
-  const url = `${SC.BASE_URL}${SC.LEAVE_PATH}?${API_P}`;
-  const body = new URLSearchParams({
-    [SC.F_LEAVE.EMP]:   empName,
-    [SC.F_LEAVE.DATE]:  date,
-    [SC.F_LEAVE.YEAR]:  String(year),
-    [SC.F_LEAVE.MONTH]: String(month),
-    [SC.F_LEAVE.TYPE]:  type,
-  }).toString();
-  const res = await fetch(url, {
+  const res = await SC.proxyFetch('createLeave', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      [SC.F_LEAVE.EMP]:   empName,
+      [SC.F_LEAVE.DATE]:  date,
+      [SC.F_LEAVE.YEAR]:  String(year),
+      [SC.F_LEAVE.MONTH]: String(month),
+      [SC.F_LEAVE.TYPE]:  type,
+    }),
   });
-  if (!res.ok) throw new Error('建立失敗 (' + res.status + ')');
-  const data = await res.json();
-  return data.ragicId || data._ragicId || Object.keys(data)[0];
+  return res.ragicId || res._ragicId;
 }
 
 async function apiDeleteLeave(ragicId) {
-  const url = `${SC.BASE_URL}${SC.LEAVE_PATH}/${ragicId}?${API_P}`;
-  const res = await fetch(url, { method: 'DELETE' });
-  if (!res.ok) throw new Error('刪除失敗 (' + res.status + ')');
+  await SC.proxyFetch(`deleteLeave/${ragicId}`, { method: 'DELETE' });
 }
 
 async function apiUpdateLeaveType(ragicId, newType) {
-  const url = `${SC.BASE_URL}${SC.LEAVE_PATH}/${ragicId}?${API_P}`;
-  const body = new URLSearchParams({ [SC.F_LEAVE.TYPE]: newType }).toString();
-  const res = await fetch(url, {
+  await SC.proxyFetch(`updateLeave/${ragicId}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ [SC.F_LEAVE.TYPE]: newType }),
   });
-  if (!res.ok) throw new Error('更新失敗 (' + res.status + ')');
 }
 
 /* ── Shared logic: get statuses for a cell ─────────────────── */

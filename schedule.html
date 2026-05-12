@@ -39,30 +39,24 @@
 <script type="text/babel">
 
 const CONFIG = {
-    BASE: SC.BASE_URL, KEY: SC.API_KEY,
-    EMP_PATH: SC.EMP_PATH, LEAVE_PATH: SC.LEAVE_PATH,
     F_EMP: SC.F_EMP, F_LEAVE: SC.F_LEAVE,
 };
 
-// leaveWhere → SC.leaveWhere（共用常數檔）
+// leaveQuery → SC.leaveQuery（共用常數檔）
 
-// apiFetch → SC.apiFetch（共用常數檔）
+// proxyFetch → SC.proxyFetch（共用常數檔）
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 // 逐筆 POST（Ragic batch JSON API 在此表單會建空白紀錄，改逐筆送）
-const apiBatchCreate = async (path, records, onProgress) => {
+const apiBatchCreate = async (records, onProgress) => {
     const results = [];
     for (let i = 0; i < records.length; i++) {
         if (onProgress) onProgress(i + 1, records.length);
-        const params = new URLSearchParams();
-        for (const [k, v] of Object.entries(records[i])) {
-            params.append(k, v);
-        }
-        const res = await SC.apiFetch(path, {
+        const res = await SC.proxyFetch("createLeave", {
             method: "POST",
-            headers: {"Content-Type":"application/x-www-form-urlencoded"},
-            body: params.toString()
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify(records[i])
         });
         results.push({ ragicId: String(res.ragicId || "") });
         if (i < records.length - 1) await sleep(150);
@@ -151,14 +145,11 @@ const App = () => {
     const load = async () => {
         setLoading(true);
         try {
-            const empJson = await SC.apiFetch(CONFIG.EMP_PATH);
+            const empJson = await SC.proxyFetch("listEmployees");
             // 樓層累計次數：從歷史值日紀錄即時計算（員工表 FL 欄位已不可寫）
             // 起算點：2026/03/30（平安街樓層制度啟用）
             const histEnd = `${year}/${String(month).padStart(2,"0")}/${String(new Date(year, month, 0).getDate()).padStart(2,"0")}`;
-            const fcHistJson = await SC.apiFetch(CONFIG.LEAVE_PATH
-                + `?where=${CONFIG.F_LEAVE.TYPE},eq,${encodeURIComponent("值日")}`
-                + `&where=${CONFIG.F_LEAVE.DATE},gte,2026/03/30`
-                + `&where=${CONFIG.F_LEAVE.DATE},lte,${histEnd}`);
+            const fcHistJson = await SC.proxyFetch(`listLeaves?type=${encodeURIComponent("值日")}&dateFrom=2026%2F03%2F30&dateTo=${encodeURIComponent(histEnd)}`);
             const fcHist = {};
             Object.entries(fcHistJson)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
@@ -209,7 +200,7 @@ const App = () => {
             // 只拉當月+上月（不拉全表）
             const pm = month === 1 ? 12 : month - 1;
             const py = month === 1 ? year - 1 : year;
-            const leaveJson = await SC.apiFetch(CONFIG.LEAVE_PATH + SC.leaveWhere(py, pm, year, month));
+            const leaveJson = await SC.proxyFetch("listLeaves" + SC.leaveQuery(py, pm, year, month));
             const lmap = {};
             const dmap = {};
             const nrmap = {};
@@ -300,24 +291,24 @@ const App = () => {
         try {
             const existing = noRest[dateStr];
             if (existing) {
-                await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${existing.ragicId}`, { method: "DELETE" });
+                await SC.proxyFetch(`deleteLeave/${existing.ragicId}`, { method: "DELETE" });
                 setNoRest(nr => { const n = {...nr}; delete n[dateStr]; return n; });
                 showToast(`${dateStr} 禁休已取消`);
             } else {
                 const reason = prompt("禁休原因（如：開幕活動）：");
                 if (reason === null) { setSaving(s => { const n = {...s}; delete n[savingKey]; return n; }); return; }
-                const params = new URLSearchParams();
-                params.append(CONFIG.F_LEAVE.EMP, "韓珊珊");
-                params.append(CONFIG.F_LEAVE.DATE, dateStr);
-                params.append(CONFIG.F_LEAVE.YEAR, String(year));
-                params.append(CONFIG.F_LEAVE.MONTH, String(month));
-                params.append(CONFIG.F_LEAVE.TYPE, "禁休");
-                params.append(CONFIG.F_LEAVE.NOTE, reason || "");
-                params.append(CONFIG.F_LEAVE.DEPT, "禁休設定");
-                const res = await SC.apiFetch(CONFIG.LEAVE_PATH, {
+                const res = await SC.proxyFetch("createLeave", {
                     method: "POST",
-                    headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                    body: params.toString()
+                    headers: {"Content-Type":"application/json"},
+                    body: JSON.stringify({
+                        [CONFIG.F_LEAVE.EMP]: "韓珊珊",
+                        [CONFIG.F_LEAVE.DATE]: dateStr,
+                        [CONFIG.F_LEAVE.YEAR]: String(year),
+                        [CONFIG.F_LEAVE.MONTH]: String(month),
+                        [CONFIG.F_LEAVE.TYPE]: "禁休",
+                        [CONFIG.F_LEAVE.NOTE]: reason || "",
+                        [CONFIG.F_LEAVE.DEPT]: "禁休設定",
+                    })
                 });
                 setNoRest(nr => ({...nr, [dateStr]: { ragicId: String(res.ragicId), reason: reason || "" }}));
                 showToast(`${dateStr} 已設為禁休${reason ? "（" + reason + "）" : ""}`);
@@ -351,19 +342,19 @@ const App = () => {
                         if (action === "1") {
                             // 加排新樓層
                             const floor = canAddFloor.sort((a, b) => (empObj?.fc[a]||0) - (empObj?.fc[b]||0))[0];
-                            const params = new URLSearchParams();
-                            params.append(CONFIG.F_LEAVE.EMP, empName);
-                            params.append(CONFIG.F_LEAVE.DATE, dateStr);
-                            params.append(CONFIG.F_LEAVE.YEAR, String(year));
-                            params.append(CONFIG.F_LEAVE.MONTH, String(month));
-                            params.append(CONFIG.F_LEAVE.TYPE, "值日");
-                            params.append(CONFIG.F_LEAVE.NOTE, floor);
-                            params.append(CONFIG.F_LEAVE.IS_AUTO, "No");
-                            params.append(CONFIG.F_LEAVE.DEPT, "手動變更");
-                            const res = await SC.apiFetch(CONFIG.LEAVE_PATH, {
+                            const res = await SC.proxyFetch("createLeave", {
                                 method: "POST",
-                                headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                                body: params.toString()
+                                headers: {"Content-Type":"application/json"},
+                                body: JSON.stringify({
+                                    [CONFIG.F_LEAVE.EMP]: empName,
+                                    [CONFIG.F_LEAVE.DATE]: dateStr,
+                                    [CONFIG.F_LEAVE.YEAR]: String(year),
+                                    [CONFIG.F_LEAVE.MONTH]: String(month),
+                                    [CONFIG.F_LEAVE.TYPE]: "值日",
+                                    [CONFIG.F_LEAVE.NOTE]: floor,
+                                    [CONFIG.F_LEAVE.IS_AUTO]: "No",
+                                    [CONFIG.F_LEAVE.DEPT]: "手動變更",
+                                })
                             });
                             if (floor && empObj) {
                                 empObj.fc[floor] = (empObj.fc[floor] || 0) + 1;
@@ -375,7 +366,7 @@ const App = () => {
                         } else if (action === "3") {
                             // 清除最後一層
                             const lastDuty = myDuties[myDuties.length - 1];
-                            await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${lastDuty.ragicId}`, { method: "DELETE" });
+                            await SC.proxyFetch(`deleteLeave/${lastDuty.ragicId}`, { method: "DELETE" });
                             if (lastDuty.floor && empObj) {
                                 empObj.fc[lastDuty.floor] = Math.max(0, (empObj.fc[lastDuty.floor]||0) - 1);
                             }
@@ -390,7 +381,7 @@ const App = () => {
                     const lastDuty = myDuties[myDuties.length - 1];
                     if (lastDuty.missed) {
                         // 未掃 → 再點 = 清除
-                        await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${lastDuty.ragicId}`, { method: "DELETE" });
+                        await SC.proxyFetch(`deleteLeave/${lastDuty.ragicId}`, { method: "DELETE" });
                         if (lastDuty.floor && empObj) {
                             empObj.fc[lastDuty.floor] = Math.max(0, (empObj.fc[lastDuty.floor]||0) - 1);
                         }
@@ -398,10 +389,10 @@ const App = () => {
                         showToast(`${empName} ${dateStr} ${lastDuty.floor || "值日"}已清除`);
                     } else {
                         // 正常 → 標記未掃
-                        await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${lastDuty.ragicId}`, {
+                        await SC.proxyFetch(`updateLeave/${lastDuty.ragicId}`, {
                             method: "POST",
-                            headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                            body: new URLSearchParams({ [CONFIG.F_LEAVE.IS_AUTO]: "未掃" }).toString()
+                            headers: {"Content-Type":"application/json"},
+                            body: JSON.stringify({ [CONFIG.F_LEAVE.IS_AUTO]: "未掃" })
                         });
                         setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).map(x => x.ragicId === lastDuty.ragicId ? {...x, missed: true} : x)}));
                         showToast(`${empName} ${dateStr} 標記未掃 ❌`);
@@ -420,19 +411,19 @@ const App = () => {
                     const floor = availFloors.length > 0
                         ? availFloors.sort((a, b) => (fc[a]||0) - (fc[b]||0))[0]
                         : "";
-                    const params = new URLSearchParams();
-                    params.append(CONFIG.F_LEAVE.EMP, empName);
-                    params.append(CONFIG.F_LEAVE.DATE, dateStr);
-                    params.append(CONFIG.F_LEAVE.YEAR, String(year));
-                    params.append(CONFIG.F_LEAVE.MONTH, String(month));
-                    params.append(CONFIG.F_LEAVE.TYPE, "值日");
-                    params.append(CONFIG.F_LEAVE.NOTE, floor || "手動變更");
-                    params.append(CONFIG.F_LEAVE.IS_AUTO, "No");
-                    params.append(CONFIG.F_LEAVE.DEPT, "手動變更");
-                    const res = await SC.apiFetch(CONFIG.LEAVE_PATH, {
+                    const res = await SC.proxyFetch("createLeave", {
                         method: "POST",
-                        headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                        body: params.toString()
+                        headers: {"Content-Type":"application/json"},
+                        body: JSON.stringify({
+                            [CONFIG.F_LEAVE.EMP]: empName,
+                            [CONFIG.F_LEAVE.DATE]: dateStr,
+                            [CONFIG.F_LEAVE.YEAR]: String(year),
+                            [CONFIG.F_LEAVE.MONTH]: String(month),
+                            [CONFIG.F_LEAVE.TYPE]: "值日",
+                            [CONFIG.F_LEAVE.NOTE]: floor || "手動變更",
+                            [CONFIG.F_LEAVE.IS_AUTO]: "No",
+                            [CONFIG.F_LEAVE.DEPT]: "手動變更",
+                        })
                     });
                     // 更新本地樓層次數（員工表 FL 欄位不可寫，僅記憶體內追蹤）
                     if (floor && empObj) {
@@ -502,7 +493,7 @@ const App = () => {
         try {
             if (sameTypeEntry) {
                 // 同類型已存在 → 清除（保留其他類型）
-                await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${sameTypeEntry.ragicId}`, { method:"DELETE" });
+                await SC.proxyFetch(`deleteLeave/${sameTypeEntry.ragicId}`, { method:"DELETE" });
                 setLeaves(l => {
                     const newList = (l[key] || []).filter(e => e.ragicId !== sameTypeEntry.ragicId);
                     const n = {...l};
@@ -516,7 +507,7 @@ const App = () => {
                 if (otherZhibanEntries.length > 0) {
                     for (const oldZ of otherZhibanEntries) {
                         try {
-                            await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${oldZ.ragicId}`, { method:"DELETE" });
+                            await SC.proxyFetch(`deleteLeave/${oldZ.ragicId}`, { method:"DELETE" });
                         } catch (delErr) {
                             // DELETE 失敗：alert 並中止，不 POST 新人，state 維持原樣
                             const msg = `換值班失敗：舊紀錄（${oldZ.empName}）沒刪掉。請重新整理頁面後再試，或聯絡 Joan 處理。\n\n錯誤：${delErr.message}`;
@@ -537,25 +528,23 @@ const App = () => {
                 }
 
                 // 新增當前類型（不影響其他類型紀錄）
-                const params = new URLSearchParams();
-                params.append(CONFIG.F_LEAVE.EMP, empName);
-                params.append(CONFIG.F_LEAVE.DATE, dateStr);
-                params.append(CONFIG.F_LEAVE.YEAR, String(year));
-                params.append(CONFIG.F_LEAVE.MONTH, String(month));
-                params.append(CONFIG.F_LEAVE.TYPE, mode);
                 const empObj = employees.find(e => e.name === empName);
-                // 換值班預設標記為「手動變更」，跟系統預排區分
-                if (mode === "值班" && otherZhibanEntries.length > 0) {
-                    params.append(CONFIG.F_LEAVE.DEPT, "手動變更");
-                } else if (empObj && empObj.dept) {
-                    params.append(CONFIG.F_LEAVE.DEPT, empObj.dept);
-                }
+                const deptVal = (mode === "值班" && otherZhibanEntries.length > 0) ? "手動變更"
+                    : (empObj && empObj.dept ? empObj.dept : "");
+                const createBody = {
+                    [CONFIG.F_LEAVE.EMP]: empName,
+                    [CONFIG.F_LEAVE.DATE]: dateStr,
+                    [CONFIG.F_LEAVE.YEAR]: String(year),
+                    [CONFIG.F_LEAVE.MONTH]: String(month),
+                    [CONFIG.F_LEAVE.TYPE]: mode,
+                };
+                if (deptVal) createBody[CONFIG.F_LEAVE.DEPT] = deptVal;
                 let res;
                 try {
-                    res = await SC.apiFetch(CONFIG.LEAVE_PATH, {
+                    res = await SC.proxyFetch("createLeave", {
                         method: "POST",
-                        headers: {"Content-Type":"application/x-www-form-urlencoded"},
-                        body: params.toString()
+                        headers: {"Content-Type":"application/json"},
+                        body: JSON.stringify(createBody)
                     });
                 } catch (postErr) {
                     // POST 新人失敗：舊值班已刪、新值班沒進去 → 警告 Joan
@@ -609,7 +598,7 @@ const App = () => {
             // 讀上月+當月（上月算 countMap，當月刪舊紀錄+建 zhibanByDate）
             const prevMonth = month === 1 ? 12 : month - 1;
             const prevYear = month === 1 ? year - 1 : year;
-            const allLeaveForDuty = await SC.apiFetch(CONFIG.LEAVE_PATH + SC.leaveWhere(prevYear, prevMonth, year, month));
+            const allLeaveForDuty = await SC.proxyFetch("listLeaves" + SC.leaveQuery(prevYear, prevMonth, year, month));
             const countMap = {};
             allEmployees.forEach(e => { countMap[e.name] = 0; });
             Object.entries(allLeaveForDuty)
@@ -687,7 +676,7 @@ const App = () => {
                 if (floor && fcMap[empName]) {
                     fcMap[empName][floor] = Math.max(0, (fcMap[empName][floor] || 0) - 1);
                 }
-                await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${id}`, { method: "DELETE" });
+                await SC.proxyFetch(`deleteLeave/${id}`, { method: "DELETE" });
                 await sleep(200);
             }
 
@@ -893,7 +882,7 @@ const App = () => {
                     batchMeta.push({ dateStr, empName, floor });
                 }
             }
-            const batchRes = await apiBatchCreate(CONFIG.LEAVE_PATH, batchRecords, (cur, tot) => {
+            const batchRes = await apiBatchCreate(batchRecords, (cur, tot) => {
                 setProgress({ text: "寫入值日紀錄...", current: cur, total: tot });
             });
             const results = batchMeta.map((m, i) => ({ ...m, ragicId: batchRes[i]?.ragicId || "" }));
@@ -944,7 +933,7 @@ const App = () => {
             if (eligible.length === 0) { showToast("沒有符合條件的值班人員", false); setAutoZhiban(false); return; }
 
             // 只讀當月（刪除舊紀錄 + 建 onLeave 用，值班不追債不需上月）
-            const allLeaveJson = await SC.apiFetch(CONFIG.LEAVE_PATH + SC.leaveWhere(year, month, year, month));
+            const allLeaveJson = await SC.proxyFetch("listLeaves" + SC.leaveQuery(year, month, year, month));
             // 本月從零開始，跨月不追債（新人入池不用補歷史）
             const zCount = {};
             eligible.forEach(e => { zCount[e.name] = 0; });
@@ -961,7 +950,7 @@ const App = () => {
                 });
             for (let di = 0; di < toDelete.length; di++) {
                 setProgress({ text: "清除舊值班紀錄", current: di + 1, total: toDelete.length });
-                await SC.apiFetch(`${CONFIG.LEAVE_PATH}/${toDelete[di][0]}`, { method: "DELETE" });
+                await SC.proxyFetch(`deleteLeave/${toDelete[di][0]}`, { method: "DELETE" });
                 await sleep(200);
             }
 
@@ -1018,7 +1007,7 @@ const App = () => {
                 });
                 zBatchMeta.push({ empName, dateStr });
             }
-            const zBatchRes = await apiBatchCreate(CONFIG.LEAVE_PATH, zBatchRecords, (cur, tot) => {
+            const zBatchRes = await apiBatchCreate(zBatchRecords, (cur, tot) => {
                 setProgress({ text: "寫入值班紀錄...", current: cur, total: tot });
             });
             const newZhibanEntries = []; // [{key, entry}]
