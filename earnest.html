@@ -369,8 +369,7 @@
   </div>
 
   <script>
-    const RAGIC_API_KEY = "VEZsOEwzYzVJdWdoWXRDM3ptS2YwTFA1M283aGxIUHM1ZjRORmNGbDNHNi9qSnVDNnlYWlhwUmJnMnJIWGo3RQ==";
-    const RAGIC_BASE_URL = "https://ap15.ragic.com/wuohome/payments/1";
+    const WORKER_BASE_URL = "https://wuohome-ragic-proxy.wuohome.workers.dev";
 
     const FIELDS = {
       // Step 2 顯示用欄位
@@ -502,12 +501,24 @@
       $("step-1").classList.remove('hidden');
     };
 
-    function executeLoad() {
+    async function executeLoad() {
       $("loader-text").innerText = "開啟中...";
       loadTimer = setTimeout(() => { if (!currentRecord) $("loader-text").innerText = "讀取逾時"; }, 10000);
-      const script = document.createElement('script');
-      script.src = `${RAGIC_BASE_URL}/${recordId}.json?api&APIKey=${encodeURIComponent(RAGIC_API_KEY)}&callback=ragicCallback`;
-      document.body.appendChild(script);
+      try {
+        const res = await fetch(`${WORKER_BASE_URL}/getEarnest?rid=${encodeURIComponent(recordId)}`);
+        clearTimeout(loadTimer);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          $("loader-text").innerHTML = "載入失敗（" + (err.error || res.status) + "）<br>請聯繫窩的家業務重新傳送連結。";
+          return;
+        }
+        const data = await res.json();
+        ragicCallback(data);
+      } catch (e) {
+        clearTimeout(loadTimer);
+        console.error("executeLoad error", e);
+        $("loader-text").innerHTML = "網路錯誤，無法載入資料。<br>請檢查網路後重新整理，或聯繫窩的家業務。";
+      }
     }
 
     function renderData() {
@@ -652,10 +663,24 @@
           dataTransfer.items.add(pdfFile);
           fileInput.files = dataTransfer.files;
 
-          // 5. 送出表單
-          const form = $("ragicForm");
-          form.action = `${RAGIC_BASE_URL}/${recordId}?api&v=3&APIKey=${encodeURIComponent(RAGIC_API_KEY)}`;
-          form.submit();
+          // 5. 組裝 FormData，透過 Worker proxy 送出
+          const fd = new FormData();
+          fd.append("rid", recordId);
+          fd.append("1000792", $("input_name").value);
+          fd.append("1000808", $("input_phone").value);
+          fd.append("1000837", $("input_occ").value);
+          fd.append("1000816", sigData);
+          fd.append("1001709", pdfFile, fileName);
+
+          const postRes = await fetch(`${WORKER_BASE_URL}/submitEarnest`, {
+            method: "POST",
+            body: fd
+          });
+
+          if (!postRes.ok) {
+            const errBody = await postRes.json().catch(() => ({}));
+            throw new Error(errBody.error || "HTTP " + postRes.status);
+          }
 
           // 6. 切到驗證中畫面，3 秒後打 API 確認 Ragic 真的有收到
           $("loader-text").innerText = "驗證中，請稍候...";
@@ -668,58 +693,41 @@
     }
 
     // 驗證 Ragic 是否真的收到資料（姓名必填、簽名長度 > 500 判為有效）
-    function verifyUpload(attempt) {
+    async function verifyUpload(attempt) {
       attempt = attempt || 1;
       const MAX_ATTEMPTS = 3;
       const expectedName = ($("input_name").value || "").trim();
 
-      const cbName = "verifyCb_" + Date.now() + "_" + attempt;
-      let timed = false;
-      const timer = setTimeout(() => {
-        timed = true;
-        if (attempt < MAX_ATTEMPTS) verifyUpload(attempt + 1);
-        else showFailed("VERIFY_TIMEOUT");
-      }, 8000);
+      try {
+        const res = await fetch(`${WORKER_BASE_URL}/getEarnest?rid=${encodeURIComponent(recordId)}&_=${Date.now()}`);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        const rec = findExactRecord(data, recordId) || data || {};
+        const gotName = (rec["1000792"] || rec["租客姓名"] || rec["1001091"] || "").toString().trim();
+        const sig = (rec["1000816"] || rec["租客簽名"] || "").toString();
+        const nameOk = expectedName ? gotName === expectedName : gotName.length > 0;
+        const sigOk = sig.length > 500;
 
-      window[cbName] = function(data) {
-        if (timed) return;
-        clearTimeout(timer);
-        try {
-          const rec = findExactRecord(data, recordId) || {};
-          const gotName = (rec["1000792"] || rec["租客姓名"] || rec["1001091"] || "").toString().trim();
-          const sig = (rec["1000816"] || rec["租客簽名"] || "").toString();
-          const nameOk = expectedName ? gotName === expectedName : gotName.length > 0;
-          const sigOk = sig.length > 500;
-
-          if (nameOk && sigOk) {
-              $("loader").classList.add('hidden');
-              $("step-2").classList.add('hidden');
-              $("step-failed").classList.add('hidden');
-              $("step-success").classList.remove('hidden');
-              window.scrollTo(0, 0);
-          } else if (attempt < MAX_ATTEMPTS) {
-              // 再等 3 秒重試一次（Ragic 有時會延遲入庫）
-              setTimeout(() => verifyUpload(attempt + 1), 3000);
-          } else {
-              showFailed("VERIFY_MISSING_" + (!nameOk ? "NAME" : "SIG"));
-          }
-        } catch (err) {
-          console.error("verify parse error", err);
-          showFailed("VERIFY_PARSE");
-        } finally {
-          try { delete window[cbName]; } catch(_) {}
+        if (nameOk && sigOk) {
+            $("loader").classList.add('hidden');
+            $("step-2").classList.add('hidden');
+            $("step-failed").classList.add('hidden');
+            $("step-success").classList.remove('hidden');
+            window.scrollTo(0, 0);
+        } else if (attempt < MAX_ATTEMPTS) {
+            // 再等 3 秒重試一次（Ragic 有時會延遲入庫）
+            setTimeout(() => verifyUpload(attempt + 1), 3000);
+        } else {
+            showFailed("VERIFY_MISSING_" + (!nameOk ? "NAME" : "SIG"));
         }
-      };
-
-      const script = document.createElement('script');
-      script.src = `${RAGIC_BASE_URL}/${recordId}.json?api&APIKey=${encodeURIComponent(RAGIC_API_KEY)}&callback=${cbName}&_=${Date.now()}`;
-      script.onerror = () => {
-        if (timed) return;
-        clearTimeout(timer);
-        if (attempt < MAX_ATTEMPTS) verifyUpload(attempt + 1);
-        else showFailed("VERIFY_NET");
-      };
-      document.body.appendChild(script);
+      } catch (err) {
+        console.error("verifyUpload error", err);
+        if (attempt < MAX_ATTEMPTS) {
+          setTimeout(() => verifyUpload(attempt + 1), 3000);
+        } else {
+          showFailed("VERIFY_NET");
+        }
+      }
     }
 
     function showFailed(code) {
