@@ -425,7 +425,7 @@
 
     <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
 
-    <form id="ragicForm" target="hidden_iframe" method="POST" action="https://ap15.ragic.com/wuohome/property-data-kept/8?api=true&APIKey=VEZsOEwzYzVJdWdoWXRDM3ptS2YwTFA1M283aGxIUHM1ZjRORmNGbDNHNi9qSnVDNnlYWlhwUmJnMnJIWGo3RQ==">
+    <form id="ragicForm" onsubmit="return false;">
         
         <!-- 隱藏欄位 (維持與舊版一致) -->
         <input type="hidden" name="1000640" id="input_agent_name">
@@ -642,8 +642,8 @@
     const agentName = agentNameParam ? agentNameParam : defaultAgentName;
     const agentPhone = agentPhoneParam ? agentPhoneParam : defaultAgentPhone;
 
-    // Ragic API
-    const ragicApiUrl = "https://ap15.ragic.com/wuohome/property-data-kept/8?api=true&APIKey=VEZsOEwzYzVJdWdoWXRDM3ptS2YwTFA1M283aGxIUHM1ZjRORmNGbDNHNi9qSnVDNnlYWlhwUmJnMnJIWGo3RQ==";
+    // 2026-05-12: Cloudflare Worker proxy（取代 hardcoded Ragic API key）
+    const WORKER_API = "https://wuohome-ragic-proxy.wuohome.workers.dev/submitTenantNeed";
 
     // 資料暫存
     let occupantList = [];
@@ -1083,14 +1083,32 @@ ${furnitureText}
             lineCopyField.value = generateLineCopyText();
         }
 
+        // 收集所有 form fields 走 Cloudflare Worker proxy
         const form = document.getElementById('ragicForm');
-        form.submit();
+        const fields = {};
+        for (const inp of form.querySelectorAll('[name]')) {
+            fields[inp.name] = inp.value;
+        }
 
-        setTimeout(() => {
+        fetch(WORKER_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields })
+        })
+        .then(async (resp) => {
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data.ok) {
+                throw new Error(data.error || data.msg || ('HTTP ' + resp.status));
+            }
             document.getElementById('loadingOverlay').style.display = 'none';
-            currentStep = totalSteps; 
+            currentStep = totalSteps;
             updateUI();
-        }, 1500);
+        })
+        .catch(err => {
+            console.error(err);
+            document.getElementById('loadingOverlay').style.display = 'none';
+            alert("送出失敗：" + (err.message || "請稍後再試") + "\n請聯絡業務人員協助。");
+        });
     }
 
     initAgentInfo(); 
