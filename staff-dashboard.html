@@ -61,17 +61,6 @@
     </p>
   </header>
 
-  <!-- 人員篩選器 -->
-  <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 mb-6">
-    <div class="flex items-center gap-3">
-      <span class="text-sm font-medium text-slate-500">👤 檢視對象</span>
-      <select id="staffSelector" class="border border-slate-200 rounded-lg px-4 py-2 text-sm font-medium bg-white min-w-[160px]">
-        <option value="">All</option>
-      </select>
-      <span id="staffLabel" class="text-sm text-slate-400"></span>
-    </div>
-  </section>
-
   <!-- Tabs -->
   <div class="flex gap-6 border-b border-slate-200 overflow-x-auto scrollbar-thin">
     <div class="tab active pb-3 text-lg px-1" data-tab="month">📦 進案量 &amp; 業績</div>
@@ -167,13 +156,44 @@
   <!-- ── 年度總覽 ── -->
   <!-- ── 業務分析 ── -->
   <div class="tab-panel" id="panel-analysis">
-    <div id="anaEmpty" class="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center hidden">
+
+    <!-- 人員篩選器（僅在業務分析 tab 顯示） -->
+    <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 mb-6">
+      <div class="flex items-center gap-3">
+        <span class="text-sm font-medium text-slate-500">👤 檢視對象</span>
+        <select id="staffSelector" class="border border-slate-200 rounded-lg px-4 py-2 text-sm font-medium bg-white min-w-[160px]">
+          <option value="">請選擇業務…</option>
+        </select>
+        <span id="staffLabel" class="text-sm text-slate-400"></span>
+      </div>
+    </section>
+
+    <div id="anaEmpty" class="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">
       <div class="text-4xl mb-3">👆</div>
-      <p class="text-amber-900 font-semibold text-lg">請在頂部選擇一位業務</p>
+      <p class="text-amber-900 font-semibold text-lg">請選擇一位業務</p>
       <p class="text-amber-700 text-sm mt-1">業務分析頁必須選定特定人員才能計算個人戰力側寫</p>
     </div>
 
     <div id="anaContent" class="hidden">
+
+      <!-- Tier 0 個人簡介卡 -->
+      <section id="anaBioCard" class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+        <div class="grid grid-cols-3 gap-6">
+          <div class="text-center">
+            <div class="text-slate-400 text-xs mb-1">到職日</div>
+            <div id="anaBioOnboard" class="text-xl font-black text-slate-800">—</div>
+          </div>
+          <div class="text-center">
+            <div class="text-slate-400 text-xs mb-1">在職年資</div>
+            <div id="anaBioTenure" class="text-xl font-black text-blue-700">—</div>
+          </div>
+          <div class="text-center">
+            <div class="text-slate-400 text-xs mb-1">累積總業績（含三類，自入職）</div>
+            <div id="anaBioTotal" class="text-xl font-black text-emerald-700">—</div>
+          </div>
+        </div>
+      </section>
+
       <!-- 時間範圍：起始 / 結束 雙滑軌 -->
       <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
         <div class="flex items-center gap-4 mb-4">
@@ -204,8 +224,8 @@
         </div>
       </section>
 
-      <!-- Tier 1 北極星 -->
-      <section class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+      <!-- Tier 1 北極星（6 卡） -->
+      <section class="grid grid-cols-2 md:grid-cols-3 gap-5 mb-6">
         <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
           <div class="text-slate-500 text-sm mb-1">📦 進案件數</div>
           <div class="flex items-baseline gap-2">
@@ -215,12 +235,36 @@
           <div id="anaKpiIntakeAvg" class="text-xs text-slate-400 mt-1">月均 — 件</div>
         </div>
         <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-          <div class="text-slate-500 text-sm mb-1">💰 業績金額</div>
+          <div class="text-slate-500 text-sm mb-1">💰 新開發業績</div>
           <div class="flex items-baseline gap-2">
-            <div id="anaKpiPerf" class="text-4xl font-black text-emerald-600">0</div>
+            <div id="anaKpiPerf" class="text-4xl font-black text-blue-600">0</div>
             <div class="text-slate-400">元</div>
           </div>
           <div id="anaKpiPerfAvg" class="text-xs text-slate-400 mt-1">月均 — 元</div>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="text-slate-500 text-sm mb-1">🔄 續約業績</div>
+          <div class="flex items-baseline gap-2">
+            <div id="anaKpiRenewal" class="text-4xl font-black text-emerald-600">0</div>
+            <div class="text-slate-400">元</div>
+          </div>
+          <div id="anaKpiRenewalAvg" class="text-xs text-slate-400 mt-1">月均 — 元</div>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="text-slate-500 text-sm mb-1">🏠 代管業績</div>
+          <div class="flex items-baseline gap-2">
+            <div id="anaKpiMgmt" class="text-4xl font-black text-violet-600">0</div>
+            <div class="text-slate-400">元</div>
+          </div>
+          <div id="anaKpiMgmtAvg" class="text-xs text-slate-400 mt-1">月均 — 元</div>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="text-slate-500 text-sm mb-1">💎 業績總和</div>
+          <div class="flex items-baseline gap-2">
+            <div id="anaKpiTotal" class="text-4xl font-black text-amber-600">0</div>
+            <div class="text-slate-400">元</div>
+          </div>
+          <div id="anaKpiTotalAvg" class="text-xs text-slate-400 mt-1">月均 — 元</div>
         </div>
         <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
           <div class="text-slate-500 text-sm mb-1">⚡ 最近進案距今</div>
@@ -236,10 +280,10 @@
       <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
         <div class="flex items-center justify-between mb-4">
           <div>
-            <h2 class="text-xl font-bold text-slate-900">📈 月度雙軸趨勢</h2>
+            <h2 class="text-xl font-bold text-slate-900">📈 月度業績結構 × 進案趨勢</h2>
             <p id="anaOnboardNote" class="text-xs text-slate-500 mt-1"></p>
           </div>
-          <p class="text-xs text-slate-400">長條=進案件數　折線=業績金額</p>
+          <p class="text-xs text-slate-400">堆疊長條=業績（新開發/續約/代管）　折線=進案件數</p>
         </div>
         <div class="relative" style="height:320px"><canvas id="anaTrendChart"></canvas></div>
       </section>
@@ -1101,6 +1145,7 @@ async function fetchAllData() {
 
   // FIX-2026-04-28-loading: 移除孤立 } (原 if perfSnapshots block 殘骸)
   PERF_GSHEET_AVAILABLE = true;
+  window._rawHr = rawHr;  // 供 renderAnalysis Tier 0 讀精確到職日
 
   // Build active staff set：只接受 HR 在職員工本名 + 白名單合併名
   // 避免下拉選單出現「吳惠慈、關宗宇」「張忠豪、蕭眞儀、詹張傳」這種混合字串
@@ -2049,10 +2094,6 @@ function renderAnalysis(){
   const myIntake = allMyIntake.filter(r => inRange(r.date.slice(0,7)));
   const myPerf = allMyPerf.filter(r => inRange(r.ym));
 
-  // 範圍統計註記
-  document.getElementById('anaRangeStat').textContent =
-    `範圍內 ${myIntake.length} 件進案 · ${fmtMoney(myPerf.reduce((a,r)=>a+r.perf,0))} 元業績`;
-
   // 顯示起始/結束月份 label
   document.getElementById('anaStartLabel').textContent = bounds.start || '—';
   document.getElementById('anaEndLabel').textContent = bounds.end || '—';
@@ -2060,6 +2101,44 @@ function renderAnalysis(){
   // Month chips 的 active 狀態（單月選中時）
   document.querySelectorAll('[data-ana-month]').forEach(c =>
     c.classList.toggle('active', bounds.start === bounds.end && c.dataset.anaMonth === bounds.start));
+
+  // ── Tier 0 個人簡介卡 ──
+  const onboardMonthForBio = STAFF_ONBOARD_MONTH[curStaff] || '';
+  // 到職日：從 rawHr 找精確到日的欄位，fallback 到 YYYY-MM
+  let onboardDateStr = '—';
+  if (onboardMonthForBio) {
+    // 嘗試找精確日期（rawHr 可能有含完整 YYYY/MM/DD 或 YYYY-MM-DD）
+    const hrRecFull = Object.values(window._rawHr || {}).find(r => {
+      const nm = (r['姓名'] || '').trim();
+      return nm === curStaff || nm === curStaff.replace('&','&');
+    });
+    if (hrRecFull) {
+      const raw = (hrRecFull['到職日期'] || hrRecFull['到職日'] || hrRecFull['入職日'] || '').trim();
+      if (raw) onboardDateStr = raw.replaceAll('/', '-');
+    } else {
+      onboardDateStr = onboardMonthForBio;
+    }
+  }
+  const tenureInfo = calcTenure(onboardMonthForBio);
+  document.getElementById('anaBioOnboard').textContent = onboardDateStr;
+  document.getElementById('anaBioTenure').textContent = onboardMonthForBio ? tenureInfo.label : '—';
+
+  // 累積總業績（自入職至今，新開發 + 續約 + 代管，不受範圍影響）
+  const allExtras = window.PERF_EXTRAS || {};
+  const allMyPerfFull = PERF.filter(r => r.name === curStaff);
+  let bioTotalDev = allMyPerfFull.reduce((a, r) => {
+    if (!onboardMonthForBio || r.ym >= onboardMonthForBio) return a + r.perf;
+    return a;
+  }, 0);
+  let bioTotalRenewal = 0, bioTotalMgmt = 0;
+  Object.entries(allExtras).forEach(([mon, staffMap]) => {
+    if (!onboardMonthForBio || mon >= onboardMonthForBio) {
+      const d = staffMap[curStaff];
+      if (d) { bioTotalRenewal += d.renewal || 0; bioTotalMgmt += d.mgmt || 0; }
+    }
+  });
+  const bioGrandTotal = bioTotalDev + bioTotalRenewal + bioTotalMgmt;
+  document.getElementById('anaBioTotal').textContent = `${fmtMoney(bioGrandTotal)} 元`;
 
   // ── Tier 1 北極星 ──
   const intakeCount = myIntake.length;
@@ -2069,6 +2148,33 @@ function renderAnalysis(){
   const intakeMoAvg = intakeMonths.size ? (intakeCount/intakeMonths.size).toFixed(1) : '—';
   const perfMoAvg = perfMonthsSet.size ? Math.round(perfTotal/perfMonthsSet.size) : 0;
 
+  // 續約 + 代管業績（範圍篩選）
+  const extrasRange = window.PERF_EXTRAS || {};
+  let renewalTotal = 0, mgmtTotal = 0;
+  const renewalMonthsSet = new Set(), mgmtMonthsSet = new Set();
+  Object.entries(extrasRange).forEach(([mon, staffMap]) => {
+    if (mon >= bounds.start && mon <= bounds.end) {
+      const d = staffMap[curStaff];
+      if (d) {
+        if (d.renewal > 0) { renewalTotal += d.renewal; renewalMonthsSet.add(mon); }
+        if (d.mgmt > 0)    { mgmtTotal += d.mgmt;    mgmtMonthsSet.add(mon); }
+      }
+    }
+  });
+  const grandTotal = perfTotal + renewalTotal + mgmtTotal;
+  // 月均計算：以實際有資料的月數為分母
+  const renewalMoAvg = renewalMonthsSet.size ? Math.round(renewalTotal / renewalMonthsSet.size) : 0;
+  const mgmtMoAvg = mgmtMonthsSet.size ? Math.round(mgmtTotal / mgmtMonthsSet.size) : 0;
+  // 總和月均：取範圍月份數（含三類任一有資料的月）
+  const rangeMonthKeys = [];
+  { let rm = bounds.start; while (rm && rm <= bounds.end) { rangeMonthKeys.push(rm); const [ry,rmm]=rm.split('-').map(Number); rm=ym(new Date(ry,rmm,1)); if(rangeMonthKeys.length>120)break; } }
+  const activeTotalMonths = rangeMonthKeys.filter(m => {
+    const hasDev = allMyPerfFull.some(r => r.ym === m);
+    const extras = (window.PERF_EXTRAS||{})[m]?.[curStaff];
+    return hasDev || (extras && (extras.renewal>0 || extras.mgmt>0));
+  });
+  const totalMoAvg = activeTotalMonths.length ? Math.round(grandTotal / activeTotalMonths.length) : 0;
+
   document.getElementById('anaKpiIntake').textContent = intakeCount;
   document.getElementById('anaKpiIntakeAvg').textContent = intakeMonths.size
     ? `月均 ${intakeMoAvg} 件 · 範圍內 ${intakeMonths.size} 個月有進案`
@@ -2077,6 +2183,22 @@ function renderAnalysis(){
   document.getElementById('anaKpiPerfAvg').textContent = perfMonthsSet.size
     ? `月均 ${fmtMoney(perfMoAvg)} 元 · 範圍內 ${perfMonthsSet.size} 個月有業績`
     : '範圍內無業績';
+  document.getElementById('anaKpiRenewal').textContent = fmtMoney(renewalTotal);
+  document.getElementById('anaKpiRenewalAvg').textContent = renewalMonthsSet.size
+    ? `月均 ${fmtMoney(renewalMoAvg)} 元 · 範圍內 ${renewalMonthsSet.size} 個月有續約`
+    : '範圍內無續約紀錄';
+  document.getElementById('anaKpiMgmt').textContent = fmtMoney(mgmtTotal);
+  document.getElementById('anaKpiMgmtAvg').textContent = mgmtMonthsSet.size
+    ? `月均 ${fmtMoney(mgmtMoAvg)} 元 · 範圍內 ${mgmtMonthsSet.size} 個月有代管`
+    : '範圍內無代管紀錄';
+  document.getElementById('anaKpiTotal').textContent = fmtMoney(grandTotal);
+  document.getElementById('anaKpiTotalAvg').textContent = activeTotalMonths.length
+    ? `月均 ${fmtMoney(totalMoAvg)} 元（含三類）`
+    : '範圍內無業績';
+
+  // 範圍統計註記（更新加總）
+  document.getElementById('anaRangeStat').textContent =
+    `範圍內 ${myIntake.length} 件進案 · 三類業績合計 ${fmtMoney(grandTotal)} 元`;
 
   // ── 最近進案距今 + 最長空窗（永遠用全歷史，不受範圍影響）──
   const sortedDates = allMyIntake.map(r => r.date).sort();
@@ -2144,22 +2266,30 @@ function renderAnalysis(){
 
   const intakeSeries = months.map(m => intakeByMonth[m]||0);
   const perfSeries = months.map(m => perfByMonth[m]||0);
+  // 續約 / 代管 月度系列（圖表用全歷史範圍）
+  const trendExtras = window.PERF_EXTRAS || {};
+  const renewalSeries = months.map(m => (trendExtras[m]?.[curStaff]?.renewal) || 0);
+  const mgmtSeries    = months.map(m => (trendExtras[m]?.[curStaff]?.mgmt)    || 0);
 
   if (window._anaTrendChart) window._anaTrendChart.destroy();
   window._anaTrendChart = new Chart(document.getElementById('anaTrendChart'), {
     data: {
       labels: months,
       datasets: [
-        { type:'bar', label:'進案件數', data:intakeSeries, yAxisID:'y1', backgroundColor:'rgba(59,130,246,0.4)', borderColor:'#3b82f6', borderWidth:1, borderRadius:4 },
-        { type:'line', label:'業績金額', data:perfSeries, yAxisID:'y2', borderColor:'#10b981', backgroundColor:'rgba(16,185,129,0.1)', borderWidth:2.5, tension:0.3, fill:false, pointRadius:3 },
+        // 堆疊業績長條（左 y 軸）
+        { type:'bar', label:'新開發業績', data:perfSeries,    yAxisID:'y1', backgroundColor:'rgba(59,130,246,0.65)',  borderColor:'#3b82f6', borderWidth:1, borderRadius:2, stack:'perf' },
+        { type:'bar', label:'續約業績',   data:renewalSeries, yAxisID:'y1', backgroundColor:'rgba(16,185,129,0.65)', borderColor:'#10b981', borderWidth:1, borderRadius:2, stack:'perf' },
+        { type:'bar', label:'代管業績',   data:mgmtSeries,    yAxisID:'y1', backgroundColor:'rgba(139,92,246,0.65)', borderColor:'#8b5cf6', borderWidth:1, borderRadius:2, stack:'perf' },
+        // 進案折線（右 y 軸）
+        { type:'line', label:'進案件數', data:intakeSeries, yAxisID:'y2', borderColor:'#f97316', backgroundColor:'rgba(249,115,22,0.12)', borderWidth:2.5, tension:0.3, fill:false, pointRadius:3, pointBackgroundColor:'#f97316' },
       ]
     },
     options: {
       responsive:true, maintainAspectRatio:false,
       interaction:{mode:'index', intersect:false},
       scales:{
-        y1:{position:'left', beginAtZero:true, title:{display:true,text:'件數'}},
-        y2:{position:'right', beginAtZero:true, title:{display:true,text:'業績 (元)'}, grid:{drawOnChartArea:false}, ticks:{callback:v=>fmtMoney(v)}},
+        y1:{position:'left',  beginAtZero:true, stacked:true, title:{display:true,text:'業績 (元)'}, ticks:{callback:v=>fmtMoney(v)}},
+        y2:{position:'right', beginAtZero:true, title:{display:true,text:'件數'}, grid:{drawOnChartArea:false}},
       },
       plugins:{legend:{position:'top'}}
     }
