@@ -326,7 +326,7 @@
 
     <!-- 說明卡 -->
     <div class="bg-blue-50 border border-blue-100 rounded-2xl p-5 mb-6 text-sm text-slate-600 leading-relaxed">
-      業績排行榜只算新開發業績。窩的家還有續約（維護舊客）＋ 代管（包租代管）2 條業務線，年資越久累積越多，這頁讓你看見時間自然形成的全貌。
+      業績排行榜只算新開發業績。窩的家還有續約（維護舊客）＋ 代管（包租代管）2 條業務線。上方 chips 切換「看哪個月」的單月排行；最底部固定顯示全年度累積排行。
     </div>
 
     <!-- 時間範圍 chips -->
@@ -336,10 +336,7 @@
         <div id="recRangeLabel" class="text-lg font-bold text-slate-900">—</div>
         <div class="flex flex-wrap gap-2 ml-auto">
           <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-rec-preset="thisMonth">本月</span>
-          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-rec-preset="lastMonth">上月</span>
-          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-rec-preset="3M">近 3 個月</span>
-          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-rec-preset="6M">近 6 個月</span>
-          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium active" data-rec-preset="all">全部</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium active" data-rec-preset="lastMonth">上月</span>
           <span id="recMonthChips" class="contents"></span>
         </div>
       </div>
@@ -348,7 +345,7 @@
 
     <!-- 個人續約業績表 -->
     <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
-      <h2 class="text-xl font-bold text-slate-900 mb-4">個人累計續約業績</h2>
+      <h2 class="text-xl font-bold text-slate-900 mb-4">個人該月續約業績</h2>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
@@ -356,7 +353,7 @@
               <th class="pb-2 w-10">排名</th>
               <th class="pb-2">姓名</th>
               <th class="pb-2">年資</th>
-              <th class="pb-2 text-right">累計續約業績</th>
+              <th class="pb-2 text-right">該月續約業績</th>
             </tr>
           </thead>
           <tbody id="recurringRenewalBody" class="divide-y divide-slate-50"></tbody>
@@ -366,7 +363,7 @@
 
     <!-- 個人代管業績表 -->
     <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
-      <h2 class="text-xl font-bold text-slate-900 mb-4">個人累計代管業績</h2>
+      <h2 class="text-xl font-bold text-slate-900 mb-4">個人該月代管業績</h2>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
@@ -374,7 +371,7 @@
               <th class="pb-2 w-10">排名</th>
               <th class="pb-2">姓名</th>
               <th class="pb-2">年資</th>
-              <th class="pb-2 text-right">累計代管業績</th>
+              <th class="pb-2 text-right">該月代管業績</th>
             </tr>
           </thead>
           <tbody id="recurringMgmtBody" class="divide-y divide-slate-50"></tbody>
@@ -385,8 +382,47 @@
     <!-- 年資 × 業績散點圖 -->
     <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
       <h2 class="text-xl font-bold text-slate-900 mb-2">年資 × 續約＋代管業績合計</h2>
-      <p class="text-sm text-slate-400 mb-4">x 軸 = 年資（月數），y 軸 = 續約 ＋ 代管業績合計；hover 看姓名</p>
+      <p class="text-sm text-slate-400 mb-4">x 軸 = 年資（月數），y 軸 = 該月續約 ＋ 代管業績合計；hover 看姓名</p>
       <div class="relative" style="height:340px"><canvas id="recurringScatterChart"></canvas></div>
+    </section>
+
+    <!-- 年度業績累積（固定，不受 chips 影響） -->
+    <section class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-8 shadow-sm border border-amber-200 mt-8 mb-6">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="text-2xl">🏆</span>
+        <h2 class="text-xl font-bold text-slate-900">年度業績累積</h2>
+      </div>
+      <p class="text-sm text-slate-600 mb-6">本頁所有月份加總（不受上方時間範圍影響），呈現年資累積效果</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <h3 class="text-base font-semibold text-slate-800 mb-3">累積續約業績</h3>
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-amber-200 text-slate-500 text-left">
+                <th class="pb-2 w-10">排名</th>
+                <th class="pb-2">姓名</th>
+                <th class="pb-2">年資</th>
+                <th class="pb-2 text-right">累積續約業績</th>
+              </tr>
+            </thead>
+            <tbody id="yearlyRenewalBody" class="divide-y divide-amber-100"></tbody>
+          </table>
+        </div>
+        <div>
+          <h3 class="text-base font-semibold text-slate-800 mb-3">累積代管業績</h3>
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-amber-200 text-slate-500 text-left">
+                <th class="pb-2 w-10">排名</th>
+                <th class="pb-2">姓名</th>
+                <th class="pb-2">年資</th>
+                <th class="pb-2 text-right">累積代管業績</th>
+              </tr>
+            </thead>
+            <tbody id="yearlyMgmtBody" class="divide-y divide-amber-100"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
   </div>
@@ -1385,7 +1421,7 @@ function ad591TopOwners(items,emptyText){
 // ── Tab ──
 const TAB_DESC = {
   month:'當月進案件數與業績金額對照，當月業績即時來自珊珊 GSheet、歷史來自 OB 業績表',
-  recurring:'業績排行榜只算新開發業績。續約與代管是另外兩條業務線，年資越久累積越多。',
+  recurring:'上方 chips 切換單月視角；頁面最底部固定顯示全年度累積排行。',
   analysis:'單一業務戰力側寫：北極星 KPI、時序趨勢、接案偏好、協作動態',
   compare:'Ragic 資料與 OB 業績表的交叉比對，找出差異',
   inventory:'目前所有在架物件的庫存狀態，庫存越多代表待消化越多',
@@ -1465,14 +1501,14 @@ function last12Months() {
 
 let recurringScatterRef = null;
 let recAllMonths = []; // ISO yyyy-mm list, sorted asc
-let recActivePreset = 'all'; // current chip state
+let recActivePreset = 'lastMonth'; // default: 上月（最近完整月結）
 
 // Build the rec range chips and inject dynamic month chips
 function buildRecChips() {
   const extras = window.PERF_EXTRAS || {};
   recAllMonths = Object.keys(extras).filter(Boolean).sort();
 
-  // Inject per-month chips into #recMonthChips
+  // Inject per-month chips into #recMonthChips (skip thisMonth/lastMonth which are static)
   const container = document.getElementById('recMonthChips');
   if (container) {
     container.innerHTML = '';
@@ -1491,12 +1527,18 @@ function buildRecChips() {
       recActivePreset = c.dataset.recPreset;
       document.querySelectorAll('[data-rec-preset]').forEach(x => x.classList.remove('active'));
       c.classList.add('active');
-      renderRecurring();
+      renderMonthly(recActivePreset);
     });
   });
 
-  // Trigger initial render with 'all' preset active
-  renderRecurring();
+  // Set initial active chip to lastMonth
+  document.querySelectorAll('[data-rec-preset]').forEach(x => x.classList.remove('active'));
+  const lastMonthChip = document.querySelector('[data-rec-preset="lastMonth"]');
+  if (lastMonthChip) lastMonthChip.classList.add('active');
+
+  // Trigger initial renders
+  renderMonthly(recActivePreset);
+  renderYearly();
 }
 
 // Convert ISO yyyy-mm to ROC display string
@@ -1507,70 +1549,56 @@ function isoToRoc(isoYm) {
   return `${roc}/${String(m).padStart(2,'0')}`;
 }
 
-// Get start/end ISO month range based on current recActivePreset
-function getRecBounds() {
+// Resolve a preset key (thisMonth / lastMonth / ISO yyyy-mm) to a single ISO month string
+function resolveMonthPreset(preset) {
   const today = new Date();
   const thisYm = ym(today);
   const lastMonthYm = ym(new Date(today.getFullYear(), today.getMonth() - 1, 1));
-  const preset = recActivePreset;
 
-  if (!recAllMonths.length) return { months: [], label: '—' };
+  if (!recAllMonths.length) return null;
 
-  let startYm, endYm;
-
-  if (preset === 'all') {
-    startYm = recAllMonths[0];
-    endYm = recAllMonths[recAllMonths.length - 1];
-  } else if (preset === 'thisMonth') {
-    const m = recAllMonths.includes(thisYm) ? thisYm : recAllMonths[recAllMonths.length - 1];
-    startYm = m; endYm = m;
+  if (preset === 'thisMonth') {
+    return recAllMonths.includes(thisYm) ? thisYm : recAllMonths[recAllMonths.length - 1];
   } else if (preset === 'lastMonth') {
-    const m = recAllMonths.includes(lastMonthYm) ? lastMonthYm
+    return recAllMonths.includes(lastMonthYm) ? lastMonthYm
       : recAllMonths[Math.max(0, recAllMonths.length - 2)];
-    startYm = m; endYm = m;
-  } else if (preset === '3M' || preset === '6M') {
-    const n = preset === '3M' ? 3 : 6;
-    const cutoff = ym(new Date(today.getFullYear(), today.getMonth() - n + 1, 1));
-    const filtered = recAllMonths.filter(m => m >= cutoff);
-    startYm = filtered[0] || recAllMonths[0];
-    endYm = recAllMonths[recAllMonths.length - 1];
-  } else {
-    // Single month ISO key (dynamic chip)
-    if (recAllMonths.includes(preset)) { startYm = preset; endYm = preset; }
-    else { startYm = recAllMonths[0]; endYm = recAllMonths[recAllMonths.length - 1]; }
+  } else if (recAllMonths.includes(preset)) {
+    return preset;
   }
-
-  const months = recAllMonths.filter(m => m >= startYm && m <= endYm);
-  let label;
-  if (startYm === endYm) {
-    label = `${isoToRoc(startYm)}`;
-  } else {
-    label = `${isoToRoc(startYm)} ~ ${isoToRoc(endYm)}（${months.length} 個月）`;
-  }
-  return { months, label, startYm, endYm };
+  return recAllMonths[recAllMonths.length - 1]; // fallback
 }
 
-function renderRecurring() {
+// renderMonthly — 渲染單月主表（主表 + 散點圖），被 chip click 觸發
+function renderMonthly(preset) {
   const extras = window.PERF_EXTRAS || {};
-  const bounds = getRecBounds();
-  const rangeMonths = bounds.months.length ? bounds.months : Object.keys(extras).filter(Boolean).sort();
+  const resolvedYm = resolveMonthPreset(preset);
 
   // Update range label
   const labelEl = document.getElementById('recRangeLabel');
-  if (labelEl) labelEl.textContent = bounds.label || '—';
+  if (labelEl) {
+    if (resolvedYm) {
+      const today = new Date();
+      const thisYm = ym(today);
+      labelEl.textContent = resolvedYm === thisYm
+        ? `${isoToRoc(resolvedYm)}（本月）`
+        : isoToRoc(resolvedYm);
+    } else {
+      labelEl.textContent = '—';
+    }
+  }
 
   // Update source note
   const noteEl = document.getElementById('recSourceNote');
   if (noteEl) {
-    noteEl.textContent = rangeMonths.length
-      ? `資料來源：perf.md 個人續約／代管業績小表（${rangeMonths.map(isoToRoc).join('、')}）`
+    noteEl.textContent = resolvedYm
+      ? `資料來源：perf.md 個人續約／代管業績小表（${isoToRoc(resolvedYm)}）`
       : '尚無資料';
   }
 
-  // 彙整每人選定範圍合計
+  // 彙整單月資料
   const perPerson = {}; // name -> { renewal, mgmt }
-  for (const ym_iso of rangeMonths) {
-    const monthData = extras[ym_iso] || {};
+  if (resolvedYm) {
+    const monthData = extras[resolvedYm] || {};
     for (const [name, v] of Object.entries(monthData)) {
       if (!perPerson[name]) perPerson[name] = { renewal: 0, mgmt: 0 };
       perPerson[name].renewal += v.renewal;
@@ -1584,7 +1612,7 @@ function renderRecurring() {
     tenureMap[name] = calcTenure(ob);
   }
 
-  // ── 續約業績表 ──
+  // ── 該月續約業績表 ──
   const renewalList = Object.entries(perPerson)
     .map(([name, v]) => ({ name, perf: v.renewal }))
     .filter(x => x.perf > 0)
@@ -1593,7 +1621,7 @@ function renderRecurring() {
   const renewalBody = document.getElementById('recurringRenewalBody');
   if (renewalBody) {
     renewalBody.innerHTML = renewalList.length === 0
-      ? '<tr><td colspan="4" class="text-center text-slate-400 py-6">選定範圍無續約業績資料</td></tr>'
+      ? '<tr><td colspan="4" class="text-center text-slate-400 py-6">該月無續約業績資料</td></tr>'
       : renewalList.map((x, i) => {
           const t = tenureMap[x.name] || { label: '—' };
           return `<tr class="hover:bg-slate-50">
@@ -1605,7 +1633,7 @@ function renderRecurring() {
         }).join('');
   }
 
-  // ── 代管業績表 ──
+  // ── 該月代管業績表 ──
   const mgmtList = Object.entries(perPerson)
     .map(([name, v]) => ({ name, perf: v.mgmt }))
     .filter(x => x.perf > 0)
@@ -1614,7 +1642,7 @@ function renderRecurring() {
   const mgmtBody = document.getElementById('recurringMgmtBody');
   if (mgmtBody) {
     mgmtBody.innerHTML = mgmtList.length === 0
-      ? '<tr><td colspan="4" class="text-center text-slate-400 py-6">選定範圍無代管業績資料</td></tr>'
+      ? '<tr><td colspan="4" class="text-center text-slate-400 py-6">該月無代管業績資料</td></tr>'
       : mgmtList.map((x, i) => {
           const t = tenureMap[x.name] || { label: '—' };
           return `<tr class="hover:bg-slate-50">
@@ -1626,7 +1654,7 @@ function renderRecurring() {
         }).join('');
   }
 
-  // ── 散點圖 ──
+  // ── 散點圖（該月業績）──
   const scatterData = [];
   for (const [name, v] of Object.entries(perPerson)) {
     const t = tenureMap[name];
@@ -1663,8 +1691,8 @@ function renderRecurring() {
               return [
                 `${d.name}`,
                 `年資：${d.tenure}（${d.x} 月）`,
-                `續約業績：${d.renewal.toLocaleString()}`,
-                `代管業績：${d.mgmt.toLocaleString()}`,
+                `該月續約業績：${d.renewal.toLocaleString()}`,
+                `該月代管業績：${d.mgmt.toLocaleString()}`,
                 `合計：${d.y.toLocaleString()}`,
               ];
             }
@@ -1678,13 +1706,83 @@ function renderRecurring() {
           grid: { color: '#f1f5f9' },
         },
         y: {
-          title: { display: true, text: '續約 ＋ 代管業績合計', color: '#94a3b8' },
+          title: { display: true, text: '該月續約 ＋ 代管業績合計', color: '#94a3b8' },
           ticks: { color: '#94a3b8', callback: v => v.toLocaleString() },
           grid: { color: '#f1f5f9' },
         }
       }
     }
   });
+}
+
+// renderYearly — 渲染底部年度累積區塊，page load 跑一次，chip 切換不重跑
+function renderYearly() {
+  const extras = window.PERF_EXTRAS || {};
+  const allMonths = Object.keys(extras).filter(Boolean).sort();
+
+  // 彙整全部月份每人累積
+  const perPerson = {}; // name -> { renewal, mgmt }
+  for (const ym_iso of allMonths) {
+    const monthData = extras[ym_iso] || {};
+    for (const [name, v] of Object.entries(monthData)) {
+      if (!perPerson[name]) perPerson[name] = { renewal: 0, mgmt: 0 };
+      perPerson[name].renewal += v.renewal;
+      perPerson[name].mgmt    += v.mgmt;
+    }
+  }
+
+  // 年資資料
+  const tenureMap = {};
+  for (const [name, ob] of Object.entries(STAFF_ONBOARD_MONTH)) {
+    tenureMap[name] = calcTenure(ob);
+  }
+
+  // ── 年度累積續約業績表 ──
+  const renewalList = Object.entries(perPerson)
+    .map(([name, v]) => ({ name, perf: v.renewal }))
+    .filter(x => x.perf > 0)
+    .sort((a, b) => b.perf - a.perf);
+
+  const yearlyRenewalBody = document.getElementById('yearlyRenewalBody');
+  if (yearlyRenewalBody) {
+    yearlyRenewalBody.innerHTML = renewalList.length === 0
+      ? '<tr><td colspan="4" class="text-center text-slate-400 py-6">尚無續約業績資料</td></tr>'
+      : renewalList.map((x, i) => {
+          const t = tenureMap[x.name] || { label: '—' };
+          return `<tr class="hover:bg-amber-50">
+            <td class="py-2 pr-3 text-slate-400 font-mono">${i + 1}</td>
+            <td class="py-2 font-semibold text-slate-800">${esc(x.name)}</td>
+            <td class="py-2 text-slate-500 text-xs">${esc(t.label)}</td>
+            <td class="py-2 text-right font-bold text-amber-700">${fmtMoney(x.perf)}</td>
+          </tr>`;
+        }).join('');
+  }
+
+  // ── 年度累積代管業績表 ──
+  const mgmtList = Object.entries(perPerson)
+    .map(([name, v]) => ({ name, perf: v.mgmt }))
+    .filter(x => x.perf > 0)
+    .sort((a, b) => b.perf - a.perf);
+
+  const yearlyMgmtBody = document.getElementById('yearlyMgmtBody');
+  if (yearlyMgmtBody) {
+    yearlyMgmtBody.innerHTML = mgmtList.length === 0
+      ? '<tr><td colspan="4" class="text-center text-slate-400 py-6">尚無代管業績資料</td></tr>'
+      : mgmtList.map((x, i) => {
+          const t = tenureMap[x.name] || { label: '—' };
+          return `<tr class="hover:bg-amber-50">
+            <td class="py-2 pr-3 text-slate-400 font-mono">${i + 1}</td>
+            <td class="py-2 font-semibold text-slate-800">${esc(x.name)}</td>
+            <td class="py-2 text-slate-500 text-xs">${esc(t.label)}</td>
+            <td class="py-2 text-right font-bold text-orange-600">${fmtMoney(x.perf)}</td>
+          </tr>`;
+        }).join('');
+  }
+}
+
+// renderRecurring — backward-compat shim (tab switch calls this)
+function renderRecurring() {
+  renderMonthly(recActivePreset);
 }
 
 // ════════════════════════════════════════
