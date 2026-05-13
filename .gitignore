@@ -9,3 +9,10 @@ reports/
 screenshot-tmp/
 *.png
 perf-sa-key.json
+
+# 🚨 P1 SECURITY: never commit Ragic admin key / backup html to public repo
+# Origin: 2026-05-13 audit — Mac side `js/ragic-key.js` untracked but unprotected,
+# 一次 `git add .` 就會洩 plaintext base64 admin key 上 github.com/wuohome/ragic
+js/ragic-key.js
+*.bak
+*.bak-*
