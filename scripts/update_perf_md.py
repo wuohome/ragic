@@ -27,7 +27,7 @@ from typing import Optional
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-SA_KEY = Path(r'C:\Users\Joan\.claude\scripts\perf-sa-key.json')
+SA_KEY = Path.home() / '.claude' / 'scripts' / 'perf-sa-key.json'
 MIRROR_FOLDER_ID = '1s_2wWYcRAiFV-nwIYA0-hHSKsL_DMqsw'
 SA_SCOPES = [
     'https://www.googleapis.com/auth/drive.readonly',
