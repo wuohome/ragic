@@ -290,8 +290,12 @@ def fetch_commission():
 
 def to_outreach_records(rows):
     """潛在屋主 → sheet 17（開發人員欄位在記錄級）"""
+    if isinstance(rows, dict) and rows.get("status") == "ERROR":
+        raise RuntimeError(f"Ragic outreach (sheet 17) API error: {rows}")
     out = []
     for key, c in rows.items():
+        if not isinstance(c, dict):
+            continue
         created = (c.get("建立日期", "") or "").strip()
         if not created:
             continue
@@ -325,8 +329,12 @@ def to_outreach_records(rows):
 
 def to_accepted_records(commission_rows):
     """已接委託 → sheet 25（開發人員在 _subtable_1000121 子表內）"""
+    if isinstance(commission_rows, dict) and commission_rows.get("status") == "ERROR":
+        raise RuntimeError(f"Ragic commission (sheet 25) API error: {commission_rows}")
     out = []
     for key, c in commission_rows.items():
+        if not isinstance(c, dict):
+            continue
         if (c.get("屋主狀態") or "").strip() != "已接委託":
             continue
         sub121 = c.get("_subtable_1000121") or {}
