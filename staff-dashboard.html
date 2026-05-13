@@ -75,6 +75,7 @@
   <!-- Tabs -->
   <div class="flex gap-6 border-b border-slate-200 overflow-x-auto scrollbar-thin">
     <div class="tab active pb-3 text-lg px-1" data-tab="month">📦 進案量 &amp; 業績</div>
+    <div class="tab pb-3 text-lg px-1" data-tab="recurring">續約業績&amp;代管</div>
     <div class="tab pb-3 text-lg px-1" data-tab="inventory">📦 庫存統計</div>
     <div class="tab pb-3 text-lg px-1" data-tab="ad591">📢 591 廣告</div>
     <div class="tab pb-3 text-lg px-1" data-tab="outreach">📞 開發追蹤</div>
@@ -318,6 +319,76 @@
       </div>
       <div id="cTable" class="overflow-x-auto"></div>
     </section>
+  </div>
+
+  <!-- ── 續約業績 & 代管 ── -->
+  <div class="tab-panel" id="panel-recurring">
+
+    <!-- 說明卡 -->
+    <div class="bg-blue-50 border border-blue-100 rounded-2xl p-5 mb-6 text-sm text-slate-600 leading-relaxed">
+      業績排行榜只算新開發業績。窩的家還有續約（維護舊客）＋ 代管（包租代管）2 條業務線，年資越久累積越多，這頁讓你看見時間自然形成的全貌。
+    </div>
+
+    <!-- 時間範圍 chips -->
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="text-slate-500 text-sm">📅 時間範圍</div>
+        <div id="recRangeLabel" class="text-lg font-bold text-slate-900">—</div>
+        <div class="flex flex-wrap gap-2 ml-auto">
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-rec-preset="thisMonth">本月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-rec-preset="lastMonth">上月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-rec-preset="3M">近 3 個月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-rec-preset="6M">近 6 個月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium active" data-rec-preset="all">全部</span>
+          <span id="recMonthChips" class="contents"></span>
+        </div>
+      </div>
+      <p id="recSourceNote" class="text-xs text-slate-400 mt-3"></p>
+    </section>
+
+    <!-- 個人續約業績表 -->
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">個人累計續約業績</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-100 text-slate-500 text-left">
+              <th class="pb-2 w-10">排名</th>
+              <th class="pb-2">姓名</th>
+              <th class="pb-2">年資</th>
+              <th class="pb-2 text-right">累計續約業績</th>
+            </tr>
+          </thead>
+          <tbody id="recurringRenewalBody" class="divide-y divide-slate-50"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 個人代管業績表 -->
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">個人累計代管業績</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-100 text-slate-500 text-left">
+              <th class="pb-2 w-10">排名</th>
+              <th class="pb-2">姓名</th>
+              <th class="pb-2">年資</th>
+              <th class="pb-2 text-right">累計代管業績</th>
+            </tr>
+          </thead>
+          <tbody id="recurringMgmtBody" class="divide-y divide-slate-50"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 年資 × 業績散點圖 -->
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-2">年資 × 續約＋代管業績合計</h2>
+      <p class="text-sm text-slate-400 mb-4">x 軸 = 年資（月數），y 軸 = 續約 ＋ 代管業績合計；hover 看姓名</p>
+      <div class="relative" style="height:340px"><canvas id="recurringScatterChart"></canvas></div>
+    </section>
+
   </div>
 
   <!-- ── 庫存統計 ── -->
@@ -1035,6 +1106,9 @@ async function fetchAllData() {
   if (a && b) STAFF_ONBOARD_MONTH['張忠豪&蕭眞儀'] = a <= b ? a : b;
   else if (a) STAFF_ONBOARD_MONTH['張忠豪&蕭眞儀'] = a;
   else if (b) STAFF_ONBOARD_MONTH['張忠豪&蕭眞儀'] = b;
+
+  // 解析 extras（續約/代管業績）並掛到 window 供 renderRecurring 使用
+  window.PERF_EXTRAS = parseExtrasFromPerfMd(perfMdText);
 }
 
 
@@ -1311,6 +1385,7 @@ function ad591TopOwners(items,emptyText){
 // ── Tab ──
 const TAB_DESC = {
   month:'當月進案件數與業績金額對照，當月業績即時來自珊珊 GSheet、歷史來自 OB 業績表',
+  recurring:'業績排行榜只算新開發業績。續約與代管是另外兩條業務線，年資越久累積越多。',
   analysis:'單一業務戰力側寫：北極星 KPI、時序趨勢、接案偏好、協作動態',
   compare:'Ragic 資料與 OB 業績表的交叉比對，找出差異',
   inventory:'目前所有在架物件的庫存狀態，庫存越多代表待消化越多',
@@ -1324,7 +1399,293 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   t.classList.add('active');
   document.getElementById('panel-'+t.dataset.tab).classList.add('active');
   document.getElementById('tabDesc').textContent = TAB_DESC[t.dataset.tab]||'';
+  if (t.dataset.tab === 'recurring') renderRecurring();
 }));
+
+// ════════════════════════════════════════
+// 續約業績 & 代管 Tab
+// ════════════════════════════════════════
+
+// 從 perf.md 解析「### 個人續約 / 代管業績（X/YY）」小表
+// 回傳 { ym_iso: { name: { renewal, mgmt } } }
+function parseExtrasFromPerfMd(text) {
+  const result = {};
+  let curYm = null;
+  let inExtrasTable = false;
+  for (const line of text.split('\n')) {
+    // 找 ## X/YY section
+    const secM = line.match(/^##\s+(\d{3}\/\d{2})\s*$/);
+    if (secM) { curYm = rocToIso(secM[1]); inExtrasTable = false; continue; }
+    if (!curYm) continue;
+    // 找「### 個人續約 / 代管業績（X/YY）」
+    const hdrM = line.match(/^###\s+個人續約 \/ 代管業績/);
+    if (hdrM) { inExtrasTable = true; continue; }
+    // 離開 extras table（遇到 ## 或 --- 或空的 ###）
+    if (inExtrasTable && (line.startsWith('##') || line.startsWith('---'))) {
+      inExtrasTable = false; continue;
+    }
+    if (!inExtrasTable) continue;
+    if (!line.startsWith('|')) continue;
+    const cols = line.split('|').map(c => c.trim());
+    if (cols.length < 4) continue;
+    const name = normalizeName(cols[1].replace(/\*/g, '').trim());
+    if (!name || name === '姓名' || /^-+$/.test(name)) continue;
+    const renewal = parseInt((cols[2] || '0').replace(/,/g, '')) || 0;
+    const mgmt    = parseInt((cols[3] || '0').replace(/,/g, '')) || 0;
+    if (!result[curYm]) result[curYm] = {};
+    if (!result[curYm][name]) result[curYm][name] = { renewal: 0, mgmt: 0 };
+    result[curYm][name].renewal += renewal;
+    result[curYm][name].mgmt    += mgmt;
+  }
+  return result;
+}
+
+// 計算年資（今天 - 到職日，以月為單位）→ { months, label }
+function calcTenure(onboardYm) {
+  if (!onboardYm) return { months: 0, label: '未知' };
+  const today = new Date();
+  const ob = new Date(onboardYm + '-01');
+  const months = (today.getFullYear() - ob.getFullYear()) * 12 + (today.getMonth() - ob.getMonth());
+  const years = Math.floor(months / 12);
+  const rem = months % 12;
+  const label = years > 0 ? `${years} 年 ${rem} 月` : `${rem} 月`;
+  return { months: Math.max(0, months), label };
+}
+
+// 取近 12 個月（ISO YYYY-MM list）
+function last12Months() {
+  const today = new Date();
+  const months = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    months.push(ym(d));
+  }
+  return months;
+}
+
+let recurringScatterRef = null;
+let recAllMonths = []; // ISO yyyy-mm list, sorted asc
+let recActivePreset = 'all'; // current chip state
+
+// Build the rec range chips and inject dynamic month chips
+function buildRecChips() {
+  const extras = window.PERF_EXTRAS || {};
+  recAllMonths = Object.keys(extras).filter(Boolean).sort();
+
+  // Inject per-month chips into #recMonthChips
+  const container = document.getElementById('recMonthChips');
+  if (container) {
+    container.innerHTML = '';
+    recAllMonths.slice().reverse().forEach(m => {
+      const el = document.createElement('span');
+      el.className = 'chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium';
+      el.dataset.recPreset = m; // ISO month as preset key
+      el.textContent = isoToRoc(m); // display as ROC format
+      container.appendChild(el);
+    });
+  }
+
+  // Wire all data-rec-preset chips (preset + dynamic month)
+  document.querySelectorAll('[data-rec-preset]').forEach(c => {
+    c.addEventListener('click', () => {
+      recActivePreset = c.dataset.recPreset;
+      document.querySelectorAll('[data-rec-preset]').forEach(x => x.classList.remove('active'));
+      c.classList.add('active');
+      renderRecurring();
+    });
+  });
+
+  // Trigger initial render with 'all' preset active
+  renderRecurring();
+}
+
+// Convert ISO yyyy-mm to ROC display string
+function isoToRoc(isoYm) {
+  if (!isoYm) return isoYm;
+  const [y, m] = isoYm.split('-').map(Number);
+  const roc = y - 1911;
+  return `${roc}/${String(m).padStart(2,'0')}`;
+}
+
+// Get start/end ISO month range based on current recActivePreset
+function getRecBounds() {
+  const today = new Date();
+  const thisYm = ym(today);
+  const lastMonthYm = ym(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+  const preset = recActivePreset;
+
+  if (!recAllMonths.length) return { months: [], label: '—' };
+
+  let startYm, endYm;
+
+  if (preset === 'all') {
+    startYm = recAllMonths[0];
+    endYm = recAllMonths[recAllMonths.length - 1];
+  } else if (preset === 'thisMonth') {
+    const m = recAllMonths.includes(thisYm) ? thisYm : recAllMonths[recAllMonths.length - 1];
+    startYm = m; endYm = m;
+  } else if (preset === 'lastMonth') {
+    const m = recAllMonths.includes(lastMonthYm) ? lastMonthYm
+      : recAllMonths[Math.max(0, recAllMonths.length - 2)];
+    startYm = m; endYm = m;
+  } else if (preset === '3M' || preset === '6M') {
+    const n = preset === '3M' ? 3 : 6;
+    const cutoff = ym(new Date(today.getFullYear(), today.getMonth() - n + 1, 1));
+    const filtered = recAllMonths.filter(m => m >= cutoff);
+    startYm = filtered[0] || recAllMonths[0];
+    endYm = recAllMonths[recAllMonths.length - 1];
+  } else {
+    // Single month ISO key (dynamic chip)
+    if (recAllMonths.includes(preset)) { startYm = preset; endYm = preset; }
+    else { startYm = recAllMonths[0]; endYm = recAllMonths[recAllMonths.length - 1]; }
+  }
+
+  const months = recAllMonths.filter(m => m >= startYm && m <= endYm);
+  let label;
+  if (startYm === endYm) {
+    label = `${isoToRoc(startYm)}`;
+  } else {
+    label = `${isoToRoc(startYm)} ~ ${isoToRoc(endYm)}（${months.length} 個月）`;
+  }
+  return { months, label, startYm, endYm };
+}
+
+function renderRecurring() {
+  const extras = window.PERF_EXTRAS || {};
+  const bounds = getRecBounds();
+  const rangeMonths = bounds.months.length ? bounds.months : Object.keys(extras).filter(Boolean).sort();
+
+  // Update range label
+  const labelEl = document.getElementById('recRangeLabel');
+  if (labelEl) labelEl.textContent = bounds.label || '—';
+
+  // Update source note
+  const noteEl = document.getElementById('recSourceNote');
+  if (noteEl) {
+    noteEl.textContent = rangeMonths.length
+      ? `資料來源：perf.md 個人續約／代管業績小表（${rangeMonths.map(isoToRoc).join('、')}）`
+      : '尚無資料';
+  }
+
+  // 彙整每人選定範圍合計
+  const perPerson = {}; // name -> { renewal, mgmt }
+  for (const ym_iso of rangeMonths) {
+    const monthData = extras[ym_iso] || {};
+    for (const [name, v] of Object.entries(monthData)) {
+      if (!perPerson[name]) perPerson[name] = { renewal: 0, mgmt: 0 };
+      perPerson[name].renewal += v.renewal;
+      perPerson[name].mgmt    += v.mgmt;
+    }
+  }
+
+  // 年資資料
+  const tenureMap = {};
+  for (const [name, ob] of Object.entries(STAFF_ONBOARD_MONTH)) {
+    tenureMap[name] = calcTenure(ob);
+  }
+
+  // ── 續約業績表 ──
+  const renewalList = Object.entries(perPerson)
+    .map(([name, v]) => ({ name, perf: v.renewal }))
+    .filter(x => x.perf > 0)
+    .sort((a, b) => b.perf - a.perf);
+
+  const renewalBody = document.getElementById('recurringRenewalBody');
+  if (renewalBody) {
+    renewalBody.innerHTML = renewalList.length === 0
+      ? '<tr><td colspan="4" class="text-center text-slate-400 py-6">選定範圍無續約業績資料</td></tr>'
+      : renewalList.map((x, i) => {
+          const t = tenureMap[x.name] || { label: '—' };
+          return `<tr class="hover:bg-slate-50">
+            <td class="py-2 pr-3 text-slate-400 font-mono">${i + 1}</td>
+            <td class="py-2 font-semibold text-slate-800">${esc(x.name)}</td>
+            <td class="py-2 text-slate-500 text-xs">${esc(t.label)}</td>
+            <td class="py-2 text-right font-bold text-blue-600">${fmtMoney(x.perf)}</td>
+          </tr>`;
+        }).join('');
+  }
+
+  // ── 代管業績表 ──
+  const mgmtList = Object.entries(perPerson)
+    .map(([name, v]) => ({ name, perf: v.mgmt }))
+    .filter(x => x.perf > 0)
+    .sort((a, b) => b.perf - a.perf);
+
+  const mgmtBody = document.getElementById('recurringMgmtBody');
+  if (mgmtBody) {
+    mgmtBody.innerHTML = mgmtList.length === 0
+      ? '<tr><td colspan="4" class="text-center text-slate-400 py-6">選定範圍無代管業績資料</td></tr>'
+      : mgmtList.map((x, i) => {
+          const t = tenureMap[x.name] || { label: '—' };
+          return `<tr class="hover:bg-slate-50">
+            <td class="py-2 pr-3 text-slate-400 font-mono">${i + 1}</td>
+            <td class="py-2 font-semibold text-slate-800">${esc(x.name)}</td>
+            <td class="py-2 text-slate-500 text-xs">${esc(t.label)}</td>
+            <td class="py-2 text-right font-bold text-emerald-600">${fmtMoney(x.perf)}</td>
+          </tr>`;
+        }).join('');
+  }
+
+  // ── 散點圖 ──
+  const scatterData = [];
+  for (const [name, v] of Object.entries(perPerson)) {
+    const t = tenureMap[name];
+    if (!t) continue;
+    const total = v.renewal + v.mgmt;
+    if (total <= 0) continue;
+    scatterData.push({ x: t.months, y: total, name, renewal: v.renewal, mgmt: v.mgmt, tenure: t.label });
+  }
+
+  const canvas = document.getElementById('recurringScatterChart');
+  if (!canvas) return;
+  if (recurringScatterRef) { recurringScatterRef.destroy(); recurringScatterRef = null; }
+
+  recurringScatterRef = new Chart(canvas, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: '年資 × 業績',
+        data: scatterData,
+        backgroundColor: 'rgba(59,130,246,0.7)',
+        pointRadius: 8,
+        pointHoverRadius: 11,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const d = ctx.raw;
+              return [
+                `${d.name}`,
+                `年資：${d.tenure}（${d.x} 月）`,
+                `續約業績：${d.renewal.toLocaleString()}`,
+                `代管業績：${d.mgmt.toLocaleString()}`,
+                `合計：${d.y.toLocaleString()}`,
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: '年資（月數）', color: '#94a3b8' },
+          ticks: { color: '#94a3b8' },
+          grid: { color: '#f1f5f9' },
+        },
+        y: {
+          title: { display: true, text: '續約 ＋ 代管業績合計', color: '#94a3b8' },
+          ticks: { color: '#94a3b8', callback: v => v.toLocaleString() },
+          grid: { color: '#f1f5f9' },
+        }
+      }
+    }
+  });
+}
 
 // ════════════════════════════════════════
 // 最後進案距今
@@ -2172,6 +2533,7 @@ document.getElementById('clEnd').addEventListener('change',()=>{document.querySe
     // Build UI
     buildStaffSelector();
     buildMonthChips();
+    buildRecChips();
     buildCompareChips();
     renderLastCase();
     applyMonthPreset('thisMonth');
@@ -2187,6 +2549,20 @@ document.getElementById('clEnd').addEventListener('change',()=>{document.querySe
     const overlay = document.getElementById('loadingOverlay');
     overlay.classList.add('fade-out');
     setTimeout(()=>overlay.remove(), 300);
+
+    // URL param: ?tab=recurring 自動切換 tab
+    const urlTab = new URLSearchParams(location.search).get('tab');
+    if (urlTab) {
+      const target = document.querySelector(`.tab[data-tab="${urlTab}"]`);
+      if (target) {
+        document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(x => x.classList.remove('active'));
+        target.classList.add('active');
+        document.getElementById('panel-' + urlTab).classList.add('active');
+        document.getElementById('tabDesc').textContent = TAB_DESC[urlTab] || '';
+        if (urlTab === 'recurring') renderRecurring();
+      }
+    }
 
   } catch(err) {
     console.error('Dashboard load error:', err);

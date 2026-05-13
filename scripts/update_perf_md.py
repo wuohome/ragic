@@ -112,6 +112,63 @@ def to_int(s) -> int:
         return 0
 
 
+def parse_extras_from_rows(rows: list) -> tuple:
+    """
+    從單張員工 sheet rows 解析 renewal_perf（續約業績）和 mgmt_perf（代管業績）。
+    - 「本月續約業績」區段 → 找「總計」row 的 col 3
+    - 「（公司件）代管分租套房」區段 → 逐行累加 col 3，直到「總計」或下一個 section
+    回傳 (renewal_perf: int, mgmt_perf: int)
+    """
+    renewal_perf = 0
+    mgmt_perf = 0
+    in_renewal = False
+    in_mgmt_section = False
+
+    for r in rows:
+        if not r:
+            continue
+        col0 = (r[0] or '').strip().rstrip('\t').strip()
+
+        if col0 == '本月續約業績':
+            in_renewal = True
+            in_mgmt_section = False
+            continue
+
+        if '（公司件）代管分租套房' in col0:
+            in_renewal = False
+            in_mgmt_section = True
+            continue
+
+        if col0.startswith('（公司件）') and '代管分租套房' not in col0:
+            in_renewal = False
+            in_mgmt_section = False
+            continue
+
+        STOP_LABELS = ('獎金總計', '業務獎金', '本月租賃業績', '本月業績', '本月成交業績')
+        if any(col0.startswith(x) for x in STOP_LABELS):
+            in_renewal = False
+            in_mgmt_section = False
+            continue
+
+        if in_renewal:
+            if col0.startswith('總計') or col0.startswith('合計'):
+                renewal_perf = to_int(r[3]) if len(r) > 3 else 0
+                in_renewal = False
+            continue
+
+        if in_mgmt_section:
+            if col0.startswith('總計') or col0.startswith('合計'):
+                in_mgmt_section = False
+                continue
+            if col0.startswith(('本月', '（公司件）', '獎金', '業務獎金')):
+                in_mgmt_section = False
+                continue
+            if len(r) > 3:
+                mgmt_perf += to_int(r[3])
+
+    return renewal_perf, mgmt_perf
+
+
 def parse_employee_sheet(rows: list) -> tuple:
     """
     解析單張員工 sheet（115年04月員工薪資表）。
@@ -171,10 +228,14 @@ def parse_employee_sheet(rows: list) -> tuple:
     return (name_raw, perf)
 
 
-def fetch_all_perf(roc_year: int, month: int) -> Optional[dict]:
+def fetch_all_perf(roc_year: int, month: int) -> Optional[tuple]:
     """從 mirror folder 找當月 sheet → SA + Sheets API 抓所有 tabs → 解析。
        回 None = 找不到當月 sheet（珊珊還沒建 / 還沒月結），呼叫端應 skip。
-       回 {} = 找到 sheet 但解析 0 筆有效員工（異常，需檢查）。"""
+       回 ({}, {}) = 找到 sheet 但解析 0 筆有效員工（異常，需檢查）。
+       回 (raw_perf, extras) where:
+         raw_perf = {name: perf_int}
+         extras   = {name: {'renewal': int, 'mgmt': int}}
+    """
     drive, sheets = get_sa_clients()
     f = find_month_sheet(drive, roc_year, month)
     if not f:
@@ -187,15 +248,16 @@ def fetch_all_perf(roc_year: int, month: int) -> Optional[dict]:
     meta = sheets.spreadsheets().get(spreadsheetId=sheet_id, includeGridData=False).execute()
     tabs = [s['properties']['title'] for s in meta['sheets']]
     print(f"{len(tabs)} 個 tabs")
-    print(f"{'TAB':<14}  {'NAME':<14}  {'PERF':>10}")
-    print('-' * 45)
+    print(f"{'TAB':<14}  {'NAME':<14}  {'PERF':>10}  {'RENEWAL':>10}  {'MGMT':>10}")
+    print('-' * 65)
 
     raw = {}
+    extras = {}
     for tab in tabs:
         try:
             data = sheets.spreadsheets().values().get(
                 spreadsheetId=sheet_id,
-                range=f"'{tab}'!A1:N100"
+                range=f"'{tab}'!A1:N200"
             ).execute()
             rows = data.get('values', [])
         except Exception as e:
@@ -203,8 +265,9 @@ def fetch_all_perf(roc_year: int, month: int) -> Optional[dict]:
             continue
 
         name_raw, perf = parse_employee_sheet(rows)
+        renewal_perf, mgmt_perf = parse_extras_from_rows(rows)
         display_name = name_raw or '(非員工 sheet)'
-        print(f"{tab:<14}  {display_name:<14}  {perf:>10,}")
+        print(f"{tab:<14}  {display_name:<14}  {perf:>10,}  {renewal_perf:>10,}  {mgmt_perf:>10,}")
 
         if name_raw is None:
             continue
@@ -212,10 +275,17 @@ def fetch_all_perf(roc_year: int, month: int) -> Optional[dict]:
         if not name or name in EXCLUDE_DEVS or '測試' in name:
             continue
         raw[name] = raw.get(name, 0) + perf
+        if name not in extras:
+            extras[name] = {'renewal': 0, 'mgmt': 0}
+        extras[name]['renewal'] += renewal_perf
+        extras[name]['mgmt'] += mgmt_perf
 
-    print('-' * 45)
+    print('-' * 65)
     print(f"員工解析人數：{len(raw)}（合計 {sum(raw.values()):,}）")
-    return raw
+    total_renewal = sum(v['renewal'] for v in extras.values())
+    total_mgmt = sum(v['mgmt'] for v in extras.values())
+    print(f"全店續約業績：{fmt_num(total_renewal)}  全店代管業績：{fmt_num(total_mgmt)}")
+    return raw, extras
 
 
 def taiwan_year_month(dt: datetime) -> str:
@@ -270,8 +340,11 @@ def render_val(v) -> str:
     return str(v)
 
 
-def build_merged_section(ym_label: str, gsheet_data: dict, existing_rows: dict) -> str:
-    """idempotent merge：只動業績欄，其他保留 Joan 已填值"""
+def build_merged_section(ym_label: str, gsheet_data: dict, existing_rows: dict,
+                         extras: Optional[dict] = None) -> str:
+    """idempotent merge：只動業績欄，其他保留 Joan 已填值。
+    extras = {name: {'renewal': int, 'mgmt': int}}，用來附加續約/代管資訊。
+    """
     all_names = set(gsheet_data.keys()) | set(existing_rows.keys())
 
     merged = {}
@@ -294,10 +367,15 @@ def build_merged_section(ym_label: str, gsheet_data: dict, existing_rows: dict) 
     total_perf = sum(gsheet_data.values())
     fund = total_perf // 100
 
+    # 額外業績摘要
+    total_renewal = sum(v['renewal'] for v in extras.values()) if extras else 0
+    total_mgmt = sum(v['mgmt'] for v in extras.values()) if extras else 0
+
     lines = [
         f"## {ym_label}",
         "",
         f"**全店業績 {fmt_num(total_perf)}** | 1% 聚餐基金 = **{fmt_num(fund)}**",
+        f"**全店續約業績 {fmt_num(total_renewal)}** | **全店代管業績 {fmt_num(total_mgmt)}**",
         "",
         "| # | 姓名 | 業務獎金 | 業績 | 管理獎金 | 續約獎金 | 跳% | **獎金合計** |",
         "|---|------|---------|------|---------|---------|-----|-----------|",
@@ -312,6 +390,19 @@ def build_merged_section(ym_label: str, gsheet_data: dict, existing_rows: dict) 
         f"| | **合計** | **—** | **{fmt_num(total_perf)}** | **—** | **—** | **—** | **—** |"
     )
     lines.append("")
+
+    # 個人續約 / 代管業績小表
+    if extras:
+        extra_rows = [(n, v) for n, v in extras.items() if v['renewal'] > 0 or v['mgmt'] > 0]
+        extra_rows.sort(key=lambda x: -(x[1]['renewal'] + x[1]['mgmt']))
+        if extra_rows:
+            lines.append(f"### 個人續約 / 代管業績（{ym_label}）")
+            lines.append("| 姓名 | 續約業績 | 代管業績 |")
+            lines.append("|------|---------|---------|")
+            for name, v in extra_rows:
+                lines.append(f"| {name} | {fmt_num(v['renewal'])} | {fmt_num(v['mgmt'])} |")
+            lines.append("")
+
     lines.append("---")
     lines.append("")
     return "\n".join(lines)
@@ -411,11 +502,12 @@ def main():
         ym_label = taiwan_year_month(now)
     print(f"目標月份：{ym_label}")
 
-    gsheet_data = fetch_all_perf(roc_year, month)
-    if gsheet_data is None:
+    fetch_result = fetch_all_perf(roc_year, month)
+    if fetch_result is None:
         # 找不到當月 sheet（珊珊還沒月結）→ skip 不寫，但 exit 0 cron 不報錯
         print(f"⏭  skip：當月 sheet 還沒建（珊珊未月結）— 不寫 markdown，留待下輪")
         sys.exit(0)
+    gsheet_data, extras = fetch_result
     if not gsheet_data:
         print("❌ 解析到 0 筆有效員工業績（sheet 找到但解析空），abort", file=sys.stderr)
         sys.exit(1)
@@ -440,7 +532,7 @@ def main():
     existing_rows = parse_existing_section_rows(existing_section_text) if existing_section_text else {}
     print(f"既有 md row 數：{len(existing_rows)}")
 
-    new_section = build_merged_section(ym_label, gsheet_data, existing_rows)
+    new_section = build_merged_section(ym_label, gsheet_data, existing_rows, extras=extras)
 
     if args.dry_run:
         print("=== DRY RUN — 不寫入 vault ===")

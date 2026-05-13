@@ -5,3 +5,7 @@ __pycache__/
 dist/
 reports/
 .DS_Store
+
+screenshot-tmp/
+*.png
+perf-sa-key.json
