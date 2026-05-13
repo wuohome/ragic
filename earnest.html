@@ -574,7 +574,7 @@
       const canvas = $("signature-pad"); const ratio = Math.max(window.devicePixelRatio || 1, 1);
       canvas.width = canvas.offsetWidth * ratio; canvas.height = canvas.offsetHeight * ratio;
       canvas.getContext("2d").scale(ratio, ratio);
-      signaturePad = new SignaturePad(canvas, { minWidth: 3, maxWidth: 8, penColor: "black" });
+      signaturePad = new SignaturePad(canvas, { minWidth: 0.8, maxWidth: 2.2, penColor: "black" });
     }
 
     function updatePreviewFromForm() {
