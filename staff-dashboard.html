@@ -1561,7 +1561,7 @@ function buildRecChips() {
       const el = document.createElement('span');
       el.className = 'chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium';
       el.dataset.recPreset = m; // ISO month as preset key
-      el.textContent = isoToRoc(m); // display as ROC format
+      el.textContent = m; // display as ISO yyyy-mm (aligned with other tabs)
       container.appendChild(el);
     });
   }
@@ -1624,9 +1624,11 @@ function renderMonthly(preset) {
     if (resolvedYm) {
       const today = new Date();
       const thisYm = ym(today);
-      labelEl.textContent = resolvedYm === thisYm
-        ? `${isoToRoc(resolvedYm)}（本月）`
-        : isoToRoc(resolvedYm);
+      const lastMonthYm = ym(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+      let displayText = resolvedYm;
+      if (resolvedYm === thisYm) displayText = `${resolvedYm}（本月）`;
+      else if (preset === 'lastMonth' || resolvedYm === lastMonthYm) displayText = `${resolvedYm}（上月）`;
+      labelEl.textContent = displayText;
     } else {
       labelEl.textContent = '—';
     }
@@ -1636,7 +1638,7 @@ function renderMonthly(preset) {
   const noteEl = document.getElementById('recSourceNote');
   if (noteEl) {
     noteEl.textContent = resolvedYm
-      ? `資料來源：perf.md 個人續約／代管業績小表（${isoToRoc(resolvedYm)}）`
+      ? `資料來源：perf.md 個人續約／代管業績小表（${resolvedYm}）`
       : '尚無資料';
   }
 
