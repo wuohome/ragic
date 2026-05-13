@@ -2103,21 +2103,25 @@ function renderAnalysis(){
     c.classList.toggle('active', bounds.start === bounds.end && c.dataset.anaMonth === bounds.start));
 
   // ── Tier 0 個人簡介卡 ──
+  // onboardMonthForBio 來自 STAFF_ONBOARD_MONTH，已處理夫妻檔合併取較早到職
   const onboardMonthForBio = STAFF_ONBOARD_MONTH[curStaff] || '';
-  // 到職日：從 rawHr 找精確到日的欄位，fallback 到 YYYY-MM
-  let onboardDateStr = '—';
+  // 到職日顯示：
+  //   1. 先用 STAFF_ONBOARD_MONTH 作為基準（YYYY-MM 精度，夫妻檔合併 entry 也能取到）
+  //   2. 再嘗試從 rawHr 找同名單人 entry 的精確到日欄位（YYYY-MM-DD）
+  //   3. rawHr 找不到（合併 key 查不到）或欄位空 → 直接用 YYYY-MM
+  let onboardDateStr = onboardMonthForBio || '—';
   if (onboardMonthForBio) {
-    // 嘗試找精確日期（rawHr 可能有含完整 YYYY/MM/DD 或 YYYY-MM-DD）
+    // 嘗試找精確日期（單人 entry 才有，合併 key 如「張忠豪&蕭眞儀」不會在 rawHr 裡出現）
     const hrRecFull = Object.values(window._rawHr || {}).find(r => {
       const nm = (r['姓名'] || '').trim();
-      return nm === curStaff || nm === curStaff.replace('&','&');
+      return nm === curStaff;
     });
     if (hrRecFull) {
       const raw = (hrRecFull['到職日期'] || hrRecFull['到職日'] || hrRecFull['入職日'] || '').trim();
+      // 只在 raw 有實際值時才覆寫；空值維持 onboardMonthForBio
       if (raw) onboardDateStr = raw.replaceAll('/', '-');
-    } else {
-      onboardDateStr = onboardMonthForBio;
     }
+    // hrRecFull 為 undefined（合併 entry）→ onboardDateStr 已是 onboardMonthForBio，不需額外處理
   }
   const tenureInfo = calcTenure(onboardMonthForBio);
   document.getElementById('anaBioOnboard').textContent = onboardDateStr;
