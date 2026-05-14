@@ -175,6 +175,17 @@
       return `<span class="status-badge ${s.cls}">${s.text}</span>`;
     }
 
+    function formatError(e) {
+      if (e == null) return "-";
+      if (typeof e === "string") return e;
+      if (typeof e === "object") {
+        const code = e.code ? ` (code ${e.code})` : (e.http_status ? ` (HTTP ${e.http_status})` : "");
+        const msg = e.error || e.msg || e.message || JSON.stringify(e);
+        return msg + code;
+      }
+      return String(e);
+    }
+
     // ── 主頁：列表視圖 ──────────────────────────────────────────
 
     async function loadList() {
@@ -203,7 +214,7 @@
           const shortId = (item.submission_id || "").slice(0, 8) + "...";
           const name = (item.fields && (item.fields["1000792"] || item.fields["租客姓名"])) || "-";
           const no = (item.fields && (item.fields["1000796"] || item.fields["定金單編號"])) || "-";
-          const err = item.last_error || "-";
+          const err = formatError(item.last_error);
           row.innerHTML = `
             <td class="py-3 pr-4 text-slate-500 whitespace-nowrap">${formatTime(item.created_at)}</td>
             <td class="py-3 pr-4 font-mono text-xs text-slate-600">${no}</td>
@@ -334,7 +345,7 @@
       // error_history
       const history = rec.error_history || [];
       history.forEach((entry, i) => {
-        const label = `第 ${i + 1} 次失敗：${entry.error || entry}`;
+        const label = `第 ${i + 1} 次失敗：${formatError(entry.error || entry)}`;
         addTimelineItem(timeline, entry.timestamp || null, label, true);
       });
 
