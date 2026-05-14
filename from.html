@@ -770,8 +770,8 @@
     // 來源選擇（單選）
     let selectedSource = '';
     function selectSource(btn) {
-        document.querySelectorAll('#source_container .multi-select-btn').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
+        document.querySelectorAll('#source_container .multi-select-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
         selectedSource = btn.innerText;
         document.getElementById('field_source_channel').value = selectedSource;
     }
