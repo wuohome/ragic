@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>定金收據管理後台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+    body { font-family: 'Noto Sans TC', sans-serif; background: #f1f5f9; }
+
+    .big-btn { transition: all 0.2s; cursor: pointer; }
+    .big-btn:active { transform: scale(0.97); opacity: 0.9; }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .status-pending    { background: #fef9c3; color: #854d0e; }
+    .status-retrying   { background: #dbeafe; color: #1e40af; }
+    .status-success    { background: #dcfce7; color: #166534; }
+    .status-failed     { background: #fee2e2; color: #991b1b; }
+    .status-manual     { background: #f3f4f6; color: #374151; }
+
+    .timeline-item { border-left: 3px solid #e2e8f0; padding-left: 16px; margin-bottom: 12px; position: relative; }
+    .timeline-item::before { content: ''; position: absolute; left: -7px; top: 4px; width: 11px; height: 11px; border-radius: 50%; background: #94a3b8; border: 2px solid white; }
+    .timeline-item.error::before { background: #ef4444; }
+
+    #loader-overlay {
+      position: fixed; inset: 0; background: rgba(255,255,255,0.85);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 50; font-size: 1.2rem; color: #475569; font-weight: 700;
+    }
+    .hidden { display: none !important; }
+
+    @media (max-width: 640px) {
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div id="loader-overlay">載入中...</div>
+
+  <div class="max-w-5xl mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl md:text-3xl font-black text-slate-800">定金收據管理後台</h1>
+        <p class="text-slate-500 text-sm mt-1">窩的家｜earnest.html 可靠送達架構</p>
+      </div>
+      <a href="earnest-admin.html" class="text-blue-600 hover:text-blue-800 text-sm font-bold underline">← 返回列表</a>
+    </div>
+
+    <!-- 主頁視圖（無 ?id） -->
+    <div id="view-list">
+      <div class="bg-white rounded-2xl shadow p-6 mb-4">
+        <h2 class="text-lg font-black text-slate-700 mb-1">待處理 submission</h2>
+        <p class="text-slate-400 text-sm mb-4">顯示 failed_need_human / retrying / pending 狀態</p>
+        <div id="list-empty" class="hidden text-center py-10 text-slate-400 font-bold">🎉 目前沒有待處理項目</div>
+        <div id="list-error" class="hidden text-center py-10 text-red-500 font-bold"></div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm" id="list-table">
+            <thead>
+              <tr class="border-b-2 border-slate-200 text-slate-500 text-xs uppercase">
+                <th class="text-left py-2 pr-4 font-bold">時間</th>
+                <th class="text-left py-2 pr-4 font-bold">單號</th>
+                <th class="text-left py-2 pr-4 font-bold">房客</th>
+                <th class="text-left py-2 pr-4 font-bold">狀態</th>
+                <th class="text-left py-2 pr-4 font-bold">失敗原因</th>
+                <th class="text-left py-2 font-bold">動作</th>
+              </tr>
+            </thead>
+            <tbody id="list-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 單筆視圖（帶 ?id=xxx） -->
+    <div id="view-detail" class="hidden">
+      <div id="detail-error" class="hidden bg-red-50 border border-red-200 rounded-2xl p-6 mb-4 text-red-700 font-bold"></div>
+
+      <div id="detail-card" class="hidden">
+        <!-- 狀態 header -->
+        <div class="bg-white rounded-2xl shadow p-6 mb-4">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-3 mb-2">
+                <span id="d-status-badge" class="status-badge"></span>
+                <span id="d-submission-id" class="text-slate-400 text-xs font-mono"></span>
+              </div>
+              <h2 class="text-xl font-black text-slate-800" id="d-title">-</h2>
+              <p class="text-slate-500 text-sm mt-1" id="d-created">-</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button id="btn-retry" onclick="doRetry()" class="big-btn bg-blue-600 hover:bg-blue-700 text-white font-black px-5 py-2 rounded-xl text-sm">
+                🔄 一鍵重試
+              </button>
+              <button id="btn-pdf" onclick="doDownloadPDF()" class="big-btn bg-slate-700 hover:bg-slate-800 text-white font-black px-5 py-2 rounded-xl text-sm">
+                📥 下載 PDF
+              </button>
+              <button id="btn-manual" onclick="doMarkManual()" class="big-btn bg-slate-200 hover:bg-slate-300 text-slate-700 font-black px-5 py-2 rounded-xl text-sm">
+                📋 標記人工處理
+              </button>
+            </div>
+          </div>
+          <div id="action-result" class="hidden mt-3 py-2 px-4 rounded-lg text-sm font-bold"></div>
+        </div>
+
+        <!-- 欄位資料 -->
+        <div class="bg-white rounded-2xl shadow p-6 mb-4">
+          <h3 class="font-black text-slate-700 mb-4">填寫資料</h3>
+          <table class="w-full text-sm">
+            <tbody id="d-fields-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- 簽名圖 -->
+        <div id="sig-section" class="bg-white rounded-2xl shadow p-6 mb-4 hidden">
+          <h3 class="font-black text-slate-700 mb-4">簽名圖</h3>
+          <img id="d-sig-img" src="" alt="簽名" class="border border-slate-200 rounded-xl max-w-xs" />
+        </div>
+
+        <!-- 錯誤歷史時間軸 -->
+        <div id="timeline-section" class="bg-white rounded-2xl shadow p-6 mb-4">
+          <h3 class="font-black text-slate-700 mb-4">處理紀錄</h3>
+          <div id="d-timeline"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const WORKER_BASE_URL = "https://wuohome-ragic-proxy.wuohome.workers.dev";
+
+    const STATUS_LABELS = {
+      pending:           { text: "待處理",     cls: "status-pending"  },
+      retrying:          { text: "重試中",     cls: "status-retrying" },
+      success:           { text: "已成功",     cls: "status-success"  },
+      failed_need_human: { text: "需人工處理", cls: "status-failed"   },
+      manual_processed:  { text: "已人工處理", cls: "status-manual"   },
+    };
+
+    const FIELD_NAMES = {
+      "1000792": "房客姓名",
+      "1000808": "電話",
+      "1000837": "職業",
+      "1001709": "PDF 附件",
+    };
+
+    // 讀 ?id query string
+    const params = new URLSearchParams(location.search);
+    const submissionId = params.get("id");
+
+    function hideLoader() {
+      document.getElementById("loader-overlay").classList.add("hidden");
+    }
+
+    function formatTime(iso) {
+      if (!iso) return "-";
+      try {
+        return new Date(iso).toLocaleString("zh-TW", {
+          timeZone: "Asia/Taipei",
+          year: "numeric", month: "2-digit", day: "2-digit",
+          hour: "2-digit", minute: "2-digit", second: "2-digit"
+        });
+      } catch { return iso; }
+    }
+
+    function statusBadgeHTML(status) {
+      const s = STATUS_LABELS[status] || { text: status, cls: "status-manual" };
+      return `<span class="status-badge ${s.cls}">${s.text}</span>`;
+    }
+
+    // ── 主頁：列表視圖 ──────────────────────────────────────────
+
+    async function loadList() {
+      document.getElementById("view-list").classList.remove("hidden");
+      try {
+        const res = await fetch(`${WORKER_BASE_URL}/listFailedSubmissions`);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        const items = data.submissions || [];
+
+        hideLoader();
+
+        if (items.length === 0) {
+          document.getElementById("list-empty").classList.remove("hidden");
+          document.getElementById("list-table").classList.add("hidden");
+          return;
+        }
+
+        const tbody = document.getElementById("list-tbody");
+        tbody.innerHTML = "";
+
+        items.forEach(item => {
+          const statusInfo = STATUS_LABELS[item.status] || { text: item.status, cls: "status-manual" };
+          const row = document.createElement("tr");
+          row.className = "border-b border-slate-100 hover:bg-slate-50";
+          const shortId = (item.submission_id || "").slice(0, 8) + "...";
+          const name = (item.fields && (item.fields["1000792"] || item.fields["租客姓名"])) || "-";
+          const no = (item.fields && (item.fields["1000796"] || item.fields["定金單編號"])) || "-";
+          const err = item.last_error || "-";
+          row.innerHTML = `
+            <td class="py-3 pr-4 text-slate-500 whitespace-nowrap">${formatTime(item.created_at)}</td>
+            <td class="py-3 pr-4 font-mono text-xs text-slate-600">${no}</td>
+            <td class="py-3 pr-4 font-bold text-slate-800">${name}</td>
+            <td class="py-3 pr-4"><span class="status-badge ${statusInfo.cls}">${statusInfo.text}</span></td>
+            <td class="py-3 pr-4 text-slate-500 text-xs max-w-[200px] truncate" title="${err}">${err}</td>
+            <td class="py-3">
+              <a href="earnest-admin.html?id=${item.submission_id}" class="text-blue-600 hover:text-blue-800 font-bold text-xs underline">查看詳情</a>
+            </td>
+          `;
+          tbody.appendChild(row);
+        });
+
+      } catch (e) {
+        hideLoader();
+        const el = document.getElementById("list-error");
+        el.classList.remove("hidden");
+        el.textContent = "無法載入列表：" + e.message;
+        document.getElementById("list-table").classList.add("hidden");
+      }
+    }
+
+    // ── 單筆視圖 ──────────────────────────────────────────────
+
+    let currentRecord = null;
+
+    async function loadDetail(id) {
+      document.getElementById("view-list").classList.add("hidden");
+      document.getElementById("view-detail").classList.remove("hidden");
+      try {
+        const res = await fetch(`${WORKER_BASE_URL}/getSubmission/${encodeURIComponent(id)}`);
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || "HTTP " + res.status);
+        }
+        const rec = await res.json();
+        currentRecord = rec;
+        hideLoader();
+        renderDetail(rec);
+      } catch (e) {
+        hideLoader();
+        const el = document.getElementById("detail-error");
+        el.classList.remove("hidden");
+        el.textContent = "無法載入 submission：" + e.message;
+      }
+    }
+
+    function renderDetail(rec) {
+      document.getElementById("detail-card").classList.remove("hidden");
+
+      // 狀態 badge
+      const statusInfo = STATUS_LABELS[rec.status] || { text: rec.status, cls: "status-manual" };
+      const badge = document.getElementById("d-status-badge");
+      badge.textContent = statusInfo.text;
+      badge.className = "status-badge " + statusInfo.cls;
+
+      document.getElementById("d-submission-id").textContent = rec.submission_id || "";
+
+      // 標題：單號 + 房客名
+      const name = (rec.fields && (rec.fields["1000792"] || rec.fields["租客姓名"])) || "-";
+      const no   = (rec.fields && (rec.fields["1000796"] || rec.fields["定金單編號"])) || "";
+      document.getElementById("d-title").textContent = (no ? no + " — " : "") + name;
+      document.getElementById("d-created").textContent = "建立時間：" + formatTime(rec.created_at);
+
+      // 成功 / 人工處理後隱藏 retry / manual 按鈕
+      if (rec.status === "success" || rec.status === "manual_processed") {
+        document.getElementById("btn-retry").classList.add("hidden");
+        document.getElementById("btn-manual").classList.add("hidden");
+      }
+
+      // 欄位表格
+      const tbody = document.getElementById("d-fields-tbody");
+      tbody.innerHTML = "";
+      const fields = rec.fields || {};
+      const fieldOrder = ["1000792", "1000808", "1000837", "1000796", "1000799", "1000818", "1000819"];
+      const rendered = new Set();
+
+      function addRow(key, label, value) {
+        if (rendered.has(key)) return;
+        rendered.add(key);
+        const tr = document.createElement("tr");
+        tr.className = "border-b border-slate-100";
+        tr.innerHTML = `
+          <td class="py-2 pr-4 text-slate-500 font-bold text-xs w-32">${label}</td>
+          <td class="py-2 text-slate-800">${value}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      fieldOrder.forEach(k => {
+        if (fields[k] !== undefined && fields[k] !== "" && k !== "1000816") {
+          addRow(k, FIELD_NAMES[k] || k, fields[k]);
+        }
+      });
+
+      // 其他未在 fieldOrder 的欄位
+      Object.entries(fields).forEach(([k, v]) => {
+        if (k !== "1000816" && k !== "1001709" && !rendered.has(k) && v !== "") {
+          addRow(k, FIELD_NAMES[k] || k, v);
+        }
+      });
+
+      // ragic_id 若有則顯示
+      if (rec.ragic_id) {
+        const tr = document.createElement("tr");
+        tr.className = "border-b border-slate-100";
+        tr.innerHTML = `
+          <td class="py-2 pr-4 text-slate-500 font-bold text-xs w-32">Ragic ID</td>
+          <td class="py-2 text-emerald-700 font-bold">${rec.ragic_id}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      // 簽名圖
+      const sig = fields["1000816"] || "";
+      if (sig && sig.length > 100) {
+        document.getElementById("sig-section").classList.remove("hidden");
+        document.getElementById("d-sig-img").src = sig;
+      }
+
+      // 時間軸
+      const timeline = document.getElementById("d-timeline");
+      timeline.innerHTML = "";
+
+      // created
+      addTimelineItem(timeline, rec.created_at, "建立 submission", false);
+
+      // error_history
+      const history = rec.error_history || [];
+      history.forEach((entry, i) => {
+        const label = `第 ${i + 1} 次失敗：${entry.error || entry}`;
+        addTimelineItem(timeline, entry.timestamp || null, label, true);
+      });
+
+      // completed
+      if (rec.completed_at) {
+        const label = rec.status === "success"
+          ? "✅ 成功寫入 Ragic (ID: " + (rec.ragic_id || "-") + ")"
+          : "📋 標記人工處理";
+        addTimelineItem(timeline, rec.completed_at, label, false);
+      }
+
+      if (timeline.children.length === 0) {
+        timeline.innerHTML = '<p class="text-slate-400 text-sm">尚無紀錄</p>';
+      }
+    }
+
+    function addTimelineItem(container, timestamp, label, isError) {
+      const div = document.createElement("div");
+      div.className = "timeline-item" + (isError ? " error" : "");
+      div.innerHTML = `
+        <p class="text-slate-500 text-xs">${formatTime(timestamp)}</p>
+        <p class="text-slate-700 text-sm font-bold mt-0.5">${label}</p>
+      `;
+      container.appendChild(div);
+    }
+
+    // ── 動作按鈕 ──────────────────────────────────────────────
+
+    function showActionResult(msg, isError) {
+      const el = document.getElementById("action-result");
+      el.classList.remove("hidden", "bg-green-50", "text-green-700", "bg-red-50", "text-red-700");
+      if (isError) {
+        el.classList.add("bg-red-50", "text-red-700");
+      } else {
+        el.classList.add("bg-green-50", "text-green-700");
+      }
+      el.textContent = msg;
+    }
+
+    async function doRetry() {
+      const btn = document.getElementById("btn-retry");
+      btn.disabled = true;
+      btn.textContent = "重試中...";
+      try {
+        const res = await fetch(`${WORKER_BASE_URL}/retrySubmission/${encodeURIComponent(submissionId)}`, {
+          method: "POST"
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok && body.ok) {
+          showActionResult("✅ 已寫入 Ragic，ID：" + (body.ragic_id || body.submission?.ragic_id || "-"), false);
+          btn.classList.add("hidden");
+          document.getElementById("btn-manual").classList.add("hidden");
+        } else {
+          showActionResult("❌ 重試失敗：" + (body.error || "HTTP " + res.status), true);
+          btn.disabled = false;
+          btn.textContent = "🔄 一鍵重試";
+        }
+      } catch (e) {
+        showActionResult("❌ 網路錯誤：" + e.message, true);
+        btn.disabled = false;
+        btn.textContent = "🔄 一鍵重試";
+      }
+    }
+
+    function doDownloadPDF() {
+      if (!currentRecord || !currentRecord.pdf_b64) {
+        alert("無 PDF 資料");
+        return;
+      }
+      const name = (currentRecord.fields && currentRecord.fields["1000792"]) || "未知";
+      const a = document.createElement("a");
+      a.href = "data:application/pdf;base64," + currentRecord.pdf_b64;
+      a.download = `定金收據_${name}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    async function doMarkManual() {
+      if (!confirm("確定標記為人工處理？此 submission 將從待處理列表移除。")) return;
+      const btn = document.getElementById("btn-manual");
+      btn.disabled = true;
+      btn.textContent = "處理中...";
+      try {
+        const res = await fetch(`${WORKER_BASE_URL}/markSubmissionManual/${encodeURIComponent(submissionId)}`, {
+          method: "POST"
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok) {
+          showActionResult("📋 已標記為人工處理", false);
+          btn.classList.add("hidden");
+          document.getElementById("btn-retry").classList.add("hidden");
+        } else {
+          showActionResult("❌ 操作失敗：" + (body.error || "HTTP " + res.status), true);
+          btn.disabled = false;
+          btn.textContent = "📋 標記人工處理";
+        }
+      } catch (e) {
+        showActionResult("❌ 網路錯誤：" + e.message, true);
+        btn.disabled = false;
+        btn.textContent = "📋 標記人工處理";
+      }
+    }
+
+    // ── 初始化 ──────────────────────────────────────────────
+
+    if (submissionId) {
+      loadDetail(submissionId);
+    } else {
+      loadList();
+    }
+  </script>
+</body>
+</html>
