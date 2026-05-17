@@ -617,16 +617,16 @@
     }
 
     // 【新增】產生 PDF Blob 的共用函式
+    // 2026-05-17 緊急修復 file_too_large：scale 2→1.5、PNG→JPEG q=0.85，體積降約 70%
     async function generatePDFBlob() {
         const element = $("pdf-export-area");
-        // 使用較高的 scale 以確保列印品質
-        const canvas = await html2canvas(element, { scale: 2, useCORS: true });
-        const imgWidth = 210; 
-        const imgHeight = (canvas.height * imgWidth) / canvas.width; 
-        const { jsPDF } = window.jspdf; 
+        const canvas = await html2canvas(element, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' });
+        const imgWidth = 210;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', [imgWidth, imgHeight]);
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgWidth, imgHeight);
-        return pdf.output('blob'); // 回傳 Blob 物件
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, imgWidth, imgHeight);
+        return pdf.output('blob');
     }
 
     // 下載按鈕 (現在可以重用生成邏輯)
