@@ -819,6 +819,24 @@
         clearTimeout(timer);
         console.error("executeLoad error", e);
         $("loader-text").innerText = "讀取失敗，請重新載入頁面。";
+        // fire-and-forget diagnostic report — never block UX
+        try {
+          fetch(WORKER_BASE + "/diagnostic", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              stage: "load",
+              code: (typeof recordId !== "undefined" ? String(recordId) : ""),
+              errorName: e.name || "",
+              errorMessage: e.message || "",
+              errorStack: (e.stack || "").slice(0, 500),
+              userAgent: navigator.userAgent,
+              url: location.href,
+              timestamp: new Date().toISOString(),
+              referrer: document.referrer
+            })
+          }).catch(function() {});
+        } catch (_diagErr) {}
       }
     }
 
@@ -1106,6 +1124,24 @@
       } catch (e) {
         console.error("PDF 生成或上傳失敗", e);
         showFailed("PDF_GEN_" + (e.name || "ERROR"));
+        // fire-and-forget diagnostic report — never block UX
+        try {
+          fetch(WORKER_BASE + "/diagnostic", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              stage: "submit",
+              code: (typeof recordId !== "undefined" ? String(recordId) : ""),
+              errorName: e.name || "",
+              errorMessage: e.message || "",
+              errorStack: (e.stack || "").slice(0, 500),
+              userAgent: navigator.userAgent,
+              url: location.href,
+              timestamp: new Date().toISOString(),
+              referrer: document.referrer
+            })
+          }).catch(function() {});
+        } catch (_diagErr) {}
       }
     }
 
