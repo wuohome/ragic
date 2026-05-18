@@ -1062,14 +1062,10 @@
         // 3. 生成 PDF Blob
         const pdfBlob = await generatePDFBlob();
 
-        // 4. 將 PDF Blob 塞入隱藏的 File Input
-        const fileInput = $("hidden_pdf_input");
-        const dataTransfer = new DataTransfer();
+        // 4. 準備 PDF File 物件（不透過 DataTransfer — iOS 14.4 以下不支援 new DataTransfer()）
         const personName = $("display_name") ? $("display_name").innerText : "簽名方";
         const fileName = `收款憑單_${ROLE}_${personName}.pdf`;
         const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
-        dataTransfer.items.add(pdfFile);
-        fileInput.files = dataTransfer.files;
 
         // 4.5 補填電話：先 POST 到源頭 sheet（連結載入隨時同步會把值灌回 /payments/2）
         // 房東 → 屋主總表 /operation/8；租客 → 定金/斡旋 /payments/1
@@ -1095,6 +1091,7 @@
         // 5. 送出主記錄 → submitPaymentReceipt via Worker proxy
         $("loader-text").innerText = "正在上傳資料...";
         const mainFd = new FormData($("ragicForm"));
+        mainFd.append(getPdfFieldId(), pdfFile, fileName);  // iOS 相容: 直接 append 不用 DataTransfer
         mainFd.append("_rid", String(recordId));
         const postRes = await fetch(`${WORKER_BASE}/submitPaymentReceipt`, { method: "POST", body: mainFd });
         if (!postRes.ok) {
