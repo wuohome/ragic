@@ -28,7 +28,13 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 SA_KEY = Path.home() / '.claude' / 'scripts' / 'perf-sa-key.json'
-MIRROR_FOLDER_ID = '1s_2wWYcRAiFV-nwIYA0-hHSKsL_DMqsw'
+MIRROR_FOLDER_ID = '1s_2wWYcRAiFV-nwIYA0-hHSKsL_DMqsw'  # legacy fallback, joandevagent 同步 5/8 斷
+# 直接讀真實源（同事每月填這份）— 2026-05-18 廢棄 mirror folder 改直連
+# 每月初新 sheet 出來請新增一筆，並把 SA email 加進該 sheet 共享：
+#   perf-fetcher@amazing-height-482211-t0.iam.gserviceaccount.com
+MONTH_SHEET_OVERRIDE = {
+    (115, 5): '1WJqc6b1NEvxOJB2ocaXXQM351ZX0Lv8G-GYhpHv84V8',  # 115年5月業績表
+}
 SA_SCOPES = [
     'https://www.googleapis.com/auth/drive.readonly',
     'https://www.googleapis.com/auth/spreadsheets.readonly',
@@ -80,7 +86,11 @@ def get_sa_clients():
 
 
 def find_month_sheet(drive, roc_year: int, month: int) -> Optional[dict]:
-    """從 mirror folder 找「{roc}年{月}月業績表」sheet（fuzzy 含月份字樣 + 業績表）"""
+    """先查 MONTH_SHEET_OVERRIDE（直連真實源），沒設才 fallback mirror folder。"""
+    override_id = MONTH_SHEET_OVERRIDE.get((roc_year, month))
+    if override_id:
+        print(f"✅ 使用 override sheet: {roc_year}年{month}月 -> {override_id[:20]}…")
+        return {'id': override_id, 'name': f'{roc_year}年{month}月業績表 (override)'}
     resp = drive.files().list(
         q=f"'{MIRROR_FOLDER_ID}' in parents and trashed=false and mimeType='application/vnd.google-apps.spreadsheet'",
         fields='files(id,name,modifiedTime)',
