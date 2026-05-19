@@ -3,7 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>租押金/服務費收款憑單簽署系統</title>
+  <script>
+  (function(){
+    var u = new URL(location.href);
+    if (!u.searchParams.has('v')) {
+      u.searchParams.set('v', new Date().toISOString().slice(0,10).replace(/-/g,''));
+      location.replace(u.toString());
+    }
+  })();
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
   <!-- 引入 PDF 產生套件 -->
