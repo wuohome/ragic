@@ -783,8 +783,15 @@ const EXCLUDE_KEYWORDS = ['測試'];
 
 const NAME_ALIASES = {
   'TINA':'蕭靜芳','TINA（蕭靜芳）':'蕭靜芳',
-  '蕭眞儀':'張忠豪&蕭眞儀','眞儀':'張忠豪&蕭眞儀','張忠豪':'張忠豪&蕭眞儀','忠豪':'張忠豪&蕭眞儀',
-  '忠豪&眞儀':'張忠豪&蕭眞儀','張忠豪、蕭眞儀':'張忠豪&蕭眞儀','蕭眞儀、張忠豪':'張忠豪&蕭眞儀',
+  // 2026-05-19 蕭眞儀改名蕭頤臻；舊名+合併 key 全 alias 到新合併 key「張忠豪&蕭頤臻」
+  '蕭頤臻':'張忠豪&蕭頤臻','頤臻':'張忠豪&蕭頤臻',
+  '蕭眞儀':'張忠豪&蕭頤臻','眞儀':'張忠豪&蕭頤臻','蕭真儀':'張忠豪&蕭頤臻',
+  '張忠豪':'張忠豪&蕭頤臻','忠豪':'張忠豪&蕭頤臻',
+  'WEIWEI':'張忠豪&蕭頤臻','Weiwei':'張忠豪&蕭頤臻','weiwei':'張忠豪&蕭頤臻',
+  '忠豪&眞儀':'張忠豪&蕭頤臻','忠豪&頤臻':'張忠豪&蕭頤臻',
+  '張忠豪、蕭眞儀':'張忠豪&蕭頤臻','蕭眞儀、張忠豪':'張忠豪&蕭頤臻',
+  '張忠豪、蕭頤臻':'張忠豪&蕭頤臻','蕭頤臻、張忠豪':'張忠豪&蕭頤臻',
+  '張忠豪&蕭眞儀':'張忠豪&蕭頤臻',  // 舊合併 key 兼容
   '宣佑':'林宣佑','惠慈':'吳惠慈','張傳':'詹張傳','小碩':'劉子碩','小鐘':'鐘晟鈺',
   '炫儒':'吳炫儒','佳燕':'林佳燕','心瑜':'陳心瑜','則泓':'張則泓','薇雅':'陳薇雅',
   '卓威':'李卓威','小方':'方鼎文','馬丁':'關宗宇','小吳哥':'吳彥廷',
@@ -801,7 +808,13 @@ const TYPE_MAP = {
 // ═══════════════════════════════════════════════════════════════════���
 // DATA TRANSFORMATION (ported from Python)
 // ════════════════════════════════════════════════════════════════════
-function normalizeName(name) { return NAME_ALIASES[name] || name; }
+function normalizeName(name) {
+  if (!name) return name;
+  // 防禦：剝掉殘留的 wikilink markdown `[[X|Y]]` → 取 Y（display alias）；單純 `[[X]]` → X
+  const m = name.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/);
+  if (m) name = (m[2] || m[1]).trim();
+  return NAME_ALIASES[name] || name;
+}
 function normalizeDistrict(d) { return (d && d.includes('|')) ? d.split('|')[1] : (d || ''); }
 function fmtRent(v) {
   try { const n = parseInt(parseFloat(v)); return isNaN(n) ? (v||'—') : n.toLocaleString(); }
@@ -1155,7 +1168,7 @@ async function fetchAllData() {
     const status = (rec['在職狀態'] || rec['狀態'] || '').trim();
     if (name && (status === '在職' || status === '試用')) hrValid.add(name);
   }
-  const MERGED_NAMES = new Set(['張忠豪&蕭眞儀']);  // 合法合併
+  const MERGED_NAMES = new Set(['張忠豪&蕭頤臻']);  // 合法合併
   const validNames = new Set([...hrValid, ...MERGED_NAMES]);
 
   const allStaff = new Set();
@@ -1181,12 +1194,12 @@ async function fetchAllData() {
       STAFF_ONBOARD_MONTH[name] = onboard.slice(0,7).replaceAll('/', '-');
     }
   }
-  // 夫妻檔合併：取較早到職
+  // 夫妻檔合併：取較早到職（蕭頤臻舊名「蕭眞儀」，HR record 可能仍為舊名）
   const a = STAFF_ONBOARD_MONTH['張忠豪'];
-  const b = STAFF_ONBOARD_MONTH['蕭眞儀'];
-  if (a && b) STAFF_ONBOARD_MONTH['張忠豪&蕭眞儀'] = a <= b ? a : b;
-  else if (a) STAFF_ONBOARD_MONTH['張忠豪&蕭眞儀'] = a;
-  else if (b) STAFF_ONBOARD_MONTH['張忠豪&蕭眞儀'] = b;
+  const b = STAFF_ONBOARD_MONTH['蕭頤臻'] || STAFF_ONBOARD_MONTH['蕭眞儀'];
+  if (a && b) STAFF_ONBOARD_MONTH['張忠豪&蕭頤臻'] = a <= b ? a : b;
+  else if (a) STAFF_ONBOARD_MONTH['張忠豪&蕭頤臻'] = a;
+  else if (b) STAFF_ONBOARD_MONTH['張忠豪&蕭頤臻'] = b;
 
   // 解析 extras（續約/代管業績）並掛到 window 供 renderRecurring 使用
   window.PERF_EXTRAS = parseExtrasFromPerfMd(perfMdText);
@@ -2113,7 +2126,7 @@ function renderAnalysis(){
   //   3. rawHr 找不到（合併 key 查不到）或欄位空 → 直接用 YYYY-MM
   let onboardDateStr = onboardMonthForBio || '—';
   if (onboardMonthForBio) {
-    // 嘗試找精確日期（單人 entry 才有，合併 key 如「張忠豪&蕭眞儀」不會在 rawHr 裡出現）
+    // 嘗試找精確日期（單人 entry 才有，合併 key 如「張忠豪&蕭頤臻」不會在 rawHr 裡出現）
     const hrRecFull = Object.values(window._rawHr || {}).find(r => {
       const nm = (r['姓名'] || '').trim();
       return nm === curStaff;
