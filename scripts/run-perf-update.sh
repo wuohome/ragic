@@ -26,7 +26,7 @@ git reset --hard origin/main 2>&1 | tee -a "$LOG_FILE"
 # 跑 update_perf_md.py，直接吃 vault md
 export PYTHONUTF8=1
 export PYTHONIOENCODING=utf-8
-python3 "$PROJECT_DIR/scripts/update_perf_md.py" --vault-md "$VAULT_MD" 2>&1 | tee -a "$LOG_FILE"
+/opt/homebrew/bin/python3 "$PROJECT_DIR/scripts/update_perf_md.py" --vault-md "$VAULT_MD" 2>&1 | tee -a "$LOG_FILE"
 
 # 同步 vault → repo data/
 cp "$VAULT_MD" "$REPO_PERF_MD"
