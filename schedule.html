@@ -477,13 +477,14 @@ const App = () => {
             }
         }
 
-        // 排休上限 8 天警告（只在新增時檢查）
+        // 排休上限警告（當月有三節 → 9 天，否則 8 天；只在新增時檢查）
         if (mode === "排休" && !sameTypeEntry) {
             const count = Object.entries(leaves).filter(([k,arr]) =>
                 k.startsWith(empName + "|") && Array.isArray(arr) && arr.some(e => e.type === "排休")
             ).length;
-            if (count >= 8) {
-                if (!window.confirm(`${empName} 本月已排休 ${count} 天，超過 8 天上限，確定要繼續？`)) return;
+            const limit = SC.monthLeaveLimit(year, month);
+            if (count >= limit) {
+                if (!window.confirm(`${empName} 本月已排休 ${count} 天，超過 ${limit} 天上限，確定要繼續？`)) return;
             }
         }
 
@@ -1166,7 +1167,7 @@ const App = () => {
                                 <h3 className="font-bold text-base mb-1">📋 狀態說明</h3>
                                 <table className="w-full text-left text-sm">
                                     <tbody>
-                                        <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-green-100 text-green-700">排休</span></td><td>月休（計入 8 天上限）</td></tr>
+                                        <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-green-100 text-green-700">排休</span></td><td>月休（計入 {SC.monthLeaveLimit(year, month)} 天上限{SC.monthLeaveLimit(year, month) === 9 ? "，三節月 +1" : ""}）</td></tr>
                                         <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-yellow-100 text-yellow-700">特休</span></td><td>特別休假</td></tr>
                                         <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-red-100 text-red-700">請假</span></td><td>事假/病假</td></tr>
                                         <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-orange-100 text-orange-700">值班</span></td><td>19:00-20:00 多留 1 小時</td></tr>
@@ -1451,9 +1452,10 @@ const App = () => {
                                     return (
                                         <td key={emp.name} className="emp-cell p-1 text-center text-xs whitespace-nowrap">
                                             {(() => {
-                                                const restShort = 8 - s.totalRest;
+                                                const monthLimit = SC.monthLeaveLimit(year, month);
+                                                const restShort = monthLimit - s.totalRest;
                                                 return restShort > 0
-                                                    ? <div className="text-red-500 font-bold" title={`總休 ${s.totalRest} 天（排休${s.paixiu}+特休${s.texiu}+請假${s.qingjia}${s.govRestDays > 0 ? "+見紅休" + s.govRestDays : ""}），還差 ${restShort} 天`}>未休{restShort}天</div>
+                                                    ? <div className="text-red-500 font-bold" title={`總休 ${s.totalRest} 天（排休${s.paixiu}+特休${s.texiu}+請假${s.qingjia}${s.govRestDays > 0 ? "+見紅休" + s.govRestDays : ""}），還差 ${restShort} 天（上限 ${monthLimit}${monthLimit === 9 ? "，三節月 +1" : ""}）`}>未休{restShort}天</div>
                                                     : null;
                                             })()}
                                             <div>

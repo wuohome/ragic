@@ -568,11 +568,12 @@ function PersonalView({ emp, onBack }) {
     const date = fmtDate(year, month, d);
     const cellKey = emp.name + '__' + date;
     const existing = leaves[cellKey] || [];
-    // 排休上限 8 天警告
+    // 排休上限警告（當月有三節 → 9 天，否則 8 天）
     if (existing.length === 0) {
       const count = Object.values(leaves).reduce((n, recs) => n + recs.filter(r => r.empName === emp.name && r.type === '排休').length, 0);
-      if (count >= 8) {
-        if (!window.confirm(`您本月已排休 ${count} 天，超過 8 天上限，確定要繼續？`)) return;
+      const limit = SC.monthLeaveLimit(year, month);
+      if (count >= limit) {
+        if (!window.confirm(`您本月已排休 ${count} 天，超過 ${limit} 天上限，確定要繼續？`)) return;
       }
     }
     // 禁休日警告
