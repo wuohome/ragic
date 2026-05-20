@@ -872,7 +872,7 @@ const App = () => {
             console.log("分配結果 (排序):", Object.entries(dutyCounts).sort((a,b) => b[1]-a[1]).map(([n,c]) => `${n}:${c}`).join(", "));
             console.log("夫妻 Plan A 選中天數:", Object.entries(newDuties).filter(([d, arr]) => {
                 const names = arr.map(a => a.empName);
-                return names.includes("張忠豪") || names.includes("蕭眞儀");
+                return names.includes("張忠豪") || names.includes("蕭頤臻");
             }).length);
 
             // 逐筆寫入值日紀錄
@@ -1214,7 +1214,7 @@ const App = () => {
                             </div>
                             <hr className="border-gray-200" />
                             <div>
-                                <h3 className="font-bold text-base mb-1">💑 夫妻同排（張忠豪 &amp; 蕭眞儀）</h3>
+                                <h3 className="font-bold text-base mb-1">💑 夫妻同排（張忠豪 &amp; 蕭頤臻）</h3>
                                 <ul className="list-disc pl-4 space-y-1">
                                     <li>值日生必須一起排（一組佔 2 個名額）</li>
                                     <li>作為一個「家庭單位」跟個人公平競爭</li>
