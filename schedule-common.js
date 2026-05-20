@@ -92,6 +92,16 @@ SC.getHolidayName = (y, m, d) => SC.HOLIDAYS_2026[SC.fmtDate(y, m, d)] || "";
 SC.isGovHoliday = (dateStr, isWeekend) => isWeekend || dateStr in SC.HOLIDAYS_2026;
 SC.isOpenPeriod = () => new Date().getDate() >= 20;
 
+// ── 月休上限：當月有三節（春節/端午/中秋）→ 9 天，否則 8 天 ──
+SC.MAJOR_FESTIVAL_NAMES = ["春節", "除夕", "端午", "中秋"];
+SC.monthLeaveLimit = (year, month) => {
+    const prefix = `${year}/${String(month).padStart(2, "0")}/`;
+    const hasFest = Object.entries(SC.HOLIDAYS_2026).some(([date, name]) =>
+        date.startsWith(prefix) && SC.MAJOR_FESTIVAL_NAMES.some(f => name.includes(f))
+    );
+    return hasFest ? 9 : 8;
+};
+
 // ── 日期範圍 query params（listLeaves 用）──
 SC.leaveQuery = (fromY, fromM, toY, toM) => {
     const from = `${fromY}/${String(fromM).padStart(2, "0")}/01`;
