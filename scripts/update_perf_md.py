@@ -9,6 +9,7 @@
 
 # FIX-2026-04-28-multisheet: 改抓所有員工 sheet 的成交明細總計（含房東+房客方）
 # FIX-2026-04-28-perf-flow: idempotent merge，保留 Joan 已填的獎金欄
+# FIX-2026-05-22-L50-real-fix: 母 folder 共享 SA 後改 auto-detect 主路徑，MONTH_SHEET_OVERRIDE 清空為 escape hatch
 # FIX-2026-05-03-mirror-folder: 移除 hardcoded PUBKEY (鎖死 4 月 sheet → 抓到的數字被當當月寫，造成 5/2 跑時 4 月新增業績寫進 115/05)
 #                                改 SA + mirror folder 動態找「{roc}年{當月}月業績表」
 """
@@ -29,12 +30,14 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 SA_KEY = Path.home() / '.claude' / 'scripts' / 'perf-sa-key.json'
-MIRROR_FOLDER_ID = '1s_2wWYcRAiFV-nwIYA0-hHSKsL_DMqsw'  # legacy fallback, joandevagent 同步 5/8 斷
-# 直接讀真實源（同事每月填這份）— 2026-05-18 廢棄 mirror folder 改直連
-# 每月初新 sheet 出來請新增一筆，並把 SA email 加進該 sheet 共享：
-#   perf-fetcher@amazing-height-482211-t0.iam.gserviceaccount.com
-MONTH_SHEET_OVERRIDE = {
-    (115, 5): '1WJqc6b1NEvxOJB2ocaXXQM351ZX0Lv8G-GYhpHv84V8',  # 115年5月業績表
+MIRROR_FOLDER_ID = '1s_2wWYcRAiFV-nwIYA0-hHSKsL_DMqsw'  # legacy fallback (mirror folder，5/8 後同步已斷，保留作安全網)
+PARENT_FOLDER_ID = '1izWZC2w49BJGkMoWD5c_0UtIRrI9qkHx'  # 母 folder「薪資表」owner=wuo.home@gmail.com，2026-05-22 共享 SA Reader
+# L50 真正修法 2026-05-22：Joan 把母 folder 共享給 SA，改用 auto-detect 動態找月份 sheet。
+# MONTH_SHEET_OVERRIDE 保留作 manual escape hatch（auto-detect 不適用的 edge case 時 Joan 可直接填）
+# 正常情況 dict 應保持空白，由 auto-detect 接管。
+MONTH_SHEET_OVERRIDE: dict = {
+    # 格式：(roc_year, month): 'sheet_id'
+    # 只在 auto-detect 無法命中（同事用奇怪命名 / 臨時狀況）時手填
 }
 SA_SCOPES = [
     'https://www.googleapis.com/auth/drive.readonly',
@@ -145,24 +148,16 @@ def maybe_alert_zero_perf(roc_year, month):
 
 
 def maybe_remind_new_month_sheet(roc_year, month):
-    """L50 Case B: each month day 1-3, if month not in MONTH_SHEET_OVERRIDE, send Telegram reminder.
+    """L50 all-miss reminder: auto-detect + mirror fallback 全都找不到月份 sheet 時 fire。
 
-    Physical blocker: SA files().get returns no 'parents' field (SA lacks Reader on parent folder).
-    files().list only sees mirror folder (Joan-業績表-Mirror). Shared Drives empty.
-    Real fix: 珊珊 將每月業績表母 folder 共享給 SA:
-        perf-fetcher@amazing-height-482211-t0.iam.gserviceaccount.com
-    Until then: manual MONTH_SHEET_OVERRIDE entry + SA share each month; this reminder helps.
-    Throttle: 24h per trigger, separate from sanity throttle file.
+    2026-05-22 升級：Joan 把母 folder 共享 SA 後，auto-detect 應天天命中；
+    all-miss 代表真實異常（sheet 未建 / SA 權限問題 / 命名不對），全月每次都應 ping，
+    不再限制 day 1-3。
+    Throttle: 30min per trigger（同 sanity check throttle 分離）。
     """
     import time, urllib.parse
-    from datetime import datetime, timezone, timedelta
-    taipei = timezone(timedelta(hours=8))
-    today = datetime.now(taipei).day
-    if today > 3:
-        return False
-    if (roc_year, month) in MONTH_SHEET_OVERRIDE:
-        return False
-    THROTTLE_SEC = 24 * 3600
+    # day <= 3 guard 已移除 — auto-detect 接管後 all-miss 全月都是異常
+    THROTTLE_SEC = 30 * 60
     state_file = __import__("pathlib").Path.home() / ".claude" / "state" / "perf-newsheet-throttle.txt"
     now = time.time()
     if state_file.exists():
@@ -182,51 +177,111 @@ def maybe_remind_new_month_sheet(roc_year, month):
         print(f"[L50-remind] cannot import OPS creds: {e}", file=sys.stderr)
         return False
     msg = (
-        "📋 業績 cron 月初提醒\n"
-        f"{roc_year}/{month:02d} 不在 MONTH_SHEET_OVERRIDE\n"
-        "若新月份業績表已建立，需：\n"
-        "1. SA 加進共享：perf-fetcher@amazing-height-482211-t0.iam.gserviceaccount.com\n"
-        f"2. 在 MONTH_SHEET_OVERRIDE 新增 ({roc_year}, {month}): '<sheet_id>'\n"
-        "(目前 fallback mirror folder，若 mirror 同步正常可暫不動)"
+        "⚠️ 業績 cron auto-detect 全 miss\n"
+        f"{roc_year}/{month:02d} 母 folder + mirror folder 都找不到業績表\n"
+        "可能原因：\n"
+        "1. 當月業績表尚未建立（珊珊未月結）\n"
+        "2. SA 對母 folder 的 Reader 被撤\n"
+        f"3. 檔名不符命名規則（應含 {roc_year}年{month}月業績表）\n"
+        "行動：確認後若急用，在 MONTH_SHEET_OVERRIDE 手填 sheet_id"
     )
     url = f"https://api.telegram.org/bot{OPS_BOT_TOKEN}/sendMessage"
     data = urllib.parse.urlencode({"chat_id": OPS_CHAT_ID, "text": msg}).encode()
     try:
         with __import__("urllib.request", fromlist=["urlopen"]).urlopen(url, data=data, timeout=10) as r:
             r.read()
-        print("[L50-remind] new-sheet reminder sent to OPS bot", file=sys.stderr)
+        print("[L50-remind] all-miss reminder sent to OPS bot", file=sys.stderr)
         return True
     except Exception as e:
         print(f"[L50-remind] reminder failed: {e}", file=sys.stderr)
         return False
 
-
 def find_month_sheet(drive, roc_year: int, month: int) -> Optional[dict]:
-    """先查 MONTH_SHEET_OVERRIDE（直連真實源），沒設才 fallback mirror folder。"""
-    override_id = MONTH_SHEET_OVERRIDE.get((roc_year, month))
-    if override_id:
-        print(f"✅ 使用 override sheet: {roc_year}年{month}月 -> {override_id[:20]}…")
-        return {'id': override_id, 'name': f'{roc_year}年{month}月業績表 (override)'}
-    resp = drive.files().list(
-        q=f"'{MIRROR_FOLDER_ID}' in parents and trashed=false and mimeType='application/vnd.google-apps.spreadsheet'",
-        fields='files(id,name,modifiedTime)',
-        pageSize=200,
-        supportsAllDrives=True,
-        includeItemsFromAllDrives=True,
-    ).execute()
-    files = resp.get('files', [])
-    # 命名 fuzzy: {roc}年{0?}{month}月...業績表
-    pat = re.compile(rf'{roc_year}\s*年\s*0?{month}\s*月.*業績表')
-    matches = [f for f in files if pat.search(f['name'])]
-    if not matches:
-        print(f"⚠️  mirror folder 內找不到 {roc_year}年{month}月業績表")
-        print(f"   現有檔: {[f['name'] for f in files]}")
-        return None
-    if len(matches) > 1:
-        print(f"⚠️  多筆 match {[f['name'] for f in matches]}，取最新 modifiedTime")
-        matches.sort(key=lambda x: x.get('modifiedTime', ''), reverse=True)
-    return matches[0]
+    """4-layer search:
+    1. MONTH_SHEET_OVERRIDE (manual escape hatch，override 優先)
+    2. PARENT_FOLDER_ID auto-detect（母 folder 直搜，2026-05-22 主路徑）
+    3. MIRROR_FOLDER_ID fallback（legacy mirror folder，safety net）
+    4. all-miss → maybe_remind_new_month_sheet
 
+    Fault inject:
+    - PERF_FORCE_MISS=1 : 強制 return None（略過全部搜尋，reminder 仍 fire）
+    - PERF_DISABLE_OVERRIDE=1 : 跳過 layer 1 直接走 auto-detect（驗 auto-detect 有效性）
+    """
+    # ── fault inject: PERF_FORCE_MISS ──────────────────────────────────
+    if os.environ.get("PERF_FORCE_MISS") == "1":
+        print(f"[fault-inject] PERF_FORCE_MISS=1, forcing find_month_sheet to return None", file=sys.stderr)
+        maybe_remind_new_month_sheet(roc_year, month)
+        return None
+
+    # ── layer 1: MONTH_SHEET_OVERRIDE (manual escape hatch) ────────────
+    if os.environ.get("PERF_DISABLE_OVERRIDE") == "1":
+        print(f"[fault-inject] PERF_DISABLE_OVERRIDE=1, skipping MONTH_SHEET_OVERRIDE", file=sys.stderr)
+    else:
+        override_id = MONTH_SHEET_OVERRIDE.get((roc_year, month))
+        if override_id:
+            print(f"✅ 使用 override sheet: {roc_year}年{month}月 -> {override_id[:20]}…")
+            return {'id': override_id, 'name': f'{roc_year}年{month}月業績表 (override)'}
+
+    # ── layer 2: auto-detect 母 folder（主路徑，2026-05-22）───────────────
+    name_q = f"{roc_year}年{month}月業績表"
+    try:
+        resp2 = drive.files().list(
+            q=(
+                f'"{PARENT_FOLDER_ID}" in parents'
+                f' and mimeType="application/vnd.google-apps.spreadsheet"'
+                f' and name contains "{name_q}"'
+                f' and trashed=false'
+            ),
+            fields='files(id,name,modifiedTime)',
+            orderBy='modifiedTime desc',
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        ).execute()
+        auto_files = resp2.get('files', [])
+    except Exception as e:
+        print(f"[auto-detect] Drive API error: {e}", file=sys.stderr)
+        auto_files = []
+
+    if auto_files:
+        if len(auto_files) > 1:
+            print(f"⚠️  auto-detect: multiple sheets match {name_q!r}: {[f['name'] for f in auto_files]}，取最新 modifiedTime", file=sys.stderr)
+        best = auto_files[0]
+        print(f"✅ auto-detect 命中：{best['name']} (id={best['id'][:20]}…)")
+        return best
+
+    print(f"⚠️  auto-detect: 母 folder 內找不到 {name_q}")
+
+    # ── layer 3: mirror folder fallback（legacy safety net）─────────────
+    try:
+        mirror_q = f"'{MIRROR_FOLDER_ID}' in parents and trashed=false and mimeType='application/vnd.google-apps.spreadsheet'"
+        resp3 = drive.files().list(
+            q=mirror_q,
+            fields='files(id,name,modifiedTime)',
+            pageSize=200,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        ).execute()
+        mirror_files = resp3.get('files', [])
+    except Exception as e:
+        print(f"[mirror-fallback] Drive API error: {e}", file=sys.stderr)
+        mirror_files = []
+
+    pat = re.compile(rf'{roc_year}\s*年\s*0?{month}\s*月.*業績表')
+    mirror_matches = [f for f in mirror_files if pat.search(f['name'])]
+    if mirror_matches:
+        if len(mirror_matches) > 1:
+            print(f"⚠️  mirror fallback 多筆 match {[f['name'] for f in mirror_matches]}，取最新 modifiedTime")
+            mirror_matches.sort(key=lambda x: x.get('modifiedTime', ''), reverse=True)
+        best = mirror_matches[0]
+        print(f"✅ mirror fallback 命中：{best['name']} (id={best['id'][:20]}…)")
+        return best
+
+    print(f"⚠️  mirror folder 內也找不到 {roc_year}年{month}月業績表")
+    print(f"   mirror 現有檔: {[f['name'] for f in mirror_files]}")
+
+    # ── layer 4: all-miss → reminder ───────────────────────────────────
+    maybe_remind_new_month_sheet(roc_year, month)
+    return None
 
 def to_int(s) -> int:
     s = (s or '').replace(',', '').replace('\t', '').strip()
@@ -637,11 +692,6 @@ def main():
     if not gsheet_data:
         print("❌ 解析到 0 筆有效員工業績（sheet 找到但解析空），abort", file=sys.stderr)
         sys.exit(1)
-
-    # ── L50 Case B: 月初 1-3 號提醒（若該月不在 OVERRIDE）────────────────────
-    # SA 無法 auto-detect 母 folder（files().get 拿不到 parents，files().list 只看到 mirror folder）
-    # 真正修法需珊珊把母 folder 共享給 SA，在那之前月初人工補 OVERRIDE
-    maybe_remind_new_month_sheet(roc_year, month)
 
     total_perf = sum(gsheet_data.values())
     print(f"全店合計：{fmt_num(total_perf)}（{len(gsheet_data)} 人）")
