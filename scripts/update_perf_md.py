@@ -12,6 +12,7 @@
 # FIX-2026-05-03-mirror-folder: 移除 hardcoded PUBKEY (鎖死 4 月 sheet → 抓到的數字被當當月寫，造成 5/2 跑時 4 月新增業績寫進 115/05)
 #                                改 SA + mirror folder 動態找「{roc}年{當月}月業績表」
 """
+import os
 import argparse
 import csv
 import hashlib
@@ -88,6 +89,116 @@ def get_sa_clients():
         build('drive', 'v3', credentials=creds, cache_discovery=False),
         build('sheets', 'v4', credentials=creds, cache_discovery=False),
     )
+
+
+
+
+def is_zero_perf_anomaly(total_perf, gsheet_data, now=None):
+    """sanity check: non-day1, employees>=10, total==0 => anomaly"""
+    from datetime import datetime
+    now = now or datetime.now()
+    if now.day == 1:
+        return False
+    if len(gsheet_data) < 10:
+        return False
+    return total_perf == 0
+
+
+def maybe_alert_zero_perf(roc_year, month):
+    """Send Telegram OPS alert for zero-perf anomaly. 30-min throttle."""
+    import time, urllib.parse
+    THROTTLE_SEC = 30 * 60
+    state_file = __import__("pathlib").Path.home() / ".claude" / "state" / "perf-sanity-throttle.txt"
+    now = time.time()
+    if state_file.exists():
+        try:
+            last = float(state_file.read_text().strip())
+            if now - last < THROTTLE_SEC:
+                print(f"[sanity] zero-perf alert throttled (last alert {int(now - last)}s ago)", file=sys.stderr)
+                return False
+        except ValueError:
+            pass
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    state_file.write_text(str(now))
+    sys.path.insert(0, str(__import__("pathlib").Path.home() / ".claude" / "scripts"))
+    try:
+        from _secrets import OPS_BOT_TOKEN, OPS_CHAT_ID
+    except Exception as e:
+        print(f"[sanity] cannot import OPS creds: {e}", file=sys.stderr)
+        return False
+    msg = (
+        "⚠️ 業績 cron sanity check 觸發\n"
+        f"{roc_year}/{month:02d} total_perf=0 且非月初 + 員工解析 >=10\n"
+        "已擋住 commit + push（避免 silent push 0 業績）\n"
+        "行動：檢查源 sheet 是否被清空 / SA 權限是否被撤 / sheet ID 是否需更新"
+    )
+    url = f"https://api.telegram.org/bot{OPS_BOT_TOKEN}/sendMessage"
+    data = urllib.parse.urlencode({"chat_id": OPS_CHAT_ID, "text": msg}).encode()
+    try:
+        with __import__("urllib.request", fromlist=["urlopen"]).urlopen(url, data=data, timeout=10) as r:
+            r.read()
+        print("[sanity] alert sent to OPS bot", file=sys.stderr)
+        return True
+    except Exception as e:
+        print(f"[sanity] alert failed: {e}", file=sys.stderr)
+        return False
+
+
+def maybe_remind_new_month_sheet(roc_year, month):
+    """L50 Case B: each month day 1-3, if month not in MONTH_SHEET_OVERRIDE, send Telegram reminder.
+
+    Physical blocker: SA files().get returns no 'parents' field (SA lacks Reader on parent folder).
+    files().list only sees mirror folder (Joan-業績表-Mirror). Shared Drives empty.
+    Real fix: 珊珊 將每月業績表母 folder 共享給 SA:
+        perf-fetcher@amazing-height-482211-t0.iam.gserviceaccount.com
+    Until then: manual MONTH_SHEET_OVERRIDE entry + SA share each month; this reminder helps.
+    Throttle: 24h per trigger, separate from sanity throttle file.
+    """
+    import time, urllib.parse
+    from datetime import datetime, timezone, timedelta
+    taipei = timezone(timedelta(hours=8))
+    today = datetime.now(taipei).day
+    if today > 3:
+        return False
+    if (roc_year, month) in MONTH_SHEET_OVERRIDE:
+        return False
+    THROTTLE_SEC = 24 * 3600
+    state_file = __import__("pathlib").Path.home() / ".claude" / "state" / "perf-newsheet-throttle.txt"
+    now = time.time()
+    if state_file.exists():
+        try:
+            last = float(state_file.read_text().strip())
+            if now - last < THROTTLE_SEC:
+                print(f"[L50-remind] new-sheet reminder throttled (last {int(now - last)}s ago)", file=sys.stderr)
+                return False
+        except ValueError:
+            pass
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    state_file.write_text(str(now))
+    sys.path.insert(0, str(__import__("pathlib").Path.home() / ".claude" / "scripts"))
+    try:
+        from _secrets import OPS_BOT_TOKEN, OPS_CHAT_ID
+    except Exception as e:
+        print(f"[L50-remind] cannot import OPS creds: {e}", file=sys.stderr)
+        return False
+    msg = (
+        "📋 業績 cron 月初提醒\n"
+        f"{roc_year}/{month:02d} 不在 MONTH_SHEET_OVERRIDE\n"
+        "若新月份業績表已建立，需：\n"
+        "1. SA 加進共享：perf-fetcher@amazing-height-482211-t0.iam.gserviceaccount.com\n"
+        f"2. 在 MONTH_SHEET_OVERRIDE 新增 ({roc_year}, {month}): '<sheet_id>'\n"
+        "(目前 fallback mirror folder，若 mirror 同步正常可暫不動)"
+    )
+    url = f"https://api.telegram.org/bot{OPS_BOT_TOKEN}/sendMessage"
+    data = urllib.parse.urlencode({"chat_id": OPS_CHAT_ID, "text": msg}).encode()
+    try:
+        with __import__("urllib.request", fromlist=["urlopen"]).urlopen(url, data=data, timeout=10) as r:
+            r.read()
+        print("[L50-remind] new-sheet reminder sent to OPS bot", file=sys.stderr)
+        return True
+    except Exception as e:
+        print(f"[L50-remind] reminder failed: {e}", file=sys.stderr)
+        return False
 
 
 def find_month_sheet(drive, roc_year: int, month: int) -> Optional[dict]:
@@ -527,8 +638,25 @@ def main():
         print("❌ 解析到 0 筆有效員工業績（sheet 找到但解析空），abort", file=sys.stderr)
         sys.exit(1)
 
+    # ── L50 Case B: 月初 1-3 號提醒（若該月不在 OVERRIDE）────────────────────
+    # SA 無法 auto-detect 母 folder（files().get 拿不到 parents，files().list 只看到 mirror folder）
+    # 真正修法需珊珊把母 folder 共享給 SA，在那之前月初人工補 OVERRIDE
+    maybe_remind_new_month_sheet(roc_year, month)
+
     total_perf = sum(gsheet_data.values())
     print(f"全店合計：{fmt_num(total_perf)}（{len(gsheet_data)} 人）")
+
+    # ── fault injection hook（tester 用 PERF_FORCE_ZERO=1 觸發）───────────────────────
+    if os.environ.get("PERF_FORCE_ZERO") == "1":
+        print("[sanity] PERF_FORCE_ZERO=1 detected, forcing total_perf=0 for fault injection test", file=sys.stderr)
+        total_perf = 0
+        gsheet_data = {f"emp{i}": 0 for i in range(15)}  # 確保 len>=10
+
+    # ── L51 sanity check：0 業績異常擋寫入 ─────────────────────
+    if is_zero_perf_anomaly(total_perf, gsheet_data):
+        print(f"[sanity] ⚠️ {roc_year}/{month} 0 業績異常，中止寫入", file=sys.stderr)
+        maybe_alert_zero_perf(roc_year, month)
+        sys.exit(2)
 
     original = vault_md.read_text(encoding='utf-8')
     h2_pattern = re.compile(r'^## ', re.MULTILINE)
