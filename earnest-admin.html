@@ -411,6 +411,11 @@
     }
 
     function doDownloadPDF() {
+      // 2026-05-22 修：LINE 內建瀏覽器點下載會把 data URI 當文字傳到聊天室
+      if (/Line\//i.test(navigator.userAgent)) {
+        alert("⚠️ LINE 內建瀏覽器無法下載 PDF\n\n請點右上角「⋯」→「在 Safari / Chrome 中開啟」→ 再按一次此按鈕。");
+        return;
+      }
       if (!currentRecord || !currentRecord.pdf_b64) {
         alert("無 PDF 資料");
         return;
