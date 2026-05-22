@@ -12,11 +12,15 @@ backfill_extras.py — 一次性歷史回填：續約業績 + 代管業績
 Idempotent：跑第二次結果一樣。
 
 Usage:
-  python backfill_extras.py --dry-run   # 只印不寫
-  python backfill_extras.py --write     # 實際寫入 vault
+  python backfill_extras.py --dry-run            # 只印不寫（走 mirror folder）
+  python backfill_extras.py --write              # 實際寫入 vault（走 mirror folder）
+  python backfill_extras.py --year 114 --dry-run # 只印不寫（走 114 年度子 folder）
+  python backfill_extras.py --year 114 --write   # 實際寫入 vault（走 114 年度子 folder）
+  python backfill_extras.py --month 115/03 --dry-run  # 只跑指定月份
 """
 
 import argparse
+import platform
 import re
 import sys
 import time
@@ -27,12 +31,25 @@ from googleapiclient.discovery import build
 
 SA_KEY = Path.home() / '.claude' / 'scripts' / 'perf-sa-key.json'
 MIRROR_FOLDER_ID = '1s_2wWYcRAiFV-nwIYA0-hHSKsL_DMqsw'
+
+# 新母 folder（owner=wuo.home@gmail.com），含各年度薪資表子 folder
+PARENT_FOLDER_ID = '1izWZC2w49BJGkMoWD5c_0UtIRrI9qkHx'
+ANNUAL_SUBFOLDER_NAMES = {
+    114: '114年度薪資表',
+    113: '113年度薪資表',
+    112: '112年薪資表',
+}
+
 SA_SCOPES = [
     'https://www.googleapis.com/auth/drive.readonly',
     'https://www.googleapis.com/auth/spreadsheets.readonly',
 ]
 
-VAULT_MD = Path(r'C:\Second Brain\Obsidian\窩的家\管理部\全店每月業績表.md')
+# 跨機 VAULT_MD path
+if platform.system() == 'Darwin':
+    VAULT_MD = Path.home() / 'Vaults' / 'Joan' / '窩的家' / '管理部' / '全店每月業績表.md'
+else:
+    VAULT_MD = Path(r'C:\Second Brain\Obsidian\窩的家\管理部\全店每月業績表.md')
 
 NAME_ALIASES = {
     'TINA': '蕭靜芳', 'TINA（蕭靜芳）': '蕭靜芳', '蕭靜芳': '蕭靜芳',
@@ -90,6 +107,55 @@ def list_mirror_files(drive) -> list:
         includeItemsFromAllDrives=True,
     ).execute()
     return resp.get('files', [])
+
+
+def list_annual_sheets(drive, year: int) -> list:
+    """
+    從 PARENT_FOLDER_ID 找 ANNUAL_SUBFOLDER_NAMES[year] 子 folder，
+    再 list 裡面所有 spreadsheet，過濾出 name 含「{year}年」+ 「月業績表」的檔案。
+    回傳 list of {id, name, modifiedTime} 同 list_mirror_files 格式。
+    """
+    subfolder_name = ANNUAL_SUBFOLDER_NAMES.get(year)
+    if not subfolder_name:
+        print(f"error: 不支援 year={year}（未在 ANNUAL_SUBFOLDER_NAMES 中）", file=sys.stderr)
+        sys.exit(1)
+
+    # 找子 folder
+    resp = drive.files().list(
+        q=f"'{PARENT_FOLDER_ID}' in parents and trashed=false and mimeType='application/vnd.google-apps.folder'",
+        fields='files(id,name)',
+        pageSize=50,
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+    ).execute()
+    subfolders = resp.get('files', [])
+    subfolder_id = None
+    for f in subfolders:
+        if f['name'] == subfolder_name:
+            subfolder_id = f['id']
+            break
+    if not subfolder_id:
+        print(f"error: 找不到子 folder '{subfolder_name}'（parent={PARENT_FOLDER_ID}）", file=sys.stderr)
+        sys.exit(1)
+    print(f"找到年度子 folder: {subfolder_name}  id={subfolder_id}")
+
+    # List spreadsheets in subfolder
+    resp2 = drive.files().list(
+        q=f"'{subfolder_id}' in parents and trashed=false and mimeType='application/vnd.google-apps.spreadsheet'",
+        fields='files(id,name,modifiedTime)',
+        pageSize=50,
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+    ).execute()
+    all_files = resp2.get('files', [])
+
+    year_str = str(year)
+    filtered = [
+        f for f in all_files
+        if f'{year_str}年' in f['name'] and '月業績表' in f['name']
+    ]
+    print(f"  子 folder 共 {len(all_files)} 個 spreadsheet，過濾出 {len(filtered)} 份月業績表")
+    return filtered
 
 
 def parse_month_from_filename(name: str):
@@ -363,46 +429,8 @@ def update_vault_section(vault_md: Path, ym_label: str, summary_line: str, detai
     return True
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--dry-run', action='store_true', help='只印不寫')
-    parser.add_argument('--write', action='store_true', help='實際寫入 vault')
-    parser.add_argument('--month', default=None, help='只跑指定月份如 115/03')
-    args = parser.parse_args()
-
-    if not args.dry_run and not args.write:
-        print("error 請指定 --dry-run 或 --write", file=sys.stderr)
-        sys.exit(1)
-
-    dry_run = args.dry_run
-
-    drive, sheets = get_sa_clients()
-    files = list_mirror_files(drive)
-
-    # 建立 (roc_year, month) → file dict（取 modifiedTime 最新者）
-    month_files = {}
-    for f in files:
-        parsed = parse_month_from_filename(f['name'])
-        if parsed:
-            key = parsed
-            if key not in month_files:
-                month_files[key] = f
-            else:
-                if f.get('modifiedTime', '') > month_files[key].get('modifiedTime', ''):
-                    month_files[key] = f
-
-    print(f"mirror folder 共找到 {len(month_files)} 個月份 sheet")
-    for k in sorted(month_files.keys()):
-        print(f"  {k[0]}/{k[1]:02d}  ->  {month_files[k]['name']}")
-
-    if args.month:
-        m = re.match(r'^(\d{3})/(\d{1,2})$', args.month.strip())
-        if not m:
-            print(f"error --month 格式錯（要 ROC年/月，如 115/03），收到 {args.month}", file=sys.stderr)
-            sys.exit(1)
-        filter_key = (int(m.group(1)), int(m.group(2)))
-        month_files = {k: v for k, v in month_files.items() if k == filter_key}
-
+def process_month_files(month_files: dict, sheets, vault_md: Path, dry_run: bool):
+    """處理 month_files dict（key=(roc_year, month), value=file dict）"""
     grand_renewal = 0
     grand_mgmt = 0
     processed_count = 0
@@ -436,7 +464,103 @@ def main():
         results_summary.append((ym_label, total_renewal, total_mgmt, extras))
 
         summary_line, detail_table = build_extras_block(ym_label, extras)
-        update_vault_section(VAULT_MD, ym_label, summary_line, detail_table, dry_run=dry_run)
+        update_vault_section(vault_md, ym_label, summary_line, detail_table, dry_run=dry_run)
+
+    return grand_renewal, grand_mgmt, processed_count, results_summary
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dry-run', action='store_true', help='只印不寫')
+    parser.add_argument('--write', action='store_true', help='實際寫入 vault')
+    parser.add_argument('--month', default=None, help='只跑指定月份如 115/03')
+    parser.add_argument('--year', type=int, default=None, help='跑整年度（走年度子 folder），如 --year 114')
+    parser.add_argument('--vault-md', default=None, help='override VAULT_MD 路徑')
+    args = parser.parse_args()
+
+    if not args.dry_run and not args.write:
+        print("error 請指定 --dry-run 或 --write", file=sys.stderr)
+        sys.exit(1)
+
+    if args.month and args.year:
+        print("error --month 和 --year 互斥，不能同時指定", file=sys.stderr)
+        sys.exit(1)
+
+    dry_run = args.dry_run
+    vault_md = Path(args.vault_md) if args.vault_md else VAULT_MD
+    print(f"VAULT_MD: {vault_md}")
+
+    drive, sheets = get_sa_clients()
+
+    # ── 年度模式 --year ──
+    if args.year:
+        year = args.year
+        print(f"\n=== 年度模式：{year} 年 ===")
+        annual_files = list_annual_sheets(drive, year)
+
+        month_files = {}
+        for f in annual_files:
+            parsed = parse_month_from_filename(f['name'])
+            if parsed:
+                key = parsed
+                if key not in month_files:
+                    month_files[key] = f
+                else:
+                    if f.get('modifiedTime', '') > month_files[key].get('modifiedTime', ''):
+                        month_files[key] = f
+            else:
+                print(f"  skip (parse fail): {f['name']}")
+
+        print(f"解析出 {len(month_files)} 個月份 sheet：")
+        for k in sorted(month_files.keys()):
+            print(f"  {k[0]}/{k[1]:02d}  ->  {month_files[k]['name']}")
+
+        grand_renewal, grand_mgmt, processed_count, results_summary = process_month_files(
+            month_files, sheets, vault_md, dry_run
+        )
+
+        print(f"\n{'='*60}")
+        print(f"年度模式完成：{year} 年，共處理 {processed_count} 個月")
+        print(f"  累計全店續約業績：{fmt_num(grand_renewal)}")
+        print(f"  累計全店代管業績：{fmt_num(grand_mgmt)}")
+
+        # 114/12 有續約業績，做基本驗算
+        for ym_label, total_renewal, total_mgmt, extras in results_summary:
+            if ym_label == f'{year}/12' and total_renewal == 0 and total_mgmt == 0:
+                print(f"\n  [WARN] {ym_label} 全 0 命中，請確認 sheet 結構是否有變")
+
+        return
+
+    # ── 原有模式（mirror folder / --month）──
+    files = list_mirror_files(drive)
+
+    # 建立 (roc_year, month) → file dict（取 modifiedTime 最新者）
+    month_files = {}
+    for f in files:
+        parsed = parse_month_from_filename(f['name'])
+        if parsed:
+            key = parsed
+            if key not in month_files:
+                month_files[key] = f
+            else:
+                if f.get('modifiedTime', '') > month_files[key].get('modifiedTime', ''):
+                    month_files[key] = f
+
+    print(f"mirror folder 共找到 {len(month_files)} 個月份 sheet")
+    for k in sorted(month_files.keys()):
+        print(f"  {k[0]}/{k[1]:02d}  ->  {month_files[k]['name']}")
+
+    if args.month:
+        m = re.match(r'^(\d{3})/(\d{1,2})$', args.month.strip())
+        if not m:
+            print(f"error --month 格式錯（要 ROC年/月，如 115/03），收到 {args.month}", file=sys.stderr)
+            sys.exit(1)
+        filter_key = (int(m.group(1)), int(m.group(2)))
+        month_files = {k: v for k, v in month_files.items() if k == filter_key}
+
+    grand_renewal, grand_mgmt, processed_count, results_summary = process_month_files(
+        month_files, sheets, vault_md, dry_run
+    )
 
     print(f"\n{'='*60}")
     print(f"處理完成：{processed_count} 個月")
