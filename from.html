@@ -590,17 +590,22 @@
             <p class="question-label" style="margin-top:20px;">2. 必要需求</p>
             <input type="hidden" name="1000592" id="field_needs">
             <div id="needs_container" class="option-grid">
-                <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">公司營登</div>
-                <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">公司報稅</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">附傢俱</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">租屋補助</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">入戶籍</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">汽車位</div>
-                <!-- 新增附傢俱選項 -->
-                <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">附傢俱</div>
                 <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">以上皆無需求</div>
             </div>
 
-            <p class="question-label" style="margin-top:20px;">3. 想對我們說的話</p>
+            <p class="question-label" style="margin-top:20px;">3. 商業用途</p>
+            <div id="biz_container" class="option-grid">
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">公司營登</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">公司報稅</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">工廠用地</div>
+                <div class="multi-select-btn" onclick="toggleSelection(this, 'needs')">不需要商業用途</div>
+            </div>
+
+            <p class="question-label" style="margin-top:20px;">4. 想對我們說的話</p>
             <textarea name="1000648" rows="4" placeholder="還有什麼想告訴我們的嗎？(選填)" style="width:100%; padding:15px; border-radius:12px; border:2px solid #ddd;"></textarea>
         </div>
 
@@ -793,22 +798,30 @@
 
         // 互斥邏輯
         if (type === 'needs') {
-            const noneOptionText = "以上皆無需求";
-            const container = document.getElementById('needs_container');
+            // 每個 container 各自的「以上皆無」排他選項；只清自己 container 內的勾選
+            const exclusiveByContainer = {
+                'needs_container': '以上皆無需求',
+                'biz_container': '不需要商業用途'
+            };
+            const container = btn.closest('.option-grid');
+            const containerId = container.id;
+            const noneOptionText = exclusiveByContainer[containerId];
 
             if (value === noneOptionText) {
                 if (selectedNeeds.includes(noneOptionText)) {
-                    selectedNeeds = [];
+                    selectedNeeds = selectedNeeds.filter(x => x !== noneOptionText);
                     btn.classList.remove('active');
                 } else {
-                    selectedNeeds = [noneOptionText];
-                    container.querySelectorAll('.multi-select-btn').forEach(b => {
-                        b.classList.remove('active');
-                    });
+                    // 清掉本 container 內所有其他勾選 + active state
+                    const itemsInThisContainer = Array.from(container.querySelectorAll('.multi-select-btn')).map(b => b.innerText);
+                    selectedNeeds = selectedNeeds.filter(x => !itemsInThisContainer.includes(x));
+                    container.querySelectorAll('.multi-select-btn').forEach(b => b.classList.remove('active'));
+                    selectedNeeds.push(noneOptionText);
                     btn.classList.add('active');
                 }
             } else {
-                if (selectedNeeds.includes(noneOptionText)) {
+                // 勾任一非排他選項 → 清掉本 container 的排他選項（如有）
+                if (noneOptionText && selectedNeeds.includes(noneOptionText)) {
                     selectedNeeds = selectedNeeds.filter(x => x !== noneOptionText);
                     container.querySelectorAll('.multi-select-btn').forEach(b => {
                         if (b.innerText === noneOptionText) b.classList.remove('active');
@@ -930,6 +943,13 @@
         const hasCar = selectedNeeds.includes("汽車位");
         const hasFurniture = selectedNeeds.includes("附傢俱");
 
+        const bizOptions = ["公司營登", "公司報稅", "工廠用地"];
+        const selectedBiz = bizOptions.filter(o => selectedNeeds.includes(o));
+        const bizNotNeeded = selectedNeeds.includes("不需要商業用途");
+        const bizText = selectedBiz.length > 0
+            ? `商業用途：${selectedBiz.map(o => "⭕️" + o).join("、")}`
+            : `商業用途：${bizNotNeeded ? "❌不需要" : "未填寫"}`;
+
         const needLines = [
             `${hasPet ? "⭕️" : "❌"}養寵物`,
             `${hasSubsidy ? "⭕️" : "❌"}租屋補助`,
@@ -963,6 +983,7 @@
 ${needLines.join('\n')}
 
 ${furnitureText}
+${bizText}
 預算：${budgetText}`;
 
         return final;
