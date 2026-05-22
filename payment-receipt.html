@@ -1044,6 +1044,11 @@
 
     // 下載備份 PDF
     async function downloadReceiptPDF() {
+      // 2026-05-22 修：LINE 內建瀏覽器點下載會把 blob URL 當文字傳到聊天室
+      if (/Line\//i.test(navigator.userAgent)) {
+        alert("⚠️ LINE 內建瀏覽器無法下載 PDF\n\n您的收款憑單已自動存入系統，業務可從後台調閱備份檔，無需另外下載。\n\n若仍要下載：請點右上角「⋯」→「在 Safari / Chrome 中開啟」→ 再按一次此按鈕。");
+        return;
+      }
       const btn = event.currentTarget;
       btn.innerText = "PDF 產生中...";
       btn.disabled = true;
