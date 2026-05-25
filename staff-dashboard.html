@@ -990,7 +990,7 @@ function rocToIso(rocStr) {
 }
 
 function parsePerfMd(text) {
-  const records = [];
+  const raw = [];
   let curYm = null;
   for (const line of text.split('\n')) {
     const m = line.match(/^##\s+(\d{3}\/\d{2})\s*$/);
@@ -1003,12 +1003,26 @@ function parsePerfMd(text) {
     if (!/^\d+$/.test(rank)) continue;
     const name = normalizeName(cols[2].replace(/\*/g, '').trim());
     if (!name || name === '合計') continue;
-    const rawPerf = cols[4].replace(/,/g, '').replace(/\*/g, '').trim();
-    const perf = parseInt(parseFloat(rawPerf));
+    // Bug B fix: cols[4] 可能是「—」(待結)，parseInt 返回 NaN；fallback 讀 cols[3]（原始業績數字欄）
+    let rawPerf = cols[4].replace(/,/g, '').replace(/\*/g, '').trim();
+    let perf = parseInt(parseFloat(rawPerf));
+    if (!perf || perf <= 0) {
+      rawPerf = (cols[3] || '').replace(/,/g, '').replace(/\*/g, '').trim();
+      perf = parseInt(parseFloat(rawPerf));
+    }
     if (!perf || perf <= 0) continue;
-    records.push({ ym: curYm, name, perf });
+    raw.push({ ym: curYm, name, perf });
   }
-  return records;
+  // Bug A fix: 同月同人取最大值 dedup — 避免 NAME_ALIASES 把舊名 alias 後與直寫新名那行重複計算
+  const dedupMap = {};
+  for (const r of raw) {
+    const k = `${r.ym}|${r.name}`;
+    if (dedupMap[k] === undefined || r.perf > dedupMap[k]) dedupMap[k] = r.perf;
+  }
+  return Object.entries(dedupMap).map(([k, perf]) => {
+    const [ym, name] = k.split('|');
+    return { ym, name, perf };
+  });
 }
 
 function buildCompare(ragicPerf, obPerf) {
