@@ -61,6 +61,60 @@
     </p>
   </header>
 
+  <!-- ── 五月業績目標 ── -->
+  <details open class="mb-8 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+    <summary class="cursor-pointer select-none px-6 py-4 flex items-center justify-between">
+      <span class="text-xl font-black text-amber-900">📋 五月業績目標</span>
+      <span class="text-sm text-amber-700">合計 <b>180 萬</b> ／ <b>86.5 間</b>　大家加油 💪</span>
+    </summary>
+    <div class="px-6 pb-6">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-amber-800 border-b border-amber-200">
+              <th class="text-left py-2 pr-4 font-semibold">姓名</th>
+              <th class="text-right py-2 px-4 font-semibold">業績</th>
+              <th class="text-right py-2 pl-4 font-semibold">委託</th>
+            </tr>
+          </thead>
+          <tbody id="mayTargetBody" class="divide-y divide-amber-100"></tbody>
+          <tfoot>
+            <tr class="border-t-2 border-amber-300 font-black text-amber-900">
+              <td class="py-2 pr-4">合計</td>
+              <td class="text-right py-2 px-4">180 萬</td>
+              <td class="text-right py-2 pl-4">86.5 間</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </details>
+  <script>
+    (function () {
+      const rows = [
+        ["忠豪", "40 萬", "15 間"],
+        ["傳", "20 萬", "7.5 間"],
+        ["慈", "20 萬", "10 間"],
+        ["宣", "15 萬", "8 間"],
+        ["Kelly", "15 萬", "5 間"],
+        ["炫", "10 萬", "10 間"],
+        ["馬丁", "10 萬", "8 間"],
+        ["碩", "10 萬", "2 間"],
+        ["方", "10 萬", "6 間"],
+        ["Tina", "10 萬", "1 間"],
+        ["威", "8 萬", "8 間"],
+        ["勁", "5 萬", "5 間"],
+        ["則", "5 萬", "0 間"],
+        ["宇謙", "2 萬", "1 間"],
+      ];
+      const tb = document.getElementById("mayTargetBody");
+      if (tb) tb.innerHTML = rows.map(([n, p, c]) =>
+        `<tr><td class="py-2 pr-4 text-slate-700">${n}</td>` +
+        `<td class="text-right py-2 px-4 text-slate-900 font-medium">${p}</td>` +
+        `<td class="text-right py-2 pl-4 text-slate-600">${c}</td></tr>`).join("");
+    })();
+  </script>
+
   <!-- Tabs -->
   <div class="flex gap-6 border-b border-slate-200 overflow-x-auto scrollbar-thin">
     <div class="tab active pb-3 text-lg px-1" data-tab="month">📦 進案量 &amp; 業績</div>
