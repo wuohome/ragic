@@ -467,7 +467,7 @@
 
       <p class="question-label">大頭照</p>
       <label class="upload-zone" id="photoZone">
-        <input type="file" id="f_photo" accept="image/*" capture="user">
+        <input type="file" id="f_photo" accept="image/*">
         <i class="fas fa-camera"></i>
         <div class="up-hint">點擊拍照或上傳</div>
         <div class="up-sub">建議正面、清晰、無遮擋</div>
@@ -523,7 +523,7 @@
 
       <p class="question-label">存摺照片</p>
       <label class="upload-zone" id="passbookZone">
-        <input type="file" id="f_passbook" accept="image/*" capture="environment">
+        <input type="file" id="f_passbook" accept="image/*">
         <i class="fas fa-book"></i>
         <div class="up-hint">拍攝存摺封面</div>
         <div class="up-sub">需清楚顯示戶名與帳號</div>
@@ -834,7 +834,6 @@ function buildCard(kind, row, idx) {
       el = document.createElement('input');
       el.type = 'file';
       el.accept = 'image/*';
-      el.capture = 'environment';
     } else {
       el = document.createElement('input');
       el.type = f.type;
