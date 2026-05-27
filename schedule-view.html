@@ -269,6 +269,42 @@ function getCellStatuses(emp, y, m, d, leaves, duties, noRest) {
   return result;
 }
 
+/* ── Inline ConfirmModal (replaces window.confirm for WKWebView) ─ */
+function ConfirmModal({ open, message, onConfirm, onCancel }) {
+  if (!open) return null;
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 9999, padding: 16,
+    }}>
+      <div style={{
+        background: '#fff', borderRadius: 16,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.22)',
+        maxWidth: 360, width: '100%', padding: '28px 24px',
+        fontFamily: '"Microsoft JhengHei","Noto Sans TC",sans-serif',
+      }}>
+        <div style={{
+          fontSize: 15, color: '#1e293b', marginBottom: 24,
+          lineHeight: 1.6, whiteSpace: 'pre-wrap', textAlign: 'center',
+        }}>{message}</div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button onClick={onCancel} style={{
+            flex: 1, padding: '12px 0', borderRadius: 10,
+            border: '1.5px solid #cbd5e1', background: '#f8fafc',
+            color: '#475569', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+          }}>取消</button>
+          <button onClick={onConfirm} style={{
+            flex: 1, padding: '12px 0', borderRadius: 10,
+            border: 'none', background: '#3f5262',
+            color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+          }}>確定</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Sub-components ─────────────────────────────────────────── */
 function Spinner({ small }) {
   const s = small ? 14 : 18;
@@ -412,6 +448,12 @@ function EntryScreen({ onPersonal, onTeam }) {
 
 /* ── Name Selection ─────────────────────────────────────────── */
 function NameSelect({ emps, onSelect, onBack }) {
+  const [confirmState, setConfirmState] = React.useState({ open: false, message: '', onConfirm: null });
+  const openConfirm = (message) => new Promise(resolve => {
+    setConfirmState({ open: true, message, onConfirm: () => { setConfirmState(s => ({...s, open: false})); resolve(true); } });
+  });
+  const cancelConfirm = () => { setConfirmState(s => ({...s, open: false, onConfirm: null})); };
+
   // Group by dept (preserving order)
   // 合併分組：珊珊+瓊安 一排、社宅+設計 一排
   const groups = React.useMemo(() => {
@@ -464,7 +506,7 @@ function NameSelect({ emps, onSelect, onBack }) {
               }}>{dept}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                 {members.map(emp => (
-                  <button key={emp.name} onClick={() => { if (window.confirm(`確認您是「${emp.name}」嗎？`)) onSelect(emp); }} style={{
+                  <button key={emp.name} onClick={async () => { const ok = await openConfirm(`確認您是「${emp.name}」嗎？`); if (ok) onSelect(emp); }} style={{
                     background: '#fff', border: '2px solid ' + dc.border,
                     borderRadius: 10, padding: '12px 22px',
                     cursor: 'pointer', fontSize: 15, fontWeight: 700, color: dc.text,
@@ -488,6 +530,12 @@ function NameSelect({ emps, onSelect, onBack }) {
           );
         })}
       </div>
+      <ConfirmModal
+        open={confirmState.open}
+        message={confirmState.message}
+        onConfirm={confirmState.onConfirm}
+        onCancel={cancelConfirm}
+      />
     </div>
   );
 }
@@ -507,6 +555,12 @@ function PersonalView({ emp, onBack }) {
   const [savingCells, setSavingCells] = React.useState({}); // key -> true
 
   const { toasts, show: showToast } = useToast();
+  const [confirmState, setConfirmState] = React.useState({ open: false, message: '', resolve: null });
+  const openConfirm = React.useCallback((message) => new Promise(resolve => {
+    setConfirmState({ open: true, message, resolve });
+  }), []);
+  const handleConfirmOk = () => setConfirmState(s => { if (s.resolve) s.resolve(true); return { open: false, message: '', resolve: null }; });
+  const handleConfirmCancel = () => setConfirmState(s => { if (s.resolve) s.resolve(false); return { open: false, message: '', resolve: null }; });
 
   React.useEffect(() => {
     setLoading(true);
@@ -560,7 +614,7 @@ function PersonalView({ emp, onBack }) {
   };
 
   // ── Cell click handler ──────────────────────────────────────
-  const handleCellClick = (d) => {
+  const handleCellClick = async (d) => {
     if (!open) {
       showToast('每月 20 號後開放排班', 'error');
       return;
@@ -573,13 +627,15 @@ function PersonalView({ emp, onBack }) {
       const count = Object.values(leaves).reduce((n, recs) => n + recs.filter(r => r.empName === emp.name && r.type === '排休').length, 0);
       const limit = SC.monthLeaveLimit(year, month);
       if (count >= limit) {
-        if (!window.confirm(`您本月已排休 ${count} 天，超過 ${limit} 天上限，確定要繼續？`)) return;
+        const ok = await openConfirm(`您本月已排休 ${count} 天，超過 ${limit} 天上限，確定要繼續？`);
+        if (!ok) return;
       }
     }
     // 禁休日警告
     const nrInfo = noRest[date];
     if (nrInfo && existing.length === 0) {
-      if (!window.confirm(`${date} 為禁休日${nrInfo.reason ? '（' + nrInfo.reason + '）' : ''}，確定要排休？`)) return;
+      const ok = await openConfirm(`${date} 為禁休日${nrInfo.reason ? '（' + nrInfo.reason + '）' : ''}，確定要排休？`);
+      if (!ok) return;
     }
     doToggleCell(d);
   };
@@ -768,6 +824,12 @@ function PersonalView({ emp, onBack }) {
         可編輯排休 · 其他狀態請聯絡管理員 · 資料來源：Ragic
       </div>
 
+      <ConfirmModal
+        open={confirmState.open}
+        message={confirmState.message}
+        onConfirm={handleConfirmOk}
+        onCancel={handleConfirmCancel}
+      />
       <Toast toasts={toasts}/>
     </div>
   );

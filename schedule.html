@@ -17,10 +17,9 @@
     })();
     </script>
     <script>
-        if (/iPhone|iPad|Android/i.test(navigator.userAgent)) {
-            if (confirm("排班模式建議使用電腦操作。\n\n要切換到閱覽模式嗎？")) {
-                window.location.href = "schedule-view.html";
-            }
+        /* LINE WKWebView fix: native confirm() freezes JS thread. Mobile redirected silently. */
+        if (/iPhone|iPad|Android/i.test(navigator.userAgent) && !new URLSearchParams(location.search).has('readonly')) {
+            window.location.href = "schedule-view.html";
         }
     </script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -96,6 +95,88 @@ const EDIT_PASSWORD = "0718";
 const isOpenPeriod = SC.isOpenPeriod;
 const IS_READONLY = new URLSearchParams(window.location.search).has('readonly');
 
+
+/* ── Inline Modal Components (WKWebView fix) ─────────────────── */
+function ModalBase({ children }) {
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 9999, padding: 16,
+            fontFamily: '"Microsoft JhengHei","Noto Sans TC",sans-serif',
+        }}>
+            <div style={{
+                background: '#fff', borderRadius: 16,
+                boxShadow: '0 8px 32px rgba(0,0,0,0.22)',
+                maxWidth: 380, width: '100%', padding: '28px 24px',
+            }}>
+                {children}
+            </div>
+        </div>
+    );
+}
+
+function ConfirmModal({ open, message, onConfirm, onCancel }) {
+    if (!open) return null;
+    return (
+        <ModalBase>
+            <div style={{ fontSize: 15, color: '#1e293b', marginBottom: 24, lineHeight: 1.6, whiteSpace: 'pre-wrap', textAlign: 'center' }}>{message}</div>
+            <div style={{ display: 'flex', gap: 12 }}>
+                <button onClick={onCancel} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: '1.5px solid #cbd5e1', background: '#f8fafc', color: '#475569', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>取消</button>
+                <button onClick={onConfirm} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', background: '#3f5262', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>確定</button>
+            </div>
+        </ModalBase>
+    );
+}
+
+function AlertModal({ open, message, onClose }) {
+    if (!open) return null;
+    return (
+        <ModalBase>
+            <div style={{ fontSize: 15, color: '#1e293b', marginBottom: 24, lineHeight: 1.6, whiteSpace: 'pre-wrap', textAlign: 'center' }}>{message}</div>
+            <button onClick={onClose} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', background: '#3f5262', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>確定</button>
+        </ModalBase>
+    );
+}
+
+function PromptModal({ open, message, onConfirm, onCancel }) {
+    if (!open) return null;
+    const [val, setVal] = React.useState('');
+    React.useEffect(() => { if (open) setVal(''); }, [open]);
+    return (
+        <ModalBase>
+            <div style={{ fontSize: 15, color: '#1e293b', marginBottom: 16, lineHeight: 1.6, whiteSpace: 'pre-wrap', textAlign: 'center' }}>{message}</div>
+            <input
+                autoFocus
+                value={val}
+                onChange={e => setVal(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && onConfirm(val)}
+                style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #cbd5e1', fontSize: 15, marginBottom: 16, boxSizing: 'border-box', outline: 'none' }}
+                placeholder="請輸入..."
+            />
+            <div style={{ display: 'flex', gap: 12 }}>
+                <button onClick={onCancel} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: '1.5px solid #cbd5e1', background: '#f8fafc', color: '#475569', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>取消</button>
+                <button onClick={() => onConfirm(val)} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', background: '#3f5262', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>確定</button>
+            </div>
+        </ModalBase>
+    );
+}
+
+function ActionSelectModal({ open, message, actions, onCancel }) {
+    if (!open) return null;
+    return (
+        <ModalBase>
+            <div style={{ fontSize: 15, color: '#1e293b', marginBottom: 20, lineHeight: 1.6, whiteSpace: 'pre-wrap', textAlign: 'center' }}>{message}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+                {actions.map((a, i) => (
+                    <button key={i} onClick={a.onClick} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', background: '#3f5262', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>{a.label}</button>
+                ))}
+            </div>
+            <button onClick={onCancel} style={{ width: '100%', padding: '10px 0', borderRadius: 10, border: '1.5px solid #cbd5e1', background: '#f8fafc', color: '#475569', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>取消</button>
+        </ModalBase>
+    );
+}
+
 const App = () => {
     const [unlocked, setUnlocked] = React.useState(IS_READONLY ? true : isOpenPeriod());
     const [pwInput, setPwInput] = React.useState("");
@@ -153,6 +234,24 @@ const App = () => {
         setToast({msg, ok});
         setTimeout(() => setToast(null), 2500);
     };
+    // ── Inline modal state (WKWebView fix) ──
+    const [confirmModal, setConfirmModal] = React.useState({ open: false, message: '', resolve: null });
+    const [alertModal, setAlertModal] = React.useState({ open: false, message: '', resolve: null });
+    const [promptModal, setPromptModal] = React.useState({ open: false, message: '', resolve: null });
+    const [actionModal, setActionModal] = React.useState({ open: false, message: '', actions: [], resolve: null });
+
+    const openConfirm = React.useCallback((msg) => new Promise(resolve => setConfirmModal({ open: true, message: msg, resolve })), []);
+    const openAlert = React.useCallback((msg) => new Promise(resolve => setAlertModal({ open: true, message: msg, resolve })), []);
+    const openPrompt = React.useCallback((msg) => new Promise(resolve => setPromptModal({ open: true, message: msg, resolve })), []);
+    const openActionSelect = React.useCallback((msg, actionLabels) => new Promise(resolve => {
+        const actions = actionLabels.map((label, i) => ({ label, onClick: () => { setActionModal(s => ({...s, open: false})); resolve(String(i + 1)); } }));
+        setActionModal({ open: true, message: msg, actions, resolve });
+    }), []);
+
+    const closeConfirm = (val) => setConfirmModal(s => { if (s.resolve) s.resolve(val); return { open: false, message: '', resolve: null }; });
+    const closeAlert = () => setAlertModal(s => { if (s.resolve) s.resolve(); return { open: false, message: '', resolve: null }; });
+    const closePrompt = (val) => setPromptModal(s => { if (s.resolve) s.resolve(val); return { open: false, message: '', resolve: null }; });
+    const closeActionModal = () => setActionModal(s => { if (s.resolve) s.resolve(null); return { open: false, message: '', actions: [], resolve: null }; });
 
     const load = async () => {
         setLoading(true);
@@ -307,7 +406,7 @@ const App = () => {
                 setNoRest(nr => { const n = {...nr}; delete n[dateStr]; return n; });
                 showToast(`${dateStr} 禁休已取消`);
             } else {
-                const reason = prompt("禁休原因（如：開幕活動）：");
+                const reason = await openPrompt("禁休原因（如：開幕活動）：");
                 if (reason === null) { setSaving(s => { const n = {...s}; delete n[savingKey]; return n; }); return; }
                 const res = await SC.proxyFetch("createLeave", {
                     method: "POST",
@@ -350,7 +449,11 @@ const App = () => {
                     const canAddFloor = FLOORS.filter(f => !usedFloors.includes(f) && !myFloors.includes(f));
                     if (canAddFloor.length > 0 && !myDuties.some(d => d.missed)) {
                         // 還有空樓層且沒有未掃狀態 → 問要加層還是標未掃
-                        const action = prompt(`${empName} 已排 ${myFloors.join("+")}，要？\n1) 加排 ${canAddFloor[0]}\n2) 標記 ${myFloors[myFloors.length-1]} 未掃\n3) 清除 ${myFloors[myFloors.length-1]}\n\n輸入 1/2/3`);
+                        const action = await openActionSelect(`${empName} 已排 ${myFloors.join("+")}，要做什麼？`, [
+                            `加排 ${canAddFloor[0]}`,
+                            `標記 ${myFloors[myFloors.length-1]} 未掃`,
+                            `清除 ${myFloors[myFloors.length-1]}`
+                        ]);
                         if (action === "1") {
                             // 加排新樓層
                             const floor = canAddFloor.sort((a, b) => (empObj?.fc[a]||0) - (empObj?.fc[b]||0))[0];
@@ -473,7 +576,8 @@ const App = () => {
             });
             if (otherZhibanEntries.length > 0) {
                 const oldNames = otherZhibanEntries.map(e => e.empName).join("、");
-                if (!window.confirm(`${dateStr} 目前值班是 ${oldNames}，要換成 ${empName} 嗎？`)) return;
+                const okSwitch = await openConfirm(`${dateStr} 目前值班是 ${oldNames}，要換成 ${empName} 嗎？`);
+                if (!okSwitch) return;
             }
         }
 
@@ -484,14 +588,16 @@ const App = () => {
             ).length;
             const limit = SC.monthLeaveLimit(year, month);
             if (count >= limit) {
-                if (!window.confirm(`${empName} 本月已排休 ${count} 天，超過 ${limit} 天上限，確定要繼續？`)) return;
+                const okLimit = await openConfirm(`${empName} 本月已排休 ${count} 天，超過 ${limit} 天上限，確定要繼續？`);
+                if (!okLimit) return;
             }
         }
 
         // 禁休日排休/特休需確認（請假不擋）
         const nrInfo = noRest[dateStr];
         if (nrInfo && (mode === "排休" || mode === "特休") && !sameTypeEntry) {
-            if (!window.confirm(`${dateStr} 為禁休日${nrInfo.reason ? "（" + nrInfo.reason + "）" : ""}，確定要排${mode}？`)) return;
+            const okNoRest = await openConfirm(`${dateStr} 為禁休日${nrInfo.reason ? "（" + nrInfo.reason + "）" : ""}，確定要排${mode}？`);
+            if (!okNoRest) return;
         }
 
         setSaving(s => ({...s, [key]: true}));
@@ -524,7 +630,7 @@ const App = () => {
                         } catch (delErr) {
                             // DELETE 失敗：alert 並中止，不 POST 新人，state 維持原樣
                             const msg = `換值班失敗：舊紀錄（${oldZ.empName}）沒刪掉。請重新整理頁面後再試，或聯絡 Joan 處理。\n\n錯誤：${delErr.message}`;
-                            window.alert(msg);
+                            await openAlert(msg);
                             throw new Error(`DELETE old 值班 ${oldZ.empName}/${oldZ.ragicId} 失敗：${delErr.message}`);
                         }
                         await sleep(150);
@@ -563,14 +669,14 @@ const App = () => {
                     // POST 新人失敗：舊值班已刪、新值班沒進去 → 警告 Joan
                     if (otherZhibanEntries.length > 0) {
                         const oldNames = otherZhibanEntries.map(e => e.empName).join("、");
-                        window.alert(`換值班只完成一半：${oldNames} 已從 Ragic 刪除，但 ${empName} 沒寫進去。\n請重新整理頁面後再點 ${empName} 一次。\n\n錯誤：${postErr.message}`);
+                        await openAlert(`換值班只完成一半：${oldNames} 已從 Ragic 刪除，但 ${empName} 沒寫進去。\n請重新整理頁面後再點 ${empName} 一次。\n\n錯誤：${postErr.message}`);
                     }
                     throw postErr;
                 }
                 if (!res || !res.ragicId) {
                     if (otherZhibanEntries.length > 0) {
                         const oldNames = otherZhibanEntries.map(e => e.empName).join("、");
-                        window.alert(`換值班疑似失敗：${oldNames} 已刪、但 ${empName} 寫入沒拿到 ragicId。請重新整理確認資料狀態。`);
+                        await openAlert(`換值班疑似失敗：${oldNames} 已刪、但 ${empName} 寫入沒拿到 ragicId。請重新整理確認資料狀態。`);
                     }
                     throw new Error("POST 沒拿到 ragicId");
                 }
@@ -595,7 +701,8 @@ const App = () => {
 
     const handleAutoSchedule = async () => {
         if (employees.length === 0) { showToast("尚未載入員工資料", false); return; }
-        if (!window.confirm(`確定要自動預排 ${year} 年 ${month} 月的值日生？\n每天 3 位（1F/2F/3F），現有的自動排班紀錄會被覆蓋。`)) return;
+        const okAutoDuty = await openConfirm(`確定要自動預排 ${year} 年 ${month} 月的值日生？\n每天 3 位（1F/2F/3F），現有的自動排班紀錄會被覆蓋。`);
+        if (!okAutoDuty) return;
 
         setAutoScheduling(true);
         try {
@@ -940,7 +1047,8 @@ const App = () => {
     };
 
     const handleAutoZhiban = async () => {
-        if (!window.confirm(`確定要自動預排 ${year} 年 ${month} 月的值班？\n每天 1 人（承攬滿 3 個月），本月所有值班紀錄會被清除重排。`)) return;
+        const okAutoZhiban = await openConfirm(`確定要自動預排 ${year} 年 ${month} 月的值班？\n每天 1 人（承攬滿 3 個月），本月所有值班紀錄會被清除重排。`);
+        if (!okAutoZhiban) return;
         setAutoZhiban(true);
         try {
             setProgress({ text: "載入資料...", current: 0, total: 0 });
@@ -1496,6 +1604,10 @@ const App = () => {
                     {toast.msg}
                 </div>
             )}
+            <ConfirmModal open={confirmModal.open} message={confirmModal.message} onConfirm={() => closeConfirm(true)} onCancel={() => closeConfirm(false)} />
+            <AlertModal open={alertModal.open} message={alertModal.message} onClose={closeAlert} />
+            <PromptModal open={promptModal.open} message={promptModal.message} onConfirm={(v) => closePrompt(v)} onCancel={() => closePrompt(null)} />
+            <ActionSelectModal open={actionModal.open} message={actionModal.message} actions={actionModal.actions} onCancel={closeActionModal} />
         </div>
     );
 };
