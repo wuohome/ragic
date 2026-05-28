@@ -226,7 +226,8 @@
 
 <script>
 // ===== 設定 =====
-var LIFF_ID = "2009040494-frTNmMZ7";  // 複用 bind.html 的 LIFF（同 Provider，userId 與 operation/12 一致）
+var LIFF_ID = "";  // 待建專屬 perf-goal LIFF App 後填入；留空走純網頁下拉選名（後端用姓名反查 userId）
+// ⚠️ 不可填 2009040494-frTNmMZ7（bind.html 的 LIFF）—— LIFF Endpoint 綁死指向綁定頁，點了會開「業務身分綁定」不是本表單
 var PROXY_URL = "https://wuohome-ragic-proxy.wuohome.workers.dev/perf-goal";
 var MONTH = "2026-05";
 
