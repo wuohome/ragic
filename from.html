@@ -8,6 +8,25 @@
     <meta http-equiv="Expires" content="0">
     <title>優式租售管理．窩的家 Wuo Home - 租屋需求小幫手</title>
     <script>
+    /* LINE WebView redirect — must run before cache buster */
+    (function(){
+      var ua = navigator.userAgent || '';
+      var isLine = /Line\//.test(ua);
+      var url = new URL(location.href);
+      var alreadyRedirected = url.searchParams.has('openExternalBrowser');
+      if (isLine && !alreadyRedirected) {
+        /* Ensure v param is present so external browser also skips cache */
+        if (!url.searchParams.has('v')) {
+          url.searchParams.set('v', new Date().toISOString().slice(0,10).replace(/-/g,''));
+        }
+        url.searchParams.set('openExternalBrowser', '1');
+        window.location.href = url.toString();
+        return; /* stop — cache buster below must not run */
+      }
+    })();
+    </script>
+    <script>
+    /* Cache buster — runs only when NOT redirecting out of LINE */
     (function(){
       var u = new URL(location.href);
       if (!u.searchParams.has('v')) {
