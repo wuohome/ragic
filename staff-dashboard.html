@@ -61,60 +61,6 @@
     </p>
   </header>
 
-  <!-- ── 五月業績目標 ── -->
-  <details open class="mb-8 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
-    <summary class="cursor-pointer select-none px-6 py-4 flex items-center justify-between">
-      <span class="text-xl font-black text-amber-900">📋 五月業績目標</span>
-      <span class="text-sm text-amber-700">合計 <b>180 萬</b> ／ <b>86.5 間</b>　大家加油 💪</span>
-    </summary>
-    <div class="px-6 pb-6">
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="text-amber-800 border-b border-amber-200">
-              <th class="text-left py-2 pr-4 font-semibold">姓名</th>
-              <th class="text-right py-2 px-4 font-semibold">業績</th>
-              <th class="text-right py-2 pl-4 font-semibold">委託</th>
-            </tr>
-          </thead>
-          <tbody id="mayTargetBody" class="divide-y divide-amber-100"></tbody>
-          <tfoot>
-            <tr class="border-t-2 border-amber-300 font-black text-amber-900">
-              <td class="py-2 pr-4">合計</td>
-              <td class="text-right py-2 px-4">180 萬</td>
-              <td class="text-right py-2 pl-4">86.5 間</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
-  </details>
-  <script>
-    (function () {
-      const rows = [
-        ["忠豪", "40 萬", "15 間"],
-        ["傳", "20 萬", "7.5 間"],
-        ["慈", "20 萬", "10 間"],
-        ["宣", "15 萬", "8 間"],
-        ["Kelly", "15 萬", "5 間"],
-        ["炫", "10 萬", "10 間"],
-        ["馬丁", "10 萬", "8 間"],
-        ["碩", "10 萬", "2 間"],
-        ["方", "10 萬", "6 間"],
-        ["Tina", "10 萬", "1 間"],
-        ["威", "8 萬", "8 間"],
-        ["勁", "5 萬", "5 間"],
-        ["則", "5 萬", "0 間"],
-        ["宇謙", "2 萬", "1 間"],
-      ];
-      const tb = document.getElementById("mayTargetBody");
-      if (tb) tb.innerHTML = rows.map(([n, p, c]) =>
-        `<tr><td class="py-2 pr-4 text-slate-700">${n}</td>` +
-        `<td class="text-right py-2 px-4 text-slate-900 font-medium">${p}</td>` +
-        `<td class="text-right py-2 pl-4 text-slate-600">${c}</td></tr>`).join("");
-    })();
-  </script>
-
   <!-- Tabs -->
   <div class="flex gap-6 border-b border-slate-200 overflow-x-auto scrollbar-thin">
     <div class="tab active pb-3 text-lg px-1" data-tab="month">📦 進案量 &amp; 業績</div>
@@ -179,6 +125,56 @@
           <div id="mKpiPerfPpl" class="text-4xl font-black text-emerald-600">0</div>
           <div class="text-slate-400">人</div>
         </div>
+      </div>
+    </section>
+
+    <!-- ── 全店達成總覽（五月目標期間才顯示） ── -->
+    <section id="mStoreGoalSection" class="hidden mb-6">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="text-lg font-bold text-slate-900">🏁 五月全店目標達成</h2>
+          <span id="mStoreGoalBadge" class="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-500"></span>
+        </div>
+        <!-- 業績總進度 -->
+        <div class="mb-5">
+          <div class="flex justify-between items-baseline mb-2">
+            <span class="text-sm font-semibold text-slate-600">💰 業績</span>
+            <div class="text-right">
+              <span id="mStorePerfActual" class="text-2xl font-black text-slate-900">—</span>
+              <span class="text-slate-400 text-sm"> / 180 萬</span>
+              <span id="mStorePerfPct" class="ml-2 text-base font-bold text-slate-500"></span>
+            </div>
+          </div>
+          <div class="relative h-4 bg-slate-100 rounded-full overflow-hidden">
+            <div id="mStorePerfBar" class="bar absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500" style="width:0%"></div>
+            <div class="absolute right-0 top-0 h-full w-0.5 bg-slate-400 opacity-60"></div>
+          </div>
+          <div class="flex justify-between mt-1">
+            <span id="mStorePerfGap" class="text-xs text-slate-500"></span>
+            <span class="text-xs text-slate-400">目標 180 萬</span>
+          </div>
+        </div>
+        <!-- 委託間數總進度 -->
+        <div>
+          <div class="flex justify-between items-baseline mb-2">
+            <span class="text-sm font-semibold text-slate-600">📦 委託間數</span>
+            <div class="text-right">
+              <span id="mStoreCasesActual" class="text-2xl font-black text-slate-900">—</span>
+              <span class="text-slate-400 text-sm"> / 86.5 間</span>
+              <span id="mStoreCasesPct" class="ml-2 text-base font-bold text-slate-500"></span>
+            </div>
+          </div>
+          <div class="relative h-4 bg-slate-100 rounded-full overflow-hidden">
+            <div id="mStoreCasesBar" class="bar absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-500" style="width:0%"></div>
+            <div class="absolute right-0 top-0 h-full w-0.5 bg-slate-400 opacity-60"></div>
+          </div>
+          <div class="flex justify-between mt-1">
+            <span id="mStoreCasesGap" class="text-xs text-slate-500"></span>
+            <span class="text-xs text-slate-400">目標 86.5 間</span>
+          </div>
+        </div>
+        <!-- 人員達標小計 -->
+        <div id="mStoreAchieverLine" class="mt-4 pt-4 border-t border-slate-100 text-sm text-slate-500"></div>
       </div>
     </section>
 
@@ -1347,6 +1343,96 @@ function rankHtml(items, fmtVal, unit){
   }).join('');
 }
 
+// ── 五月業績目標對照表 ──
+// revenue 單位：萬（顯示用萬，計算時乘 10000）；cases 單位：間
+const MAY_TARGET = {
+  "張忠豪&蕭頤臻": { revenue: 40, cases: 15 },
+  "詹張傳":        { revenue: 20, cases: 7.5 },
+  "吳惠慈":        { revenue: 20, cases: 10 },
+  "林宣佑":        { revenue: 15, cases: 8 },
+  "陳心瑜":        { revenue: 15, cases: 5 },
+  "吳炫儒":        { revenue: 10, cases: 10 },
+  "關宗宇":        { revenue: 10, cases: 8 },
+  "劉子碩":        { revenue: 10, cases: 2 },
+  "方鼎文":        { revenue: 10, cases: 6 },
+  "蕭靜芳":        { revenue: 10, cases: 1 },
+  "李卓威":        { revenue: 8,  cases: 8 },
+  "陳勁豪":        { revenue: 5,  cases: 5 },
+  "張則泓":        { revenue: 5,  cases: 0 },
+  "曾宇謙":        { revenue: 2,  cases: 1 },
+};
+
+// 判斷日期範圍是否與 2026-05 有交集（用於顯示五月目標）
+function isMayPeriod(start, end){
+  return start <= '2026-05-31' && end >= '2026-05-01';
+}
+
+// 進案量排行帶目標副資訊（雙層進度條：目標底層 + 實際疊加）
+function rankHtmlIntakeWithTarget(items, showTarget){
+  if(!items.length) return '<div class="text-center text-slate-400 py-8">此區間無資料</div>';
+  const top = items[0][1]||1;
+  const medals=['medal-1','medal-2','medal-3'];
+  const icons=['🥇','🥈','🥉'];
+  return items.map(([name,n],i)=>{
+    const badge = i<3
+      ? `<span class="${medals[i]} w-10 h-10 rounded-full flex items-center justify-center font-black text-lg">${icons[i]}</span>`
+      : `<span class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-slate-400 bg-slate-100">${i+1}</span>`;
+
+    if (showTarget && MAY_TARGET[name] !== undefined) {
+      const t = MAY_TARGET[name];
+      if (t.cases === 0) {
+        // 無委託目標：普通排行條
+        const pct = Math.round(n / top * 100);
+        return `<div class="flex items-center gap-4">${badge}<div class="flex-1"><div class="flex justify-between mb-1"><span class="font-bold text-slate-800">${esc(name)}</span><span class="font-black text-slate-900">${fmtN(n)} <span class="text-sm text-slate-400 font-normal">間</span></span></div><div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="bar h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" style="width:${pct}%"></div></div><div class="text-xs text-slate-400 mt-0.5">無委託目標</div></div></div>`;
+      }
+      // 雙層進度條：目標寬度=全條 100%，實際進度疊在上
+      const pctAch = Math.min(Math.round(n / t.cases * 100), 100);
+      const over = n >= t.cases;
+      const near = !over && pctAch >= 70;
+      // 顏色語意：超標 emerald / 接近 amber / 落後 rose
+      const barColor = over ? 'from-emerald-400 to-emerald-500' : near ? 'from-amber-400 to-amber-500' : 'from-rose-400 to-rose-500';
+      const badgeColor = over ? 'bg-emerald-100 text-emerald-700' : near ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700';
+      const pctLabel = `<span class="text-xs font-bold px-2 py-0.5 rounded-full ${badgeColor}">${pctAch}%</span>`;
+      return `<div class="flex items-center gap-4">${badge}<div class="flex-1"><div class="flex justify-between items-center mb-1.5"><span class="font-bold text-slate-800">${esc(name)}</span><div class="flex items-center gap-2"><span class="font-black text-slate-900">${fmtN(n)}<span class="text-sm text-slate-400 font-normal"> / ${fmtN(t.cases)} 間</span></span>${pctLabel}</div></div><div class="relative h-3 bg-slate-100 rounded-full overflow-hidden"><div class="bar absolute left-0 top-0 h-full bg-gradient-to-r ${barColor} rounded-full" style="width:${pctAch}%"></div></div></div></div>`;
+    } else {
+      // 非五月期間：普通排行條
+      const pct = Math.round(n / top * 100);
+      return `<div class="flex items-center gap-4">${badge}<div class="flex-1"><div class="flex justify-between mb-1"><span class="font-bold text-slate-800">${esc(name)}</span><span class="font-black text-slate-900">${fmtN(n)} <span class="text-sm text-slate-400 font-normal">間</span></span></div><div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="bar h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" style="width:${pct}%"></div></div></div></div>`;
+    }
+  }).join('');
+}
+
+// 業績排行帶目標副資訊（雙層進度條：目標底層 + 實際疊加）
+function rankHtmlPerfWithTarget(items, showTarget){
+  if(!items.length) return '<div class="text-center text-slate-400 py-8">此區間無資料</div>';
+  const top = items[0][1]||1;
+  const medals=['medal-1','medal-2','medal-3'];
+  const icons=['🥇','🥈','🥉'];
+  return items.map(([name,n],i)=>{
+    const badge = i<3
+      ? `<span class="${medals[i]} w-10 h-10 rounded-full flex items-center justify-center font-black text-lg">${icons[i]}</span>`
+      : `<span class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-slate-400 bg-slate-100">${i+1}</span>`;
+
+    if (showTarget && MAY_TARGET[name] !== undefined) {
+      const t = MAY_TARGET[name];
+      const target = t.revenue * 10000;
+      const pctAch = Math.min(Math.round(n / target * 100), 100);
+      const over = n >= target;
+      const near = !over && pctAch >= 70;
+      const barColor = over ? 'from-emerald-400 to-emerald-500' : near ? 'from-amber-400 to-amber-500' : 'from-rose-400 to-rose-500';
+      const badgeColor = over ? 'bg-emerald-100 text-emerald-700' : near ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700';
+      const pctLabel = `<span class="text-xs font-bold px-2 py-0.5 rounded-full ${badgeColor}">${pctAch}%</span>`;
+      // 顯示萬為單位（精簡可讀）
+      const fmtWan = v => (v / 10000).toFixed(1).replace(/\.0$/,'') + ' 萬';
+      return `<div class="flex items-center gap-4">${badge}<div class="flex-1"><div class="flex justify-between items-center mb-1.5"><span class="font-bold text-slate-800">${esc(name)}</span><div class="flex items-center gap-2"><span class="font-black text-slate-900">${fmtWan(n)}<span class="text-sm text-slate-400 font-normal"> / ${t.revenue} 萬</span></span>${pctLabel}</div></div><div class="relative h-3 bg-slate-100 rounded-full overflow-hidden"><div class="bar absolute left-0 top-0 h-full bg-gradient-to-r ${barColor} rounded-full" style="width:${pctAch}%"></div></div></div></div>`;
+    } else {
+      // 非五月期間：普通排行條
+      const pct = Math.round(n / top * 100);
+      return `<div class="flex items-center gap-4">${badge}<div class="flex-1"><div class="flex justify-between mb-1"><span class="font-bold text-slate-800">${esc(name)}</span><span class="font-black text-slate-900">${fmtMoney(n)} <span class="text-sm text-slate-400 font-normal">元</span></span></div><div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="bar h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" style="width:${pct}%"></div></div></div></div>`;
+    }
+  }).join('');
+}
+
 // ── 全域人員篩選 ──
 let curStaff = '';
 function buildStaffSelector(){
@@ -1972,12 +2058,81 @@ function renderPerfIntake(){
   // ── Rankings ──
   const intakeItems = Object.entries(intakeCounter).sort((a,b)=>b[1]-a[1]);
   const perfItems = Object.entries(perfCounter).sort((a,b)=>b[1]-a[1]);
+  const showTarget = isMayPeriod(start, end);
   document.getElementById('mIntakeRanking').innerHTML = intakeItems.length
-    ? rankHtml(intakeItems, fmtN, '間')
+    ? rankHtmlIntakeWithTarget(intakeItems, showTarget)
     : '<div class="text-center text-slate-400 py-4">此區間無進案</div>';
   document.getElementById('mPerfRanking').innerHTML = perfItems.length
-    ? rankHtml(perfItems, fmtMoney, '元')
+    ? rankHtmlPerfWithTarget(perfItems, showTarget)
     : '<div class="text-center text-slate-400 py-4">此區間無業績</div>';
+
+  // ── 全店達成總覽（五月目標期間才顯示）──
+  const storeGoalSection = document.getElementById('mStoreGoalSection');
+  if (showTarget) {
+    storeGoalSection.classList.remove('hidden');
+
+    // 從 MAY_TARGET 加總總目標
+    const STORE_PERF_TARGET  = Object.values(MAY_TARGET).reduce((s,t)=>s+t.revenue,0) * 10000; // 元
+    const STORE_CASES_TARGET = Object.values(MAY_TARGET).reduce((s,t)=>s+t.cases,0);            // 間
+
+    // 全店業績：summing perfCounter（已含五月資料）
+    const storePerfActual = perfTotal; // 元
+    const storePerfPct = STORE_PERF_TARGET > 0 ? Math.round(storePerfActual / STORE_PERF_TARGET * 100) : 0;
+    const storePerfGap = storePerfActual < STORE_PERF_TARGET
+      ? `還差 ${((STORE_PERF_TARGET - storePerfActual) / 10000).toFixed(1)} 萬`
+      : `超標 +${((storePerfActual - STORE_PERF_TARGET) / 10000).toFixed(1)} 萬 ✅`;
+
+    // 全店進案量：summing intakeCounter（間數）
+    const storeCasesActual = Object.values(intakeCounter).reduce((s,v)=>s+v,0);
+    const storeCasesPct = STORE_CASES_TARGET > 0 ? Math.round(storeCasesActual / STORE_CASES_TARGET * 100) : 0;
+    const storeCasesGap = storeCasesActual < STORE_CASES_TARGET
+      ? `還差 ${(STORE_CASES_TARGET - storeCasesActual).toFixed(1)} 間`
+      : `超標 +${(storeCasesActual - STORE_CASES_TARGET).toFixed(1)} 間 ✅`;
+
+    // badge 顏色
+    const perfOver = storePerfActual >= STORE_PERF_TARGET;
+    const perfNear = !perfOver && storePerfPct >= 70;
+    const badgeCls = perfOver ? 'bg-emerald-100 text-emerald-700' : perfNear ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700';
+    const badgeText = perfOver ? '已達標' : perfNear ? '衝刺中' : '落後';
+
+    // 進度條寬度（最大 100%）
+    const perfBarW = Math.min(storePerfPct, 100);
+    const casesBarW = Math.min(storeCasesPct, 100);
+
+    // 達標人員計算（業績）
+    let perfAchievers = 0, perfTotal2 = 0;
+    Object.entries(MAY_TARGET).forEach(([nm, t]) => {
+      if (t.revenue > 0) { perfTotal2++; if ((perfCounter[nm]||0) >= t.revenue*10000) perfAchievers++; }
+    });
+    let casesAchievers = 0, casesTotal2 = 0;
+    Object.entries(MAY_TARGET).forEach(([nm, t]) => {
+      if (t.cases > 0) { casesTotal2++; if ((intakeCounter[nm]||0) >= t.cases) casesAchievers++; }
+    });
+
+    document.getElementById('mStoreGoalBadge').className = `text-xs font-bold px-3 py-1 rounded-full ${badgeCls}`;
+    document.getElementById('mStoreGoalBadge').textContent = badgeText;
+
+    document.getElementById('mStorePerfActual').textContent = (storePerfActual/10000).toFixed(1).replace(/\.0$/,'') + ' 萬';
+    document.getElementById('mStorePerfPct').textContent = storePerfPct + '%';
+    document.getElementById('mStorePerfPct').className = `ml-2 text-base font-bold ${perfOver?'text-emerald-600':perfNear?'text-amber-500':'text-rose-500'}`;
+    document.getElementById('mStorePerfBar').style.width = perfBarW + '%';
+    document.getElementById('mStorePerfBar').className = `bar absolute left-0 top-0 h-full rounded-full bg-gradient-to-r ${perfOver?'from-emerald-400 to-emerald-500':perfNear?'from-amber-400 to-amber-500':'from-blue-500 to-indigo-500'}`;
+    document.getElementById('mStorePerfGap').textContent = storePerfGap;
+
+    document.getElementById('mStoreCasesActual').textContent = storeCasesActual % 1 === 0 ? storeCasesActual : storeCasesActual.toFixed(1);
+    document.getElementById('mStoreCasesPct').textContent = storeCasesPct + '%';
+    const casesOver = storeCasesActual >= STORE_CASES_TARGET;
+    const casesNear = !casesOver && storeCasesPct >= 70;
+    document.getElementById('mStoreCasesPct').className = `ml-2 text-base font-bold ${casesOver?'text-emerald-600':casesNear?'text-amber-500':'text-rose-500'}`;
+    document.getElementById('mStoreCasesBar').style.width = casesBarW + '%';
+    document.getElementById('mStoreCasesBar').className = `bar absolute left-0 top-0 h-full rounded-full bg-gradient-to-r ${casesOver?'from-emerald-400 to-emerald-500':casesNear?'from-amber-400 to-amber-500':'from-purple-500 to-indigo-500'}`;
+    document.getElementById('mStoreCasesGap').textContent = storeCasesGap;
+
+    document.getElementById('mStoreAchieverLine').innerHTML =
+      `業績達標 <strong class="text-slate-900">${perfAchievers}</strong> / ${perfTotal2} 人&nbsp;&nbsp;·&nbsp;&nbsp;委託達標 <strong class="text-slate-900">${casesAchievers}</strong> / ${casesTotal2} 人`;
+  } else {
+    storeGoalSection.classList.add('hidden');
+  }
 
   // ── 進案明細 ──
   document.getElementById('mDetail').innerHTML = intakeRows.length===0
