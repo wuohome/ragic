@@ -171,18 +171,6 @@
         </select>
       </div>
 
-      <div class="field" id="deptField" style="display:none;">
-        <label>部門 <span class="hint">（選填）</span></label>
-        <select id="deptSelect">
-          <option value="">— 選擇部門 —</option>
-          <option value="業務部">業務部</option>
-          <option value="設計部">設計部</option>
-          <option value="工程部">工程部</option>
-          <option value="行政部">行政部</option>
-          <option value="管理部">管理部</option>
-        </select>
-      </div>
-
       <div class="field">
         <label>本月業績目標</label>
         <div class="input-row">
@@ -238,15 +226,15 @@
 
 <script>
 // ===== 設定 =====
-var LIFF_ID = "";  // 建立 LIFF App 後填入 LIFF ID，留空則自動走純網頁下拉模式
+var LIFF_ID = "2009040494-frTNmMZ7";  // 複用 bind.html 的 LIFF（同 Provider，userId 與 operation/12 一致）
 var PROXY_URL = "https://wuohome-ragic-proxy.wuohome.workers.dev/perf-goal";
 var MONTH = "2026-05";
 
-// 純網頁模式員工名單（無 LIFF 時用；有 LIFF 自動帶名字就不需要）
-var STAFF = ["劉子碩","吳偉民","吳彥廷","吳惠慈","吳書葶","吳炫儒","呂鴻墀","張則泓","張忠豪","張玉慧","張瓊安","方鼎文","曾宇謙","曾正煌","李卓威","李維","林佳燕","林宣佑","沈郁雯","蕭靜芳","蕭頤臻","詹張傳","謝佳芬","賴信杰","鐘晟鈺","關宗宇","陳勁豪","陳心瑜","陳薇雅","韓珊珊","高晶晶"];
+// 純網頁模式員工名單（租賃部夥伴；有 LIFF 自動帶名字就不需要）
+var STAFF = ["方鼎文","李卓威","李維","吳偉民","吳炫儒","吳惠慈","吳書葶","林佳燕","林宣佑","張忠豪","張則泓","曾正煌","曾宇謙","詹張傳","劉子碩","蕭靜芳","蕭頤臻","謝佳芬","鐘晟鈺","關宗宇","陳心瑜","陳勁豪","陳薇雅","高晶晶"];
 
 // ===== 狀態 =====
-var ctx = { name:"", department:"", lineUserId:"" };
+var ctx = { name:"", department:"租賃部", lineUserId:"" };
 
 // ===== 即時換算 =====
 function fmt(n){ return Number.isInteger(n) ? String(n) : n.toFixed(1); }
@@ -269,7 +257,6 @@ function toast(msg){
 // ===== 純網頁模式：填名單下拉 =====
 function setupWebMode(){
   document.getElementById('nameSelect').style.display = 'block';
-  document.getElementById('deptField').style.display = 'block';
   var sel = document.getElementById('nameSelect');
   STAFF.forEach(function(n){
     var o = document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o);
@@ -278,23 +265,17 @@ function setupWebMode(){
     ctx.name = sel.value;
     document.getElementById('greetName').textContent = sel.value ? ('嗨，'+sel.value) : '嗨，夥伴';
   });
-  document.getElementById('deptSelect').addEventListener('change', function(e){
-    ctx.department = e.target.value;
-  });
 }
 
-// ===== LIFF 模式：自動帶名字 =====
+// ===== LIFF 模式：只拿 userId，姓名由後端用 userId 反查 operation/12 正式名 =====
+// （不用 profile.displayName 當姓名 —— 有人 LINE 暱稱是「慧管家」「蕭眞儀」會對不上正式名）
 function setupLiffMode(profile){
-  ctx.name = profile.displayName || "";
   ctx.lineUserId = profile.userId || "";
+  ctx.name = "";  // 留空，送出時後端用 lineUserId 反查正式名填入
+  var dn = profile.displayName || "";
   document.getElementById('nameAuto').style.display = 'flex';
-  document.getElementById('nameAutoText').textContent = ctx.name || '（無法取得名字）';
-  document.getElementById('greetName').textContent = ctx.name ? ('嗨，'+ctx.name) : '嗨，夥伴';
-  // LIFF 模式仍顯示部門選擇（LINE 暱稱不含部門）
-  document.getElementById('deptField').style.display = 'block';
-  document.getElementById('deptSelect').addEventListener('change', function(e){
-    ctx.department = e.target.value;
-  });
+  document.getElementById('nameAutoText').textContent = dn ? ('LINE：'+dn) : '（已透過 LINE 識別身分）';
+  document.getElementById('greetName').textContent = dn ? ('嗨，'+dn) : '嗨，夥伴';
 }
 
 // ===== 初始化 =====
@@ -321,7 +302,8 @@ document.getElementById('submitBtn').addEventListener('click', function(){
   var goal = document.getElementById('goal').value.trim();
   var cases = document.getElementById('cases').value.trim();
 
-  if (!ctx.name){ toast('請先選擇你的名字'); return; }
+  // 純網頁模式要選名字；LIFF 模式靠 lineUserId 識別、name 留給後端反查
+  if (!ctx.name && !ctx.lineUserId){ toast('請先選擇你的名字'); return; }
   if (!goal || parseFloat(goal) <= 0){ toast('請填本月業績目標'); return; }
   if (cases === '') cases = '0';
 
@@ -363,7 +345,7 @@ document.getElementById('submitBtn').addEventListener('click', function(){
 function showDone(p){
   document.getElementById('formView').style.display = 'none';
   document.getElementById('doneView').style.display = 'block';
-  document.getElementById('doneName').textContent = p.name + (p.department ? '（'+p.department+'）' : '');
+  document.getElementById('doneName').textContent = (p.name || '你的目標') + (p.department ? '（'+p.department+'）' : '');
   document.getElementById('doneGoal').textContent = p.goal + ' 萬';
   document.getElementById('doneCases').textContent = p.cases + ' 間';
   document.getElementById('doneWeekMoney').textContent = fmt(parseFloat(p.goal)/4) + ' 萬';
