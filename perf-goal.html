@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>窩的家 ｜ 5月業績目標許願</title>
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  :root{
+    --coral:#FF5A4D;
+    --coral-dark:#E8463A;
+    --yellow:#FFC53D;
+    --navy:#2B3A4A;
+    --navy-soft:#41566B;
+    --bg:#F5F7FA;
+    --card:#FFFFFF;
+    --line:#E3E8EE;
+    --muted:#8A98A8;
+    --shadow:0 6px 24px rgba(43,58,74,.10);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei",sans-serif;
+    background:var(--bg);
+    color:var(--navy);
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:480px;margin:0 auto;padding:20px 18px 40px;}
+
+  .hero{
+    background:linear-gradient(135deg,var(--coral) 0%,var(--coral-dark) 100%);
+    color:#fff;border-radius:20px;padding:24px 22px;box-shadow:var(--shadow);
+    position:relative;overflow:hidden;
+  }
+  .hero::after{
+    content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;
+    background:var(--yellow);opacity:.18;border-radius:50%;
+  }
+  .hero .tag{
+    display:inline-block;background:rgba(255,255,255,.22);
+    font-size:12px;font-weight:600;padding:4px 11px;border-radius:20px;margin-bottom:10px;
+    letter-spacing:.5px;
+  }
+  .hero h1{margin:0;font-size:23px;font-weight:800;letter-spacing:.5px;}
+  .hero p{margin:8px 0 0;font-size:14px;opacity:.92;}
+
+  .greet{
+    margin:18px 0 4px;font-size:17px;font-weight:700;color:var(--navy);
+    display:flex;align-items:center;gap:7px;
+  }
+  .greet .wave{font-size:20px;}
+
+  .card{
+    background:var(--card);border-radius:18px;padding:22px 20px;margin-top:14px;
+    box-shadow:var(--shadow);
+  }
+  .field{margin-bottom:20px;}
+  .field:last-child{margin-bottom:0;}
+  label{display:block;font-size:14px;font-weight:700;margin-bottom:9px;color:var(--navy);}
+  label .hint{font-weight:400;color:var(--muted);font-size:12px;margin-left:4px;}
+
+  .input-row{position:relative;display:flex;align-items:center;}
+  .input-row input{
+    width:100%;font-size:26px;font-weight:800;color:var(--navy);
+    border:2px solid var(--line);border-radius:14px;
+    padding:14px 56px 14px 16px;text-align:right;
+    outline:none;transition:border-color .15s;background:#fff;
+    -moz-appearance:textfield;
+  }
+  .input-row input::-webkit-outer-spin-button,
+  .input-row input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  .input-row input:focus{border-color:var(--coral);}
+  .input-row .unit{
+    position:absolute;right:16px;font-size:15px;font-weight:700;color:var(--muted);
+    pointer-events:none;
+  }
+
+  select{
+    width:100%;font-size:17px;font-weight:600;color:var(--navy);
+    border:2px solid var(--line);border-radius:14px;padding:13px 16px;
+    background:#fff;outline:none;appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238A98A8' stroke-width='3'><path d='M6 9l6 6 6-6'/></svg>");
+    background-repeat:no-repeat;background-position:right 16px center;
+  }
+  select:focus{border-color:var(--coral);}
+
+  .name-fixed{
+    font-size:20px;font-weight:800;color:var(--navy);
+    background:#fff;border:2px solid var(--line);border-radius:14px;
+    padding:13px 16px;display:flex;align-items:center;gap:8px;
+  }
+  .name-fixed .badge{
+    font-size:11px;font-weight:600;color:var(--coral);
+    background:rgba(255,90,77,.10);padding:3px 9px;border-radius:20px;margin-left:auto;
+  }
+
+  .calc{
+    background:linear-gradient(135deg,#FFF8E8 0%,#FFF1D6 100%);
+    border:1.5px solid #FFE3A8;border-radius:18px;padding:18px 20px;margin-top:14px;
+  }
+  .calc .calc-title{
+    font-size:13px;font-weight:700;color:#B5821A;
+    display:flex;align-items:center;gap:6px;margin-bottom:14px;letter-spacing:.5px;
+  }
+  .calc-grid{display:flex;gap:14px;}
+  .calc-item{flex:1;text-align:center;}
+  .calc-item .num{font-size:28px;font-weight:800;color:var(--coral-dark);line-height:1.1;}
+  .calc-item .num small{font-size:14px;font-weight:700;margin-left:2px;}
+  .calc-item .lbl{font-size:12px;color:var(--navy-soft);margin-top:5px;font-weight:600;}
+  .calc-divider{width:1px;background:#FFE3A8;}
+
+  .submit{
+    width:100%;margin-top:22px;border:none;border-radius:16px;
+    background:linear-gradient(135deg,var(--coral) 0%,var(--coral-dark) 100%);
+    color:#fff;font-size:18px;font-weight:800;padding:17px;letter-spacing:2px;
+    box-shadow:0 6px 18px rgba(255,90,77,.35);cursor:pointer;transition:transform .1s,opacity .2s;
+  }
+  .submit:active{transform:scale(.98);}
+  .submit:disabled{opacity:.5;cursor:not-allowed;box-shadow:none;}
+
+  .foot{text-align:center;font-size:12px;color:var(--muted);margin-top:18px;line-height:1.7;}
+
+  .toast{
+    position:fixed;left:50%;bottom:32px;transform:translateX(-50%) translateY(20px);
+    background:var(--navy);color:#fff;padding:13px 22px;border-radius:30px;
+    font-size:14px;font-weight:600;opacity:0;pointer-events:none;transition:.3s;z-index:99;
+    box-shadow:0 8px 24px rgba(0,0,0,.25);
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  .done{display:none;text-align:center;padding:30px 10px;}
+  .done .ic{
+    width:78px;height:78px;border-radius:50%;margin:0 auto 18px;
+    background:linear-gradient(135deg,var(--coral),var(--coral-dark));
+    display:flex;align-items:center;justify-content:center;font-size:40px;color:#fff;
+    box-shadow:0 8px 24px rgba(255,90,77,.4);
+  }
+  .done h2{margin:0 0 8px;font-size:22px;font-weight:800;}
+  .done p{margin:0;color:var(--navy-soft);font-size:15px;}
+  .done .recap{
+    background:#fff;border-radius:16px;padding:18px;margin-top:22px;box-shadow:var(--shadow);text-align:left;
+  }
+  .done .recap .r-row{display:flex;justify-content:space-between;padding:7px 0;font-size:15px;}
+  .done .recap .r-row .v{font-weight:800;color:var(--coral-dark);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="formView">
+    <div class="hero">
+      <span class="tag">2026 / 5月 業績目標</span>
+      <h1>許下你的本月目標 🎯</h1>
+      <p>填下這個月你想拚到的數字，月底一起回頭看。</p>
+    </div>
+
+    <div class="greet"><span class="wave">👋</span><span id="greetName">嗨，夥伴</span></div>
+
+    <div class="card">
+      <!-- 姓名：LIFF 模式自動帶；純網頁模式顯示下拉 -->
+      <div class="field" id="nameField">
+        <label>你是？</label>
+        <div id="nameAuto" class="name-fixed" style="display:none;">
+          <span id="nameAutoText">—</span>
+          <span class="badge">LINE 自動帶入</span>
+        </div>
+        <select id="nameSelect" style="display:none;">
+          <option value="">— 請選擇你的名字 —</option>
+        </select>
+      </div>
+
+      <div class="field" id="deptField" style="display:none;">
+        <label>部門 <span class="hint">（選填）</span></label>
+        <select id="deptSelect">
+          <option value="">— 選擇部門 —</option>
+          <option value="業務部">業務部</option>
+          <option value="設計部">設計部</option>
+          <option value="工程部">工程部</option>
+          <option value="行政部">行政部</option>
+          <option value="管理部">管理部</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>本月業績目標</label>
+        <div class="input-row">
+          <input id="goal" type="number" inputmode="numeric" min="0" placeholder="0">
+          <span class="unit">萬</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>本月新進案件量</label>
+        <div class="input-row">
+          <input id="cases" type="number" inputmode="numeric" min="0" placeholder="0">
+          <span class="unit">間</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="calc">
+      <div class="calc-title">📊 換算給你看（以一個月 4 週估）</div>
+      <div class="calc-grid">
+        <div class="calc-item">
+          <div class="num" id="calcMoney">0<small>萬</small></div>
+          <div class="lbl">平均一週成交</div>
+        </div>
+        <div class="calc-divider"></div>
+        <div class="calc-item">
+          <div class="num" id="calcCases">0<small>間</small></div>
+          <div class="lbl">平均一週進案</div>
+        </div>
+      </div>
+    </div>
+
+    <button class="submit" id="submitBtn">許下目標 ✊</button>
+
+    <div class="foot">送出後資料會自動存進系統<br>月底開會時一起檢視大家的成果 💪</div>
+  </div>
+
+  <div class="done" id="doneView">
+    <div class="ic">✓</div>
+    <h2>目標已許下！</h2>
+    <p>5月一起加油，月底見真章 🔥</p>
+    <div class="recap">
+      <div class="r-row"><span id="doneName">—</span></div>
+      <div class="r-row"><span>本月業績目標</span><span class="v" id="doneGoal">— 萬</span></div>
+      <div class="r-row"><span>本月新進案件量</span><span class="v" id="doneCases">— 間</span></div>
+      <div class="r-row"><span>平均一週成交</span><span class="v" id="doneWeekMoney">— 萬</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== 設定 =====
+var LIFF_ID = "";  // 建立 LIFF App 後填入 LIFF ID，留空則自動走純網頁下拉模式
+var PROXY_URL = "https://wuohome-ragic-proxy.qiongan0208.workers.dev/perf-goal";
+var MONTH = "2026-05";
+
+// 純網頁模式員工名單（無 LIFF 時用；有 LIFF 自動帶名字就不需要）
+var STAFF = ["劉子碩","吳偉民","吳彥廷","吳惠慈","吳書葶","吳炫儒","呂鴻墀","張則泓","張忠豪","張玉慧","張瓊安","方鼎文","曾宇謙","曾正煌","李卓威","李維","林佳燕","林宣佑","沈郁雯","蕭靜芳","蕭頤臻","詹張傳","謝佳芬","賴信杰","鐘晟鈺","關宗宇","陳勁豪","陳心瑜","陳薇雅","韓珊珊","高晶晶"];
+
+// ===== 狀態 =====
+var ctx = { name:"", department:"", lineUserId:"" };
+
+// ===== 即時換算 =====
+function fmt(n){ return Number.isInteger(n) ? String(n) : n.toFixed(1); }
+function recalc(){
+  var goal = parseFloat(document.getElementById('goal').value) || 0;
+  var cases = parseFloat(document.getElementById('cases').value) || 0;
+  document.getElementById('calcMoney').innerHTML = fmt(goal/4) + '<small>萬</small>';
+  document.getElementById('calcCases').innerHTML = fmt(cases/4) + '<small>間</small>';
+}
+document.getElementById('goal').addEventListener('input', recalc);
+document.getElementById('cases').addEventListener('input', recalc);
+
+// ===== toast =====
+function toast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2600);
+}
+
+// ===== 純網頁模式：填名單下拉 =====
+function setupWebMode(){
+  document.getElementById('nameSelect').style.display = 'block';
+  document.getElementById('deptField').style.display = 'block';
+  var sel = document.getElementById('nameSelect');
+  STAFF.forEach(function(n){
+    var o = document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o);
+  });
+  sel.addEventListener('change', function(){
+    ctx.name = sel.value;
+    document.getElementById('greetName').textContent = sel.value ? ('嗨，'+sel.value) : '嗨，夥伴';
+  });
+  document.getElementById('deptSelect').addEventListener('change', function(e){
+    ctx.department = e.target.value;
+  });
+}
+
+// ===== LIFF 模式：自動帶名字 =====
+function setupLiffMode(profile){
+  ctx.name = profile.displayName || "";
+  ctx.lineUserId = profile.userId || "";
+  document.getElementById('nameAuto').style.display = 'flex';
+  document.getElementById('nameAutoText').textContent = ctx.name || '（無法取得名字）';
+  document.getElementById('greetName').textContent = ctx.name ? ('嗨，'+ctx.name) : '嗨，夥伴';
+  // LIFF 模式仍顯示部門選擇（LINE 暱稱不含部門）
+  document.getElementById('deptField').style.display = 'block';
+  document.getElementById('deptSelect').addEventListener('change', function(e){
+    ctx.department = e.target.value;
+  });
+}
+
+// ===== 初始化 =====
+function boot(){
+  if (LIFF_ID && window.liff){
+    liff.init({ liffId: LIFF_ID }).then(function(){
+      if (!liff.isLoggedIn()){ liff.login(); return; }
+      return liff.getProfile();
+    }).then(function(profile){
+      if (profile) setupLiffMode(profile);
+      else setupWebMode();
+    }).catch(function(){
+      setupWebMode();  // LIFF 失敗 fallback 純網頁
+    });
+  } else {
+    setupWebMode();
+  }
+}
+boot();
+
+// ===== 送出 =====
+document.getElementById('submitBtn').addEventListener('click', function(){
+  var btn = this;
+  var goal = document.getElementById('goal').value.trim();
+  var cases = document.getElementById('cases').value.trim();
+
+  if (!ctx.name){ toast('請先選擇你的名字'); return; }
+  if (!goal || parseFloat(goal) <= 0){ toast('請填本月業績目標'); return; }
+  if (cases === '') cases = '0';
+
+  btn.disabled = true; btn.textContent = '送出中…';
+
+  var now = new Date();
+  var pad = function(n){ return String(n).padStart(2,'0'); };
+  var submittedAt = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+
+                    ' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+
+  var payload = {
+    name: ctx.name,
+    department: ctx.department || '',
+    month: MONTH,
+    goal: goal,
+    cases: cases,
+    lineUserId: ctx.lineUserId || '',
+    submittedAt: submittedAt
+  };
+
+  fetch(PROXY_URL, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, body:j}; }); })
+    .then(function(res){
+      if (res.ok && res.body && res.body.ok){
+        showDone(payload);
+      } else {
+        toast('送出失敗，請再試一次');
+        btn.disabled = false; btn.textContent = '許下目標 ✊';
+      }
+    }).catch(function(){
+      toast('網路連線有問題，請再試一次');
+      btn.disabled = false; btn.textContent = '許下目標 ✊';
+    });
+});
+
+function showDone(p){
+  document.getElementById('formView').style.display = 'none';
+  document.getElementById('doneView').style.display = 'block';
+  document.getElementById('doneName').textContent = p.name + (p.department ? '（'+p.department+'）' : '');
+  document.getElementById('doneGoal').textContent = p.goal + ' 萬';
+  document.getElementById('doneCases').textContent = p.cases + ' 間';
+  document.getElementById('doneWeekMoney').textContent = fmt(parseFloat(p.goal)/4) + ' 萬';
+  window.scrollTo(0,0);
+  if (LIFF_ID && window.liff && liff.isInClient && liff.isInClient()){
+    setTimeout(function(){ try{ liff.closeWindow(); }catch(e){} }, 3500);
+  }
+}
+</script>
+</body>
+</html>
