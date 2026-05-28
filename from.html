@@ -415,6 +415,29 @@
             display: block;
         }
 
+        #errorToast {
+            display: none;
+            position: sticky;
+            bottom: 70px;
+            left: 0;
+            right: 0;
+            margin: 0 16px;
+            background: #e74c3c;
+            color: #fff;
+            padding: 14px 18px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: bold;
+            text-align: center;
+            z-index: 200;
+            box-shadow: 0 4px 12px rgba(231,76,60,0.4);
+            animation: toastIn 0.25s ease;
+        }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
     </style>
 </head>
 <body>
@@ -631,6 +654,8 @@
         </div>
     </div>
 
+    <div id="errorToast"></div>
+
     <div class="footer-btns">
         <button class="btn-prev" id="prevBtn" onclick="prevStep()">上一步</button>
         <button class="btn-next" id="nextBtn" onclick="nextStep()">下一步</button>
@@ -649,8 +674,17 @@
 </div>
 
 <script>
-    let defaultAgentName = ""; 
-    let defaultAgentPhone = "02 2286 5755"; 
+    let _toastTimer = null;
+    function showError(msg) {
+        const t = document.getElementById('errorToast');
+        t.textContent = msg;
+        t.style.display = 'block';
+        if (_toastTimer) clearTimeout(_toastTimer);
+        _toastTimer = setTimeout(() => { t.style.display = 'none'; }, 3500);
+    }
+
+    let defaultAgentName = "";
+    let defaultAgentPhone = "02 2286 5755";
 
     const urlParams = new URLSearchParams(window.location.search);
     const agentNameParam = (urlParams.get('agent') || "").trim();
@@ -1034,21 +1068,21 @@ ${bizText}
         if (currentStep === 1) {
             const name = document.getElementById('field_name').value;
             const phone = document.getElementById('field_phone').value;
-            if (!name) { alert('請填寫姓名喔！'); return; }
-            if (!phone) { alert('請填寫手機號碼喔！'); return; }
+            if (!name) { showError('請填寫姓名喔！'); return; }
+            if (!phone) { showError('請填寫手機號碼喔！'); return; }
         }
         else if (currentStep === 2) { 
-            if (selectedType.length === 0) { alert('請選擇房屋類型！'); return; }
-            if (selectedLayout.length === 0) { alert('請選擇您需要的格局！'); return; }
+            if (selectedType.length === 0) { showError('請選擇房屋類型！'); return; }
+            if (selectedLayout.length === 0) { showError('請選擇您需要的格局！'); return; }
         }
         else if (currentStep === 3) { 
             const moveIn = document.getElementById('field_movein').value;
             const relation = document.getElementById('occupant_relation').value;
             const countVal = document.getElementById('occupant_count_select').value;
 
-            if (!moveIn) { alert('請選擇預計入住時間喔！'); return; }
-            if (!relation) { alert('請選擇「居住關係」喔！'); return; }
-            if (!countVal) { alert('請選擇「入住總人數」喔！'); return; }
+            if (!moveIn) { showError('請選擇預計入住時間喔！'); return; }
+            if (!relation) { showError('請選擇「居住關係」喔！'); return; }
+            if (!countVal) { showError('請選擇「入住總人數」喔！'); return; }
 
             // 檢查必填
             const cards = document.querySelectorAll('.member-card');
@@ -1064,15 +1098,15 @@ ${bizText}
             });
 
             if (!allValid) {
-                alert('請完整填寫每位成員的「姓名」與「職業」喔！');
+                showError('請完整填寫每位成員的「姓名」與「職業」喔！');
                 return;
             }
             updateOccupantListFromDOM();
         }
         else if (currentStep === 4) { 
             const city = document.getElementById('field_city').value;
-            if (!city) { alert('請選擇縣市！'); return; }
-            if (selectedBudget.length === 0) { alert('請至少選擇一個預算範圍！'); return; }
+            if (!city) { showError('請選擇縣市！'); return; }
+            if (selectedBudget.length === 0) { showError('請至少選擇一個預算範圍！'); return; }
         }
 
         if(currentStep < totalSteps - 1) { 
@@ -1140,7 +1174,7 @@ ${bizText}
         .catch(err => {
             console.error(err);
             document.getElementById('loadingOverlay').style.display = 'none';
-            alert("送出失敗：" + (err.message || "請稍後再試") + "\n請聯絡業務人員協助。");
+            showError("送出失敗：" + (err.message || "請稍後再試") + "　請聯絡業務人員協助。");
         });
     }
 
