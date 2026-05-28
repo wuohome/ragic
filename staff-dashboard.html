@@ -179,12 +179,31 @@
     </section>
 
     <section class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-      <div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
-        <h2 class="text-xl font-bold text-slate-900 mb-6">📦 進案量排行</h2>
+      <!-- 進案量排行卡 -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-slate-900">📦 進案量排行</h2>
+          <!-- pill tabs：五月目標期間才顯示「達成率」tab -->
+          <div id="intakeTabBar" class="hidden flex bg-slate-100 rounded-full p-0.5 gap-0.5 text-xs font-semibold">
+            <button id="intakeTabRank" onclick="switchRankTab('intake','rank')"
+              class="rank-tab-btn px-3 py-1 rounded-full bg-white text-slate-900 shadow-sm transition-all">排行</button>
+            <button id="intakeTabGoal" onclick="switchRankTab('intake','goal')"
+              class="rank-tab-btn px-3 py-1 rounded-full text-slate-500 transition-all">達成率</button>
+          </div>
+        </div>
         <div id="mIntakeRanking" class="space-y-3"></div>
       </div>
-      <div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
-        <h2 class="text-xl font-bold text-slate-900 mb-6">💰 業績排行</h2>
+      <!-- 業績排行卡 -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-slate-900">💰 業績排行</h2>
+          <div id="perfTabBar" class="hidden flex bg-slate-100 rounded-full p-0.5 gap-0.5 text-xs font-semibold">
+            <button id="perfTabRank" onclick="switchRankTab('perf','rank')"
+              class="rank-tab-btn px-3 py-1 rounded-full bg-white text-slate-900 shadow-sm transition-all">排行</button>
+            <button id="perfTabGoal" onclick="switchRankTab('perf','goal')"
+              class="rank-tab-btn px-3 py-1 rounded-full text-slate-500 transition-all">達成率</button>
+          </div>
+        </div>
         <div id="mPerfRanking" class="space-y-3"></div>
       </div>
     </section>
@@ -1367,70 +1386,197 @@ function isMayPeriod(start, end){
   return start <= '2026-05-31' && end >= '2026-05-01';
 }
 
-// 進案量排行帶目標副資訊（雙層進度條：目標底層 + 實際疊加）
-function rankHtmlIntakeWithTarget(items, showTarget){
-  if(!items.length) return '<div class="text-center text-slate-400 py-8">此區間無資料</div>';
-  const top = items[0][1]||1;
+// ── 名次牌 helper ──
+function _rankBadge(i){
   const medals=['medal-1','medal-2','medal-3'];
   const icons=['🥇','🥈','🥉'];
-  return items.map(([name,n],i)=>{
-    const badge = i<3
-      ? `<span class="${medals[i]} w-10 h-10 rounded-full flex items-center justify-center font-black text-lg">${icons[i]}</span>`
-      : `<span class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-slate-400 bg-slate-100">${i+1}</span>`;
+  return i < 3
+    ? `<span class="${medals[i]} w-10 h-10 rounded-full flex items-center justify-center font-black text-lg">${icons[i]}</span>`
+    : `<span class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-slate-400 bg-slate-100 text-sm">${i+1}</span>`;
+}
 
-    if (showTarget && MAY_TARGET[name] !== undefined) {
-      const t = MAY_TARGET[name];
-      if (t.cases === 0) {
-        // 無委託目標：普通排行條
-        const pct = Math.round(n / top * 100);
-        return `<div class="flex items-center gap-4">${badge}<div class="flex-1"><div class="flex justify-between mb-1"><span class="font-bold text-slate-800">${esc(name)}</span><span class="font-black text-slate-900">${fmtN(n)} <span class="text-sm text-slate-400 font-normal">間</span></span></div><div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="bar h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" style="width:${pct}%"></div></div><div class="text-xs text-slate-400 mt-0.5">無委託目標</div></div></div>`;
-      }
-      // 雙層進度條：目標寬度=全條 100%，實際進度疊在上
-      const pctAch = Math.min(Math.round(n / t.cases * 100), 100);
-      const over = n >= t.cases;
-      const near = !over && pctAch >= 70;
-      // 顏色語意：超標 emerald / 接近 amber / 落後 rose
-      const barColor = over ? 'from-emerald-400 to-emerald-500' : near ? 'from-amber-400 to-amber-500' : 'from-rose-400 to-rose-500';
-      const badgeColor = over ? 'bg-emerald-100 text-emerald-700' : near ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700';
-      const pctLabel = `<span class="text-xs font-bold px-2 py-0.5 rounded-full ${badgeColor}">${pctAch}%</span>`;
-      return `<div class="flex items-center gap-4">${badge}<div class="flex-1"><div class="flex justify-between items-center mb-1.5"><span class="font-bold text-slate-800">${esc(name)}</span><div class="flex items-center gap-2"><span class="font-black text-slate-900">${fmtN(n)}<span class="text-sm text-slate-400 font-normal"> / ${fmtN(t.cases)} 間</span></span>${pctLabel}</div></div><div class="relative h-3 bg-slate-100 rounded-full overflow-hidden"><div class="bar absolute left-0 top-0 h-full bg-gradient-to-r ${barColor} rounded-full" style="width:${pctAch}%"></div></div></div></div>`;
-    } else {
-      // 非五月期間：普通排行條
-      const pct = Math.round(n / top * 100);
-      return `<div class="flex items-center gap-4">${badge}<div class="flex-1"><div class="flex justify-between mb-1"><span class="font-bold text-slate-800">${esc(name)}</span><span class="font-black text-slate-900">${fmtN(n)} <span class="text-sm text-slate-400 font-normal">間</span></span></div><div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="bar h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" style="width:${pct}%"></div></div></div></div>`;
-    }
+// ── 子分頁 1「排行」：純比大小，單色 blue→indigo 漸層，相對寬度 ──
+function rankHtmlIntakeRank(items){
+  if(!items.length) return '<div class="text-center text-slate-400 py-8">此區間無資料</div>';
+  const top = items[0][1]||1;
+  return items.map(([name,n],i)=>{
+    const pct = Math.round(n / top * 100);
+    return `<div class="flex items-center gap-3">
+      ${_rankBadge(i)}
+      <div class="flex-1 min-w-0">
+        <div class="flex justify-between mb-1">
+          <span class="font-semibold text-slate-800 truncate">${esc(name)}</span>
+          <span class="font-black text-slate-900 ml-2 shrink-0">${fmtN(n)} <span class="text-xs text-slate-400 font-normal">間</span></span>
+        </div>
+        <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div class="bar h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" style="width:${pct}%"></div>
+        </div>
+      </div>
+    </div>`;
   }).join('');
 }
 
-// 業績排行帶目標副資訊（雙層進度條：目標底層 + 實際疊加）
-function rankHtmlPerfWithTarget(items, showTarget){
+// ── 子分頁 2「委託達成率」：進度條寬度 = 達成率（capped 100%），語意三色 ──
+function rankHtmlIntakeGoal(items){
+  if(!items.length) return '<div class="text-center text-slate-400 py-8">此區間無資料</div>';
+  // 分成：有目標（照達成率排序）、無目標（排最後灰字）
+  const withTarget = items.filter(([name])=> MAY_TARGET[name] && MAY_TARGET[name].cases > 0);
+  const noTarget   = items.filter(([name])=> !MAY_TARGET[name] || MAY_TARGET[name].cases === 0);
+  // 有目標者依達成率排序
+  withTarget.sort(([na,a],[nb,b])=>{
+    const ra = a / MAY_TARGET[na].cases;
+    const rb = b / MAY_TARGET[nb].cases;
+    return rb - ra;
+  });
+  const rows = [];
+  withTarget.forEach(([name,n], i)=>{
+    const t = MAY_TARGET[name];
+    const pctAch = Math.min(Math.round(n / t.cases * 100), 100);
+    const over = n >= t.cases;
+    const near = !over && pctAch >= 70;
+    const barColor = over ? 'from-emerald-400 to-emerald-500' : near ? 'from-amber-400 to-amber-500' : 'from-rose-400 to-rose-500';
+    const badgeCls = over ? 'bg-emerald-100 text-emerald-700' : near ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700';
+    rows.push(`<div class="flex items-center gap-3">
+      ${_rankBadge(i)}
+      <div class="flex-1 min-w-0">
+        <div class="flex justify-between items-center mb-1">
+          <span class="font-semibold text-slate-800 truncate">${esc(name)}</span>
+          <div class="flex items-center gap-1.5 ml-2 shrink-0">
+            <span class="font-black text-slate-900">${fmtN(n)}<span class="text-xs text-slate-400 font-normal"> / ${fmtN(t.cases)} 間</span></span>
+            <span class="text-xs font-bold px-2 py-0.5 rounded-full ${badgeCls}">${pctAch}%</span>
+          </div>
+        </div>
+        <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+          <div class="bar h-full bg-gradient-to-r ${barColor} rounded-full" style="width:${pctAch}%"></div>
+        </div>
+      </div>
+    </div>`);
+  });
+  if(noTarget.length){
+    rows.push(`<div class="mt-3 pt-3 border-t border-slate-100">`);
+    noTarget.forEach(([name,n])=>{
+      rows.push(`<div class="flex items-center gap-3 opacity-50 py-1">
+        <span class="w-10 h-10 shrink-0"></span>
+        <div class="flex-1 min-w-0 flex justify-between items-center">
+          <span class="text-sm text-slate-500 truncate">${esc(name)}</span>
+          <span class="text-xs text-slate-400">${fmtN(n)} 間・無目標</span>
+        </div>
+      </div>`);
+    });
+    rows.push(`</div>`);
+  }
+  return rows.join('');
+}
+
+// ── 子分頁 1「業績排行」：純比金額高低，單色 blue→indigo，相對寬度 ──
+function rankHtmlPerfRank(items){
   if(!items.length) return '<div class="text-center text-slate-400 py-8">此區間無資料</div>';
   const top = items[0][1]||1;
-  const medals=['medal-1','medal-2','medal-3'];
-  const icons=['🥇','🥈','🥉'];
+  const fmtWan = v => (v / 10000).toFixed(1).replace(/\.0$/,'') + ' 萬';
   return items.map(([name,n],i)=>{
-    const badge = i<3
-      ? `<span class="${medals[i]} w-10 h-10 rounded-full flex items-center justify-center font-black text-lg">${icons[i]}</span>`
-      : `<span class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-slate-400 bg-slate-100">${i+1}</span>`;
-
-    if (showTarget && MAY_TARGET[name] !== undefined) {
-      const t = MAY_TARGET[name];
-      const target = t.revenue * 10000;
-      const pctAch = Math.min(Math.round(n / target * 100), 100);
-      const over = n >= target;
-      const near = !over && pctAch >= 70;
-      const barColor = over ? 'from-emerald-400 to-emerald-500' : near ? 'from-amber-400 to-amber-500' : 'from-rose-400 to-rose-500';
-      const badgeColor = over ? 'bg-emerald-100 text-emerald-700' : near ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700';
-      const pctLabel = `<span class="text-xs font-bold px-2 py-0.5 rounded-full ${badgeColor}">${pctAch}%</span>`;
-      // 顯示萬為單位（精簡可讀）
-      const fmtWan = v => (v / 10000).toFixed(1).replace(/\.0$/,'') + ' 萬';
-      return `<div class="flex items-center gap-4">${badge}<div class="flex-1"><div class="flex justify-between items-center mb-1.5"><span class="font-bold text-slate-800">${esc(name)}</span><div class="flex items-center gap-2"><span class="font-black text-slate-900">${fmtWan(n)}<span class="text-sm text-slate-400 font-normal"> / ${t.revenue} 萬</span></span>${pctLabel}</div></div><div class="relative h-3 bg-slate-100 rounded-full overflow-hidden"><div class="bar absolute left-0 top-0 h-full bg-gradient-to-r ${barColor} rounded-full" style="width:${pctAch}%"></div></div></div></div>`;
-    } else {
-      // 非五月期間：普通排行條
-      const pct = Math.round(n / top * 100);
-      return `<div class="flex items-center gap-4">${badge}<div class="flex-1"><div class="flex justify-between mb-1"><span class="font-bold text-slate-800">${esc(name)}</span><span class="font-black text-slate-900">${fmtMoney(n)} <span class="text-sm text-slate-400 font-normal">元</span></span></div><div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="bar h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" style="width:${pct}%"></div></div></div></div>`;
-    }
+    const pct = Math.round(n / top * 100);
+    return `<div class="flex items-center gap-3">
+      ${_rankBadge(i)}
+      <div class="flex-1 min-w-0">
+        <div class="flex justify-between mb-1">
+          <span class="font-semibold text-slate-800 truncate">${esc(name)}</span>
+          <span class="font-black text-slate-900 ml-2 shrink-0">${fmtWan(n)}</span>
+        </div>
+        <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div class="bar h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" style="width:${pct}%"></div>
+        </div>
+      </div>
+    </div>`;
   }).join('');
+}
+
+// ── 子分頁 2「業績達成率」：進度條寬度 = 達成率（capped 100%），語意三色 ──
+function rankHtmlPerfGoal(items){
+  if(!items.length) return '<div class="text-center text-slate-400 py-8">此區間無資料</div>';
+  const fmtWan = v => (v / 10000).toFixed(1).replace(/\.0$/,'') + ' 萬';
+  const withTarget = items.filter(([name])=> MAY_TARGET[name] && MAY_TARGET[name].revenue > 0);
+  const noTarget   = items.filter(([name])=> !MAY_TARGET[name] || MAY_TARGET[name].revenue === 0);
+  withTarget.sort(([na,a],[nb,b])=>{
+    const ra = a / (MAY_TARGET[na].revenue * 10000);
+    const rb = b / (MAY_TARGET[nb].revenue * 10000);
+    return rb - ra;
+  });
+  const rows = [];
+  withTarget.forEach(([name,n], i)=>{
+    const t = MAY_TARGET[name];
+    const target = t.revenue * 10000;
+    const pctAch = Math.min(Math.round(n / target * 100), 100);
+    const over = n >= target;
+    const near = !over && pctAch >= 70;
+    const barColor = over ? 'from-emerald-400 to-emerald-500' : near ? 'from-amber-400 to-amber-500' : 'from-rose-400 to-rose-500';
+    const badgeCls = over ? 'bg-emerald-100 text-emerald-700' : near ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700';
+    rows.push(`<div class="flex items-center gap-3">
+      ${_rankBadge(i)}
+      <div class="flex-1 min-w-0">
+        <div class="flex justify-between items-center mb-1">
+          <span class="font-semibold text-slate-800 truncate">${esc(name)}</span>
+          <div class="flex items-center gap-1.5 ml-2 shrink-0">
+            <span class="font-black text-slate-900">${fmtWan(n)}<span class="text-xs text-slate-400 font-normal"> / ${t.revenue} 萬</span></span>
+            <span class="text-xs font-bold px-2 py-0.5 rounded-full ${badgeCls}">${pctAch}%</span>
+          </div>
+        </div>
+        <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+          <div class="bar h-full bg-gradient-to-r ${barColor} rounded-full" style="width:${pctAch}%"></div>
+        </div>
+      </div>
+    </div>`);
+  });
+  if(noTarget.length){
+    rows.push(`<div class="mt-3 pt-3 border-t border-slate-100">`);
+    noTarget.forEach(([name,n])=>{
+      rows.push(`<div class="flex items-center gap-3 opacity-50 py-1">
+        <span class="w-10 h-10 shrink-0"></span>
+        <div class="flex-1 min-w-0 flex justify-between items-center">
+          <span class="text-sm text-slate-500 truncate">${esc(name)}</span>
+          <span class="text-xs text-slate-400">${fmtWan(n)}・無目標</span>
+        </div>
+      </div>`);
+    });
+    rows.push(`</div>`);
+  }
+  return rows.join('');
+}
+
+// ── 舊的合體函式保留為包裝（向下相容，目前已不被呼叫）──
+function rankHtmlIntakeWithTarget(items, showTarget){ return showTarget ? rankHtmlIntakeGoal(items) : rankHtmlIntakeRank(items); }
+function rankHtmlPerfWithTarget(items, showTarget){ return showTarget ? rankHtmlPerfGoal(items) : rankHtmlPerfRank(items); }
+
+// ── 子分頁狀態（intake / perf 各自記錄） ──
+const _rankTabState = { intake: 'rank', perf: 'rank' };
+
+// ── 切換子分頁並重渲染 ──
+function switchRankTab(card, tab){
+  _rankTabState[card] = tab;
+  // 更新 pill 樣式
+  const active   = document.getElementById(card + 'Tab' + (tab==='rank'?'Rank':'Goal'));
+  const inactive = document.getElementById(card + 'Tab' + (tab==='rank'?'Goal':'Rank'));
+  if(active){   active.className   = 'rank-tab-btn px-3 py-1 rounded-full bg-white text-slate-900 shadow-sm transition-all'; }
+  if(inactive){ inactive.className = 'rank-tab-btn px-3 py-1 rounded-full text-slate-500 transition-all'; }
+  // 重渲染對應排行榜
+  _rerenderRankCard(card);
+}
+
+// ── 重渲染單張排行卡（不重跑整個 renderPerfIntake） ──
+function _rerenderRankCard(card){
+  const state = _rankTabState[card];
+  if(card === 'intake'){
+    const el = document.getElementById('mIntakeRanking');
+    if(!el._rankItems) return;
+    el.innerHTML = state === 'rank'
+      ? rankHtmlIntakeRank(el._rankItems)
+      : rankHtmlIntakeGoal(el._rankItems);
+  } else {
+    const el = document.getElementById('mPerfRanking');
+    if(!el._rankItems) return;
+    el.innerHTML = state === 'rank'
+      ? rankHtmlPerfRank(el._rankItems)
+      : rankHtmlPerfGoal(el._rankItems);
+  }
 }
 
 // ── 全域人員篩選 ──
@@ -2059,11 +2205,33 @@ function renderPerfIntake(){
   const intakeItems = Object.entries(intakeCounter).sort((a,b)=>b[1]-a[1]);
   const perfItems = Object.entries(perfCounter).sort((a,b)=>b[1]-a[1]);
   const showTarget = isMayPeriod(start, end);
-  document.getElementById('mIntakeRanking').innerHTML = intakeItems.length
-    ? rankHtmlIntakeWithTarget(intakeItems, showTarget)
+
+  // 五月期間才顯示「達成率」tab；非五月期間鎖定排行 tab
+  const intakeTabBar = document.getElementById('intakeTabBar');
+  const perfTabBar   = document.getElementById('perfTabBar');
+  if (showTarget) {
+    intakeTabBar.classList.remove('hidden');
+    perfTabBar.classList.remove('hidden');
+  } else {
+    intakeTabBar.classList.add('hidden');
+    perfTabBar.classList.add('hidden');
+    // 非五月期間強制回排行 tab
+    _rankTabState.intake = 'rank';
+    _rankTabState.perf   = 'rank';
+  }
+
+  // 存入資料供 tab 切換時重渲染
+  const intakeEl = document.getElementById('mIntakeRanking');
+  const perfEl   = document.getElementById('mPerfRanking');
+  intakeEl._rankItems = intakeItems;
+  perfEl._rankItems   = perfItems;
+
+  // 依當前 tab 渲染（資料更新後重繪，不強制切回 tab）
+  intakeEl.innerHTML = intakeItems.length
+    ? (_rankTabState.intake === 'rank' ? rankHtmlIntakeRank(intakeItems) : rankHtmlIntakeGoal(intakeItems))
     : '<div class="text-center text-slate-400 py-4">此區間無進案</div>';
-  document.getElementById('mPerfRanking').innerHTML = perfItems.length
-    ? rankHtmlPerfWithTarget(perfItems, showTarget)
+  perfEl.innerHTML = perfItems.length
+    ? (_rankTabState.perf === 'rank' ? rankHtmlPerfRank(perfItems) : rankHtmlPerfGoal(perfItems))
     : '<div class="text-center text-slate-400 py-4">此區間無業績</div>';
 
   // ── 全店達成總覽（五月目標期間才顯示）──
