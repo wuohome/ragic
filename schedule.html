@@ -82,7 +82,7 @@ const DEPT_ORDER = SC.DEPT_ORDER;
 // 見紅休人員（設計部 + 瓊安）
 const GOV_REST_EMPLOYEES = new Set(SC.GOV_REST_NAMES);
 
-// 2026/03/30 起搬到平安街，每天 3 位值日生（1F/2F/3F）
+// 2026/03/30 起搬到平安街，每天 4 位值日生（1F/2F/3F/4F）
 const FLOORS = SC.FLOORS;
 const FLOOR_COLORS = SC.FLOOR_COLORS;
 
@@ -269,9 +269,9 @@ const App = () => {
                     if (isAuto === "未掃") return;
                     const name = f[CONFIG.F_LEAVE.EMP] || "";
                     const note = f[CONFIG.F_LEAVE.NOTE] || "";
-                    const floor = /^(1F|2F|3F)$/.test(note) ? note : null;
+                    const floor = /^(1F|2F|3F|4F)$/.test(note) ? note : null;
                     if (!name || !floor) return;
-                    if (!fcHist[name]) fcHist[name] = {"1F":0,"2F":0,"3F":0};
+                    if (!fcHist[name]) fcHist[name] = {"1F":0,"2F":0,"3F":0,"4F":0};
                     fcHist[name][floor]++;
                 });
             const allEmps = Object.entries(empJson)
@@ -287,7 +287,7 @@ const App = () => {
                         hire: f[CONFIG.F_EMP.HIRE] || "",
                         hireDate: f[CONFIG.F_EMP.HIRE_DATE] || "9999/12/31",
                         birthday: f[CONFIG.F_EMP.BIRTHDAY] || "",
-                        fc: fcHist[name] ? {...fcHist[name]} : {"1F":0,"2F":0,"3F":0}
+                        fc: fcHist[name] ? {...fcHist[name]} : {"1F":0,"2F":0,"3F":0,"4F":0}
                     };
                 })
                 .filter(e => e.status === "在職" && e.dept !== "經營階層");
@@ -343,7 +343,7 @@ const App = () => {
                     } else if (type === "值日") {
                         const note = f[CONFIG.F_LEAVE.NOTE] || "";
                         const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
-                        const floor = (note.match(/^(1F|2F|3F)$/) || [""])[0];
+                        const floor = (note.match(/^(1F|2F|3F|4F)$/) || [""])[0];
                         if (!dmap[date]) dmap[date] = [];
                         const missed = isAuto === "未掃";
                         dmap[date].push({ ragicId: id, empName: emp, isAuto, note, floor, missed });
@@ -518,8 +518,8 @@ const App = () => {
                     // 分配空樓層中此人次數最少的
                     const usedFloors = current.map(d => d.floor);
                     const availFloors = FLOORS.filter(f => !usedFloors.includes(f));
-                    if (availFloors.length === 0 && current.length >= 3) {
-                        showToast(`${dateStr} 已有 3 位值日生`, false);
+                    if (availFloors.length === 0 && current.length >= FLOORS.length) {
+                        showToast(`${dateStr} 已有 ${FLOORS.length} 位值日生`, false);
                         setSaving(s => { const n = {...s}; delete n[dutyKey]; return n; });
                         return;
                     }
@@ -745,7 +745,7 @@ const App = () => {
 
     const handleAutoSchedule = async () => {
         if (employees.length === 0) { showToast("尚未載入員工資料", false); return; }
-        const okAutoDuty = await openConfirm(`確定要自動預排 ${year} 年 ${month} 月的值日生？\n每天 3 位（1F/2F/3F），現有的自動排班紀錄會被覆蓋。`);
+        const okAutoDuty = await openConfirm(`確定要自動預排 ${year} 年 ${month} 月的值日生？\n每天 4 位（1F/2F/3F/4F），現有的自動排班紀錄會被覆蓋。`);
         if (!okAutoDuty) return;
 
         setAutoScheduling(true);
@@ -798,10 +798,10 @@ const App = () => {
 
                 // 對齊各樓層 fcMap：新人 1F/2F/3F 起始值 = 老員工平均
                 // 避免「新人 fc=0 永遠排 1F 排序最前」造成的 1F 偏向（bug：曾宇謙/高晶晶/鐘晟鈺 1F 比例 67-100%）
-                for (const fl of ["1F", "2F", "3F"]) {
+                for (const fl of ["1F", "2F", "3F", "4F"]) {
                     const fcAvg = veteranNames.reduce((s, n) => s + (fcMap[n]?.[fl] || 0), 0) / veteranNames.length;
                     newNames.forEach(n => {
-                        if (!fcMap[n]) fcMap[n] = {"1F":0, "2F":0, "3F":0};
+                        if (!fcMap[n]) fcMap[n] = {"1F":0, "2F":0, "3F":0, "4F":0};
                         fcMap[n][fl] = Math.round(fcAvg);
                     });
                 }
@@ -832,7 +832,7 @@ const App = () => {
                     if (isAuto === "No") {
                         const empName = f[CONFIG.F_LEAVE.EMP] || "";
                         const note = f[CONFIG.F_LEAVE.NOTE] || "";
-                        const floor = /^(1F|2F|3F)$/.test(note) ? note : "";
+                        const floor = /^(1F|2F|3F|4F)$/.test(note) ? note : "";
                         if (!manualByDate[date]) manualByDate[date] = [];
                         manualByDate[date].push({ empName, floor });
                         if (empName) countMap[empName] = (countMap[empName] || 0) + 1;
@@ -846,7 +846,7 @@ const App = () => {
                 setProgress({ text: "清除舊值日紀錄", current: di + 1, total: toDelete.length });
                 const empName = f[CONFIG.F_LEAVE.EMP] || "";
                 const note = f[CONFIG.F_LEAVE.NOTE] || "";
-                const floor = /^(1F|2F|3F)$/.test(note) ? note : "";
+                const floor = /^(1F|2F|3F|4F)$/.test(note) ? note : "";
                 if (floor && fcMap[empName]) {
                     fcMap[empName][floor] = Math.max(0, (fcMap[empName][floor] || 0) - 1);
                 }
@@ -1032,7 +1032,7 @@ const App = () => {
                 dutyCounts[a.empName] = (dutyCounts[a.empName] || 0) + 1;
             }));
             console.log("=== 排班結果 ===");
-            console.log("總天數:", Object.keys(newDuties).length, "天 ×3 =", Object.keys(newDuties).length * 3, "slots");
+            console.log("總天數:", Object.keys(newDuties).length, "天 ×4 =", Object.keys(newDuties).length * 4, "slots");
             console.log("分配結果 (排序):", Object.entries(dutyCounts).sort((a,b) => b[1]-a[1]).map(([n,c]) => `${n}:${c}`).join(", "));
             console.log("夫妻 Plan A 選中天數:", Object.entries(newDuties).filter(([d, arr]) => {
                 const names = arr.map(a => a.empName);
@@ -1081,7 +1081,7 @@ const App = () => {
             // 更新本地員工樓層次數
             setAllEmployees(prev => prev.map(e => changedEmps.has(e.name) ? {...e, fc: {...fcMap[e.name]}} : e));
             const totalRecords = Object.values(newDuties).reduce((s, a) => s + a.length, 0);
-            showToast(`已完成自動預排 ${Object.keys(newDuties).length} 天 × 3 樓 = ${totalRecords} 筆`);
+            showToast(`已完成自動預排 ${Object.keys(newDuties).length} 天 × ${FLOORS.length} 樓 = ${totalRecords} 筆`);
         } catch(e) {
             console.error(e);
             showToast("自動預排失敗: " + e.message, false);
@@ -1234,7 +1234,7 @@ const App = () => {
     };
 
     const getStats = (empName) => {
-        let paixiu = 0, texiu = 0, qingjia = 0, zhiban = 0, zhibanMissed = 0, f1 = 0, f2 = 0, f3 = 0, dutyOther = 0;
+        let paixiu = 0, texiu = 0, qingjia = 0, zhiban = 0, zhibanMissed = 0, f1 = 0, f2 = 0, f3 = 0, f4 = 0, dutyOther = 0;
         Object.entries(leaves).forEach(([k, arr]) => {
             if (!k.startsWith(empName + "|") || !Array.isArray(arr)) return;
             arr.forEach(v => {
@@ -1255,6 +1255,7 @@ const App = () => {
                 if (d.floor === "1F") f1++;
                 else if (d.floor === "2F") f2++;
                 else if (d.floor === "3F") f3++;
+                else if (d.floor === "4F") f4++;
                 else dutyOther++;
             });
         });
@@ -1273,7 +1274,7 @@ const App = () => {
             }
         }
         const totalRest = paixiu + texiu + qingjia + govRestDays;
-        return { paixiu, texiu, qingjia, zhiban, zhibanMissed, f1, f2, f3, dutyOther, missed, govRestDays, totalRest };
+        return { paixiu, texiu, qingjia, zhiban, zhibanMissed, f1, f2, f3, f4, dutyOther, missed, govRestDays, totalRest };
     };
 
     const pct = progress && progress.total > 0 ? Math.round(progress.current / progress.total * 100) : null;
@@ -1339,7 +1340,7 @@ const App = () => {
                                         <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-yellow-100 text-yellow-700">特休</span></td><td>特別休假</td></tr>
                                         <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-red-100 text-red-700">請假</span></td><td>事假/病假</td></tr>
                                         <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-orange-100 text-orange-700">值班</span></td><td>19:00-20:00 多留 1 小時</td></tr>
-                                        <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-blue-100 text-blue-700">值日</span></td><td>打掃（1F/2F/3F 每天各 1 人）</td></tr>
+                                        <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-blue-100 text-blue-700">值日</span></td><td>打掃（1F/2F/3F/4F 每天各 1 人）</td></tr>
                                         <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-gray-100 text-gray-500">休假</span></td><td>見紅休（設計部＋瓊安，週末/國定假日自動標記）</td></tr>
                                     </tbody>
                                 </table>
@@ -1362,7 +1363,7 @@ const App = () => {
                                     <li><b>資格</b>：全部在職（不含經營階層、兼職）</li>
                                     <li><b>公平輪轉</b>：上月次數少的人優先排，多的少排</li>
                                     <li><b>新人不追入池前的債</b>：起始次數 = 老員工平均值</li>
-                                    <li>每天 3 位，分配 1F / 2F / 3F（難度：1F &gt; 3F &gt; 2F）</li>
+                                    <li>每天 4 位，分配 1F / 2F / 3F / 4F</li>
                                     <li>盡量一週排一次（本週已排過 +5 分降低優先）</li>
                                     <li>不連續排同一人，排除當天休假/見紅休者</li>
                                     <li>值班的人同天順便掃地（佔 1 個值日名額）</li>
@@ -1438,6 +1439,7 @@ const App = () => {
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#3b82f6"}}></span> 1F</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#8b5cf6"}}></span> 2F</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#0891b2"}}></span> 3F</span>
+                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#ea580c"}}></span> 4F</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-gray-200 inline-block"></span> 見紅休</span>
                 <span className="flex items-center gap-1 text-sm">🚫 禁休</span>
                 {!IS_READONLY && <span className="ml-2 text-gray-400 text-sm">{mode === "禁休" ? "點左邊日期欄設定/取消禁休" : `點格子=${mode}，再點=清除`}</span>}
@@ -1507,12 +1509,12 @@ const App = () => {
                                 // 每日驗證：值日每樓層 1 人、值班每天 1 人
                                 const warnMsgs = [];
                                 if (!nrInfo) {
-                                    const floorGroup = { "1F": [], "2F": [], "3F": [], "_none": [] };
+                                    const floorGroup = { "1F": [], "2F": [], "3F": [], "4F": [], "_none": [] };
                                     dutyList.forEach(d => {
-                                        const slot = ["1F","2F","3F"].includes(d.floor) ? d.floor : "_none";
+                                        const slot = ["1F","2F","3F","4F"].includes(d.floor) ? d.floor : "_none";
                                         floorGroup[slot].push(d.empName);
                                     });
-                                    ["1F","2F","3F"].forEach(f => {
+                                    ["1F","2F","3F","4F"].forEach(f => {
                                         const n = floorGroup[f].length;
                                         if (n === 0) warnMsgs.push(`缺 ${f} 值日`);
                                         else if (n > 1) warnMsgs.push(`${f} 多排：${floorGroup[f].join("、")}`);
@@ -1668,10 +1670,10 @@ const App = () => {
                                             <div>
                                                 {s.zhiban > 0 && <span className="text-orange-600">{s.zhiban}班</span>}
                                                 {s.zhibanMissed > 0 && <span className="text-red-600 font-bold"> {s.zhibanMissed}未值班</span>}
-                                                {(s.f1 + s.f2 + s.f3 + s.dutyOther) > 0 && <span className="text-blue-600"> {s.f1 + s.f2 + s.f3 + s.dutyOther}值</span>}
+                                                {(s.f1 + s.f2 + s.f3 + s.f4 + s.dutyOther) > 0 && <span className="text-blue-600"> {s.f1 + s.f2 + s.f3 + s.f4 + s.dutyOther}值</span>}
                                                 {s.missed > 0 && <span className="text-red-500"> {s.missed}未掃</span>}
                                             </div>
-                                            {s.paixiu === 0 && s.texiu === 0 && s.qingjia === 0 && s.zhiban === 0 && s.zhibanMissed === 0 && s.f1 === 0 && s.f2 === 0 && s.f3 === 0 && s.dutyOther === 0 && s.missed === 0 && <span className="text-gray-300">-</span>}
+                                            {s.paixiu === 0 && s.texiu === 0 && s.qingjia === 0 && s.zhiban === 0 && s.zhibanMissed === 0 && s.f1 === 0 && s.f2 === 0 && s.f3 === 0 && s.f4 === 0 && s.dutyOther === 0 && s.missed === 0 && <span className="text-gray-300">-</span>}
                                         </td>
                                     );
                                 })}

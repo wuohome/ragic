@@ -87,9 +87,11 @@ const STATUS_CONFIG = {
   '1F':   { bg:'#3b82f6', text:'#fff', label:'1F值日' },
   '2F':   { bg:'#8b5cf6', text:'#fff', label:'2F值日' },
   '3F':   { bg:'#0891b2', text:'#fff', label:'3F值日' },
+  '4F':   { bg:'#ea580c', text:'#fff', label:'4F值日' },
   '1F未掃':{ bg:'#ef4444', text:'#fff', label:'1F未掃' },  // 異常：值日未掃
   '2F未掃':{ bg:'#ef4444', text:'#fff', label:'2F未掃' },
   '3F未掃':{ bg:'#ef4444', text:'#fff', label:'3F未掃' },
+  '4F未掃':{ bg:'#ef4444', text:'#fff', label:'4F未掃' },
   '值未掃':{ bg:'#ef4444', text:'#fff', label:'未掃' },
   '未掃':   { bg:'#ef4444', text:'#fff', label:'未掃' },   // summary 合計用
   '見紅休':{ bg:'#9ca3af', text:'#fff', label:'休假' },
@@ -193,7 +195,7 @@ async function loadDutiesAndNoRest(year, month) {
       const date = r[SC.F_LEAVE.DATE];
       const key = empName + '__' + date;
       const note = r[SC.F_LEAVE.NOTE] || '';
-      const floor = /^(1F|2F|3F)$/.test(note) ? note : '';
+      const floor = /^(1F|2F|3F|4F)$/.test(note) ? note : '';
       const isAutoVal = r[SC.F_LEAVE.IS_AUTO] || '';
       const missed = isAutoVal === '未掃';
       if (!duties[key]) duties[key] = [];
@@ -268,7 +270,7 @@ function getCellStatuses(emp, y, m, d, leaves, duties, noRest) {
     if (dutyRec.missed) {
       key = dutyRec.floor ? dutyRec.floor + '未掃' : '值未掃';
     } else {
-      key = dutyRec.floor || '值日';
+      key = /^(1F|2F|3F|4F)$/.test(dutyRec.floor) ? dutyRec.floor : (dutyRec.floor || '值日');
     }
     if (!result.includes(key)) result.push(key);
   }
@@ -916,7 +918,7 @@ function TeamView({ emps, onBack }) {
   const summary = React.useMemo(() => {
     const s = {};
     for (const e of emps) {
-      s[e.name] = { '排休':0, '特休':0, '請假':0, '值班':0, '未值班':0, '1F':0, '2F':0, '3F':0, '值日':0, '見紅休':0 };
+      s[e.name] = { '排休':0, '特休':0, '請假':0, '值班':0, '未值班':0, '1F':0, '2F':0, '3F':0, '4F':0, '值日':0, '見紅休':0 };
     }
     // Count leaves（值班區分未值班）
     for (const recs of Object.values(leaves)) {
@@ -1028,7 +1030,7 @@ function TeamView({ emps, onBack }) {
             </div>
             <div style={{ fontSize:13,color:'#374151',lineHeight:1.7 }}>
               <p><b>📋 狀態</b></p>
-              <p>排休（綠）= 月休、特休（黃）= 特別休假、請假（紅）= 事病假<br/>值班（橘）= 19:00-20:00 多留、值日（藍）= 打掃 1F/2F/3F<br/>休假（灰）= 見紅休（設計部＋瓊安，週末/國定假日自動標記）</p>
+              <p>排休（綠）= 月休、特休（黃）= 特別休假、請假（紅）= 事病假<br/>值班（橘）= 19:00-20:00 多留、值日（藍/青/橘）= 打掃 1F/2F/3F/4F<br/>休假（灰）= 見紅休（設計部＋瓊安，週末/國定假日自動標記）</p>
               <hr style={{ border:'none',borderTop:'1px solid #e5e7eb',margin:'12px 0' }}/>
               <p><b>⚡ 值班規則</b></p>
               <ul style={{ paddingLeft:20,margin:'4px 0' }}>
@@ -1042,7 +1044,7 @@ function TeamView({ emps, onBack }) {
                 <li>資格：全部在職（不含經營階層、兼職）</li>
                 <li>追債制：上月次數少的人優先排</li>
                 <li>新人起始次數 = 老員工平均值（不追入池前的債）</li>
-                <li>每天 3 位（1F/2F/3F），盡量一週排一次</li>
+                <li>每天 4 位（1F/2F/3F/4F），盡量一週排一次</li>
                 <li>值班的人同天順便掃地</li>
               </ul>
               <div style={{ background:'#eff6ff',borderRadius:8,padding:10,margin:'8px 0',fontSize:12,color:'#1e40af' }}>
