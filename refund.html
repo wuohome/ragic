@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>定金退款確認 | 優式窩的家三重加盟店</title>
+  <script>
+  // cache-bust: force fresh load every deploy day (2026-05-19 pattern)
+  (function(){
+    var u = new URL(location.href);
+    if (!u.searchParams.has('v')) {
+      u.searchParams.set('v', new Date().toISOString().slice(0,10).replace(/-/g,''));
+      location.replace(u.toString());
+    }
+  })();
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+    body { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; }
+    .sig-canvas { border: 2px dashed #cbd5e1; border-radius: 12px; cursor: crosshair; touch-action: none; }
+    .chip { display: inline-block; padding: 6px 14px; border-radius: 999px; background: #f1f5f9; border: 1px solid #cbd5e1; cursor: pointer; font-size: 14px; transition: background .15s; }
+    .chip:hover { background: #e2e8f0; }
+    .hidden { display: none !important; }
+    /* PDF export area (off-screen for html2canvas) */
+    #pdf-export-area { position: absolute; left: -9999px; top: -9999px; width: 800px; background: #fff; padding: 40px; font-size: 15px; line-height: 1.7; }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-100 to-blue-50 flex flex-col items-center px-4 py-10">
+
+  <!-- ── Loader ── -->
+  <div id="loader" class="flex flex-col items-center justify-center min-h-[60vh] w-full">
+    <div class="w-14 h-14 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mb-6"></div>
+    <p id="loader-text" class="text-slate-500 text-lg">讀取退款資訊中...</p>
+  </div>
+
+  <!-- ── Step 1: 退款資訊確認 + 客戶填寫 ── -->
+  <div id="step-1" class="hidden w-full max-w-2xl">
+    <div class="bg-white rounded-3xl shadow-2xl p-6 md:p-10 border-t-[10px] border-rose-500 mb-6">
+      <!-- Header -->
+      <div class="text-center mb-8">
+        <p class="text-xs text-slate-400 mb-1">優式租售管理</p>
+        <h1 class="text-2xl font-black text-slate-800">窩的家三重加盟店</h1>
+        <h2 class="text-lg font-bold text-rose-600 mt-1">定金退款確認</h2>
+      </div>
+
+      <!-- 退款資訊唯讀區 -->
+      <div class="bg-rose-50 rounded-2xl p-5 mb-8 border border-rose-200">
+        <h3 class="text-sm font-bold text-rose-700 mb-4 tracking-widest uppercase">退款單資訊</h3>
+        <div class="grid grid-cols-1 gap-3 text-sm">
+          <div class="flex justify-between items-start">
+            <span class="text-slate-500 shrink-0 mr-3">退款單編號</span>
+            <span id="show_refund_no" class="font-bold text-slate-800 text-right"></span>
+          </div>
+          <div class="flex justify-between items-start">
+            <span class="text-slate-500 shrink-0 mr-3">案名</span>
+            <span id="show_case_name" class="font-bold text-slate-800 text-right"></span>
+          </div>
+          <div class="flex justify-between items-start">
+            <span class="text-slate-500 shrink-0 mr-3">地址</span>
+            <span id="show_addr" class="font-bold text-slate-800 text-right"></span>
+          </div>
+          <div class="flex justify-between items-start">
+            <span class="text-slate-500 shrink-0 mr-3">租客姓名</span>
+            <span id="show_tenant_name" class="font-bold text-slate-800 text-right"></span>
+          </div>
+          <div class="flex justify-between items-start border-t border-rose-200 pt-3 mt-1">
+            <span class="text-slate-500 shrink-0 mr-3">原定金金額</span>
+            <span id="show_amount" class="font-black text-rose-600 text-xl text-right"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 退款原因 -->
+      <div class="mb-6">
+        <label class="block text-sm font-bold text-slate-700 mb-2">退款原因 <span class="text-red-500">*</span></label>
+        <p class="text-xs text-slate-400 mb-3">請說明申請退款的原因，或點選下方快速選項</p>
+        <div class="flex flex-wrap gap-2 mb-3">
+          <span class="chip" onclick="setChip('因個人因素不再租用')">個人因素</span>
+          <span class="chip" onclick="setChip('房東未同意要約條件')">房東不同意條件</span>
+          <span class="chip" onclick="setChip('雙方協議解除要約')">雙方協議解除</span>
+        </div>
+        <textarea id="input_reason" rows="4"
+          class="w-full rounded-xl border border-slate-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 resize-none"
+          placeholder="請填寫退款原因..."></textarea>
+      </div>
+
+      <!-- 退款方式 -->
+      <div class="mb-6">
+        <label class="block text-sm font-bold text-slate-700 mb-3">退款方式 <span class="text-red-500">*</span></label>
+        <div class="space-y-3">
+          <label class="flex items-center gap-3 p-4 rounded-xl border border-slate-200 cursor-pointer hover:border-rose-300 transition">
+            <input type="radio" name="refund_method" id="method_original" value="退回原收款帳號" class="accent-rose-500 w-5 h-5" checked onchange="toggleBankFields()">
+            <div>
+              <p class="font-bold text-slate-800 text-sm">退回原收款帳號</p>
+              <p class="text-xs text-slate-400">退款匯入當初繳付定金的帳號</p>
+            </div>
+          </label>
+          <label class="flex items-center gap-3 p-4 rounded-xl border border-slate-200 cursor-pointer hover:border-rose-300 transition">
+            <input type="radio" name="refund_method" id="method_other" value="退至其他帳戶" class="accent-rose-500 w-5 h-5" onchange="toggleBankFields()">
+            <div>
+              <p class="font-bold text-slate-800 text-sm">退至其他帳戶</p>
+              <p class="text-xs text-slate-400">指定其他銀行帳號收款</p>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- 銀行資訊（僅退至其他帳戶時顯示） -->
+      <div id="bank-section" class="hidden mb-6 bg-slate-50 rounded-2xl p-5 border border-slate-200">
+        <h4 class="text-sm font-bold text-slate-700 mb-4">收款帳號資訊</h4>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">銀行名稱 <span class="text-red-500">*</span></label>
+            <input type="text" id="input_bank" maxlength="30"
+              class="w-full rounded-xl border border-slate-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+              placeholder="例：台灣銀行、玉山銀行...">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">帳號 <span class="text-red-500">*</span></label>
+            <input type="text" id="input_account" maxlength="25" inputmode="numeric"
+              class="w-full rounded-xl border border-slate-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+              placeholder="請輸入完整帳號">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">存摺封面影本 <span class="text-red-500">*</span></label>
+            <p class="text-xs text-slate-400 mb-2">請上傳存摺封面照片（JPG/PNG，5MB 以內）</p>
+            <input type="file" id="input_passbook" accept="image/*,.pdf" multiple
+              class="w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-rose-50 file:text-rose-700 file:font-semibold hover:file:bg-rose-100 cursor-pointer">
+          </div>
+        </div>
+      </div>
+
+      <!-- 簽名區 -->
+      <div class="mb-8">
+        <label class="block text-sm font-bold text-slate-700 mb-2">本人簽名確認 <span class="text-red-500">*</span></label>
+        <p class="text-xs text-slate-400 mb-3">請於下方空白處親手簽名，確認退款申請內容</p>
+        <canvas id="signature-pad" class="sig-canvas w-full" height="180"></canvas>
+        <div class="flex justify-end mt-2">
+          <button id="btn-clear" type="button"
+            class="text-xs text-slate-400 underline hover:text-slate-600"
+            onclick="signaturePad && signaturePad.clear()">清除重簽</button>
+        </div>
+      </div>
+
+      <!-- 送出按鈕 -->
+      <button id="btn-submit" type="button" onclick="submitData()"
+        class="w-full py-4 bg-rose-600 hover:bg-rose-700 text-white font-black text-lg rounded-2xl shadow-lg transition active:scale-95">
+        確認送出退款申請
+      </button>
+      <p class="text-xs text-slate-400 text-center mt-4">送出後系統將通知業務人員處理，退款將於確認後匯出</p>
+    </div>
+  </div>
+
+  <!-- ── Loading overlay (送出中) ── -->
+  <div id="submit-loader" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+    <div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl max-w-xs w-full mx-4">
+      <div class="w-12 h-12 border-4 border-rose-400 border-t-transparent rounded-full animate-spin mb-4"></div>
+      <p id="submit-loader-text" class="text-slate-600 text-base text-center">正在送出退款申請...</p>
+    </div>
+  </div>
+
+  <!-- ── Step Success ── -->
+  <div id="step-success" class="hidden w-full max-w-2xl">
+    <div class="bg-white rounded-3xl shadow-2xl p-8 md:p-16 text-center border-t-[10px] border-emerald-500">
+      <div class="text-6xl mb-6">✅</div>
+      <h2 class="text-2xl font-black text-emerald-700 mb-3">退款申請已送出！</h2>
+      <p class="text-slate-600 mb-6">我們已收到您的退款申請，將由承辦人員審核後安排匯款，請靜候通知。</p>
+      <div class="bg-emerald-50 rounded-2xl p-5 text-left text-sm mb-8 border border-emerald-200">
+        <p class="font-bold text-emerald-800 mb-2">後續流程</p>
+        <ol class="list-decimal list-inside space-y-1 text-slate-600">
+          <li>承辦人員審核退款申請資料</li>
+          <li>會計確認後由財務執行匯款</li>
+          <li>退款完成後將通知您確認</li>
+        </ol>
+      </div>
+      <button onclick="downloadReceiptPDF()" id="btn-download-success"
+        class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition mb-3">
+        下載退款確認單 PDF
+      </button>
+      <p class="text-xs text-slate-400">如有任何問題，請聯繫為您服務的窩的家業務人員</p>
+    </div>
+  </div>
+
+  <!-- ── Step Failed ── -->
+  <div id="step-failed" class="hidden w-full max-w-2xl">
+    <div class="bg-white rounded-3xl shadow-2xl p-8 md:p-16 text-center border-t-[10px] border-red-500">
+      <div class="text-6xl mb-6">⚠️</div>
+      <h2 class="text-2xl font-black text-red-700 mb-3">送出未成功</h2>
+      <p class="text-slate-600 mb-2">資料可能尚未儲存至系統，請依下方說明處理。</p>
+      <p id="failed-detail" class="text-xs text-slate-400 mb-6"></p>
+      <div class="bg-red-50 rounded-2xl p-5 text-left text-sm mb-8 border border-red-200">
+        <p class="font-bold text-red-800 mb-2">建議處理方式</p>
+        <ol class="list-decimal list-inside space-y-1 text-slate-600">
+          <li>點下方「重新送出」再試一次</li>
+          <li>若仍失敗，請下載 PDF 傳給業務人員協助上傳</li>
+          <li>或直接聯繫業務以口頭說明退款申請</li>
+        </ol>
+      </div>
+      <button onclick="retrySubmit()" id="btn-retry"
+        class="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition mb-3">
+        重新送出
+      </button>
+      <button onclick="downloadReceiptPDF()" id="btn-download-failed"
+        class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition mb-3">
+        下載退款確認單 PDF（傳給業務）
+      </button>
+      <p class="text-xs text-slate-400">如需協助請聯繫窩的家業務人員</p>
+    </div>
+  </div>
+
+  <!-- ── PDF Export Area (off-screen, rendered by html2canvas) ── -->
+  <div id="pdf-export-area" aria-hidden="true">
+    <div style="text-align:center; margin-bottom:20px;">
+      <p style="font-size:12px; color:#888; margin:0;">優式租售管理</p>
+      <p style="font-size:22px; font-weight:900; margin:4px 0;">窩的家三重加盟店</p>
+      <p style="font-size:16px; font-weight:700; color:#e11d48; margin:0;">定金退款確認單</p>
+    </div>
+    <table style="width:100%; border-collapse:collapse; font-size:14px; margin-bottom:20px;">
+      <tr style="background:#fff1f2;">
+        <td style="padding:8px 12px; font-weight:700; border:1px solid #fecdd3; width:35%; color:#9f1239;">退款單編號</td>
+        <td style="padding:8px 12px; border:1px solid #fecdd3;" id="pdf_refund_no"></td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px; font-weight:700; border:1px solid #e2e8f0;">案名</td>
+        <td style="padding:8px 12px; border:1px solid #e2e8f0;" id="pdf_case_name"></td>
+      </tr>
+      <tr style="background:#f8fafc;">
+        <td style="padding:8px 12px; font-weight:700; border:1px solid #e2e8f0;">地址</td>
+        <td style="padding:8px 12px; border:1px solid #e2e8f0;" id="pdf_addr"></td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px; font-weight:700; border:1px solid #e2e8f0;">租客姓名</td>
+        <td style="padding:8px 12px; border:1px solid #e2e8f0;" id="pdf_tenant_name"></td>
+      </tr>
+      <tr style="background:#fff1f2;">
+        <td style="padding:8px 12px; font-weight:700; border:1px solid #fecdd3; color:#9f1239;">原定金金額</td>
+        <td style="padding:8px 12px; border:1px solid #fecdd3; font-weight:900; color:#e11d48; font-size:16px;" id="pdf_amount"></td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px; font-weight:700; border:1px solid #e2e8f0;">退款原因</td>
+        <td style="padding:8px 12px; border:1px solid #e2e8f0;" id="pdf_reason"></td>
+      </tr>
+      <tr style="background:#f8fafc;">
+        <td style="padding:8px 12px; font-weight:700; border:1px solid #e2e8f0;">退款方式</td>
+        <td style="padding:8px 12px; border:1px solid #e2e8f0;" id="pdf_method"></td>
+      </tr>
+      <tr id="pdf_bank_row">
+        <td style="padding:8px 12px; font-weight:700; border:1px solid #e2e8f0;">退款銀行</td>
+        <td style="padding:8px 12px; border:1px solid #e2e8f0;" id="pdf_bank"></td>
+      </tr>
+      <tr id="pdf_account_row">
+        <td style="padding:8px 12px; font-weight:700; border:1px solid #e2e8f0;">退款帳號</td>
+        <td style="padding:8px 12px; border:1px solid #e2e8f0;" id="pdf_account"></td>
+      </tr>
+      <tr style="background:#f8fafc;">
+        <td style="padding:8px 12px; font-weight:700; border:1px solid #e2e8f0;">確認時間</td>
+        <td style="padding:8px 12px; border:1px solid #e2e8f0;" id="pdf_confirm_time"></td>
+      </tr>
+    </table>
+    <div style="margin-top:30px; padding-top:20px; border-top:2px solid #000; display:flex; justify-content:space-between; align-items:flex-end;">
+      <div>
+        <p style="font-size:14px; font-weight:700; margin-bottom:8px;">申請人簽名</p>
+        <img id="pdf_signature_img" style="max-height:80px; border:1px solid #e2e8f0; padding:4px;" alt="簽名">
+      </div>
+      <div style="text-align:right; font-size:12px; color:#888;">
+        <p>優式窩的家三重加盟店</p>
+        <p id="pdf_confirm_time2"></p>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const WORKER_BASE_URL = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+
+  // Ragic fid constants (payments/5)
+  const F = {
+    refund_no:   '1002099', // A1 退款單編號 (唯讀)
+    case_name:   '1002102', // A4 案名
+    address:     '1002103', // A5 地址
+    tenant_name: '1002104', // A6 租客姓名
+    amount:      '1002106', // A8 原定金金額
+    reason:      '1002108', // A11 退款原因
+    method:      '1002109', // A12 退款方式
+    bank:        '1002110', // A13 退款銀行
+    account:     '1002111', // A14 退款帳號
+    passbook:    '1002112', // A15 存摺封面影本
+    signature:   '1002113', // A16 客戶簽名
+    confirm_time:'1002114', // A17 客戶確認時間
+  };
+
+  let currentRecord = null;
+  let numericRid = null;
+  let signaturePad = null;
+  let _lastFormData = null;
+  let _verifyRetryCount = 0;
+
+  const $ = (id) => document.getElementById(id);
+
+  // Parse ?code= from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const codeParam = urlParams.get('code') || urlParams.get('id') || '';
+
+  function formatCurrency(val) {
+    if (!val) return '$ 0';
+    const n = parseFloat(String(val).replace(/[^\d.]/g, ''));
+    if (isNaN(n)) return '$ 0';
+    return '$ ' + n.toLocaleString('zh-TW');
+  }
+
+  function getNowTW() {
+    const now = new Date();
+    const opts = { timeZone: 'Asia/Taipei', hour12: true,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit' };
+    // Format: yyyy/MM/dd hh:mm AM/PM
+    const parts = new Intl.DateTimeFormat('en-US', opts).formatToParts(now);
+    const get = (t) => parts.find(p => p.type === t)?.value || '';
+    const ampm = get('dayPeriod').toUpperCase();
+    return `${get('year')}/${get('month')}/${get('day')} ${get('hour')}:${get('minute')} ${ampm}`;
+  }
+
+  function setChip(text) {
+    $('input_reason').value = text;
+    $('input_reason').focus();
+  }
+
+  function toggleBankFields() {
+    const other = $('method_other').checked;
+    $('bank-section').classList.toggle('hidden', !other);
+  }
+
+  function initSignaturePad() {
+    const canvas = $('signature-pad');
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    canvas.width = canvas.offsetWidth * ratio;
+    canvas.height = canvas.offsetHeight * ratio;
+    canvas.getContext('2d').scale(ratio, ratio);
+    signaturePad = new SignaturePad(canvas, { minWidth: 0.8, maxWidth: 2.2, penColor: 'black' });
+  }
+
+  function renderRecord(rec) {
+    currentRecord = rec;
+    const refundNo  = rec[F.refund_no]   || '';
+    const caseName  = rec[F.case_name]   || '';
+    const addr      = rec[F.address]     || '';
+    const tenant    = rec[F.tenant_name] || '';
+    const amount    = rec[F.amount]      || '0';
+
+    // Screen display
+    $('show_refund_no').innerText   = refundNo;
+    $('show_case_name').innerText   = caseName;
+    $('show_addr').innerText        = addr;
+    $('show_tenant_name').innerText = tenant;
+    $('show_amount').innerText      = formatCurrency(amount);
+
+    // PDF area (prefill static info now; dynamic fields updated at submit)
+    $('pdf_refund_no').innerText    = refundNo;
+    $('pdf_case_name').innerText    = caseName;
+    $('pdf_addr').innerText         = addr;
+    $('pdf_tenant_name').innerText  = tenant;
+    $('pdf_amount').innerText       = formatCurrency(amount);
+
+    // Show step-1 and init sig pad
+    $('loader').classList.add('hidden');
+    $('step-1').classList.remove('hidden');
+    setTimeout(initSignaturePad, 250);
+  }
+
+  async function loadRecord() {
+    if (!codeParam) {
+      $('loader-text').innerHTML = '缺少退款單編號（?code=...）<br>請聯繫業務重新傳送連結。';
+      return;
+    }
+    $('loader-text').innerText = '讀取退款資訊中...';
+    try {
+      const res = await fetch(
+        `${WORKER_BASE_URL}/getRefund?code=${encodeURIComponent(codeParam)}`
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        $('loader-text').innerHTML = `載入失敗（${err.error || res.status}）<br>請聯繫窩的家業務重新傳送連結。`;
+        return;
+      }
+      const data = await res.json();
+      // Worker returns { _rid: '123', '1002099': 'RF-...', ... }
+      numericRid = data._rid || null;
+      renderRecord(data);
+    } catch (e) {
+      $('loader-text').innerHTML = '網路錯誤，無法載入資料。<br>請檢查網路後重新整理，或聯繫窩的家業務。';
+    }
+  }
+
+  // ── PDF generation (2026-05-17 scale 1.5 + JPEG 0.85 to avoid file_too_large) ──
+  async function generatePDFBlob() {
+    const el = $('pdf-export-area');
+    const canvas = await html2canvas(el, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' });
+    const imgW = 210;
+    const imgH = (canvas.height * imgW) / canvas.width;
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', [imgW, imgH]);
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, imgW, imgH);
+    return pdf.output('blob');
+  }
+
+  async function downloadReceiptPDF() {
+    if (/Line\//i.test(navigator.userAgent)) {
+      alert('⚠️ LINE 內建瀏覽器無法下載 PDF\n\n請點右上角「⋯」→「在 Safari / Chrome 中開啟」→ 再按一次下載按鈕。');
+      return;
+    }
+    const btn = event.currentTarget;
+    const origText = btn.innerText;
+    btn.innerText = 'PDF 產生中...'; btn.disabled = true;
+    try {
+      const blob = await generatePDFBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `退款確認單_${$('show_tenant_name').innerText || ''}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert('下載失敗，請截圖存檔後傳給業務。');
+    } finally {
+      btn.innerText = origText; btn.disabled = false;
+    }
+  }
+
+  // ── Build FormData for submitRefund ──
+  async function buildFormData() {
+    const method = document.querySelector('input[name="refund_method"]:checked')?.value || '退回原收款帳號';
+    const reason = ($('input_reason').value || '').trim();
+    const sigData = signaturePad.toDataURL('image/png');
+    const confirmTime = getNowTW();
+
+    // Update PDF area with dynamic data before rendering
+    $('pdf_reason').innerText       = reason;
+    $('pdf_method').innerText       = method;
+    $('pdf_confirm_time').innerText = confirmTime;
+    $('pdf_confirm_time2').innerText = confirmTime;
+    $('pdf_signature_img').src      = sigData;
+
+    const showBank = (method === '退至其他帳戶');
+    $('pdf_bank_row').style.display    = showBank ? '' : 'none';
+    $('pdf_account_row').style.display = showBank ? '' : 'none';
+    if (showBank) {
+      $('pdf_bank').innerText    = ($('input_bank').value || '').trim();
+      $('pdf_account').innerText = ($('input_account').value || '').trim();
+    }
+
+    // Small delay for pdf area to render
+    await new Promise(r => setTimeout(r, 120));
+
+    const fd = new FormData();
+    fd.append('rid', numericRid);
+    fd.append(F.reason,      reason);
+    fd.append(F.method,      method);
+    fd.append(F.signature,   sigData);
+    fd.append(F.confirm_time, confirmTime);
+
+    if (showBank) {
+      fd.append(F.bank,    ($('input_bank').value || '').trim());
+      fd.append(F.account, ($('input_account').value || '').trim());
+      const files = $('input_passbook').files;
+      for (let i = 0; i < files.length; i++) {
+        fd.append(F.passbook, files[i], files[i].name);
+      }
+    }
+
+    return fd;
+  }
+
+  // ── Client-side validation ──
+  function validate() {
+    const reason = ($('input_reason').value || '').trim();
+    if (!reason) {
+      alert('請填寫退款原因後再送出。');
+      $('input_reason').focus();
+      return false;
+    }
+
+    const method = document.querySelector('input[name="refund_method"]:checked')?.value;
+    if (method === '退至其他帳戶') {
+      const bank    = ($('input_bank').value    || '').trim();
+      const account = ($('input_account').value || '').trim();
+      const files   = $('input_passbook').files;
+      if (!bank) { alert('請填寫退款銀行名稱。'); $('input_bank').focus(); return false; }
+      if (!account) { alert('請填寫退款帳號。'); $('input_account').focus(); return false; }
+      if (files.length === 0) { alert('請上傳存摺封面影本。'); return false; }
+    }
+
+    // B2: signature base64 length > 500
+    if (!signaturePad || signaturePad.isEmpty()) {
+      alert('請完成簽名後再送出。');
+      return false;
+    }
+    const sigData = signaturePad.toDataURL('image/png');
+    if (sigData.length <= 500) {
+      alert('簽名內容不完整，請重新簽名。');
+      return false;
+    }
+
+    return true;
+  }
+
+  // ── JSONP-style verify after submit (3s delay, 3 retries) ──
+  async function verifySubmit(retryLeft = 3) {
+    _verifyRetryCount = 3 - retryLeft + 1;
+    await new Promise(r => setTimeout(r, 3000));
+    try {
+      const res = await fetch(
+        `${WORKER_BASE_URL}/verifyRefund?code=${encodeURIComponent(codeParam)}`
+      );
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      // Verify key fields written: signature (A16) and reason (A11)
+      const sig    = data[F.signature] || '';
+      const reason = data[F.reason]    || '';
+      if (sig.length > 500 && reason.length > 0) {
+        // Verified → step-success
+        showSuccess();
+        return;
+      }
+      // Not verified yet
+      if (retryLeft > 1) {
+        await verifySubmit(retryLeft - 1);
+      } else {
+        showFailed('VERIFY_MISSING_DATA');
+      }
+    } catch (e) {
+      if (retryLeft > 1) {
+        await verifySubmit(retryLeft - 1);
+      } else {
+        showFailed('VERIFY_NET_' + (e.message || 'ERROR').replace(/\s+/g, '_').slice(0, 20));
+      }
+    }
+  }
+
+  function showLoading(msg) {
+    $('submit-loader-text').innerText = msg || '正在送出退款申請...';
+    $('submit-loader').classList.remove('hidden');
+  }
+  function hideLoading() {
+    $('submit-loader').classList.add('hidden');
+  }
+
+  function showSuccess() {
+    hideLoading();
+    $('step-1').classList.add('hidden');
+    $('step-success').classList.remove('hidden');
+    window.scrollTo(0, 0);
+  }
+
+  function showFailed(code) {
+    hideLoading();
+    $('step-1').classList.add('hidden');
+    $('step-failed').classList.remove('hidden');
+    if ($('failed-detail')) $('failed-detail').innerText = '錯誤代碼：' + (code || 'UNKNOWN');
+    window.scrollTo(0, 0);
+  }
+
+  async function postToWorker(fd) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 30000);
+    try {
+      const res = await fetch(`${WORKER_BASE_URL}/submitRefund`, {
+        method: 'POST',
+        body: fd,
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      return res;
+    } catch (e) {
+      clearTimeout(timer);
+      throw e;
+    }
+  }
+
+  async function submitData() {
+    if (!validate()) return;
+    if (!numericRid) { alert('系統錯誤：無法取得退款單 ID，請重新整理頁面。'); return; }
+
+    showLoading('正在產生確認單並上傳...');
+
+    let fd;
+    try {
+      fd = await buildFormData();
+    } catch (e) {
+      console.error('buildFormData error', e);
+      showFailed('PDF_GEN_' + (e.name || 'ERROR'));
+      return;
+    }
+    _lastFormData = fd;
+
+    let postRes;
+    try {
+      postRes = await postToWorker(fd);
+    } catch (firstErr) {
+      // Network blip → auto retry once after 15s
+      showLoading('網路不穩，15 秒後自動重試...');
+      await new Promise(r => setTimeout(r, 15000));
+      showLoading('重試送出中...');
+      try {
+        postRes = await postToWorker(_lastFormData);
+      } catch (retryErr) {
+        showFailed('VERIFY_NET_TIMEOUT');
+        return;
+      }
+    }
+
+    if (!postRes.ok) {
+      const errBody = await postRes.json().catch(() => ({}));
+      showFailed(errBody.error || 'HTTP_' + postRes.status);
+      return;
+    }
+
+    // Worker returned 200 — now verify data actually landed in Ragic (3s + 3 retries)
+    showLoading('確認資料寫入中...');
+    await verifySubmit(3);
+  }
+
+  // Retry button handler
+  function retrySubmit() {
+    $('step-failed').classList.add('hidden');
+    $('step-1').classList.remove('hidden');
+    window.scrollTo(0, 0);
+  }
+
+  // Init
+  loadRecord();
+</script>
+</body>
+</html>
