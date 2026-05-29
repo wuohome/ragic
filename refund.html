@@ -403,16 +403,19 @@
   async function generatePDFBlob() {
     const el = $('pdf-export-area');
     const canvas = await html2canvas(el, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' });
-    // Fit-to-width: leave 10mm margin on each side so right edge is never clipped.
-    // canvas pixel width may vary (device, padding, overflow); always scale to contentW.
-    // Keep scale=1.5 + JPEG 0.85 volume optimisation (earnest 5/17 file_too_large fix).
-    const pageW   = 210;          // A4 width mm
-    const margin  = 10;           // left & right margin mm
-    const contentW = pageW - 2 * margin;              // 190 mm usable
-    const contentH = canvas.height * (contentW / canvas.width);
-    const pageH   = contentH + 2 * margin;
+    // Fit-to-width fix (2026-05-30):
+    //   - Use fixed A4 portrait (210×297mm). jsPDF custom [w,h] arrays caused
+    //     landscape swap when contentH < pageW (h<w triggers jsPDF auto-rotate).
+    //   - Scale image to fit within A4 width minus margins; height follows proportionally.
+    //   - If content taller than A4, it overflows below (no second page needed for this form).
+    //   - Keep scale=1.5 + JPEG 0.85 (earnest 5/17 file_too_large fix).
+    const pageW   = 210;  // A4 mm
+    const pageH   = 297;  // A4 mm (fixed portrait — avoids jsPDF auto-rotate when h<w)
+    const margin  = 10;   // left & right margin mm
+    const contentW = pageW - 2 * margin;              // 190 mm usable width
+    const contentH = canvas.height * (contentW / canvas.width);  // proportional height
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF('p', 'mm', [pageW, pageH]);
+    const pdf = new jsPDF('p', 'mm', 'a4');
     pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', margin, margin, contentW, contentH);
     return pdf.output('blob');
   }
