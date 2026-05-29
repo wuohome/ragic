@@ -332,7 +332,8 @@ const App = () => {
                             const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
                             if (isAuto !== "未掃") pStats[emp].duty++;
                         } else if (type === "值班") {
-                            pStats[emp].zhiban++;
+                            const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
+                            if (isAuto !== "未值班") pStats[emp].zhiban++;
                         }
                     }
                     if (y !== year || m !== month) return;
@@ -350,7 +351,8 @@ const App = () => {
                         // leaves[key] 為陣列，支援同日多種類型（如 排休+值班）
                         const k = `${emp}|${date}`;
                         if (!lmap[k]) lmap[k] = [];
-                        lmap[k].push({ ragicId: id, type });
+                        const isAutoVal = f[CONFIG.F_LEAVE.IS_AUTO] || "";
+                        lmap[k].push({ ragicId: id, type, isAuto: isAutoVal });
                     }
                 });
             setLeaves(lmap);
@@ -611,7 +613,48 @@ const App = () => {
         }
         try {
             if (sameTypeEntry) {
-                // 同類型已存在 → 清除（保留其他類型）
+                // 值班模式：支援「未值班」標記
+                if (mode === "值班") {
+                    if (sameTypeEntry.isAuto === "未值班") {
+                        // 未值班 → 再點 = 清除（對齊未掃邏輯）
+                        await SC.proxyFetch(`deleteLeave/${sameTypeEntry.ragicId}`, { method:"DELETE" });
+                        setLeaves(l => {
+                            const newList = (l[key] || []).filter(e => e.ragicId !== sameTypeEntry.ragicId);
+                            const n = {...l};
+                            if (newList.length === 0) delete n[key]; else n[key] = newList;
+                            return n;
+                        });
+                        showToast(`${empName} ${dateStr} 值班已清除`);
+                    } else {
+                        // 正常值班 → 問「標記未值班 / 清除值班」
+                        const action = await openActionSelect(
+                            `${empName} ${dateStr} 值班，要做什麼？`,
+                            ["標記未值班（放鴿子）", "清除值班"]
+                        );
+                        if (action === "1") {
+                            // 標記未值班
+                            await SC.proxyFetch(`updateLeave/${sameTypeEntry.ragicId}`, {
+                                method: "POST",
+                                headers: {"Content-Type":"application/json"},
+                                body: JSON.stringify({ [CONFIG.F_LEAVE.IS_AUTO]: "未值班" })
+                            });
+                            setLeaves(l => ({...l, [key]: (l[key]||[]).map(e => e.ragicId === sameTypeEntry.ragicId ? {...e, isAuto:"未值班"} : e)}));
+                            showToast(`${empName} ${dateStr} 標記未值班 ❌`);
+                        } else if (action === "2") {
+                            // 清除值班
+                            await SC.proxyFetch(`deleteLeave/${sameTypeEntry.ragicId}`, { method:"DELETE" });
+                            setLeaves(l => {
+                                const newList = (l[key] || []).filter(e => e.ragicId !== sameTypeEntry.ragicId);
+                                const n = {...l};
+                                if (newList.length === 0) delete n[key]; else n[key] = newList;
+                                return n;
+                            });
+                            showToast(`${empName} ${dateStr} 值班已清除`);
+                        }
+                        // action === null → 取消，不做任何事
+                    }
+                } else {
+                // 其他類型（排休/請假/特休）→ 原邏輯：清除
                 await SC.proxyFetch(`deleteLeave/${sameTypeEntry.ragicId}`, { method:"DELETE" });
                 setLeaves(l => {
                     const newList = (l[key] || []).filter(e => e.ragicId !== sameTypeEntry.ragicId);
@@ -620,6 +663,7 @@ const App = () => {
                     return n;
                 });
                 showToast(`${empName} ${dateStr} ${mode}已清除`);
+                }
             } else {
                 // 換值班原子操作：先 DELETE 所有舊值班紀錄，全部成功才 POST 新人
                 // 任一 DELETE 失敗 → throw → 不更新 state、不 POST 新人，避免狀態漂移
@@ -1190,13 +1234,16 @@ const App = () => {
     };
 
     const getStats = (empName) => {
-        let paixiu = 0, texiu = 0, qingjia = 0, zhiban = 0, f1 = 0, f2 = 0, f3 = 0, dutyOther = 0;
+        let paixiu = 0, texiu = 0, qingjia = 0, zhiban = 0, zhibanMissed = 0, f1 = 0, f2 = 0, f3 = 0, dutyOther = 0;
         Object.entries(leaves).forEach(([k, arr]) => {
             if (!k.startsWith(empName + "|") || !Array.isArray(arr)) return;
             arr.forEach(v => {
                 if (v.type === "排休") paixiu++;
                 else if (v.type === "特休") texiu++;
-                else if (v.type === "值班") zhiban++;
+                else if (v.type === "值班") {
+                    if (v.isAuto === "未值班") zhibanMissed++;
+                    else zhiban++;
+                }
                 else qingjia++;
             });
         });
@@ -1226,7 +1273,7 @@ const App = () => {
             }
         }
         const totalRest = paixiu + texiu + qingjia + govRestDays;
-        return { paixiu, texiu, qingjia, zhiban, f1, f2, f3, dutyOther, missed, govRestDays, totalRest };
+        return { paixiu, texiu, qingjia, zhiban, zhibanMissed, f1, f2, f3, dutyOther, missed, govRestDays, totalRest };
     };
 
     const pct = progress && progress.total > 0 ? Math.round(progress.current / progress.total * 100) : null;
@@ -1509,19 +1556,44 @@ const App = () => {
                                             const floorLabel = hasMultiFloor
                                                 ? myDuties.map(d => d.floor || "值").join("+")
                                                 : myDuty ? (myDuty.floor || "值") : "";
-                                            // 組合所有彩色段：每個 leave 類型 + 值日（若有）
-                                            const leaveColor = (t) => t === "排休" ? "#22c55e" : t === "特休" ? "#eab308" : t === "值班" ? "#f97316" : "#dc2626";
-                                            const leaveShort = (t) => t === "排休" ? "休" : t === "特休" ? "特" : t === "值班" ? "班" : "假";
+                                            // 組合所有彩色段（C 項重構：未值班/未掃融入 segments，不蓋掉式）
+                                            const MISSED_BG = "#ef4444";  // 未做 = 紅色
+                                            const MISSED_BORDER = "#fca5a5";
                                             const segments = [];
-                                            leaveList.forEach(l => segments.push({ color: leaveColor(l.type), label: l.type, short: leaveShort(l.type) }));
-                                            if (myDuty && !myDuties.some(d => d.missed)) {
-                                                if (hasMultiFloor) {
-                                                    myDuties.forEach(d => segments.push({ color: FLOOR_COLORS[d.floor] || "#3b82f6", label: d.floor || "值", short: d.floor || "值" }));
+
+                                            // leave 類型段（值班支援未值班）
+                                            leaveList.forEach(l => {
+                                                if (l.type === "值班") {
+                                                    if (l.isAuto === "未值班") {
+                                                        segments.push({ color: MISSED_BG, label: "值班", short: "班", missed: true });
+                                                    } else {
+                                                        segments.push({ color: "#f97316", label: "值班", short: "班", missed: false });
+                                                    }
+                                                } else if (l.type === "排休") {
+                                                    segments.push({ color: "#22c55e", label: "排休", short: "休", missed: false });
+                                                } else if (l.type === "特休") {
+                                                    segments.push({ color: "#eab308", label: "特休", short: "特", missed: false });
                                                 } else {
-                                                    segments.push({ color: FLOOR_COLORS[myDuty.floor] || "#3b82f6", label: myDuty.floor || "值", short: myDuty.floor || "值" });
+                                                    segments.push({ color: "#dc2626", label: l.type, short: "假", missed: false });
                                                 }
+                                            });
+
+                                            // 值日段（missed = 未掃，正常 = 樓層色）
+                                            if (myDuties.length > 0) {
+                                                myDuties.forEach(d => {
+                                                    if (d.missed) {
+                                                        const floorShort = d.floor || "值";
+                                                        segments.push({ color: MISSED_BG, label: `${floorShort}未掃`, short: `${floorShort}掃`, missed: true });
+                                                    } else {
+                                                        const floorShort = d.floor || "值";
+                                                        segments.push({ color: FLOOR_COLORS[d.floor] || "#3b82f6", label: floorShort, short: floorShort, missed: false });
+                                                    }
+                                                });
                                             }
+
                                             const nSeg = segments.length;
+                                            const hasMissedSeg = segments.some(s => s.missed);
+
                                             const bg = nSeg === 0 ? null :
                                                 nSeg === 1 ? segments[0].color :
                                                 "linear-gradient(135deg, " + segments.map((s, i) => {
@@ -1529,30 +1601,39 @@ const App = () => {
                                                     const p2 = ((i + 1) / nSeg * 100).toFixed(1);
                                                     return s.color + " " + p1 + "%, " + s.color + " " + p2 + "%";
                                                 }).join(", ") + ")";
-                                            // 文字：單段用全名，多段用簡短
-                                            const label = nSeg === 0 ? "" : nSeg === 1 ? segments[0].label : segments.map(s => s.short).join("");
-                                            const textSizeClass = nSeg >= 3 ? "text-[9px]" : nSeg === 2 ? "text-[10px]" : "text-xs";
+
+                                            // 文字：單段用 label，多段用 short，未做段同樣參與，字級隨段數縮
+                                            const label = nSeg === 0 ? "" : nSeg === 1 ? segments[0].label : segments.map(s => s.short).join("·");
+                                            const textSizeClass = nSeg >= 4 ? "text-[8px]" : nSeg >= 3 ? "text-[9px]" : nSeg === 2 ? "text-[10px]" : "text-xs";
+
                                             // 生日判斷
                                             const isBirthday = SC.isBirthday(emp, month, day);
                                             const birthdayStyle = isBirthday
                                                 ? {outline:"2px dashed #eab308", outlineOffset:"-2px", ...((nSeg === 0 && !isGovRest) ? {background:"#fef9c3"} : {})}
                                                 : undefined;
+
+                                            // title tooltip 包含所有 labels
+                                            const allMissedLabels = segments.filter(s => s.missed).map(s => s.label);
                                             const titleText = isBirthday ? `🎂 ${emp.name} 生日`
                                                 : nSeg > 1 ? `${emp.name}：${segments.map(s => s.label).join(" + ")}`
                                                 : hasMultiFloor ? `${emp.name} 值日：${floorLabel}`
                                                 : undefined;
+
+                                            // 未做狀態（有任一 missed segment）→ 外框紅虛線
+                                            const missedBorderStyle = hasMissedSeg
+                                                ? { outline: "2px dashed #f87171", outlineOffset: "-2px" }
+                                                : {};
+
                                             return (
                                                 <td key={key}
                                                     onClick={() => !IS_READONLY && !isGovRest && mode !== "禁休" && handleClick(emp.name, dateStr)}
                                                     className={`emp-cell p-0 text-center transition-colors select-none ${isGovRest ? "cursor-default" : mode === "禁休" ? "cursor-default" : "cursor-pointer hover:bg-gray-100"} ${cellSaving ? "opacity-50" : ""}`}
-                                                    style={{...(nrInfo && nSeg === 0 && !isGovRest ? {background:"#fff1f2"} : undefined), ...birthdayStyle}}
+                                                    style={{...(nrInfo && nSeg === 0 && !isGovRest ? {background:"#fff1f2"} : undefined), ...birthdayStyle, ...missedBorderStyle}}
                                                     title={titleText}>
                                                     {cellSaving ? (
                                                         <span className="cell-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full"></span>
                                                     ) : isGovRest ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-gray-400 bg-gray-100">休</span>
-                                                    ) : myDuties.some(d => d.missed) ? (
-                                                        <span className="inline-block w-full leading-[32px] text-[10px] font-bold" style={{background:"#fff1f2", color:"#be123c", border:"2px dashed #f87171"}}>{floorLabel}未掃</span>
                                                     ) : nSeg > 0 ? (
                                                         <span className={`inline-block w-full leading-[32px] ${textSizeClass} font-bold text-white`} style={{background: bg}}>{label}</span>
                                                     ) : isBirthday ? (
@@ -1586,10 +1667,11 @@ const App = () => {
                                             </div>
                                             <div>
                                                 {s.zhiban > 0 && <span className="text-orange-600">{s.zhiban}班</span>}
+                                                {s.zhibanMissed > 0 && <span className="text-red-600 font-bold"> {s.zhibanMissed}未值班</span>}
                                                 {(s.f1 + s.f2 + s.f3 + s.dutyOther) > 0 && <span className="text-blue-600"> {s.f1 + s.f2 + s.f3 + s.dutyOther}值</span>}
-                                                {s.missed > 0 && <span className="text-purple-500"> {s.missed}未掃</span>}
+                                                {s.missed > 0 && <span className="text-red-500"> {s.missed}未掃</span>}
                                             </div>
-                                            {s.paixiu === 0 && s.texiu === 0 && s.qingjia === 0 && s.zhiban === 0 && s.f1 === 0 && s.f2 === 0 && s.f3 === 0 && s.dutyOther === 0 && s.missed === 0 && <span className="text-gray-300">-</span>}
+                                            {s.paixiu === 0 && s.texiu === 0 && s.qingjia === 0 && s.zhiban === 0 && s.zhibanMissed === 0 && s.f1 === 0 && s.f2 === 0 && s.f3 === 0 && s.dutyOther === 0 && s.missed === 0 && <span className="text-gray-300">-</span>}
                                         </td>
                                     );
                                 })}
