@@ -196,11 +196,27 @@ def maybe_remind_new_month_sheet(roc_year, month):
         print(f"[L50-remind] reminder failed: {e}", file=sys.stderr)
         return False
 
+def _pick_exact_month_sheet(files: list, roc_year: int, month: int) -> Optional[dict]:
+    """從 candidate 過濾「檔名去空格後精確 == {roc}年{month}月業績表」那張。
+    避開 Drive `name contains` 分詞 match（搜「1月」會中 1~5 月全部）+ 容忍檔名尾隨空格。
+    多張精確 match 才取 modifiedTime 最新。"""
+    target = f"{roc_year}年{month}月業績表"
+    def _norm(s):
+        return (s or '').replace(' ', '').replace('　', '').strip()
+    exact = [f for f in files if _norm(f.get('name')) == target]
+    if not exact:
+        return None
+    if len(exact) > 1:
+        exact = sorted(exact, key=lambda x: x.get('modifiedTime', ''), reverse=True)
+    return exact[0]
+
+
 def find_month_sheet(drive, roc_year: int, month: int) -> Optional[dict]:
-    """4-layer search:
+    """search layers:
     1. MONTH_SHEET_OVERRIDE (manual escape hatch，override 優先)
-    2. PARENT_FOLDER_ID auto-detect（母 folder 直搜，2026-05-22 主路徑）
-    3. MIRROR_FOLDER_ID fallback（legacy mirror folder，safety net）
+    2. PARENT_FOLDER_ID auto-detect 母 folder + 檔名精確比對（主路徑）
+    2.5 全 drive 精確比對（歷史月跨 folder / 檔名含尾空格，2026-05-29）
+    3. MIRROR_FOLDER_ID fallback（legacy safety net）
     4. all-miss → maybe_remind_new_month_sheet
 
     Fault inject:
@@ -242,14 +258,42 @@ def find_month_sheet(drive, roc_year: int, month: int) -> Optional[dict]:
         print(f"[auto-detect] Drive API error: {e}", file=sys.stderr)
         auto_files = []
 
+    # 精確比對：Drive `name contains` 是分詞 match（搜「1月」會中 1~5 月全部），
+    # 不能盲取 auto_files[0]（最新），必須過濾出檔名精確相符那張
+    hit = _pick_exact_month_sheet(auto_files, roc_year, month)
+    if hit:
+        print(f"✅ auto-detect 精確命中：{hit['name']!r} (id={hit['id'][:20]}…)")
+        return hit
     if auto_files:
-        if len(auto_files) > 1:
-            print(f"⚠️  auto-detect: multiple sheets match {name_q!r}: {[f['name'] for f in auto_files]}，取最新 modifiedTime", file=sys.stderr)
-        best = auto_files[0]
-        print(f"✅ auto-detect 命中：{best['name']} (id={best['id'][:20]}…)")
-        return best
+        print(f"⚠️  auto-detect: name contains 命中 {[f['name'] for f in auto_files]} 但無檔名精確相符，往下層", file=sys.stderr)
 
     print(f"⚠️  auto-detect: 母 folder 內找不到 {name_q}")
+
+    # ── layer 2.5: 全 drive 精確比對（歷史月表常不在母 folder、檔名帶尾隨空格）──
+    # 解 2026-05-29 教訓：114 年月表檔名有尾空格 + 不在母 folder → layer 2 抓不到；
+    # 全 drive name contains + 去空格精確比對可命中，且避開分詞取最新抓錯月
+    try:
+        resp_all = drive.files().list(
+            q=(
+                f'mimeType="application/vnd.google-apps.spreadsheet"'
+                f' and name contains "{name_q}"'
+                f' and trashed=false'
+            ),
+            fields='files(id,name,modifiedTime)',
+            orderBy='modifiedTime desc',
+            pageSize=50,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        ).execute()
+        all_files = resp_all.get('files', [])
+    except Exception as e:
+        print(f"[full-drive] Drive API error: {e}", file=sys.stderr)
+        all_files = []
+
+    hit = _pick_exact_month_sheet(all_files, roc_year, month)
+    if hit:
+        print(f"✅ 全 drive 精確命中（跨 folder/含空格）：{hit['name']!r} (id={hit['id'][:20]}…)")
+        return hit
 
     # ── layer 3: mirror folder fallback（legacy safety net）─────────────
     try:
@@ -266,6 +310,11 @@ def find_month_sheet(drive, roc_year: int, month: int) -> Optional[dict]:
         print(f"[mirror-fallback] Drive API error: {e}", file=sys.stderr)
         mirror_files = []
 
+    # 先去空格精確比對，再 fallback 寬鬆 regex
+    hit = _pick_exact_month_sheet(mirror_files, roc_year, month)
+    if hit:
+        print(f"✅ mirror 精確命中：{hit['name']!r} (id={hit['id'][:20]}…)")
+        return hit
     pat = re.compile(rf'{roc_year}\s*年\s*0?{month}\s*月.*業績表')
     mirror_matches = [f for f in mirror_files if pat.search(f['name'])]
     if mirror_matches:
