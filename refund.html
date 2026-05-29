@@ -403,11 +403,17 @@
   async function generatePDFBlob() {
     const el = $('pdf-export-area');
     const canvas = await html2canvas(el, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' });
-    const imgW = 210;
-    const imgH = (canvas.height * imgW) / canvas.width;
+    // Fit-to-width: leave 10mm margin on each side so right edge is never clipped.
+    // canvas pixel width may vary (device, padding, overflow); always scale to contentW.
+    // Keep scale=1.5 + JPEG 0.85 volume optimisation (earnest 5/17 file_too_large fix).
+    const pageW   = 210;          // A4 width mm
+    const margin  = 10;           // left & right margin mm
+    const contentW = pageW - 2 * margin;              // 190 mm usable
+    const contentH = canvas.height * (contentW / canvas.width);
+    const pageH   = contentH + 2 * margin;
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF('p', 'mm', [imgW, imgH]);
-    pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, imgW, imgH);
+    const pdf = new jsPDF('p', 'mm', [pageW, pageH]);
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', margin, margin, contentW, contentH);
     return pdf.output('blob');
   }
 
