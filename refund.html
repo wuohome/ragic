@@ -618,8 +618,11 @@
     }
 
     if (!postRes.ok) {
-      const errBody = await postRes.json().catch(() => ({}));
-      showFailed(errBody.error || 'HTTP_' + postRes.status);
+      // Always show SUBMIT_<status> so tester/staff can distinguish
+      // "submitRefund HTTP failure" from VERIFY_* (verify step) or PDF_GEN_* (client PDF).
+      // DO NOT use errBody.error directly — it's always truthy (e.g. "upstream_error")
+      // and would mask the useful HTTP status code.
+      showFailed('SUBMIT_' + postRes.status);
       return;
     }
 
