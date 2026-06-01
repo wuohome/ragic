@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>拋轉 591 — 刊登包</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    background: #f5f6fa;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 20px;
+  }
+  .container {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 16px rgba(0,0,0,.10);
+    padding: 28px 24px;
+    width: 100%;
+    max-width: 520px;
+  }
+  h1 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    font-size: .82rem;
+    color: #888;
+    margin-bottom: 20px;
+  }
+  .block {
+    background: #f8f9ff;
+    border: 1px solid #dde3f0;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    position: relative;
+  }
+  .block-label {
+    font-size: .75rem;
+    font-weight: 600;
+    color: #5c6bc0;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 8px;
+  }
+  .block-content {
+    font-size: .95rem;
+    color: #1a1a2e;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+    min-height: 24px;
+  }
+  .copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    background: #5c6bc0;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: .78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .copy-btn:hover { background: #3949ab; }
+  .copy-btn.copied { background: #43a047; }
+  .warn-box {
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: .82rem;
+    color: #795548;
+    margin-bottom: 14px;
+  }
+  .err-box {
+    background: #fce4ec;
+    border: 1px solid #f48fb1;
+    border-radius: 8px;
+    padding: 16px;
+    font-size: .9rem;
+    color: #b71c1c;
+    text-align: center;
+  }
+  .loading {
+    text-align: center;
+    color: #888;
+    padding: 40px 0;
+    font-size: .95rem;
+  }
+  .meta {
+    font-size: .76rem;
+    color: #aaa;
+    margin-top: 14px;
+    text-align: right;
+  }
+</style>
+</head>
+<body>
+<div class="container" id="app">
+  <div class="loading">載入刊登資料中…</div>
+</div>
+
+<script>
+// ====== Config ======
+const PROXY_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+
+// ====== Field mapping ======
+const F = {
+  案名:       '1000050',
+  地址:       '1000055',
+  月租金:     '1000076',
+  登記坪:     '1000059',
+  主建坪:     '1000058',
+  格局:       '1000063',
+  特色說明:   '1000072',
+  拋轉碼:     '1002134',
+  刊登標題:   '1002135',
+};
+
+// ====== Helper ======
+function fmt(val, unit) {
+  if (!val && val !== 0) return '';
+  const n = parseFloat(val);
+  if (isNaN(n)) return String(val);
+  return n.toLocaleString('zh-TW') + (unit || '');
+}
+
+function buildListingPack(rec) {
+  const tossCode = rec[F.拋轉碼] || '';
+  const rawTitle = rec[F.刊登標題] || rec[F.案名] || '';
+  const title = rawTitle ? `${rawTitle} ${tossCode}`.trim() : tossCode;
+
+  // Build content block
+  const lines = [];
+  const rent = rec[F.月租金];
+  if (rent) lines.push(`月租金：NT$ ${fmt(rent)}`);
+
+  const regArea = rec[F.登記坪];
+  const mainArea = rec[F.主建坪];
+  if (regArea || mainArea) {
+    const parts = [];
+    if (regArea) parts.push(`登記坪數 ${fmt(regArea, '坪')}`);
+    if (mainArea) parts.push(`主建坪數 ${fmt(mainArea, '坪')}`);
+    lines.push(`坪數：${parts.join(' / ')}`);
+  }
+
+  const layout = rec[F.格局];
+  if (layout) lines.push(`格局：${layout}`);
+
+  const addr = rec[F.地址];
+  if (addr) lines.push(`地址：${addr}`);
+
+  const note = rec[F.特色說明];
+  if (note) lines.push(`\n備註：${note.trim()}`);
+
+  const content = lines.join('\n');
+  return { title, content, tossCode, rawTitle };
+}
+
+function copyToClipboard(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '已複製！';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1800);
+  }).catch(() => {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    const orig = btn.textContent;
+    btn.textContent = '已複製！';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1800);
+  });
+}
+
+function renderError(msg) {
+  document.getElementById('app').innerHTML = `<div class="err-box">${msg}</div>`;
+}
+
+function renderPack(rec) {
+  const { title, content, tossCode, rawTitle } = buildListingPack(rec);
+  const app = document.getElementById('app');
+  const caseName = rec[F.案名] || '（未填案名）';
+  const hasCustomTitle = !!(rec[F.刊登標題] && rec[F.刊登標題].trim());
+
+  app.innerHTML = `
+    <h1>拋轉 591 刊登包</h1>
+    <p class="subtitle">物件：${caseName}｜拋轉碼：${tossCode}</p>
+
+    <div class="warn-box">
+      ⚠️ 這是測試用版本，請確認內容正確後再複製刊登。<br>
+      ${hasCustomTitle ? '' : '🔔 <b>591刊登標題</b> 尚未填寫，已用「案名」代替。建議先填寫再拋轉。'}
+    </div>
+
+    <div class="block" id="title-block">
+      <div class="block-label">① 標題（複製後貼到 591 標題欄）</div>
+      <div class="block-content" id="title-text">${title}</div>
+      <button class="copy-btn" onclick="copyToClipboard(document.getElementById('title-text').textContent, this)">複製標題</button>
+    </div>
+
+    <div class="block" id="content-block">
+      <div class="block-label">② 內容（複製後貼到 591 物件說明）</div>
+      <div class="block-content" id="content-text">${content}</div>
+      <button class="copy-btn" onclick="copyToClipboard(document.getElementById('content-text').textContent, this)">複製內容</button>
+    </div>
+
+    <div class="meta">record id: ${rec._rid} · 拋轉碼永久穩定，重上廣告複製同標題碼不變</div>
+  `;
+}
+
+// ====== Main ======
+async function main() {
+  const params = new URLSearchParams(window.location.search);
+  const rid = params.get('rid');
+  if (!rid || !/^\d{1,12}$/.test(rid)) {
+    renderError('缺少或無效的 rid 參數。請從 Ragic 物件頁點擊「拋轉 591」按鈕進入此頁面。');
+    return;
+  }
+
+  try {
+    const resp = await fetch(`${PROXY_BASE}/getToss591?rid=${encodeURIComponent(rid)}`);
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      renderError(`無法取得物件資料 (${resp.status})：${errData.error || '未知錯誤'}`);
+      return;
+    }
+    const rec = await resp.json();
+    renderPack(rec);
+  } catch (e) {
+    renderError(`網路錯誤：${e.message}`);
+  }
+}
+
+main();
+</script>
+</body>
+</html>
