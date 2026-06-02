@@ -1434,7 +1434,7 @@ const App = () => {
                 </>}
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-green-500 inline-block"></span> 排休</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-yellow-500 inline-block"></span> 特休</span>
-                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-red-500 inline-block"></span> 請假</span>
+                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#ffb3c6"}}></span> 請假</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-orange-500 inline-block"></span> 值班</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#3b82f6"}}></span> 1F</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#8b5cf6"}}></span> 2F</span>
@@ -1578,7 +1578,7 @@ const App = () => {
                                                 } else if (l.type === "特休") {
                                                     segments.push({ color: "#eab308", label: "特休", short: "特", missed: false });
                                                 } else {
-                                                    segments.push({ color: "#dc2626", label: l.type, short: "假", missed: false });
+                                                    segments.push({ color: "#ffb3c6", label: l.type, short: "假", missed: false });
                                                 }
                                             });
 
@@ -1587,7 +1587,7 @@ const App = () => {
                                                 myDuties.forEach(d => {
                                                     if (d.missed) {
                                                         const floorShort = d.floor || "值";
-                                                        segments.push({ color: MISSED_BG, label: `${floorShort}未掃`, short: `${floorShort}掃`, missed: true });
+                                                        segments.push({ color: "#7a7b7a", label: `${floorShort}未掃`, short: `${floorShort}掃`, missed: true });
                                                     } else {
                                                         const floorShort = d.floor || "值";
                                                         segments.push({ color: FLOOR_COLORS[d.floor] || "#3b82f6", label: floorShort, short: floorShort, missed: false });
@@ -1609,6 +1609,8 @@ const App = () => {
                                             // 文字：單段用 label，多段用 short，未做段同樣參與，字級隨段數縮
                                             const label = nSeg === 0 ? "" : nSeg === 1 ? segments[0].label : segments.map(s => s.short).join("·");
                                             const textSizeClass = nSeg >= 4 ? "text-[8px]" : nSeg >= 3 ? "text-[9px]" : nSeg === 2 ? "text-[10px]" : "text-xs";
+                                            // 單段粉色請假：文字改深粉（蓋掉 text-white）
+                                            const singleTextStyle = (nSeg === 1 && segments[0].color === "#ffb3c6") ? { color: "#9d174d" } : {};
 
                                             // 生日判斷
                                             const isBirthday = SC.isBirthday(emp, month, day);
@@ -1639,7 +1641,7 @@ const App = () => {
                                                     ) : isGovRest ? (
                                                         <span className="inline-block w-full leading-[32px] text-xs font-bold text-gray-400 bg-gray-100">休</span>
                                                     ) : nSeg > 0 ? (
-                                                        <span className={`inline-block w-full leading-[32px] ${textSizeClass} font-bold text-white`} style={{background: bg}}>{label}</span>
+                                                        <span className={`inline-block w-full leading-[32px] ${textSizeClass} font-bold text-white`} style={{background: bg, ...singleTextStyle}}>{label}</span>
                                                     ) : isBirthday ? (
                                                         <span className="inline-block w-full leading-[32px] text-sm">🎂</span>
                                                     ) : null}
