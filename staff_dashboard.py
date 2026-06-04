@@ -23,7 +23,8 @@ PERF_SERVICE_TYPES_TENANT   = {"服務費", "定金轉服務費"}
 
 VAULT    = Path(r"c:/Second Brain/Obsidian")
 PERF_MD  = Path(os.environ.get("PERF_MD_PATH", str(VAULT / "窩的家/管理部/全店每月業績表.md")))
-HTML_OUT = Path(os.environ.get("HTML_OUT", r"C:/Users/Joan/Downloads/租賃部業績儀表板.html"))
+# 2026-06-04 廢除 standalone HTML 快照產出機制，分發一律用 live URL https://wuohome.github.io/ragic/staff-dashboard.html
+# HTML_OUT = Path(os.environ.get("HTML_OUT", r"C:/Users/Joan/Downloads/租賃部業績儀表板.html"))
 
 LOOKBACK_DAYS = 365
 
@@ -1584,9 +1585,10 @@ def main():
         .replace("__UPDATED__",      f"{datetime.now():%Y-%m-%d %H:%M}")
     )
 
-    HTML_OUT.parent.mkdir(parents=True, exist_ok=True)
-    HTML_OUT.write_text(html_doc, encoding="utf-8")
-    print(f"✅  {HTML_OUT}")
+    # 2026-06-04 廢除：以下三行產出 standalone HTML 快照，已停用。分發一律用 live URL。
+    # HTML_OUT.parent.mkdir(parents=True, exist_ok=True)
+    # HTML_OUT.write_text(html_doc, encoding="utf-8")
+    # print(f"✅  {HTML_OUT}")
 
 
 if __name__ == "__main__":
