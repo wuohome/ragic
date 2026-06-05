@@ -12,6 +12,7 @@
 # FIX-2026-05-22-L50-real-fix: 母 folder 共享 SA 後改 auto-detect 主路徑，MONTH_SHEET_OVERRIDE 清空為 escape hatch
 # FIX-2026-05-03-mirror-folder: 移除 hardcoded PUBKEY (鎖死 4 月 sheet → 抓到的數字被當當月寫，造成 5/2 跑時 4 月新增業績寫進 115/05)
 #                                改 SA + mirror folder 動態找「{roc}年{當月}月業績表」
+# FIX-2026-06-05-monthly-close-race: 找不到當月表 + 日期 ≤10 → fallback 抓上月表（月結期 race condition 修復）
 """
 import os
 import argparse
@@ -734,9 +735,25 @@ def main():
 
     fetch_result = fetch_all_perf(roc_year, month)
     if fetch_result is None:
-        # 找不到當月 sheet（珊珊還沒月結）→ skip 不寫，但 exit 0 cron 不報錯
-        print(f"⏭  skip：當月 sheet 還沒建（珊珊未月結）— 不寫 markdown，留待下輪")
-        sys.exit(0)
+        # FIX-2026-06-05-monthly-close-race: 當月表不存在時，月結期（1~10日）繼續嘗試上月表。
+        # 背景：珊珊在月結期（1~10日）仍會更新上月業績表；但腳本只找當月表，找不到就 skip，
+        # 導致 cron 每輪都 "no change"，上月補填的數字永遠抓不回來。
+        # 修法：找不到當月表 + 日期 ≤10 → fallback 抓上月表（用當月 ym_label 寫進 md 所屬月份區塊）。
+        if not args.target_month:
+            taipei = timezone(timedelta(hours=8))
+            _now = datetime.now(taipei)
+            if _now.day <= 10:
+                prev_month = month - 1 if month > 1 else 12
+                prev_roc_year = roc_year if month > 1 else roc_year - 1
+                prev_ym_label = f"{prev_roc_year}/{prev_month:02d}"
+                print(f"⏩  當月表不存在，月結期 fallback → 嘗試上月 {prev_ym_label}")
+                fetch_result = fetch_all_perf(prev_roc_year, prev_month)
+                if fetch_result is not None:
+                    roc_year, month, ym_label = prev_roc_year, prev_month, prev_ym_label
+                    print(f"✅  月結 fallback 成功，改寫 {ym_label}")
+        if fetch_result is None:
+            print(f"⏭  skip：當月 sheet 還沒建（珊珊未月結）— 不寫 markdown，留待下輪")
+            sys.exit(0)
     gsheet_data, extras = fetch_result
     if not gsheet_data:
         print("❌ 解析到 0 筆有效員工業績（sheet 找到但解析空），abort", file=sys.stderr)
