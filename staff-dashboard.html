@@ -912,6 +912,8 @@ function extractDevs(record) {
 function toIntakeRecords(rawData) {
   const out = [];
   for (const c of Object.values(rawData)) {
+    // 排除永策（別店）經 n8n sync 從 ap16 同步來的物件，不計入本店進案
+    if (c['sync_來源'] === 'sync_ap16') continue;
     const d = (c['委託時間(起)'] || '').trim();
     if (!d) continue;
     const devs = extractDevs(c);
