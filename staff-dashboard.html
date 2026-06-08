@@ -61,6 +61,41 @@
     </p>
   </header>
 
+  <!-- ── 當月業績目標（動態，由 ragicFetch('listGoals') 填入） ── -->
+  <details open id="goalPanelDetails" class="mb-8 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+    <summary class="cursor-pointer select-none px-6 py-4 flex items-center justify-between">
+      <span id="goalPanelTitle" class="text-xl font-black text-amber-900">📋 業績目標</span>
+      <span id="goalPanelSummary" class="text-sm text-amber-700">載入中…</span>
+    </summary>
+    <div class="px-6 pb-6">
+      <div id="goalPanelTable" class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-amber-800 border-b border-amber-200">
+              <th class="text-left py-2 pr-4 font-semibold">姓名</th>
+              <th class="text-right py-2 px-4 font-semibold">業績目標</th>
+              <th class="text-right py-2 pl-4 font-semibold">新進案件</th>
+            </tr>
+          </thead>
+          <tbody id="goalTableBody" class="divide-y divide-amber-100"></tbody>
+          <tfoot>
+            <tr id="goalTableFoot" class="border-t-2 border-amber-300 font-black text-amber-900">
+              <td class="py-2 pr-4">合計</td>
+              <td id="goalTotalPerf" class="text-right py-2 px-4">—</td>
+              <td id="goalTotalCases" class="text-right py-2 pl-4">—</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div id="goalPanelEmpty" class="hidden text-center py-6">
+        <div class="text-3xl mb-2">📋</div>
+        <div id="goalPanelEmptyMsg" class="text-amber-900 font-semibold"></div>
+        <div class="text-amber-700 text-sm mt-1">請至 LINE 填報當月目標</div>
+      </div>
+    </div>
+  </details>
+
+
   <!-- Tabs -->
   <div class="flex gap-6 border-b border-slate-200 overflow-x-auto scrollbar-thin">
     <div class="tab active pb-3 text-lg px-1" data-tab="month">📦 進案量 &amp; 業績</div>
@@ -1159,8 +1194,8 @@ async function ragicFetch(action, params = '') {
 }
 
 let _loadDone = 0;
-const _loadTotal = 9;
-const _loadLabels = ['進案量','業績','庫存','開發追蹤','委託屋主','客戶來源','人事資料','業績比對','GSheet時間'];
+const _loadTotal = 10;
+const _loadLabels = ['進案量','業績','庫存','開發追蹤','委託屋主','客戶來源','人事資料','業績比對','GSheet時間','業績目標'];
 function setProgress(label) {
   _loadDone++;
   const pct = Math.round(_loadDone / _loadTotal * 100);
@@ -1180,7 +1215,7 @@ async function fetchAllData() {
 
   const intakeParams = `subtables=true&where=${encodeURIComponent(`1000260,gte,${fmtDate(dataStart)}`)}&where=${encodeURIComponent(`1000260,lte,${fmtDate(dataEnd)}`)}&limit=10000`;
 
-  const [rawIntake, rawPayments, rawInventory, rawOutreach, rawCommission, rawClients, rawHr, perfMdText, perfCommits] = await Promise.all([
+  const [rawIntake, rawPayments, rawInventory, rawOutreach, rawCommission, rawClients, rawHr, perfMdText, perfCommits, rawGoals] = await Promise.all([
     ragicFetch('listIntake', intakeParams).then(r => { setProgress('進案量'); return r; }),
     ragicFetch('listPayments', 'subtables=true&limit=10000').then(r => { setProgress('業績'); return r; }),
     ragicFetch('listInventory', 'subtables=true&limit=10000').then(r => { setProgress('庫存'); return r; }),
@@ -1192,6 +1227,7 @@ async function fetchAllData() {
     fetch('https://api.github.com/repos/wuohome/ragic/commits?path=data/perf.md&per_page=1')
       .then(r => r.ok ? r.json() : null).catch(() => null)
       .then(r => { setProgress('GSheet時間'); return r; }),
+    ragicFetch('listGoals', 'limit=200').then(r => { setProgress('業績目標'); return r; }).catch(() => ({})),
   ]);
   // 591 廣告另外抓（arch: vault md 已含當月 GSheet）
   // FIX-2026-04-28-591-render-guard: fetch 完成後 trigger render，否則資料來了 panel 也不更新
@@ -1313,8 +1349,83 @@ async function fetchAllData() {
 
   // 解析 extras（續約/代管業績）並掛到 window 供 renderRecurring 使用
   window.PERF_EXTRAS = parseExtrasFromPerfMd(perfMdText);
+
+  // 渲染當月業績目標面板
+  renderGoalPanel(rawGoals || {});
 }
 
+
+// ════════════════════════════════════════════════════════════════════
+// 當月業績目標面板
+// ════════════════════════════════════════════════════════════════════
+function renderGoalPanel(raw) {
+  const now = new Date();
+  const monthNum = now.getMonth() + 1;
+  const ym = `${now.getFullYear()}-${String(monthNum).padStart(2, '0')}`;
+
+  const titleEl    = document.getElementById('goalPanelTitle');
+  const summaryEl  = document.getElementById('goalPanelSummary');
+  const tbodyEl    = document.getElementById('goalTableBody');
+  const tableDiv   = document.getElementById('goalPanelTable');
+  const emptyDiv   = document.getElementById('goalPanelEmpty');
+  const emptyMsg   = document.getElementById('goalPanelEmptyMsg');
+  const totalPerf  = document.getElementById('goalTotalPerf');
+  const totalCases = document.getElementById('goalTotalCases');
+
+  if (!titleEl) return;
+  titleEl.textContent = `📋 ${monthNum}月業績目標`;
+
+  // 過濾當月資料
+  const recs = Object.values(raw || {}).filter(r => {
+    const m = (r['月份'] || '').trim();
+    return m === ym || m.startsWith(ym);
+  });
+
+  if (recs.length === 0) {
+    // 無資料：隱藏表格，顯示提示
+    tableDiv.classList.add('hidden');
+    emptyDiv.classList.remove('hidden');
+    emptyMsg.textContent = `${monthNum}月業績目標尚未填報`;
+    summaryEl.textContent = '尚未填報';
+    return;
+  }
+
+  // 有資料：依業績目標(萬)由大到小排序
+  recs.sort((a, b) => {
+    const av = parseFloat(a['業績目標(萬)']) || 0;
+    const bv = parseFloat(b['業績目標(萬)']) || 0;
+    return bv - av;
+  });
+
+  let totalPerfSum  = 0;
+  let totalCasesSum = 0;
+
+  const rows = recs.map(r => {
+    const name  = (r['員工姓名'] || r['_index_title_'] || '').trim();
+    const perf  = parseFloat(r['業績目標(萬)']) || 0;
+    const cases = parseFloat(r['新進案件量(間)']) || 0;
+    totalPerfSum  += perf;
+    totalCasesSum += cases;
+    const perfStr  = perf  % 1 === 0 ? `${perf} 萬`  : `${perf} 萬`;
+    const casesStr = cases % 1 === 0 ? `${cases} 間` : `${cases} 間`;
+    return `<tr>` +
+      `<td class="py-2 pr-4 text-slate-700">${name}</td>` +
+      `<td class="text-right py-2 px-4 text-slate-900 font-medium">${perfStr}</td>` +
+      `<td class="text-right py-2 pl-4 text-slate-600">${casesStr}</td>` +
+      `</tr>`;
+  }).join('');
+
+  tbodyEl.innerHTML = rows;
+
+  const perfDisplay  = totalPerfSum  % 1 === 0 ? `${totalPerfSum} 萬`  : `${totalPerfSum} 萬`;
+  const casesDisplay = totalCasesSum % 1 === 0 ? `${totalCasesSum} 間` : `${totalCasesSum} 間`;
+  totalPerf.textContent  = perfDisplay;
+  totalCases.textContent = casesDisplay;
+  summaryEl.innerHTML    = `合計 <b>${perfDisplay}</b> ／ <b>${casesDisplay}</b>　大家加油 💪`;
+
+  tableDiv.classList.remove('hidden');
+  emptyDiv.classList.add('hidden');
+}
 
 // ════════════════════════════════════════════════════════════════════
 // GLOBAL DATA (populated by fetchAllData)
