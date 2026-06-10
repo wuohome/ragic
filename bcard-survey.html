@@ -1,55 +1,55 @@
 <!DOCTYPE html>
-<html lang=zh-TW>
+<html lang="zh-TW">
 <head>
-<meta charset=UTF-8>
-<meta name=viewport content=width=device-width, initial-scale=1.0, user-scalable=no>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>名片資料調查表</title>
-<script src=https://cdn.tailwindcss.com><\/script>
+<script src="https://cdn.tailwindcss.com"></script>
 <style>
 body { background:#f3f4f6; font-family:'PingFang TC','Microsoft JhengHei',sans-serif; }
-<\/style>
+</style>
 </head>
-<body class=antialiased text-gray-800 p-4>
-<div class=max-w-lg mx-auto bg-white rounded-2xl shadow-lg overflow-hidden>
-  <div class=bg-indigo-600 px-6 py-8 text-white text-center>
-    <h1 class=text-2xl font-bold>名片資料調查表</h1>
-    <p class=text-indigo-100 mt-2 text-sm>請填寫您的名片資訊，資料將直接更新至人事系統</p>
+<body class="antialiased text-gray-800 p-4">
+<div class="max-w-lg mx-auto bg-white rounded-2xl shadow-lg overflow-hidden">
+  <div class="bg-indigo-600 px-6 py-8 text-white text-center">
+    <h1 class="text-2xl font-bold">名片資料調查表</h1>
+    <p class="text-indigo-100 mt-2 text-sm">請填寫您的名片資訊，資料將直接更新至人事系統</p>
   </div>
-  <div id=loadingMsg class=p-6 text-center text-gray-500>
-    <div class=animate-pulse>載入夥伴清單中⋯</div>
+  <div id="loadingMsg" class="p-6 text-center text-gray-500">
+    <div class="animate-pulse">載入夥伴清單中⋯</div>
   </div>
-  <form id=surveyForm class=p-6 space-y-5 hidden>
+  <form id="surveyForm" class="p-6 space-y-5 hidden">
     <div>
-      <label class=block text-sm font-semibold text-gray-700 mb-1>請選擇您的姓名 <span class=text-red-500>*</span></label>
-      <select id=nameSelect required class=w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-base>
-        <option value=>-- 請選擇 --</option>
+      <label class="block text-sm font-semibold text-gray-700 mb-1">請選擇您的姓名 <span class="text-red-500">*</span></label>
+      <select id="nameSelect" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-base">
+        <option value="">-- 請選擇 --</option>
       </select>
     </div>
     <div>
-      <label class=block text-sm font-semibold text-gray-700 mb-1>手機號碼 <span class=text-red-500>*</span></label>
-      <input type=tel id=phone placeholder=例：0912-345-678 class=w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-base>
-      <p class=text-xs text-gray-400 mt-1>將作為名片對外聯絡電話</p>
+      <label class="block text-sm font-semibold text-gray-700 mb-1">手機號碼 <span class="text-red-500">*</span></label>
+      <input type="tel" id="phone" placeholder="例：0912-345-678" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-base">
+      <p class="text-xs text-gray-400 mt-1">將作為名片對外聯絡電話</p>
     </div>
     <div>
-      <label class=block text-sm font-semibold text-gray-700 mb-1>不動產營業員證號</label>
-      <input type=text id=agentLicense placeholder=（可留空） class=w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-base>
+      <label class="block text-sm font-semibold text-gray-700 mb-1">不動產營業員證號</label>
+      <input type="text" id="agentLicense" placeholder="（可留空）" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-base">
     </div>
     <div>
-      <label class=block text-sm font-semibold text-gray-700 mb-1>租賃住宅管理人員證號</label>
-      <input type=text id=rentalLicense placeholder=（可留空） class=w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-base>
+      <label class="block text-sm font-semibold text-gray-700 mb-1">租賃住宅管理人員證號</label>
+      <input type="text" id="rentalLicense" placeholder="（可留空）" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-base">
     </div>
-    <button type=submit id=submitBtn class=w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg text-lg transition-colors>
+    <button type="submit" id="submitBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg text-lg transition-colors">
       送出
     </button>
   </form>
-  <div id=successMsg class=p-8 text-center hidden>
-    <div class=text-green-500 text-5xl mb-4>✓</div>
-    <h2 class=text-xl font-bold text-gray-800>已送出，謝謝！</h2>
-    <p class=text-gray-500 mt-2 text-sm>資料已更新至人事系統</p>
+  <div id="successMsg" class="p-8 text-center hidden">
+    <div class="text-green-500 text-5xl mb-4">✓</div>
+    <h2 class="text-xl font-bold text-gray-800">已送出，謝謝！</h2>
+    <p class="text-gray-500 mt-2 text-sm">資料已更新至人事系統</p>
   </div>
-  <div id=errorMsg class=p-6 hidden>
-    <div class=bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm id=errorText></div>
-    <button id=retryBtn class=mt-4 w-full border border-indigo-600 text-indigo-600 py-2 rounded-lg>重試</button>
+  <div id="errorMsg" class="p-6 hidden">
+    <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm" id="errorText"></div>
+    <button id="retryBtn" class="mt-4 w-full border border-indigo-600 text-indigo-600 py-2 rounded-lg">重試</button>
   </div>
 </div>
 <script>
@@ -129,6 +129,6 @@ function resetForm() {
   document.getElementById('submitBtn').disabled = false;
   document.getElementById('submitBtn').textContent = '送出';
 }
-<\/script>
+</script>
 </body>
 </html>
