@@ -74,8 +74,12 @@ async function loadStaff() {
       opt.textContent = e.name;
       sel.appendChild(opt);
     });
-    document.getElementById('loadingMsg').classList.add('hidden');
-    document.getElementById('surveyForm').classList.remove('hidden');
+    if ((data.staff || []).length === 0) {
+      document.getElementById('loadingMsg').textContent = '大家都填過了 🎉';
+    } else {
+      document.getElementById('loadingMsg').classList.add('hidden');
+      document.getElementById('surveyForm').classList.remove('hidden');
+    }
   } catch(err) {
     document.getElementById('loadingMsg').textContent = '載入失敗，請重新整理頁面';
     console.error(err);
