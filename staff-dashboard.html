@@ -899,8 +899,8 @@ const NAME_ALIASES = {
   '張忠豪、蕭頤臻':'張忠豪&蕭頤臻','蕭頤臻、張忠豪':'張忠豪&蕭頤臻',
   '張忠豪&蕭眞儀':'張忠豪&蕭頤臻',  // 舊合併 key 兼容
   '宣佑':'林宣佑','惠慈':'吳惠慈','張傳':'詹張傳','小碩':'劉子碩','小鐘':'鐘晟鈺',
-  '炫儒':'吳炫儒','佳燕':'林佳燕','心瑜':'陳心瑜','則泓':'張則泓','薇雅':'陳薇雅',
-  '卓威':'李卓威','小方':'方鼎文','馬丁':'關宗宇','小吳哥':'吳彥廷',
+  '炫儒':'吳炫儒','佳燕':'林佳燕','心瑜':'陳心瑜','kelly':'陳心瑜','Kelly':'陳心瑜','則泓':'張則泓','薇雅':'陳薇雅',
+  '卓威':'李卓威','小方':'方鼎文','馬丁':'關宗宇','小吳哥':'吳彥廷','兆傑':'劉兆傑',
 };
 
 const TYPE_MAP = {
@@ -1513,23 +1513,22 @@ function rankHtml(items, fmtVal, unit){
   }).join('');
 }
 
-// ── 五月業績目標對照表 ──
+// ── 六月業績目標對照表 ──
 // revenue 單位：萬（顯示用萬，計算時乘 10000）；cases 單位：間
 const MAY_TARGET = {
-  "張忠豪&蕭頤臻": { revenue: 40, cases: 15 },
-  "詹張傳":        { revenue: 20, cases: 7.5 },
-  "吳惠慈":        { revenue: 20, cases: 10 },
-  "林宣佑":        { revenue: 15, cases: 8 },
-  "陳心瑜":        { revenue: 15, cases: 5 },
-  "吳炫儒":        { revenue: 10, cases: 10 },
-  "關宗宇":        { revenue: 10, cases: 8 },
+  "張忠豪&蕭頤臻": { revenue: 40, cases: 10 },
+  "吳惠慈":        { revenue: 15, cases: 8 },
+  "林宣佑":        { revenue: 15, cases: 6 },
+  "詹張傳":        { revenue: 15, cases: 5 },
+  "陳心瑜":        { revenue: 10, cases: 5 },
+  "關宗宇":        { revenue: 10, cases: 10 },
+  "李卓威":        { revenue: 10, cases: 6 },
+  "吳炫儒":        { revenue: 10, cases: 2 },
   "劉子碩":        { revenue: 10, cases: 2 },
-  "方鼎文":        { revenue: 10, cases: 6 },
+  "方鼎文":        { revenue: 10, cases: 2 },
   "蕭靜芳":        { revenue: 10, cases: 1 },
-  "李卓威":        { revenue: 8,  cases: 8 },
-  "陳勁豪":        { revenue: 5,  cases: 5 },
-  "張則泓":        { revenue: 5,  cases: 0 },
-  "曾宇謙":        { revenue: 2,  cases: 1 },
+  "陳勁豪":        { revenue: 5,  cases: 3 },
+  "劉兆傑":        { revenue: 5,  cases: 3 },
 };
 
 // 判斷日期範圍是否與當月有交集（用於顯示全店目標達成區塊）
