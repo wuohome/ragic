@@ -53,31 +53,14 @@ body { background:#f3f4f6; font-family:'PingFang TC','Microsoft JhengHei',sans-s
   </div>
 </div>
 <script>
-const RAGIC_BASE = 'https://ap15.ragic.com/wuohome';
-const SHEET = 'ragicforms4/20004';
-const API_KEY_ENC = 'VEZsOEwzYzVJdWdoWXRDM3ptS2YwTFA1M283aGxIUHM1ZjRORmNGbDNHNi9qSnVDNnlYWlhwUmJnMnJIWGo3RQ%3D%3D';
-const FID_NAME   = '3000933';
-const FID_STATUS = '3000945';
-const FID_PHONE  = '3000975';
-const FID_AGENT  = '1002554';
-const FID_RENTAL = '1002555';
+const PROXY = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
 
 async function loadStaff() {
   try {
-    const url = RAGIC_BASE + '/' + SHEET + '?api=true&naming=EID&where=' + FID_STATUS + ',eq,%E5%9C%A8%E8%81%B7&limit=0,500&APIKey=' + API_KEY_ENC;
-    const resp = await fetch(url, { mode: 'cors' });
+    const resp = await fetch(PROXY + '/getBcardStaff');
     const data = await resp.json();
     const sel = document.getElementById('nameSelect');
-    const entries = Object.entries(data)
-      .filter(function(e) { return !isNaN(parseInt(e[0])) && parseInt(e[0]) > 0; })
-      .map(function(e) {
-        return { rid: e[0], name: e[1][FID_NAME] || '', phone: e[1][FID_PHONE] || '' };
-      })
-      .filter(function(e) { return e.name; })
-      .sort(function(a, b) { return a.name.localeCompare(b.name, 'zh-TW'); });
-    window._staffMap = {};
-    entries.forEach(function(e) {
-      window._staffMap[e.rid] = e;
+    (data.staff || []).forEach(function(e) {
       var opt = document.createElement('option');
       opt.value = e.rid;
       opt.textContent = e.name;
@@ -93,12 +76,6 @@ async function loadStaff() {
 
 document.addEventListener('DOMContentLoaded', function() {
   loadStaff();
-  document.getElementById('nameSelect').addEventListener('change', function() {
-    var rid = this.value;
-    if (rid && window._staffMap && window._staffMap[rid] && window._staffMap[rid].phone) {
-      document.getElementById('phone').value = window._staffMap[rid].phone;
-    }
-  });
   document.getElementById('surveyForm').addEventListener('submit', function(e) {
     e.preventDefault();
     submitForm();
@@ -116,19 +93,17 @@ async function submitForm() {
   var btn = document.getElementById('submitBtn');
   btn.disabled = true;
   btn.textContent = '送出中⋯';
-  var params = new URLSearchParams();
-  params.append(FID_PHONE, phone);
-  if (agent)  params.append(FID_AGENT, agent);
-  if (rental) params.append(FID_RENTAL, rental);
-  var url = RAGIC_BASE + '/' + SHEET + '/' + rid + '?api=true&APIKey=' + API_KEY_ENC;
+  var body = { '3000975': phone };
+  if (agent)  body['1002554'] = agent;
+  if (rental) body['1002555'] = rental;
   try {
-    var resp = await fetch(url, {
+    var resp = await fetch(PROXY + '/submitBcardSurvey?rid=' + encodeURIComponent(rid), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params.toString()
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
     });
     var result = await resp.json();
-    if (result && result.status === 'SUCCESS') {
+    if (result && result.ok) {
       document.getElementById('surveyForm').classList.add('hidden');
       document.getElementById('successMsg').classList.remove('hidden');
     } else {
