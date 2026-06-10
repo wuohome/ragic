@@ -1513,23 +1513,9 @@ function rankHtml(items, fmtVal, unit){
   }).join('');
 }
 
-// ── 六月業績目標對照表 ──
-// revenue 單位：萬（顯示用萬，計算時乘 10000）；cases 單位：間
-const MAY_TARGET = {
-  "張忠豪&蕭頤臻": { revenue: 40, cases: 10 },
-  "吳惠慈":        { revenue: 15, cases: 8 },
-  "林宣佑":        { revenue: 15, cases: 6 },
-  "詹張傳":        { revenue: 15, cases: 5 },
-  "陳心瑜":        { revenue: 10, cases: 5 },
-  "關宗宇":        { revenue: 10, cases: 10 },
-  "李卓威":        { revenue: 10, cases: 6 },
-  "吳炫儒":        { revenue: 10, cases: 2 },
-  "劉子碩":        { revenue: 10, cases: 2 },
-  "方鼎文":        { revenue: 10, cases: 2 },
-  "蕭靜芳":        { revenue: 10, cases: 1 },
-  "陳勁豪":        { revenue: 5,  cases: 3 },
-  "劉兆傑":        { revenue: 5,  cases: 3 },
-};
+// NOTE: MAY_TARGET hardcode removed 2026-06-10.
+// Monthly targets are now loaded dynamically from Ragic shanshans/5 via ragicFetch('listGoals').
+// Individual targets read from window._rawGoals; store totals from CURRENT_MONTH_GOAL.
 
 // 判斷日期範圍是否與當月有交集（用於顯示全店目標達成區塊）
 function isMayPeriod(start, end){
