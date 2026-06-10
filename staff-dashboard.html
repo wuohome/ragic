@@ -1407,7 +1407,7 @@ function renderGoalPanel(raw) {
   let totalCasesSum = 0;
 
   const rows = recs.map(r => {
-    const name  = (r['員工姓名'] || r['_index_title_'] || '').trim();
+    const name  = normalizeName((r['員工姓名'] || r['_index_title_'] || '').trim());
     const perf  = parseFloat(r['業績目標(萬)']) || 0;
     const cases = parseFloat(r['新進案件量(間)']) || 0;
     totalPerfSum  += perf;
@@ -1565,8 +1565,8 @@ function rankHtmlIntakeGoal(items){
   Object.values(window._rawGoals || {}).forEach(r => {
     const m = (r['月份']||'').trim();
     if (m !== nowYm && !m.startsWith(nowYm)) return;
-    const nm = (r['員工姓名']||r['_index_title_']||'').trim();
-    if (nm) goalMap[nm] = parseFloat(r['新進案件量(間)']) || 0;
+    const nm = normalizeName((r['員工姓名']||r['_index_title_']||'').trim());
+    if (nm) goalMap[nm] = (goalMap[nm] || 0) + (parseFloat(r['新進案件量(間)']) || 0);
   });
   // 分成：有目標（照達成率排序）、無目標（排最後灰字）
   const withTarget = items.filter(([name])=> goalMap[name] > 0);
@@ -1649,8 +1649,8 @@ function rankHtmlPerfGoal(items){
   Object.values(window._rawGoals || {}).forEach(r => {
     const m = (r['月份']||'').trim();
     if (m !== nowYm && !m.startsWith(nowYm)) return;
-    const nm = (r['員工姓名']||r['_index_title_']||'').trim();
-    if (nm) goalMap[nm] = parseFloat(r['業績目標(萬)']) || 0;
+    const nm = normalizeName((r['員工姓名']||r['_index_title_']||'').trim());
+    if (nm) goalMap[nm] = (goalMap[nm] || 0) + (parseFloat(r['業績目標(萬)']) || 0);
   });
   const withTarget = items.filter(([name])=> goalMap[name] > 0);
   const noTarget   = items.filter(([name])=> !goalMap[name] || goalMap[name] === 0);
