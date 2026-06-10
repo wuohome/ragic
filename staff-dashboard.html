@@ -180,9 +180,25 @@
               <span id="mStorePerfPct" class="ml-2 text-base font-bold text-slate-500"></span>
             </div>
           </div>
+          <!-- week-label row: W1/W2/W3 at 25%/50%/75% -->
+          <div id="mStorePerfWeekLabels" class="relative h-3 mb-0.5 select-none" aria-hidden="true">
+            <span class="absolute text-[10px] text-slate-400" style="left:25%;transform:translateX(-50%)">W1</span>
+            <span class="absolute text-[10px] text-slate-400" style="left:50%;transform:translateX(-50%)">W2</span>
+            <span class="absolute text-[10px] text-slate-400" style="left:75%;transform:translateX(-50%)">W3</span>
+          </div>
           <div class="relative h-4 bg-slate-100 rounded-full overflow-hidden">
             <div id="mStorePerfBar" class="bar absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500" style="width:0%"></div>
             <div class="absolute right-0 top-0 h-full w-0.5 bg-slate-400 opacity-60"></div>
+            <!-- week dividers: 25% / 50% / 75% -->
+            <div class="absolute top-0 h-full w-px bg-slate-300" style="left:25%"></div>
+            <div class="absolute top-0 h-full w-px bg-slate-300" style="left:50%"></div>
+            <div class="absolute top-0 h-full w-px bg-slate-300" style="left:75%"></div>
+            <!-- today-pace line (橘色，JS 動態設寬度) -->
+            <div id="mStorePerfTodayLine" class="absolute top-0 h-full w-px bg-orange-400" style="left:0%;display:none" title="今日應達"></div>
+          </div>
+          <!-- today-pace label -->
+          <div id="mStorePerfTodayLabel" class="relative h-3 mt-0.5 select-none" aria-hidden="true" style="display:none">
+            <span id="mStorePerfTodayLabelText" class="absolute text-[10px] text-orange-400 font-semibold" style="transform:translateX(-50%)"></span>
           </div>
           <div class="flex justify-between mt-1">
             <span id="mStorePerfGap" class="text-xs text-slate-500"></span>
@@ -199,9 +215,25 @@
               <span id="mStoreCasesPct" class="ml-2 text-base font-bold text-slate-500"></span>
             </div>
           </div>
+          <!-- week-label row -->
+          <div id="mStoreCasesWeekLabels" class="relative h-3 mb-0.5 select-none" aria-hidden="true">
+            <span class="absolute text-[10px] text-slate-400" style="left:25%;transform:translateX(-50%)">W1</span>
+            <span class="absolute text-[10px] text-slate-400" style="left:50%;transform:translateX(-50%)">W2</span>
+            <span class="absolute text-[10px] text-slate-400" style="left:75%;transform:translateX(-50%)">W3</span>
+          </div>
           <div class="relative h-4 bg-slate-100 rounded-full overflow-hidden">
             <div id="mStoreCasesBar" class="bar absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-500" style="width:0%"></div>
             <div class="absolute right-0 top-0 h-full w-0.5 bg-slate-400 opacity-60"></div>
+            <!-- week dividers -->
+            <div class="absolute top-0 h-full w-px bg-slate-300" style="left:25%"></div>
+            <div class="absolute top-0 h-full w-px bg-slate-300" style="left:50%"></div>
+            <div class="absolute top-0 h-full w-px bg-slate-300" style="left:75%"></div>
+            <!-- today-pace line -->
+            <div id="mStoreCasesTodayLine" class="absolute top-0 h-full w-px bg-orange-400" style="left:0%;display:none" title="今日應達"></div>
+          </div>
+          <!-- today-pace label -->
+          <div id="mStoreCasesTodayLabel" class="relative h-3 mt-0.5 select-none" aria-hidden="true" style="display:none">
+            <span id="mStoreCasesTodayLabelText" class="absolute text-[10px] text-orange-400 font-semibold" style="transform:translateX(-50%)"></span>
           </div>
           <div class="flex justify-between mt-1">
             <span id="mStoreCasesGap" class="text-xs text-slate-500"></span>
@@ -1437,6 +1469,46 @@ function renderGoalPanel(raw) {
 }
 
 // ════════════════════════════════════════════════════════════════════
+// 全店目標進度條：今日應達標記線
+// ════════════════════════════════════════════════════════════════════
+function updateProgressMarkers() {
+  const now = new Date();
+  const monthDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const todayPct  = Math.min(100, Math.round((now.getDate() / monthDays) * 100));
+  const label     = `今日應達 ${todayPct}%`;
+
+  // 更新業績進度條的今日應達線
+  const perfLine  = document.getElementById('mStorePerfTodayLine');
+  const perfLabelWrap = document.getElementById('mStorePerfTodayLabel');
+  const perfLabelText = document.getElementById('mStorePerfTodayLabelText');
+  if (perfLine) {
+    perfLine.style.left    = todayPct + '%';
+    perfLine.style.display = '';
+    perfLine.setAttribute('title', label);
+  }
+  if (perfLabelWrap) perfLabelWrap.style.display = '';
+  if (perfLabelText) {
+    perfLabelText.textContent  = label;
+    perfLabelText.style.left   = todayPct + '%';
+  }
+
+  // 更新委託間數進度條的今日應達線
+  const casesLine  = document.getElementById('mStoreCasesTodayLine');
+  const casesLabelWrap = document.getElementById('mStoreCasesTodayLabel');
+  const casesLabelText = document.getElementById('mStoreCasesTodayLabelText');
+  if (casesLine) {
+    casesLine.style.left    = todayPct + '%';
+    casesLine.style.display = '';
+    casesLine.setAttribute('title', label);
+  }
+  if (casesLabelWrap) casesLabelWrap.style.display = '';
+  if (casesLabelText) {
+    casesLabelText.textContent = label;
+    casesLabelText.style.left  = todayPct + '%';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
 // GLOBAL DATA (populated by fetchAllData)
 // ════════════════════════════════════════════════════════════════════
 let INTAKE = [], PERF = [], PERF_RAGIC = [], COMPARE = {}, INVENTORY = [], OUTREACH = [], CLIENTS = [];
@@ -2441,6 +2513,8 @@ function renderPerfIntake(){
       document.getElementById('mStoreCasesPct').className = 'ml-2 text-base font-bold text-slate-400';
       document.getElementById('mStoreCasesBar').style.width = '0%';
       document.getElementById('mStoreCasesGap').textContent = '';
+      // 目標未填報也顯示今日應達標記線
+      updateProgressMarkers();
     } else {
       // 有目標：正常計算達成率
       if (noGoalMsg) noGoalMsg.classList.add('hidden');
@@ -2506,6 +2580,8 @@ function renderPerfIntake(){
       if (achieverLine) achieverLine.innerHTML =
         `業績達標 <strong class="text-slate-900">${perfAchievers}</strong> / ${perfTotal2} 人&nbsp;&nbsp;·&nbsp;&nbsp;委託達標 <strong class="text-slate-900">${casesAchievers}</strong> / ${casesTotal2} 人`;
     }
+    // 每次渲染完成後更新今日應達標記線
+    updateProgressMarkers();
   } else {
     storeGoalSection.classList.add('hidden');
   }
