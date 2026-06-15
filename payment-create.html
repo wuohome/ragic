@@ -1445,10 +1445,11 @@ function buildRagicFormData() {
       fd.append('1000784', state.uploadFileTenant, state.uploadFileTenant.name);
 
     // 子表格 1000777（租客收付款明細）
+    // 1000774=類型（押金/租金/服務費等 r.type），1000776=項目備註（r.note），1000775=金額
     state.receiptItems.forEach((r, i) => {
       const rowKey = -(i + 1);
-      fd.append(`1000774_${rowKey}`, '收入');
-      fd.append(`1000776_${rowKey}`, r.type + (r.note ? `（${r.note}）` : ''));
+      fd.append(`1000774_${rowKey}`, r.type);
+      fd.append(`1000776_${rowKey}`, r.note || '');
       fd.append(`1000775_${rowKey}`, String(r.amount));
     });
 
@@ -1460,10 +1461,11 @@ function buildRagicFormData() {
       fd.append('1000650', state.uploadFileLandlord, state.uploadFileLandlord.name);
 
     // 子表格 1001701（房東服務費明細）
+    // 1001698=類型（r.type），1001699=項目備註（r.note），1001700=金額
     state.receiptItems.forEach((r, i) => {
       const rowKey = -(i + 1);
-      fd.append(`1001698_${rowKey}`, '收入');
-      fd.append(`1001699_${rowKey}`, r.type + (r.note ? `（${r.note}）` : ''));
+      fd.append(`1001698_${rowKey}`, r.type);
+      fd.append(`1001699_${rowKey}`, r.note || '');
       fd.append(`1001700_${rowKey}`, String(r.amount));
     });
   }
