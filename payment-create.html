@@ -1463,6 +1463,7 @@ function buildRagicFormData() {
   } else {
     fd.append('1002051', '新進案件');
     fd.append('1000597', state.caseName); // 連結欄寫顯示文字
+    if (state.caseAddress) fd.append('1000767', state.caseAddress); // 直接寫地址欄，不等 Link&Load auto-sync
   }
 
   // 付款資訊
