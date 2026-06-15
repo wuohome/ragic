@@ -1000,6 +1000,7 @@ const state = {
   step: 1,
   payer: null,
   staffName: '',
+  staffEmail: '',
   caseId: null, caseName: '', caseAddress: '', isManual: false,
   manualCaseName: '', manualAddress: '',
   receiptItems: [],
@@ -1069,7 +1070,7 @@ async function loadRealStaff() {
       sel.innerHTML = '<option value="">— 請選擇你的名字 —</option>';
       realStaff.forEach(s => {
         const opt = document.createElement('option');
-        opt.value = s.name;
+        opt.value = s.email || s.name;  // use email for 1000602 POST
         opt.textContent = s.name + (s.englishName ? ` (${s.englishName})` : '') + (s.dept ? ` — ${s.dept}` : '');
         sel.appendChild(opt);
       });
@@ -1081,8 +1082,11 @@ async function loadRealStaff() {
   }
 }
 
-function selectStaff(name) {
-  state.staffName = name;
+function selectStaff(emailOrName) {
+  // emailOrName is now the email (or name as fallback)
+  const found = realStaff.find(s => s.email === emailOrName || s.name === emailOrName);
+  state.staffEmail = found ? (found.email || "") : "";
+  state.staffName = found ? found.name : emailOrName;
 }
 
 const typesTenant = [
@@ -1552,7 +1556,8 @@ function buildRagicFormData() {
   }
 
   // 備註欄：記錄經辦業務姓名
-  if (state.staffName) fd.append('1000773', '經辦：' + state.staffName);
+  // 經辦人員：寫外部帳號 email 到 1000602
+  if (state.staffEmail) fd.append("1000602", state.staffEmail);
 
   return fd;
 }
@@ -1640,6 +1645,7 @@ function resetAll() {
   const staffSel = document.getElementById('staffSelect');
   if (staffSel) staffSel.value = '';
   state.staffName = '';
+  state.staffEmail = '';
   // reset case selection (but keep realCases cache for reuse)
   selectedCaseId = null;
   document.getElementById('manualFields').classList.remove('open');
