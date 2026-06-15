@@ -640,6 +640,7 @@ body {
   font-size: 0.78rem;
   color: var(--gray-600);
   word-break: break-all;
+  white-space: pre-line;
   margin-bottom: 12px;
   line-height: 1.5;
 }
@@ -968,11 +969,9 @@ body {
     <div class="share-card">
       <div class="share-card-title">📨 傳給客人簽收</div>
       <div class="share-card-sub">複製連結或用 LINE 傳送，讓客人線上確認簽收</div>
-      <div class="share-link-box" id="shareLink">
-        https://wuohome.github.io/ragic/payment-receipt.html?code=202606-015&amp;openExternalBrowser=1
-      </div>
+      <div class="share-link-box" id="shareLink"></div>
       <div class="share-btns">
-        <button class="share-btn share-btn-copy" id="copyLinkBtn" onclick="copyLink()">📋 複製連結</button>
+        <button class="share-btn share-btn-copy" id="copyLinkBtn" onclick="copyLink()">📋 複製訊息</button>
         <button class="share-btn share-btn-line" onclick="sendLine()">💬 LINE 傳送</button>
       </div>
     </div>
@@ -1384,71 +1383,111 @@ function buildSummary() {
 /* ======================================================
    SUBMIT
    ====================================================== */
-function submitForm() {
+const WORKER_URL = 'https://wuohome-ragic-proxy.wuohome.workers.dev/createPaymentReceipt';
+
+async function submitForm() {
   const btn = document.getElementById('btnNext');
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner"></div>';
 
-  const payload = buildRagicPayload();
-  console.log('=== [原型] 模擬送出 Ragic FormData ===');
-  console.log(JSON.stringify(payload, null, 2));
+  try {
+    const fd = buildRagicFormData();
+    const resp = await fetch(WORKER_URL, {
+      method: 'POST',
+      body: fd,
+    });
+    const json = await resp.json().catch(() => null);
 
-  setTimeout(showSuccess, 1500);
+    if (!resp.ok || !json?.ok) {
+      const msg = json?.error || json?.msg || ('HTTP ' + resp.status);
+      throw new Error(msg);
+    }
+
+    // Worker 回傳 voucherCode（憑單編號），降級用 ragicId
+    const code = json.voucherCode || String(json.ragicId);
+    showSuccess(code);
+
+  } catch (err) {
+    btn.disabled = false;
+    btn.innerHTML = '<span id="btnNextLabel">✅ 建立收款單</span>';
+    showToast('送出失敗：' + (err.message || '請確認網路後重試'), 4000);
+    console.error('[createPaymentReceipt] error', err);
+  }
 }
 
-function buildRagicPayload() {
+function buildRagicFormData() {
   const isTenant = state.payer === 'tenant';
-  const p = {};
+  const fd = new FormData();
 
-  // 對象
-  p['1000782'] = isTenant ? '租客' : '房東';
+  // 今天日期（Ragic 格式 yyyy/MM/dd）
+  const now = new Date();
+  const today = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')}`;
+
+  fd.append('1000782', isTenant ? '租客' : '房東');
+  fd.append('1000772', today);
 
   // 案件
   if (state.isManual) {
-    p['1002051'] = '公司件(舊件)';
-    p['1002052'] = state.manualCaseName;
-    p['1002053'] = state.manualAddress;
+    fd.append('1002051', '公司件(舊件)');
+    fd.append('1002052', state.manualCaseName);
+    fd.append('1002053', state.manualAddress);
   } else {
-    p['1000597'] = state.caseId;
-    p['_caseName']    = state.caseName;
-    p['_caseAddress'] = state.caseAddress;
+    fd.append('1002051', '新進案件');
+    fd.append('1000597', state.caseName); // 連結欄寫顯示文字
   }
 
   // 付款資訊
   if (isTenant) {
-    p['1000785'] = state.paymentMethods.map(m => m === 'cash' ? '現金' : '匯款').join('|');
-    if (state.paymentMethods.includes('transfer')) p['1000780'] = state.transferCode;
-    p['1000784'] = state.uploadFileTenant ? state.uploadFileTenant.name : '';
-    p['_subtable_1000777'] = state.receiptItems.map(r =>
-      ({ type: r.type, note: r.note, amount: r.amount })
-    );
+    fd.append('1000785', state.paymentMethods.map(m => m === 'cash' ? '現金' : '匯款').join('|'));
+    if (state.paymentMethods.includes('transfer') && state.transferCode)
+      fd.append('1000780', state.transferCode);
+    if (state.uploadFileTenant)
+      fd.append('1000784', state.uploadFileTenant, state.uploadFileTenant.name);
+
+    // 子表格 1000777（租客收付款明細）
+    state.receiptItems.forEach((r, i) => {
+      const rowKey = -(i + 1);
+      fd.append(`1000774_${rowKey}`, '收入');
+      fd.append(`1000776_${rowKey}`, r.type + (r.note ? `（${r.note}）` : ''));
+      fd.append(`1000775_${rowKey}`, String(r.amount));
+    });
+
   } else {
-    p['1002076'] = state.paymentMethodLandlord === 'cash' ? '現金' : '匯款';
-    if (state.paymentMethodLandlord === 'transfer') p['1000603'] = state.transferCodeL;
-    p['1000650'] = state.uploadFileLandlord ? state.uploadFileLandlord.name : '';
-    p['_subtable_1001701'] = state.receiptItems.map(r =>
-      ({ type: r.type, note: r.note, amount: r.amount })
-    );
+    fd.append('1002076', state.paymentMethodLandlord === 'cash' ? '現金' : '匯款');
+    if (state.paymentMethodLandlord === 'transfer' && state.transferCodeL)
+      fd.append('1000603', state.transferCodeL);
+    if (state.uploadFileLandlord)
+      fd.append('1000650', state.uploadFileLandlord, state.uploadFileLandlord.name);
+
+    // 子表格 1001701（房東服務費明細）
+    state.receiptItems.forEach((r, i) => {
+      const rowKey = -(i + 1);
+      fd.append(`1001698_${rowKey}`, '收入');
+      fd.append(`1001699_${rowKey}`, r.type + (r.note ? `（${r.note}）` : ''));
+      fd.append(`1001700_${rowKey}`, String(r.amount));
+    });
   }
 
-  return p;
+  return fd;
 }
 
 /* ======================================================
    SUCCESS
    ====================================================== */
-function showSuccess() {
+function showSuccess(code) {
   document.getElementById('mainContent').style.display = 'none';
   document.getElementById('footerNav').classList.add('hidden');
   document.getElementById('totalBar').classList.add('hidden');
 
-  const now  = new Date();
-  const code = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}-${String(Math.floor(Math.random()*900)+100)}`;
-  const url  = `https://wuohome.github.io/ragic/payment-receipt.html?code=${code}&openExternalBrowser=1`;
+  const receiptUrl = `https://wuohome.github.io/ragic/payment-receipt.html?code=${encodeURIComponent(code)}&openExternalBrowser=1`;
+  // 傳給客人的完整訊息（引導語 + URL）
+  const shareMsg = `請點下方連結確認並簽收收款憑單：\n${receiptUrl}`;
 
   document.getElementById('voucherCode').textContent = `憑單編號：${code}`;
-  document.getElementById('shareLink').textContent = url;
-  document.getElementById('shareLink').dataset.url = url;
+  // 成功頁顯示完整訊息讓業務預覽
+  document.getElementById('shareLink').textContent = shareMsg;
+  document.getElementById('shareLink').dataset.url  = receiptUrl;
+  document.getElementById('shareLink').dataset.msg  = shareMsg;
 
   const sp = document.getElementById('successPage');
   sp.classList.add('active');
@@ -1456,22 +1495,23 @@ function showSuccess() {
 }
 
 function copyLink() {
-  const url = document.getElementById('shareLink').dataset.url
+  // 複製「引導語 + URL」整段，不是只有 URL
+  const msg = document.getElementById('shareLink').dataset.msg
            || document.getElementById('shareLink').textContent.trim();
   const btn = document.getElementById('copyLinkBtn');
   const exec = () => {
     btn.classList.add('copied');
     btn.textContent = '✓ 已複製！';
-    showToast('連結已複製到剪貼簿');
+    showToast('訊息已複製到剪貼簿');
     setTimeout(() => {
       btn.classList.remove('copied');
-      btn.textContent = '📋 複製連結';
+      btn.textContent = '📋 複製訊息';
     }, 2500);
   };
   if (navigator.clipboard) {
-    navigator.clipboard.writeText(url).then(exec).catch(() => fallbackCopy(url, exec));
+    navigator.clipboard.writeText(msg).then(exec).catch(() => fallbackCopy(msg, exec));
   } else {
-    fallbackCopy(url, exec);
+    fallbackCopy(msg, exec);
   }
 }
 function fallbackCopy(text, cb) {
@@ -1487,11 +1527,11 @@ function fallbackCopy(text, cb) {
 }
 
 function sendLine() {
-  const url = document.getElementById('shareLink').dataset.url
+  // LINE URL Scheme 帶整段訊息（引導語 + URL）
+  const msg = document.getElementById('shareLink').dataset.msg
            || document.getElementById('shareLink').textContent.trim();
-  // 嘗試 LINE URL Scheme（真機可叫起 LINE）
-  const lineUrl = 'https://line.me/R/msg/text/?' + encodeURIComponent(url);
-  alert('（原型模擬）\n正式上線後會打開 LINE 傳送視窗。\n\n連結：\n' + url);
+  const lineUrl = 'https://line.me/R/msg/text/?' + encodeURIComponent(msg);
+  window.open(lineUrl, '_blank');
 }
 
 function resetAll() {
