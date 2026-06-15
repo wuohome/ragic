@@ -1003,14 +1003,36 @@ const state = {
 /* ======================================================
    FAKE DATA
    ====================================================== */
-const fakeCases = [
-  { id:'C001', name:'重新路 5 段 288 號', address:'新北市三重區重新路 5 段 288 號 4F' },
-  { id:'C002', name:'建國北路二段 99 號 3F', address:'台北市中山區建國北路二段 99 號 3F' },
-  { id:'C003', name:'民生東路五段 47 號 8F', address:'台北市松山區民生東路五段 47 號 8F' },
-  { id:'C004', name:'文心路四段 200 號 11F-2', address:'台中市北區文心路四段 200 號 11F-2' },
-  { id:'C005', name:'南京東路六段 150 號 2F', address:'台北市南港區南京東路六段 150 號 2F' },
-  { id:'C006', name:'新埔路 18 巷 5 弄 3 號', address:'新北市板橋區新埔路 18 巷 5 弄 3 號' },
-];
+// Real cases loaded from Ragic via Worker (replaces fakeCases)
+let realCases = [];   // [{rid, name, address}]
+let casesLoaded = false;
+let casesLoading = false;
+
+async function loadRealCases() {
+  if (casesLoaded) { renderCaseList(caseFilter); return; }
+  if (casesLoading) return;
+  casesLoading = true;
+  const list      = document.getElementById('caseList');
+  const emptyHint = document.getElementById('caseEmptyHint');
+  list.innerHTML  = '<li class="case-loading">載入中⋯</li>';
+  emptyHint.style.display = 'none';
+  try {
+    const BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+    const resp = await fetch(BASE + '/searchCases?q=', { method: 'GET' });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok || !json.ok) throw new Error(json.error || 'load_fail');
+    realCases   = json.cases || [];
+    casesLoaded = true;
+  } catch (e) {
+    list.innerHTML = '';
+    emptyHint.textContent = '載入案件失敗，請重新整理後再試';
+    emptyHint.style.display = 'block';
+    casesLoading = false;
+    return;
+  }
+  casesLoading = false;
+  renderCaseList(caseFilter);
+}
 
 const typesTenant = [
   '押金','租金','服務費','管理費','水電瓦斯','網路第四台',
@@ -1071,6 +1093,8 @@ function showStep(n) {
 
   state.step = n;
   document.getElementById('mainContent').scrollTop = 0;
+  // Step 2: load real cases from Ragic if not yet loaded
+  if (n === 2) loadRealCases();
 }
 
 function goNext() {
@@ -1105,9 +1129,13 @@ function renderCaseList(filter) {
   filter = filter || '';
   const list      = document.getElementById('caseList');
   const emptyHint = document.getElementById('caseEmptyHint');
-  const filtered  = fakeCases.filter(c =>
-    c.name.includes(filter) || c.address.includes(filter)
-  );
+  emptyHint.textContent = '沒有符合的案子';
+  if (!casesLoaded) { return; }
+  const ql = filter.toLowerCase();
+  const filtered = filter
+    ? realCases.filter(c =>
+        c.name.toLowerCase().includes(ql) || c.address.toLowerCase().includes(ql))
+    : realCases;
   if (filtered.length === 0) {
     list.innerHTML = '';
     emptyHint.style.display = 'block';
@@ -1115,8 +1143,8 @@ function renderCaseList(filter) {
   }
   emptyHint.style.display = 'none';
   list.innerHTML = filtered.map(c => `
-    <li class="case-item${selectedCaseId === c.id ? ' selected' : ''}"
-        onclick="selectCase('${c.id}')">
+    <li class="case-item${selectedCaseId === c.rid ? ' selected' : ''}"
+        onclick="selectCase(${c.rid})">
       <span class="case-item-icon">🏠</span>
       <span class="case-item-text">
         <div class="case-item-name">${c.name}</div>
@@ -1129,14 +1157,15 @@ function renderCaseList(filter) {
 
 function filterCases(val) {
   caseFilter = val;
+  if (!casesLoaded && !casesLoading) { loadRealCases(); return; }
   renderCaseList(val);
 }
 
-function selectCase(id) {
-  selectedCaseId = id;
-  const c = fakeCases.find(x => x.id === id);
+function selectCase(rid) {
+  selectedCaseId = rid;
+  const c = realCases.find(x => x.rid === rid);
   if (c) {
-    state.caseId      = c.id;
+    state.caseId      = rid;
     state.caseName    = c.name;
     state.caseAddress = c.address;
     state.isManual    = false;
@@ -1553,6 +1582,8 @@ function resetAll() {
   ['choiceTenant','choiceLandlord','pm-cash','pm-transfer','pm-cash-l','pm-transfer-l']
     .forEach(id => document.getElementById(id)?.classList.remove('selected'));
   document.getElementById('caseSearch').value   = '';
+  // reset case selection (but keep realCases cache for reuse)
+  selectedCaseId = null;
   document.getElementById('manualFields').classList.remove('open');
   document.getElementById('manualToggle').textContent = '🔍 找不到案子？手動輸入地址';
   document.getElementById('manualCaseName').value = '';
