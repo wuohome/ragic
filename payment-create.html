@@ -1221,7 +1221,7 @@ function goNext() {
     if (state.payer === 'tenant') { showStep(25); return; }
     showStep(3); return;
   }
-  if (state.step === 25) { commitStep25(); showStep(3); return; }
+  if (state.step === 25) { commitStep25(); buildStep3(); showStep(3); return; }
   if (state.step === 3) buildStep4();
   if (state.step === 4) buildSummary();
   if (state.step === 5) { submitForm(); return; }
