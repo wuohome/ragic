@@ -335,6 +335,178 @@ textarea.input {
   font-weight: 600;
 }
 
+/* ─── Case Picker ──────────────────────────────────── */
+.case-search-wrap {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.case-search-wrap .search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text-muted);
+  width: 18px;
+  height: 18px;
+}
+
+.case-search-input {
+  width: 100%;
+  font-family: var(--font);
+  font-size: 17px;
+  padding: 13px 16px 13px 42px; /* 左側為 icon 讓位 */
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  -webkit-appearance: none;
+  min-height: 52px;
+}
+
+.case-search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0,112,243,0.12);
+}
+
+.case-card-list {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.case-card-list:empty { display: none; }
+
+.case-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.case-card:last-child { border-bottom: none; }
+
+.case-card:hover  { background: var(--bg-subtle); }
+.case-card:active { background: var(--accent-light); }
+
+.case-card.selected {
+  background: var(--accent-light);
+  border-color: var(--accent);
+}
+
+/* 讓相鄰的 border-bottom 在選中時也隱藏 */
+.case-card.selected + .case-card { border-top: 1px solid var(--accent); }
+
+.case-card-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  line-height: 1;
+}
+
+.case-card-body { flex: 1; min-width: 0; }
+
+.case-card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.case-card.selected .case-card-name { color: var(--accent-dark); }
+
+.case-card-addr {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.case-card-check {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.case-card.selected .case-card-check { display: flex; }
+
+/* 已選 pill */
+.case-selected-pill {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--accent-light);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+}
+
+.case-selected-pill.visible { display: flex; }
+
+.case-selected-pill-text {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--accent-dark);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-selected-pill-clear {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--accent);
+  font-weight: 600;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.12s;
+  white-space: nowrap;
+}
+
+.case-selected-pill-clear:hover { background: rgba(0,112,243,0.1); }
+
+/* 載入中 / 空白 / 錯誤 狀態列 */
+.case-card-state {
+  padding: 20px 14px;
+  font-size: 14px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* fallback 手動輸入模式（預設隱藏，API 失敗時顯示） */
+.case-manual-wrap { display: none; }
+.case-manual-wrap.visible { display: block; }
+
 /* ─── Autocomplete Search ──────────────────────────── */
 .autocomplete-wrap {
   position: relative;
@@ -738,22 +910,46 @@ input[type="date"] {
       <!-- 新進案件欄位 -->
       <div class="conditional-fields" id="newCaseFields">
         <div class="field-group">
-          <label class="field-label" for="caseSearch">案名搜尋 <span class="required">*</span></label>
-          <div class="autocomplete-wrap">
-            <input
-              class="input"
-              id="caseSearch"
-              type="text"
-              placeholder="輸入案名或地址搜尋…"
-              autocomplete="off"
-              oninput="handleCaseSearch(this.value)"
-              onfocus="handleCaseSearchFocus()"
-            >
-            <div class="autocomplete-dropdown" id="caseDropdown"></div>
+          <label class="field-label">選擇物件 <span class="required">*</span></label>
+
+          <!-- 已選 pill（選中後顯示） -->
+          <div class="case-selected-pill" id="caseSelectedPill">
+            <span class="case-selected-pill-text" id="caseSelectedPillText"></span>
+            <button type="button" class="case-selected-pill-clear" onclick="clearCaseSelection()">重新選擇</button>
           </div>
-          <!-- Hidden actual value -->
+
+          <!-- 搜尋框 + 卡片列表（選中後隱藏） -->
+          <div id="casePickerWrap">
+            <div class="case-search-wrap">
+              <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="9" cy="9" r="5.5"/>
+                <line x1="13.5" y1="13.5" x2="17" y2="17"/>
+              </svg>
+              <input
+                class="case-search-input"
+                id="caseSearch"
+                type="text"
+                placeholder="搜尋地址或案名…"
+                autocomplete="off"
+                oninput="filterCaseCards(this.value)"
+              >
+            </div>
+            <!-- 卡片列表：loading / 結果 / 空白 / fallback 訊息 都渲染在這 -->
+            <div class="case-card-list" id="caseCardList">
+              <div class="case-card-state">載入中…</div>
+            </div>
+          </div>
+
+          <!-- fallback：API 失敗時切成手動輸入 -->
+          <div class="case-manual-wrap" id="caseManualWrap">
+            <input class="input" id="caseManualName" type="text"
+              placeholder="手動輸入案名"
+              oninput="handleCaseManualInput()">
+          </div>
+
+          <!-- Hidden values -->
           <input type="hidden" id="eid1000790" name="1000790">
-          <div class="error-msg" id="err-case">請選擇案件</div>
+          <div class="error-msg" id="err-case">請選擇或輸入案件</div>
         </div>
 
         <div class="field-group">
@@ -1535,6 +1731,8 @@ function handleCaseTypeChange() {
   document.getElementById("newCaseFields").classList.toggle("visible", val === "new");
   document.getElementById("companyCaseFields").classList.toggle("visible", val === "company");
   clearErr("err-caseType");
+  // 選了「新進案件」後立刻觸發載入物件列表
+  if (val === "new") loadCaseList();
 }
 
 function handleLeasePeriod(el) {
@@ -1555,75 +1753,152 @@ function handleEarnestMethodChange() {
   clearErr("err-earnestMethod");
 }
 
-/* ── Autocomplete: Cases ───────────────────────────────────────────── */
-let caseSearchResults = [];
+/* ── Case Picker ────────────────────────────────────────────────────── */
+let allCaseData   = [];   // 全量快取（fetchCases 不帶參數拉回來後存這）
+let selectedCaseIdx = -1; // 目前選中的 index（-1 = 未選）
+let caseListLoaded  = false; // 避免重複 fetch
+let caseFallbackMode = false; // true = API 失敗，切成手動輸入
 
-async function handleCaseSearch(keyword) {
-  clearTimeout(caseSearchTimer);
-  // 清空已選定的值，直到使用者重新選
-  document.getElementById("eid1000790").value = "";
+// 選了「新進案件」後呼叫（handleCaseTypeChange 觸發）
+async function loadCaseList() {
+  // 已載入過就不重打 API
+  if (caseListLoaded && !caseFallbackMode) return;
 
-  if (keyword.length < 1) {
-    closeCaseDropdown();
-    return;
-  }
+  const list = document.getElementById("caseCardList");
+  list.innerHTML = `<div class="case-card-state">載入物件中…</div>`;
 
-  caseSearchTimer = setTimeout(async () => {
-    const dd = document.getElementById("caseDropdown");
-    dd.innerHTML = `<div class="autocomplete-empty">搜尋中…</div>`;
-    dd.classList.add("open");
+  try {
+    const results = await fetchCases(); // 不帶關鍵字 → 全部代租中物件
+    allCaseData = results || [];
+    caseListLoaded = true;
 
-    try {
-      // fetchCases 讀 data.cases，回傳 [{ rid, name, address }]
-      const results = await fetchCases(keyword);
-      caseSearchResults = results;
-      renderCaseDropdown(results);
-    } catch (e) {
-      // CORS 或網路錯誤 → fallback 手動輸入，不卡表單
-      dd.innerHTML = `<div class="autocomplete-empty">搜尋失敗（CORS？），可直接手動輸入</div>`;
-      document.getElementById("eid1000790").value = keyword;
+    if (allCaseData.length === 0) {
+      // 回空陣列 → fallback 手動輸入
+      activateCaseFallback("查無代租中物件，請手動輸入");
+      return;
     }
-  }, 300);
-}
 
-function handleCaseSearchFocus() {
-  const keyword = document.getElementById("caseSearch").value;
-  if (keyword.length >= 1 && caseSearchResults.length > 0) {
-    document.getElementById("caseDropdown").classList.add("open");
+    renderCaseCards(allCaseData);
+  } catch (e) {
+    // CORS（本機 file://）或網路錯誤 → fallback
+    activateCaseFallback("無法載入物件列表（可能是本機開啟），請手動輸入");
   }
 }
 
-function renderCaseDropdown(results) {
-  const dd = document.getElementById("caseDropdown");
-  if (!results || results.length === 0) {
-    dd.innerHTML = `<div class="autocomplete-empty">找不到符合的案件，可直接手動輸入</div>`;
-    // 找不到仍可手動輸入
-    const keyword = document.getElementById("caseSearch").value;
-    document.getElementById("eid1000790").value = keyword;
+// client-side 即時過濾（搜尋框 oninput）
+function filterCaseCards(keyword) {
+  if (caseFallbackMode) return;
+  // 清掉選中狀態（使用者重新搜尋代表想換）
+  if (keyword.length > 0 && selectedCaseIdx !== -1) {
+    clearCaseSelection(/* keepPicker */ true);
+  }
+  const kw = keyword.trim().toLowerCase();
+  const filtered = kw
+    ? allCaseData.filter(r =>
+        r.name.toLowerCase().includes(kw) ||
+        (r.address || "").toLowerCase().includes(kw)
+      )
+    : allCaseData;
+  renderCaseCards(filtered, kw);
+}
+
+// 渲染卡片列表
+function renderCaseCards(list, highlight) {
+  const container = document.getElementById("caseCardList");
+  if (!list || list.length === 0) {
+    container.innerHTML = `<div class="case-card-state">找不到符合的物件<br><span style="font-size:12px;">請修改關鍵字，或清空搜尋後手動輸入地址</span></div>`;
     return;
   }
-  dd.innerHTML = results.map((r, i) =>
-    `<div class="autocomplete-item" onclick="selectCase(${i})" onmousedown="event.preventDefault()">
-       <div class="item-name">${r.name}</div>
-       <div class="item-sub">${r.address || ""}</div>
-     </div>`
-  ).join("");
+
+  const hl = (str) => {
+    if (!highlight || !str) return escHtml(str || "");
+    const re = new RegExp(escRegex(highlight), "gi");
+    return escHtml(str).replace(re, m => `<mark style="background:rgba(0,112,243,0.15);color:var(--accent-dark);border-radius:2px;padding:0 1px;">${m}</mark>`);
+  };
+
+  container.innerHTML = list.map((r, i) => {
+    // i 是過濾後的 index，需要對應回 allCaseData 的真實 index
+    const realIdx = allCaseData.indexOf(r);
+    const isSelected = realIdx === selectedCaseIdx;
+    return `<div class="case-card${isSelected ? " selected" : ""}"
+                 onclick="selectCase(${realIdx})"
+                 data-idx="${realIdx}">
+      <span class="case-card-icon">🏠</span>
+      <div class="case-card-body">
+        <div class="case-card-name">${hl(r.name)}</div>
+        <div class="case-card-addr">${hl(r.address || "")}</div>
+      </div>
+      <span class="case-card-check">
+        <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+          <polyline points="1,4 4,7 9,1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+    </div>`;
+  }).join("");
 }
 
-function selectCase(i) {
-  const r = caseSearchResults[i];
-  // 顯示 name；送出 name（Ragic 案名欄吃文字）；地址直接從同筆帶入
-  document.getElementById("caseSearch").value = r.name;
+// 點擊卡片選中
+function selectCase(realIdx) {
+  const r = allCaseData[realIdx];
+  if (!r) return;
+
+  selectedCaseIdx = realIdx;
+
+  // 填入 hidden 欄位（1000790 存 name、1000799 存 address）
   document.getElementById("eid1000790").value = r.name;
   document.getElementById("eid1000799").value = r.address || "";
+
+  // 顯示已選 pill
+  document.getElementById("caseSelectedPillText").textContent = "已選：" + r.name;
+  document.getElementById("caseSelectedPill").classList.add("visible");
+
+  // 隱藏搜尋框+列表
+  document.getElementById("casePickerWrap").style.display = "none";
+
   clearErr("err-case");
   clearErr("err-addr");
-  closeCaseDropdown();
 }
 
-function closeCaseDropdown() {
-  document.getElementById("caseDropdown").classList.remove("open");
+// 清除選中 / 重新選擇
+function clearCaseSelection(keepPicker) {
+  selectedCaseIdx = -1;
+  document.getElementById("eid1000790").value = "";
+  document.getElementById("caseSelectedPill").classList.remove("visible");
+  document.getElementById("caseSelectedPillText").textContent = "";
+
+  if (!keepPicker) {
+    // 完整還原：清搜尋框、重渲全量、顯示 picker
+    document.getElementById("caseSearch").value = "";
+    document.getElementById("casePickerWrap").style.display = "";
+    renderCaseCards(allCaseData);
+  }
 }
+
+// fallback：切成手動輸入模式
+function activateCaseFallback(msg) {
+  caseFallbackMode = true;
+  document.getElementById("caseCardList").innerHTML =
+    `<div class="case-card-state">${msg}</div>`;
+  document.getElementById("caseManualWrap").classList.add("visible");
+}
+
+// fallback 手動輸入 oninput
+function handleCaseManualInput() {
+  const val = document.getElementById("caseManualName").value.trim();
+  document.getElementById("eid1000790").value = val;
+  if (val) clearErr("err-case");
+}
+
+// 工具：HTML 跳脫
+function escHtml(str) {
+  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+function escRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// 舊的 closeCaseDropdown 留空（staff 那邊 outside-click handler 會呼叫）
+function closeCaseDropdown() {}
 
 /* ── Autocomplete: Staff ───────────────────────────────────────────── */
 let staffSearchResults = [];
@@ -1937,10 +2212,21 @@ function resetForm() {
   showStep(1);
   updateProgress();
 
-  // Reset autocomplete
-  caseSearchResults = [];
+  // Reset case picker
+  allCaseData = [];
+  selectedCaseIdx = -1;
+  caseListLoaded = false;
+  caseFallbackMode = false;
+  document.getElementById("caseSelectedPill").classList.remove("visible");
+  document.getElementById("caseSelectedPillText").textContent = "";
+  document.getElementById("casePickerWrap").style.display = "";
+  document.getElementById("caseSearch").value = "";
+  document.getElementById("caseCardList").innerHTML = `<div class="case-card-state">載入中…</div>`;
+  document.getElementById("caseManualWrap").classList.remove("visible");
+  if (document.getElementById("caseManualName")) document.getElementById("caseManualName").value = "";
+
+  // Reset staff autocomplete
   staffSearchResults = [];
-  closeCaseDropdown();
   closeStaffDropdown();
 
   // Reset date default
