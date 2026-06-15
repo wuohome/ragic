@@ -1,0 +1,1579 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>建立收款單 — 窩的家</title>
+<style>
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* 窩的家品牌色 */
+  --brand-primary:   #E8622A;
+  --brand-primary-d: #C94F1C;
+  --brand-primary-l: #FDF0EA;
+  --brand-yellow:    #F5C842;
+  --brand-navy:      #2D3B4E;
+  --brand-navy-l:    #EEF1F5;
+
+  --white:     #FFFFFF;
+  --gray-50:   #F8F9FA;
+  --gray-100:  #F1F3F5;
+  --gray-200:  #E9ECEF;
+  --gray-400:  #ADB5BD;
+  --gray-600:  #6C757D;
+  --gray-800:  #343A40;
+  --gray-900:  #212529;
+
+  --success:   #2E9E5B;
+  --success-l: #EAF7EF;
+  --danger:    #DC3545;
+  --danger-l:  #FFF0F1;
+
+  --font: -apple-system, 'PingFang TC', 'Noto Sans TC', BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  --radius-sm: 8px;
+  --radius:    14px;
+  --radius-lg: 20px;
+
+  --shadow-btn: 0 4px 14px rgba(232,98,42,0.28);
+}
+
+html { font-size: 18px; -webkit-text-size-adjust: 100%; }
+body {
+  font-family: var(--font);
+  background: var(--gray-50);
+  color: var(--gray-900);
+  min-height: 100dvh;
+  line-height: 1.5;
+}
+
+/* ===== SHELL ===== */
+#app {
+  max-width: 520px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--white);
+  position: relative;
+}
+
+/* ===== TOP BAR ===== */
+.topbar {
+  background: var(--white);
+  border-bottom: 1px solid var(--gray-200);
+  padding: 14px 20px 10px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.logo-icon {
+  width: 32px; height: 32px;
+  background: var(--brand-primary);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.logo-icon svg { width: 18px; height: 18px; }
+.logo-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--brand-navy);
+  letter-spacing: -0.01em;
+}
+.logo-sub {
+  font-size: 12px;
+  color: var(--gray-600);
+  margin-left: auto;
+}
+.progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.progress-label {
+  font-size: 13px;
+  color: var(--gray-600);
+  white-space: nowrap;
+  min-width: 64px;
+}
+.progress-bar-bg {
+  flex: 1;
+  height: 6px;
+  background: var(--gray-200);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--brand-primary), var(--brand-yellow));
+  border-radius: 99px;
+  transition: width 0.35s ease;
+}
+
+/* ===== CONTENT ===== */
+.content {
+  flex: 1;
+  padding: 24px 20px 140px;
+  overflow-y: auto;
+}
+
+/* ===== STEP VIEWS ===== */
+.step-view { display: none; }
+.step-view.active { display: block; }
+
+.step-title {
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: var(--brand-navy);
+  line-height: 1.25;
+  margin-bottom: 6px;
+  letter-spacing: -0.02em;
+}
+.step-hint {
+  font-size: 0.88rem;
+  color: var(--gray-600);
+  margin-bottom: 24px;
+}
+
+/* ===== CHOICE CARDS ===== */
+.choice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.choice-card {
+  border: 2.5px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: 24px 16px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--white);
+  transition: border-color .18s, background .18s, box-shadow .18s, transform .12s;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.choice-card:active { transform: scale(0.97); }
+.choice-card.selected {
+  border-color: var(--brand-primary);
+  background: var(--brand-primary-l);
+  box-shadow: 0 0 0 4px rgba(232,98,42,0.12);
+}
+.choice-icon { font-size: 2.4rem; margin-bottom: 8px; display: block; }
+.choice-label { font-size: 1rem; font-weight: 700; color: var(--brand-navy); line-height: 1.3; }
+.choice-sub { font-size: 0.8rem; color: var(--gray-600); margin-top: 4px; }
+
+/* ===== SEARCH BOX ===== */
+.search-wrap { position: relative; margin-bottom: 14px; }
+.search-input {
+  width: 100%;
+  font-size: 1.05rem;
+  padding: 16px 48px 16px 18px;
+  border: 2px solid var(--gray-200);
+  border-radius: var(--radius);
+  background: var(--gray-50);
+  color: var(--gray-900);
+  font-family: var(--font);
+  outline: none;
+  transition: border-color .18s, box-shadow .18s;
+  -webkit-appearance: none;
+}
+.search-input:focus {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(232,98,42,0.12);
+  background: var(--white);
+}
+.search-icon {
+  position: absolute;
+  right: 16px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--gray-400);
+  font-size: 1.2rem;
+  pointer-events: none;
+}
+
+/* 案名清單 */
+.case-list {
+  list-style: none;
+  border: 2px solid var(--gray-200);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.case-item {
+  padding: 16px 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--gray-100);
+  background: var(--white);
+  transition: background .15s;
+  font-size: 0.95rem;
+  color: var(--gray-900);
+  -webkit-tap-highlight-color: transparent;
+}
+.case-item:last-child { border-bottom: none; }
+.case-item:active { background: var(--brand-primary-l); }
+.case-item.selected { background: var(--brand-primary-l); }
+.case-item-icon { font-size: 1.2rem; flex-shrink: 0; color: var(--brand-primary); }
+.case-item-text { flex: 1; }
+.case-item-name { font-weight: 600; }
+.case-item-code { font-size: 0.78rem; color: var(--gray-600); }
+.case-check { color: var(--brand-primary); font-size: 1.2rem; display: none; }
+.case-item.selected .case-check { display: block; }
+
+.expand-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand-primary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 2px;
+  margin-bottom: 14px;
+  -webkit-tap-highlight-color: transparent;
+}
+.manual-fields {
+  display: none;
+  background: var(--brand-primary-l);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+  border: 1.5px solid rgba(232,98,42,0.2);
+}
+.manual-fields.open { display: block; }
+.empty-hint {
+  padding: 18px;
+  text-align: center;
+  color: var(--gray-400);
+  font-size: 0.88rem;
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius);
+  margin-bottom: 14px;
+}
+
+/* ===== FORM ELEMENTS ===== */
+.field-group { margin-bottom: 18px; }
+.field-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--gray-800);
+  margin-bottom: 6px;
+  letter-spacing: 0.01em;
+}
+.field-required { color: var(--brand-primary); margin-left: 2px; }
+.field-input,
+.field-select {
+  width: 100%;
+  font-size: 1.05rem;
+  padding: 14px 16px;
+  border: 2px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--gray-900);
+  font-family: var(--font);
+  outline: none;
+  transition: border-color .18s, box-shadow .18s;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.field-input:focus,
+.field-select:focus {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(232,98,42,0.12);
+}
+.field-input::placeholder { color: var(--gray-400); }
+.field-select-wrap { position: relative; }
+.field-select-wrap::after {
+  content: '▾';
+  position: absolute;
+  right: 14px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--gray-400);
+  pointer-events: none;
+}
+.field-select { padding-right: 36px; cursor: pointer; }
+.field-input.err { border-color: var(--danger) !important; }
+
+/* ===== STEP 3 收款明細 ===== */
+.quick-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.quick-btn {
+  padding: 10px 18px;
+  border: 2px solid var(--brand-primary);
+  border-radius: 99px;
+  background: var(--white);
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--brand-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .15s;
+  font-family: var(--font);
+  -webkit-tap-highlight-color: transparent;
+}
+.quick-btn:active {
+  background: var(--brand-primary);
+  color: var(--white);
+  transform: scale(0.97);
+}
+
+.receipt-row {
+  background: var(--gray-50);
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+}
+.receipt-row-top {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+.receipt-row-num {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  background: var(--brand-primary);
+  color: var(--white);
+  border-radius: 50%;
+  font-size: 0.78rem;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 4px;
+}
+.receipt-row-fields { flex: 1; }
+.receipt-row-delete {
+  flex-shrink: 0;
+  width: 32px; height: 32px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--gray-400);
+  font-size: 1.2rem;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  transition: background .15s, color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.receipt-row-delete:hover { background: var(--danger-l); color: var(--danger); }
+
+.type-amount-row {
+  display: grid;
+  grid-template-columns: 1fr 130px;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.amount-input-wrap { position: relative; }
+.amount-prefix {
+  position: absolute;
+  left: 10px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--gray-600);
+  font-size: 0.82rem;
+  font-weight: 600;
+  pointer-events: none;
+}
+.amount-input {
+  width: 100%;
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 14px 10px 14px 30px;
+  border: 2px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--brand-navy);
+  font-family: var(--font);
+  outline: none;
+  transition: border-color .18s, box-shadow .18s;
+  -webkit-appearance: none;
+  appearance: none;
+  text-align: right;
+}
+.amount-input:focus {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(232,98,42,0.12);
+}
+.add-row-btn {
+  width: 100%;
+  padding: 14px;
+  border: 2.5px dashed var(--brand-primary);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--brand-primary);
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  transition: background .15s;
+  font-family: var(--font);
+  -webkit-tap-highlight-color: transparent;
+}
+.add-row-btn:active { background: var(--brand-primary-l); }
+
+/* 合計黏底條 */
+.total-bar {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, 100vw);
+  background: var(--brand-navy);
+  color: var(--white);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 90;
+}
+.total-bar.hidden { display: none; }
+.total-bar-label { opacity: 0.7; font-size: 0.88rem; }
+.total-bar-amount {
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== STEP 4 付款方式 ===== */
+.payment-methods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.payment-method-btn {
+  flex: 1 1 calc(50% - 5px);
+  min-width: 120px;
+  padding: 16px 14px;
+  border: 2.5px solid var(--gray-200);
+  border-radius: var(--radius);
+  background: var(--white);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--brand-navy);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px;
+  transition: all .18s;
+  font-family: var(--font);
+  -webkit-tap-highlight-color: transparent;
+}
+.payment-method-btn:active { transform: scale(0.97); }
+.payment-method-btn.selected {
+  border-color: var(--brand-primary);
+  background: var(--brand-primary-l);
+  color: var(--brand-primary);
+}
+.method-icon { font-size: 1.3rem; }
+
+.transfer-fields { margin-top: 6px; }
+.transfer-fields.hidden { display: none; }
+
+/* 圖片上傳 */
+.upload-area {
+  border: 2.5px dashed var(--gray-200);
+  border-radius: var(--radius);
+  padding: 28px 20px;
+  text-align: center;
+  cursor: pointer;
+  position: relative;
+  transition: border-color .18s, background .18s;
+  background: var(--gray-50);
+  -webkit-tap-highlight-color: transparent;
+}
+.upload-area:hover, .upload-area.has-file {
+  border-color: var(--brand-primary);
+  background: var(--brand-primary-l);
+}
+.upload-area input[type="file"] {
+  position: absolute; inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%; height: 100%;
+}
+.upload-icon { font-size: 2rem; margin-bottom: 8px; }
+.upload-label { font-size: 0.9rem; font-weight: 600; color: var(--brand-primary); margin-bottom: 4px; }
+.upload-sub { font-size: 0.8rem; color: var(--gray-600); }
+.upload-preview { margin-top: 12px; display: none; justify-content: center; }
+.upload-preview.show { display: flex; }
+.upload-preview img {
+  max-height: 140px; max-width: 100%;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  border: 2px solid var(--brand-primary);
+}
+
+/* ===== STEP 5 摘要 ===== */
+.summary-card {
+  background: var(--gray-50);
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 14px;
+}
+.summary-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gray-400);
+  margin-bottom: 10px;
+}
+.summary-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--gray-200);
+  font-size: 0.92rem;
+}
+.summary-row:last-child { border-bottom: none; }
+.summary-row-key { flex-shrink: 0; min-width: 78px; color: var(--gray-600); }
+.summary-row-val { flex: 1; font-weight: 600; color: var(--gray-900); word-break: break-word; }
+.summary-receipt-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--gray-200);
+  font-size: 0.92rem;
+}
+.summary-receipt-item:last-child { border-bottom: none; }
+.summary-receipt-name { color: var(--gray-700); }
+.summary-receipt-amount { font-weight: 700; color: var(--brand-navy); font-variant-numeric: tabular-nums; }
+.summary-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 2px solid var(--gray-200);
+}
+.summary-total-label { font-weight: 700; color: var(--gray-700); }
+.summary-total-amount {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--brand-primary);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== SUCCESS PAGE ===== */
+.success-page { display: none; }
+.success-page.active {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 24px 48px;
+}
+.success-check {
+  width: 88px; height: 88px;
+  background: var(--success);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 3rem;
+  margin-bottom: 20px;
+  animation: popIn .4s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes popIn {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+.success-title {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--brand-navy);
+  text-align: center;
+  margin-bottom: 6px;
+  letter-spacing: -0.02em;
+}
+.success-sub { font-size: 0.9rem; color: var(--gray-600); text-align: center; margin-bottom: 28px; }
+.voucher-badge {
+  background: var(--gray-100);
+  border-radius: var(--radius);
+  padding: 10px 20px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--gray-700);
+  letter-spacing: 0.04em;
+  margin-bottom: 32px;
+}
+
+.share-card {
+  width: 100%;
+  background: var(--brand-primary-l);
+  border: 2px solid rgba(232,98,42,0.25);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  margin-bottom: 24px;
+}
+.share-card-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--brand-navy);
+  margin-bottom: 6px;
+}
+.share-card-sub { font-size: 0.82rem; color: var(--gray-600); margin-bottom: 14px; }
+.share-link-box {
+  background: var(--white);
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 0.78rem;
+  color: var(--gray-600);
+  word-break: break-all;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+.share-btns { display: flex; gap: 10px; }
+.share-btn {
+  flex: 1;
+  padding: 14px 8px;
+  border-radius: var(--radius);
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  gap: 6px;
+  transition: all .15s;
+  font-family: var(--font);
+  border: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.share-btn:active { transform: scale(0.97); }
+.share-btn-copy { background: var(--brand-navy); color: var(--white); }
+.share-btn-copy.copied { background: var(--success); }
+.share-btn-line { background: #06C755; color: var(--white); }
+
+.new-btn {
+  width: 100%;
+  padding: 16px;
+  border: 2.5px solid var(--gray-200);
+  border-radius: var(--radius);
+  background: var(--white);
+  color: var(--brand-navy);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  gap: 6px;
+  font-family: var(--font);
+  transition: all .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.new-btn:hover { background: var(--gray-50); }
+
+/* ===== FIXED FOOTER ===== */
+.footer-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, 100vw);
+  background: var(--white);
+  border-top: 1px solid var(--gray-200);
+  padding: 12px 20px 16px;
+  display: flex;
+  gap: 10px;
+  z-index: 100;
+}
+.footer-nav.hidden { display: none; }
+
+.btn-back {
+  flex: 0 0 56px;
+  height: 56px;
+  border: 2.5px solid var(--gray-200);
+  border-radius: var(--radius);
+  background: var(--white);
+  color: var(--gray-600);
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-back:active { background: var(--gray-100); }
+.btn-back.hidden { visibility: hidden; }
+
+.btn-next {
+  flex: 1;
+  height: 56px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--brand-primary);
+  color: var(--white);
+  font-size: 1.05rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px;
+  transition: all .15s;
+  box-shadow: var(--shadow-btn);
+  font-family: var(--font);
+  letter-spacing: 0.01em;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-next:active {
+  background: var(--brand-primary-d);
+  transform: scale(0.985);
+  box-shadow: none;
+}
+.btn-next:disabled {
+  background: var(--gray-400);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+.btn-submit {
+  background: var(--success);
+  box-shadow: 0 4px 14px rgba(46,158,91,0.28);
+}
+.btn-submit:active { background: #248048; box-shadow: none; }
+
+/* 載入圈 */
+.spinner {
+  width: 22px; height: 22px;
+  border: 3px solid rgba(255,255,255,0.35);
+  border-top-color: var(--white);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== TOAST ===== */
+.toast {
+  position: fixed;
+  top: 20px; left: 50%;
+  transform: translateX(-50%) translateY(-80px);
+  background: var(--brand-navy);
+  color: var(--white);
+  padding: 12px 22px;
+  border-radius: 99px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  z-index: 999;
+  transition: transform .3s cubic-bezier(0.34,1.56,0.64,1), opacity .3s;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+}
+.toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="1" y="13" width="4" height="4" rx="1" fill="white"/>
+          <rect x="7" y="8" width="4" height="9" rx="1" fill="white" opacity="0.85"/>
+          <rect x="13" y="3" width="4" height="14" rx="1" fill="white" opacity="0.65"/>
+        </svg>
+      </div>
+      <span class="logo-name">窩的家</span>
+      <span class="logo-sub">收款建單</span>
+    </div>
+    <div class="progress-wrap">
+      <span class="progress-label" id="progressLabel">第 1 步 / 共 5 步</span>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progressFill" style="width:20%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content" id="mainContent">
+
+    <!-- STEP 1 -->
+    <div class="step-view active" id="step1">
+      <h1 class="step-title">這筆錢是誰付的？</h1>
+      <p class="step-hint">選一個就好，之後的欄位會跟著變</p>
+      <div class="choice-grid">
+        <div class="choice-card" id="choiceTenant" onclick="selectPayer('tenant')">
+          <span class="choice-icon">🧑</span>
+          <div class="choice-label">租客付的</div>
+          <div class="choice-sub">押金、租金、服務費…</div>
+        </div>
+        <div class="choice-card" id="choiceLandlord" onclick="selectPayer('landlord')">
+          <span class="choice-icon">🏠</span>
+          <div class="choice-label">房東付的</div>
+          <div class="choice-sub">服務費、水電費…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="step-view" id="step2">
+      <h1 class="step-title">哪個案子？</h1>
+      <p class="step-hint">輸入地址或案名搜尋，點一下選取</p>
+      <div class="search-wrap">
+        <input type="search" class="search-input" id="caseSearch"
+          placeholder="搜尋地址或案名…"
+          autocomplete="off"
+          oninput="filterCases(this.value)">
+        <span class="search-icon">🔍</span>
+      </div>
+      <ul class="case-list" id="caseList"></ul>
+      <div id="caseEmptyHint" class="empty-hint" style="display:none">沒有符合的案子</div>
+      <a class="expand-link" id="manualToggle" onclick="toggleManual()">
+        🔍 找不到案子？手動輸入地址
+      </a>
+      <div class="manual-fields" id="manualFields">
+        <div class="field-group">
+          <label class="field-label">案名<span class="field-required">＊</span></label>
+          <input type="text" class="field-input" id="manualCaseName"
+            placeholder="例：三重區重新路 5 段 XX 號">
+        </div>
+        <div class="field-group" style="margin-bottom:0">
+          <label class="field-label">地址<span class="field-required">＊</span></label>
+          <input type="text" class="field-input" id="manualAddress" placeholder="完整地址">
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="step-view" id="step3">
+      <h1 class="step-title">收了什麼錢？</h1>
+      <p class="step-hint">點快捷按鈕快速加入，也可以手動加一筆</p>
+      <div class="quick-btns" id="quickBtns"></div>
+      <div id="receiptRows"></div>
+      <button class="add-row-btn" onclick="addReceiptRow()">＋ 手動加一筆</button>
+    </div>
+
+    <!-- STEP 4 -->
+    <div class="step-view" id="step4">
+      <h1 class="step-title">怎麼收的錢？</h1>
+
+      <!-- 租客流程 -->
+      <div id="step4Tenant">
+        <p class="step-hint">可以同時勾選現金和匯款</p>
+        <label class="field-label" style="margin-bottom:12px">付款方式（可複選）</label>
+        <div class="payment-methods">
+          <button class="payment-method-btn" id="pm-cash" onclick="togglePayment('cash')">
+            <span class="method-icon">💵</span> 現金
+          </button>
+          <button class="payment-method-btn" id="pm-transfer" onclick="togglePayment('transfer')">
+            <span class="method-icon">🏦</span> 匯款
+          </button>
+        </div>
+        <div class="transfer-fields hidden" id="transferFields">
+          <div class="field-group">
+            <label class="field-label">匯款後五碼</label>
+            <input type="text" class="field-input" id="transferCode"
+              placeholder="例：12345" maxlength="5" inputmode="numeric">
+          </div>
+        </div>
+        <div class="field-group">
+          <label class="field-label">📷 付款證明照片</label>
+          <div class="upload-area" id="uploadAreaTenant">
+            <input type="file" accept="image/*" onchange="handleUpload(this,'tenant')">
+            <div class="upload-icon">📷</div>
+            <div class="upload-label">點這裡拍照或選圖</div>
+            <div class="upload-sub">支援 JPG、PNG；手機可直接開相機</div>
+          </div>
+          <div class="upload-preview" id="previewTenant">
+            <img id="previewTenantImg" src="" alt="付款證明">
+          </div>
+        </div>
+      </div>
+
+      <!-- 房東流程 -->
+      <div id="step4Landlord" style="display:none">
+        <p class="step-hint">請選擇一種付款方式</p>
+        <label class="field-label" style="margin-bottom:12px">付款方式（單選）</label>
+        <div class="payment-methods">
+          <button class="payment-method-btn" id="pm-cash-l" onclick="selectPaymentLandlord('cash')">
+            <span class="method-icon">💵</span> 現金
+          </button>
+          <button class="payment-method-btn" id="pm-transfer-l" onclick="selectPaymentLandlord('transfer')">
+            <span class="method-icon">🏦</span> 匯款
+          </button>
+        </div>
+        <div class="transfer-fields hidden" id="transferFieldsL">
+          <div class="field-group">
+            <label class="field-label">匯款後五碼</label>
+            <input type="text" class="field-input" id="transferCodeL"
+              placeholder="例：12345" maxlength="5" inputmode="numeric">
+          </div>
+        </div>
+        <div class="field-group">
+          <label class="field-label">📷 房東匯款截圖</label>
+          <div class="upload-area" id="uploadAreaLandlord">
+            <input type="file" accept="image/*" onchange="handleUpload(this,'landlord')">
+            <div class="upload-icon">📷</div>
+            <div class="upload-label">點這裡拍照或選圖</div>
+            <div class="upload-sub">支援 JPG、PNG；手機可直接開相機</div>
+          </div>
+          <div class="upload-preview" id="previewLandlord">
+            <img id="previewLandlordImg" src="" alt="匯款截圖">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 5 -->
+    <div class="step-view" id="step5">
+      <h1 class="step-title">確認一下</h1>
+      <p class="step-hint">送出前最後核對，有誤可以回上一步修改</p>
+      <div id="summaryContent"></div>
+    </div>
+
+  </div><!-- /content -->
+
+  <!-- 合計黏底條（Step 3 才出現）-->
+  <div class="total-bar hidden" id="totalBar">
+    <span class="total-bar-label">目前合計</span>
+    <span class="total-bar-amount" id="totalBarAmount">NT$ 0</span>
+  </div>
+
+  <!-- 底部導覽 -->
+  <div class="footer-nav" id="footerNav">
+    <button class="btn-back hidden" id="btnBack" onclick="goBack()">←</button>
+    <button class="btn-next" id="btnNext" onclick="goNext()">
+      <span id="btnNextLabel">下一步 →</span>
+    </button>
+  </div>
+
+  <!-- SUCCESS PAGE -->
+  <div class="success-page" id="successPage">
+    <div class="success-check">✅</div>
+    <h2 class="success-title">收款單建立成功！</h2>
+    <p class="success-sub">系統已記錄，記得傳給客人確認</p>
+    <div class="voucher-badge" id="voucherCode">憑單編號：──</div>
+    <div class="share-card">
+      <div class="share-card-title">📨 傳給客人簽收</div>
+      <div class="share-card-sub">複製連結或用 LINE 傳送，讓客人線上確認簽收</div>
+      <div class="share-link-box" id="shareLink">
+        https://wuohome.github.io/ragic/payment-receipt.html?code=202606-015&amp;openExternalBrowser=1
+      </div>
+      <div class="share-btns">
+        <button class="share-btn share-btn-copy" id="copyLinkBtn" onclick="copyLink()">📋 複製連結</button>
+        <button class="share-btn share-btn-line" onclick="sendLine()">💬 LINE 傳送</button>
+      </div>
+    </div>
+    <button class="new-btn" onclick="resetAll()">➕ 再建一筆</button>
+  </div>
+
+</div><!-- /app -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ======================================================
+   STATE
+   ====================================================== */
+const state = {
+  step: 1,
+  payer: null,
+  caseId: null, caseName: '', caseAddress: '', isManual: false,
+  manualCaseName: '', manualAddress: '',
+  receiptItems: [],
+  paymentMethods: [],
+  transferCode: '',
+  uploadFileTenant: null,
+  paymentMethodLandlord: null,
+  transferCodeL: '',
+  uploadFileLandlord: null,
+};
+
+/* ======================================================
+   FAKE DATA
+   ====================================================== */
+const fakeCases = [
+  { id:'C001', name:'重新路 5 段 288 號', address:'新北市三重區重新路 5 段 288 號 4F' },
+  { id:'C002', name:'建國北路二段 99 號 3F', address:'台北市中山區建國北路二段 99 號 3F' },
+  { id:'C003', name:'民生東路五段 47 號 8F', address:'台北市松山區民生東路五段 47 號 8F' },
+  { id:'C004', name:'文心路四段 200 號 11F-2', address:'台中市北區文心路四段 200 號 11F-2' },
+  { id:'C005', name:'南京東路六段 150 號 2F', address:'台北市南港區南京東路六段 150 號 2F' },
+  { id:'C006', name:'新埔路 18 巷 5 弄 3 號', address:'新北市板橋區新埔路 18 巷 5 弄 3 號' },
+];
+
+const typesTenant = [
+  '押金','租金','服務費','管理費','水電瓦斯','網路第四台',
+  '清潔費','維修費','交接物品','定金轉服務費','預繳電費',
+  '違約金','續約手續費','換約費用','屋主代墊服務費','其他'
+];
+const quickTypesTenant = ['押金','租金','服務費','定金轉服務費'];
+
+const typesLandlord = [
+  '房東服務費','維修費用','水費','電費','瓦斯費','管理費',
+  '換約費用','續約件','續約費'
+];
+const quickTypesLandlord = ['房東服務費','維修費用','水費'];
+
+/* ======================================================
+   HELPERS
+   ====================================================== */
+function fmt(n) {
+  return Number(n || 0).toLocaleString('zh-TW');
+}
+function showToast(msg, dur = 2200) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), dur);
+}
+
+/* ======================================================
+   NAVIGATION
+   ====================================================== */
+function showStep(n) {
+  document.querySelectorAll('.step-view').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById('step' + n);
+  if (el) el.classList.add('active');
+
+  // 進度
+  document.getElementById('progressLabel').textContent = `第 ${n} 步 / 共 5 步`;
+  document.getElementById('progressFill').style.width = `${(n / 5) * 100}%`;
+
+  // 上一步
+  document.getElementById('btnBack').classList.toggle('hidden', n === 1);
+
+  // 按鈕文字 / 樣式
+  const btnNext = document.getElementById('btnNext');
+  const label   = document.getElementById('btnNextLabel');
+  if (n === 5) {
+    label.textContent = '✅ 建立收款單';
+    btnNext.className = 'btn-next btn-submit';
+  } else {
+    label.textContent = '下一步 →';
+    btnNext.className = 'btn-next';
+  }
+  btnNext.disabled = false;
+
+  // 合計條
+  document.getElementById('totalBar').classList.toggle('hidden', n !== 3);
+
+  state.step = n;
+  document.getElementById('mainContent').scrollTop = 0;
+}
+
+function goNext() {
+  if (!validate(state.step)) return;
+  if (state.step === 2) commitStep2();
+  if (state.step === 3) buildStep4();
+  if (state.step === 4) buildSummary();
+  if (state.step === 5) { submitForm(); return; }
+  showStep(state.step + 1);
+}
+
+function goBack() {
+  if (state.step > 1) showStep(state.step - 1);
+}
+
+/* ======================================================
+   STEP 1
+   ====================================================== */
+function selectPayer(type) {
+  state.payer = type;
+  document.getElementById('choiceTenant').classList.toggle('selected', type === 'tenant');
+  document.getElementById('choiceLandlord').classList.toggle('selected', type === 'landlord');
+}
+
+/* ======================================================
+   STEP 2
+   ====================================================== */
+let caseFilter = '';
+let selectedCaseId = null;
+
+function renderCaseList(filter) {
+  filter = filter || '';
+  const list      = document.getElementById('caseList');
+  const emptyHint = document.getElementById('caseEmptyHint');
+  const filtered  = fakeCases.filter(c =>
+    c.name.includes(filter) || c.address.includes(filter)
+  );
+  if (filtered.length === 0) {
+    list.innerHTML = '';
+    emptyHint.style.display = 'block';
+    return;
+  }
+  emptyHint.style.display = 'none';
+  list.innerHTML = filtered.map(c => `
+    <li class="case-item${selectedCaseId === c.id ? ' selected' : ''}"
+        onclick="selectCase('${c.id}')">
+      <span class="case-item-icon">🏠</span>
+      <span class="case-item-text">
+        <div class="case-item-name">${c.name}</div>
+        <div class="case-item-code">${c.address}</div>
+      </span>
+      <span class="case-check">✓</span>
+    </li>
+  `).join('');
+}
+
+function filterCases(val) {
+  caseFilter = val;
+  renderCaseList(val);
+}
+
+function selectCase(id) {
+  selectedCaseId = id;
+  const c = fakeCases.find(x => x.id === id);
+  if (c) {
+    state.caseId      = c.id;
+    state.caseName    = c.name;
+    state.caseAddress = c.address;
+    state.isManual    = false;
+  }
+  renderCaseList(caseFilter);
+}
+
+function toggleManual() {
+  const fields = document.getElementById('manualFields');
+  fields.classList.toggle('open');
+  document.getElementById('manualToggle').textContent =
+    fields.classList.contains('open')
+      ? '▲ 收起手動輸入'
+      : '🔍 找不到案子？手動輸入地址';
+}
+
+function commitStep2() {
+  const isManual = document.getElementById('manualFields').classList.contains('open');
+  if (isManual) {
+    state.isManual       = true;
+    state.manualCaseName = document.getElementById('manualCaseName').value.trim();
+    state.manualAddress  = document.getElementById('manualAddress').value.trim();
+    state.caseName       = state.manualCaseName;
+    state.caseAddress    = state.manualAddress;
+    state.caseId         = null;
+  }
+  buildStep3();
+}
+
+/* ======================================================
+   STEP 3
+   ====================================================== */
+function buildStep3() {
+  const qTypes = state.payer === 'tenant' ? quickTypesTenant : quickTypesLandlord;
+  document.getElementById('quickBtns').innerHTML = qTypes.map(t =>
+    `<button class="quick-btn" onclick="addReceiptRow('${t}')">＋ ${t}</button>`
+  ).join('');
+  state.receiptItems = [];
+  document.getElementById('receiptRows').innerHTML = '';
+  updateTotal();
+}
+
+let rowCounter = 0;
+function addReceiptRow(preType) {
+  preType = preType || '';
+  rowCounter++;
+  const idx   = rowCounter;
+  const types = state.payer === 'tenant' ? typesTenant : typesLandlord;
+  const opts  = types.map(t =>
+    `<option value="${t}"${t === preType ? ' selected' : ''}>${t}</option>`
+  ).join('');
+
+  const row = document.createElement('div');
+  row.className = 'receipt-row';
+  row.id = 'row-' + idx;
+  row.innerHTML = `
+    <div class="receipt-row-top">
+      <div class="receipt-row-num" id="rowNum-${idx}">${state.receiptItems.length + 1}</div>
+      <div class="receipt-row-fields">
+        <div class="type-amount-row">
+          <div class="field-select-wrap">
+            <select class="field-select" id="rowType-${idx}" onchange="syncRow(${idx})">
+              ${opts}
+            </select>
+          </div>
+          <div class="amount-input-wrap">
+            <span class="amount-prefix">NT$</span>
+            <input type="number" class="amount-input" id="rowAmt-${idx}"
+              placeholder="0" min="0" step="1" inputmode="numeric"
+              oninput="syncRow(${idx})">
+          </div>
+        </div>
+        <input type="text" class="field-input" id="rowNote-${idx}"
+          placeholder="備註（選填）"
+          style="font-size:0.9rem;padding:10px 14px;"
+          oninput="syncRow(${idx})">
+      </div>
+      <button class="receipt-row-delete" onclick="deleteRow(${idx})">✕</button>
+    </div>
+  `;
+  document.getElementById('receiptRows').appendChild(row);
+  state.receiptItems.push({ id: idx, type: preType || types[0], note: '', amount: 0 });
+  renumberRows();
+  updateTotal();
+}
+
+function syncRow(idx) {
+  const item = state.receiptItems.find(r => r.id === idx);
+  if (!item) return;
+  item.type   = document.getElementById('rowType-' + idx)?.value || item.type;
+  item.note   = document.getElementById('rowNote-' + idx)?.value || '';
+  item.amount = parseFloat(document.getElementById('rowAmt-' + idx)?.value) || 0;
+  updateTotal();
+}
+
+function deleteRow(idx) {
+  state.receiptItems = state.receiptItems.filter(r => r.id !== idx);
+  document.getElementById('row-' + idx)?.remove();
+  renumberRows();
+  updateTotal();
+}
+
+function renumberRows() {
+  document.querySelectorAll('.receipt-row').forEach((r, i) => {
+    const num = r.querySelector('[id^=rowNum-]');
+    if (num) num.textContent = i + 1;
+  });
+}
+
+function calcTotal() {
+  return state.receiptItems.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+}
+
+function updateTotal() {
+  document.getElementById('totalBarAmount').textContent = 'NT$ ' + fmt(calcTotal());
+}
+
+/* ======================================================
+   STEP 4
+   ====================================================== */
+function buildStep4() {
+  // 同步 state
+  state.receiptItems.forEach(r => {
+    r.type   = document.getElementById('rowType-' + r.id)?.value || r.type;
+    r.note   = document.getElementById('rowNote-' + r.id)?.value || '';
+    r.amount = parseFloat(document.getElementById('rowAmt-' + r.id)?.value) || 0;
+  });
+  document.getElementById('step4Tenant').style.display =
+    state.payer === 'tenant' ? '' : 'none';
+  document.getElementById('step4Landlord').style.display =
+    state.payer === 'landlord' ? '' : 'none';
+}
+
+function togglePayment(method) {
+  const idx = state.paymentMethods.indexOf(method);
+  if (idx === -1) { state.paymentMethods.push(method); }
+  else            { state.paymentMethods.splice(idx, 1); }
+  document.getElementById('pm-cash')?.classList.toggle('selected',
+    state.paymentMethods.includes('cash'));
+  document.getElementById('pm-transfer')?.classList.toggle('selected',
+    state.paymentMethods.includes('transfer'));
+  document.getElementById('transferFields').classList.toggle(
+    'hidden', !state.paymentMethods.includes('transfer'));
+}
+
+function selectPaymentLandlord(method) {
+  state.paymentMethodLandlord = method;
+  document.getElementById('pm-cash-l')?.classList.toggle('selected', method === 'cash');
+  document.getElementById('pm-transfer-l')?.classList.toggle('selected', method === 'transfer');
+  document.getElementById('transferFieldsL').classList.toggle('hidden', method !== 'transfer');
+}
+
+function handleUpload(input, who) {
+  const file = input.files[0];
+  if (!file) return;
+  const objectUrl = URL.createObjectURL(file);
+  if (who === 'tenant') {
+    state.uploadFileTenant = file;
+    document.getElementById('previewTenantImg').src = objectUrl;
+    document.getElementById('previewTenant').classList.add('show');
+    document.getElementById('uploadAreaTenant').classList.add('has-file');
+  } else {
+    state.uploadFileLandlord = file;
+    document.getElementById('previewLandlordImg').src = objectUrl;
+    document.getElementById('previewLandlord').classList.add('show');
+    document.getElementById('uploadAreaLandlord').classList.add('has-file');
+  }
+}
+
+/* ======================================================
+   STEP 5
+   ====================================================== */
+function buildSummary() {
+  state.transferCode  = document.getElementById('transferCode').value.trim();
+  state.transferCodeL = document.getElementById('transferCodeL').value.trim();
+
+  const payer    = state.payer === 'tenant' ? '租客' : '房東';
+  const caseLbl  = state.isManual
+    ? (state.manualCaseName + '（手動輸入）')
+    : state.caseName;
+  const addrLbl  = state.isManual ? state.manualAddress : state.caseAddress;
+  const items    = state.receiptItems;
+  const total    = calcTotal();
+
+  let payStr = '';
+  if (state.payer === 'tenant') {
+    const m = state.paymentMethods.map(x => x === 'cash' ? '現金' : '匯款');
+    payStr = m.length ? m.join('、') : '（未填）';
+    if (state.paymentMethods.includes('transfer') && state.transferCode)
+      payStr += `（後五碼 ${state.transferCode}）`;
+  } else {
+    payStr = state.paymentMethodLandlord === 'cash' ? '現金'
+           : state.paymentMethodLandlord === 'transfer' ? '匯款' : '（未填）';
+    if (state.paymentMethodLandlord === 'transfer' && state.transferCodeL)
+      payStr += `（後五碼 ${state.transferCodeL}）`;
+  }
+
+  const itemsHtml = items.length
+    ? items.map(r =>
+        `<div class="summary-receipt-item">
+          <span class="summary-receipt-name">${r.type}${r.note ? '（' + r.note + '）' : ''}</span>
+          <span class="summary-receipt-amount">NT$ ${fmt(r.amount)}</span>
+        </div>`
+      ).join('')
+    : '<p style="color:var(--gray-400);font-size:.88rem;padding:8px 0">無收款明細</p>';
+
+  document.getElementById('summaryContent').innerHTML = `
+    <div class="summary-card">
+      <div class="summary-section-title">付款對象</div>
+      <div class="summary-row">
+        <span class="summary-row-key">對象</span>
+        <span class="summary-row-val">${payer}</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-section-title">案件</div>
+      <div class="summary-row">
+        <span class="summary-row-key">案名</span>
+        <span class="summary-row-val">${caseLbl}</span>
+      </div>
+      <div class="summary-row">
+        <span class="summary-row-key">地址</span>
+        <span class="summary-row-val">${addrLbl || '—'}</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-section-title">收款明細</div>
+      ${itemsHtml}
+      <div class="summary-total-row">
+        <span class="summary-total-label">合計</span>
+        <span class="summary-total-amount">NT$ ${fmt(total)}</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-section-title">付款資訊</div>
+      <div class="summary-row">
+        <span class="summary-row-key">付款方式</span>
+        <span class="summary-row-val">${payStr}</span>
+      </div>
+    </div>
+  `;
+}
+
+/* ======================================================
+   SUBMIT
+   ====================================================== */
+function submitForm() {
+  const btn = document.getElementById('btnNext');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div>';
+
+  const payload = buildRagicPayload();
+  console.log('=== [原型] 模擬送出 Ragic FormData ===');
+  console.log(JSON.stringify(payload, null, 2));
+
+  setTimeout(showSuccess, 1500);
+}
+
+function buildRagicPayload() {
+  const isTenant = state.payer === 'tenant';
+  const p = {};
+
+  // 對象
+  p['1000782'] = isTenant ? '租客' : '房東';
+
+  // 案件
+  if (state.isManual) {
+    p['1002051'] = '公司件(舊件)';
+    p['1002052'] = state.manualCaseName;
+    p['1002053'] = state.manualAddress;
+  } else {
+    p['1000597'] = state.caseId;
+    p['_caseName']    = state.caseName;
+    p['_caseAddress'] = state.caseAddress;
+  }
+
+  // 付款資訊
+  if (isTenant) {
+    p['1000785'] = state.paymentMethods.map(m => m === 'cash' ? '現金' : '匯款').join('|');
+    if (state.paymentMethods.includes('transfer')) p['1000780'] = state.transferCode;
+    p['1000784'] = state.uploadFileTenant ? state.uploadFileTenant.name : '';
+    p['_subtable_1000777'] = state.receiptItems.map(r =>
+      ({ type: r.type, note: r.note, amount: r.amount })
+    );
+  } else {
+    p['1002076'] = state.paymentMethodLandlord === 'cash' ? '現金' : '匯款';
+    if (state.paymentMethodLandlord === 'transfer') p['1000603'] = state.transferCodeL;
+    p['1000650'] = state.uploadFileLandlord ? state.uploadFileLandlord.name : '';
+    p['_subtable_1001701'] = state.receiptItems.map(r =>
+      ({ type: r.type, note: r.note, amount: r.amount })
+    );
+  }
+
+  return p;
+}
+
+/* ======================================================
+   SUCCESS
+   ====================================================== */
+function showSuccess() {
+  document.getElementById('mainContent').style.display = 'none';
+  document.getElementById('footerNav').classList.add('hidden');
+  document.getElementById('totalBar').classList.add('hidden');
+
+  const now  = new Date();
+  const code = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}-${String(Math.floor(Math.random()*900)+100)}`;
+  const url  = `https://wuohome.github.io/ragic/payment-receipt.html?code=${code}&openExternalBrowser=1`;
+
+  document.getElementById('voucherCode').textContent = `憑單編號：${code}`;
+  document.getElementById('shareLink').textContent = url;
+  document.getElementById('shareLink').dataset.url = url;
+
+  const sp = document.getElementById('successPage');
+  sp.classList.add('active');
+  sp.scrollTop = 0;
+}
+
+function copyLink() {
+  const url = document.getElementById('shareLink').dataset.url
+           || document.getElementById('shareLink').textContent.trim();
+  const btn = document.getElementById('copyLinkBtn');
+  const exec = () => {
+    btn.classList.add('copied');
+    btn.textContent = '✓ 已複製！';
+    showToast('連結已複製到剪貼簿');
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.textContent = '📋 複製連結';
+    }, 2500);
+  };
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(exec).catch(() => fallbackCopy(url, exec));
+  } else {
+    fallbackCopy(url, exec);
+  }
+}
+function fallbackCopy(text, cb) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity  = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
+  cb();
+}
+
+function sendLine() {
+  const url = document.getElementById('shareLink').dataset.url
+           || document.getElementById('shareLink').textContent.trim();
+  // 嘗試 LINE URL Scheme（真機可叫起 LINE）
+  const lineUrl = 'https://line.me/R/msg/text/?' + encodeURIComponent(url);
+  alert('（原型模擬）\n正式上線後會打開 LINE 傳送視窗。\n\n連結：\n' + url);
+}
+
+function resetAll() {
+  Object.assign(state, {
+    step:1, payer:null,
+    caseId:null, caseName:'', caseAddress:'', isManual:false,
+    manualCaseName:'', manualAddress:'',
+    receiptItems:[],
+    paymentMethods:[], transferCode:'', uploadFileTenant:null,
+    paymentMethodLandlord:null, transferCodeL:'', uploadFileLandlord:null,
+  });
+  rowCounter = 0; selectedCaseId = null; caseFilter = '';
+
+  document.getElementById('mainContent').style.display = '';
+  document.getElementById('footerNav').classList.remove('hidden');
+  document.getElementById('successPage').classList.remove('active');
+  ['choiceTenant','choiceLandlord','pm-cash','pm-transfer','pm-cash-l','pm-transfer-l']
+    .forEach(id => document.getElementById(id)?.classList.remove('selected'));
+  document.getElementById('caseSearch').value   = '';
+  document.getElementById('manualFields').classList.remove('open');
+  document.getElementById('manualToggle').textContent = '🔍 找不到案子？手動輸入地址';
+  document.getElementById('manualCaseName').value = '';
+  document.getElementById('manualAddress').value  = '';
+  document.getElementById('receiptRows').innerHTML = '';
+  document.getElementById('transferFields')?.classList.add('hidden');
+  document.getElementById('transferFieldsL')?.classList.add('hidden');
+  document.getElementById('transferCode').value   = '';
+  document.getElementById('transferCodeL').value  = '';
+  document.getElementById('previewTenant').classList.remove('show');
+  document.getElementById('previewLandlord').classList.remove('show');
+  document.getElementById('uploadAreaTenant').classList.remove('has-file');
+  document.getElementById('uploadAreaLandlord').classList.remove('has-file');
+
+  renderCaseList('');
+  showStep(1);
+}
+
+/* ======================================================
+   VALIDATION
+   ====================================================== */
+function validate(step) {
+  if (step === 1) {
+    if (!state.payer) { showToast('請先選擇付款對象'); return false; }
+  }
+  if (step === 2) {
+    const isManual = document.getElementById('manualFields').classList.contains('open');
+    if (isManual) {
+      const cn = document.getElementById('manualCaseName').value.trim();
+      const ad = document.getElementById('manualAddress').value.trim();
+      if (!cn) { document.getElementById('manualCaseName').classList.add('err'); }
+      if (!ad) { document.getElementById('manualAddress').classList.add('err'); }
+      if (!cn || !ad) { showToast('請填寫案名與地址'); return false; }
+      document.getElementById('manualCaseName').classList.remove('err');
+      document.getElementById('manualAddress').classList.remove('err');
+    } else {
+      if (!selectedCaseId) { showToast('請選擇一個案子，或手動輸入地址'); return false; }
+    }
+  }
+  if (step === 3) {
+    if (state.receiptItems.length === 0) { showToast('至少要加一筆收款明細'); return false; }
+    for (const r of state.receiptItems) {
+      const rawAmt = document.getElementById('rowAmt-' + r.id)?.value;
+      const amt    = parseFloat(rawAmt) || 0;
+      r.amount = amt;
+      if (amt <= 0) { showToast('每筆收款都要填金額'); return false; }
+    }
+  }
+  if (step === 4) {
+    if (state.payer === 'tenant') {
+      if (state.paymentMethods.length === 0) { showToast('請選擇付款方式'); return false; }
+    } else {
+      if (!state.paymentMethodLandlord) { showToast('請選擇付款方式'); return false; }
+    }
+  }
+  return true;
+}
+
+/* ======================================================
+   INIT
+   ====================================================== */
+renderCaseList('');
+showStep(1);
+</script>
+</body>
+</html>
