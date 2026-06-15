@@ -826,6 +826,16 @@ body {
           <div class="choice-sub">服務費、水電費…</div>
         </div>
       </div>
+      <!-- 經辦業務下拉 -->
+      <div class="field-group" style="margin-top:18px;">
+        <label class="field-label">經辦業務<span class="field-required">＊</span></label>
+        <div class="select-wrap">
+          <select class="field-input" id="staffSelect" onchange="selectStaff(this.value)">
+            <option value="">— 請選擇你的名字 —</option>
+          </select>
+        </div>
+        <div id="staffLoading" class="empty-hint" style="display:none;margin-top:4px;">載入業務名單中⋯</div>
+      </div>
     </div>
 
     <!-- STEP 2 -->
@@ -989,6 +999,7 @@ body {
 const state = {
   step: 1,
   payer: null,
+  staffName: '',
   caseId: null, caseName: '', caseAddress: '', isManual: false,
   manualCaseName: '', manualAddress: '',
   receiptItems: [],
@@ -1032,6 +1043,46 @@ async function loadRealCases() {
   }
   casesLoading = false;
   renderCaseList(caseFilter);
+}
+
+
+/* ======================================================
+   STEP 1 — 業務員名單
+   ====================================================== */
+let realStaff = [];
+let staffLoaded = false;
+
+async function loadRealStaff() {
+  if (staffLoaded) return;
+  const sel = document.getElementById('staffSelect');
+  const hint = document.getElementById('staffLoading');
+  if (hint) hint.style.display = 'block';
+  try {
+    const BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+    const resp = await fetch(BASE + '/searchStaff', { method: 'GET' });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok || !json.ok) throw new Error(json.error || 'load_fail');
+    realStaff = json.staff || [];
+    staffLoaded = true;
+    // populate dropdown
+    if (sel) {
+      sel.innerHTML = '<option value="">— 請選擇你的名字 —</option>';
+      realStaff.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.name;
+        opt.textContent = s.name + (s.englishName ? ` (${s.englishName})` : '') + (s.dept ? ` — ${s.dept}` : '');
+        sel.appendChild(opt);
+      });
+    }
+  } catch (e) {
+    if (sel) sel.innerHTML = '<option value="">載入失敗，請重新整理</option>';
+  } finally {
+    if (hint) hint.style.display = 'none';
+  }
+}
+
+function selectStaff(name) {
+  state.staffName = name;
 }
 
 const typesTenant = [
@@ -1500,6 +1551,9 @@ function buildRagicFormData() {
     });
   }
 
+  // 備註欄：記錄經辦業務姓名
+  if (state.staffName) fd.append('1000773', '經辦：' + state.staffName);
+
   return fd;
 }
 
@@ -1583,6 +1637,9 @@ function resetAll() {
   ['choiceTenant','choiceLandlord','pm-cash','pm-transfer','pm-cash-l','pm-transfer-l']
     .forEach(id => document.getElementById(id)?.classList.remove('selected'));
   document.getElementById('caseSearch').value   = '';
+  const staffSel = document.getElementById('staffSelect');
+  if (staffSel) staffSel.value = '';
+  state.staffName = '';
   // reset case selection (but keep realCases cache for reuse)
   selectedCaseId = null;
   document.getElementById('manualFields').classList.remove('open');
@@ -1609,6 +1666,7 @@ function resetAll() {
 function validate(step) {
   if (step === 1) {
     if (!state.payer) { showToast('請先選擇付款對象'); return false; }
+    if (!state.staffName) { showToast('請選擇你的名字（經辦業務）'); return false; }
   }
   if (step === 2) {
     const isManual = document.getElementById('manualFields').classList.contains('open');
@@ -1647,6 +1705,7 @@ function validate(step) {
    INIT
    ====================================================== */
 renderCaseList('');
+loadRealStaff();
 showStep(1);
 </script>
 </body>

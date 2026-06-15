@@ -913,7 +913,28 @@
 
       // 角色相關值
       const agentVal = getValue(currentRecord, [FIELDS.agent, "經辦人員"]);
-      const totalVal = formatCurrency(getValue(currentRecord, getTotalField()));
+      // 金額合計：優先用 Ragic 公式欄，空值時從子表格明細加總
+      function calcSubtableSum(subtableData, amtKey, amtChKey) {
+        if (!subtableData || typeof subtableData !== 'object') return 0;
+        let sum = 0;
+        for (const k of Object.keys(subtableData)) {
+          const row = subtableData[k];
+          if (!row || typeof row !== 'object') continue;
+          const v = row[amtKey] || row[amtChKey] || row['金額'] || '0';
+          sum += parseFloat(String(v).replace(/[^0-9.-]/g,'')) || 0;
+        }
+        return sum;
+      }
+      let rawTotal = getValue(currentRecord, getTotalField());
+      if (!rawTotal || rawTotal === '' || String(rawTotal).trim() === '0' || String(rawTotal).trim() === '') {
+        // fallback: sum subtable rows
+        const subKey   = ROLE === '房東' ? '_subtable_1001701' : '_subtable_1000777';
+        const amtFid   = ROLE === '房東' ? '1001700' : '1000775';
+        const subData  = currentRecord[subKey];
+        const subSum   = calcSubtableSum(subData, amtFid, '金額');
+        rawTotal = subSum > 0 ? subSum : rawTotal;
+      }
+      const totalVal = formatCurrency(rawTotal);
       const category = ROLE === "租客" ? "租客" : "房東";
 
       // 付款人：依 ROLE 切（房東付服務費 / 租客付租押金）
