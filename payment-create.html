@@ -886,15 +886,21 @@ body {
 
       <!-- 有定金區塊 -->
       <div id="depositSearchArea" style="display:none">
-        <div class="search-wrap">
-          <input type="search" class="search-input" id="depositSearch"
-            placeholder="搜尋租客姓名或定金單編號…"
-            autocomplete="off"
-            oninput="handleDepositSearch(this.value)">
-          <span class="search-icon">🔍</span>
-        </div>
-        <div id="depositSearchHint" style="color:#888;font-size:0.85rem;padding:6px 0;display:none">搜尋中…</div>
+        <!-- 自動帶出列表（by 物件案名）-->
         <ul class="case-list" id="depositList"></ul>
+        <!-- fallback 手動搜尋 -->
+        <details id="depositManualSearch" style="margin-top:8px">
+          <summary style="font-size:0.85rem;color:#888;cursor:pointer;padding:4px 0">找不到？改用搜尋框</summary>
+          <div class="search-wrap" style="margin-top:6px">
+            <input type="search" class="search-input" id="depositSearch"
+              placeholder="搜尋租客姓名或定金單編號…"
+              autocomplete="off"
+              oninput="handleDepositSearch(this.value)">
+            <span class="search-icon">🔍</span>
+          </div>
+          <ul class="case-list" id="depositSearchList"></ul>
+        </details>
+        <div id="depositSearchHint" style="color:#888;font-size:0.85rem;padding:6px 0;display:none">搜尋中…</div>
         <!-- 選取後的定金資訊顯示 -->
         <div id="depositSelected" style="display:none;background:#f0f9f0;border:1px solid #b3ddb3;border-radius:8px;padding:12px;margin-top:8px">
           <div style="font-weight:600;margin-bottom:4px">✅ 已選定金單</div>
@@ -1591,7 +1597,41 @@ function setDepositChoice(hasDeposit) {
   document.getElementById('dep-no').classList.toggle('selected', !hasDeposit);
   document.getElementById('depositSearchArea').style.display = hasDeposit ? 'block' : 'none';
   document.getElementById('noDepositArea').style.display = hasDeposit ? 'none' : 'block';
-  if (!hasDeposit) clearDeposit();
+  if (!hasDeposit) { clearDeposit(); return; }
+  // auto-lookup deposits for the selected case
+  if (state.caseName && !state.isManual) autoLookupDepositsByCase(state.caseName);
+}
+
+async function autoLookupDepositsByCase(caseName) {
+  const list = document.getElementById('depositList');
+  const hint = document.getElementById('depositSearchHint');
+  const searchWrap = document.getElementById('depositSearchArea').querySelector('.search-wrap');
+  list.innerHTML = '<li style="padding:8px;color:#888">自動查詢該物件的定金單…</li>';
+  hint.style.display = 'none';
+  const BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+  try {
+    const resp = await fetch(BASE + '/searchDeposits?caseName=' + encodeURIComponent(caseName));
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok || !json.ok) { list.innerHTML = '<li style="padding:8px;color:#c00">自動查詢失敗，請手動搜尋</li>'; return; }
+    const deps = json.deposits || [];
+    const fmt = new Intl.NumberFormat('zh-TW');
+    if (deps.length === 0) {
+      list.innerHTML = '<li style="padding:8px;color:#888">此物件查無定金單，請改用下方搜尋框</li>';
+      return;
+    }
+    list.innerHTML = deps.map(d => `
+      <li class="case-item" onclick="selectDeposit(${d.rid}, ${JSON.stringify(d.depositNo)}, ${JSON.stringify(d.tenantName)}, ${JSON.stringify(d.tenantPhone)}, ${d.earnestAmt}, ${JSON.stringify(d.caseName)})">
+        <span class="case-item-icon">📋</span>
+        <span class="case-item-text">
+          <div class="case-item-name">${d.depositNo}　${d.tenantName}</div>
+          <div class="case-item-code">${d.caseName || '（無案名）'}　定金 $ ${fmt.format(d.earnestAmt)}</div>
+        </span>
+        <span class="case-check">✓</span>
+      </li>
+    `).join('');
+  } catch (e) {
+    list.innerHTML = '<li style="padding:8px;color:#c00">網路錯誤，請重試或手動搜尋</li>';
+  }
 }
 
 let depositSearchTimeout = null;
@@ -1609,9 +1649,10 @@ function handleDepositSearch(val) {
       hint.style.display = 'none';
       if (!resp.ok || !json.ok) { list.innerHTML = '<li style="padding:8px;color:#c00">搜尋失敗，請重試</li>'; return; }
       const deps = json.deposits || [];
-      if (deps.length === 0) { list.innerHTML = '<li style="padding:8px;color:#888">沒有符合的定金單</li>'; return; }
+      const searchList = document.getElementById('depositSearchList') || list;
+      if (deps.length === 0) { searchList.innerHTML = '<li style="padding:8px;color:#888">沒有符合的定金單</li>'; return; }
       const fmt = new Intl.NumberFormat('zh-TW');
-      list.innerHTML = deps.map(d => `
+      searchList.innerHTML = deps.map(d => `
         <li class="case-item" onclick="selectDeposit(${d.rid}, ${JSON.stringify(d.depositNo)}, ${JSON.stringify(d.tenantName)}, ${JSON.stringify(d.tenantPhone)}, ${d.earnestAmt}, ${JSON.stringify(d.caseName)})">
           <span class="case-item-icon">📋</span>
           <span class="case-item-text">
@@ -1623,7 +1664,7 @@ function handleDepositSearch(val) {
       `).join('');
     } catch (e) {
       hint.style.display = 'none';
-      list.innerHTML = '<li style="padding:8px;color:#c00">網路錯誤，請重試</li>';
+      const sl = document.getElementById('depositSearchList') || list; sl.innerHTML = '<li style="padding:8px;color:#c00">網路錯誤，請重試</li>';
     }
   }, 400);
 }
@@ -1634,15 +1675,15 @@ function selectDeposit(rid, depositNo, tenantName, tenantPhone, earnestAmt, case
   state.depositTenantPhone = tenantPhone;
   state.depositEarnestAmt  = earnestAmt;
   document.getElementById('depositList').innerHTML = '';
-  document.getElementById('depositSearch').value = '';
+  const dsl2 = document.getElementById('depositSearchList'); if (dsl2) dsl2.innerHTML = '';
+  const ds2 = document.getElementById('depositSearch'); if (ds2) ds2.value = '';
+  const dm2 = document.getElementById('depositManualSearch'); if (dm2) dm2.removeAttribute('open');
   const fmt = new Intl.NumberFormat('zh-TW');
   document.getElementById('depositSelectedInfo').innerHTML =
     '<b>' + depositNo + '</b>　' + tenantName + '　' + tenantPhone + '<br>' + (caseName || '');
   document.getElementById('depositEarnestDisplay').textContent =
     '此定金單要約定金：$ ' + fmt.format(earnestAmt);
   document.getElementById('depositSelected').style.display = 'block';
-  const sw = document.getElementById('depositSearchArea').querySelector('.search-wrap');
-  if (sw) sw.style.display = 'none';
   document.getElementById('depositSearchHint').style.display = 'none';
 }
 
@@ -1654,8 +1695,12 @@ function clearDeposit() {
   if (sw) sw.style.display = '';
   const dl = document.getElementById('depositList');
   if (dl) dl.innerHTML = '';
+  const dsl = document.getElementById('depositSearchList');
+  if (dsl) dsl.innerHTML = '';
   const ds = document.getElementById('depositSearch');
   if (ds) ds.value = '';
+  const dm = document.getElementById('depositManualSearch');
+  if (dm) dm.removeAttribute('open');
 }
 
 function commitStep25() {
@@ -1816,6 +1861,8 @@ function resetAll() {
   ['dep-yes','dep-no'].forEach(function(id) { var el = document.getElementById(id); if (el) el.classList.remove('selected'); });
   ['depositSearchArea','noDepositArea','depositSelected'].forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
   var dlist = document.getElementById('depositList'); if (dlist) dlist.innerHTML = '';
+  var dsl3 = document.getElementById('depositSearchList'); if (dsl3) dsl3.innerHTML = '';
+  var dm3 = document.getElementById('depositManualSearch'); if (dm3) dm3.removeAttribute('open');
   var dsearch = document.getElementById('depositSearch'); if (dsearch) dsearch.value = '';
   var tni = document.getElementById('tenantNameInput'); if (tni) tni.value = '';
   var tpi = document.getElementById('tenantPhoneInput'); if (tpi) tpi.value = '';
