@@ -867,6 +867,57 @@ body {
       </div>
     </div>
 
+    <!-- STEP 2.5 定金 (租客限定) -->
+    <div class="step-view" id="step25">
+      <h1 class="step-title">這筆有先收過定金嗎？</h1>
+      <p class="step-hint">選有定金，系統會幫你連結定金單；直接簽約可選「無定金」</p>
+      <div class="choice-grid" style="margin-bottom:16px">
+        <div class="choice-card" id="dep-yes" onclick="setDepositChoice(true)">
+          <span class="choice-icon">📋</span>
+          <span class="choice-label">有收過定金</span>
+          <span class="choice-sub">搜尋並連結定金單</span>
+        </div>
+        <div class="choice-card" id="dep-no" onclick="setDepositChoice(false)">
+          <span class="choice-icon">✍️</span>
+          <span class="choice-label">無定金</span>
+          <span class="choice-sub">直接簽約，手填租客資料</span>
+        </div>
+      </div>
+
+      <!-- 有定金區塊 -->
+      <div id="depositSearchArea" style="display:none">
+        <div class="search-wrap">
+          <input type="search" class="search-input" id="depositSearch"
+            placeholder="搜尋租客姓名或定金單編號…"
+            autocomplete="off"
+            oninput="handleDepositSearch(this.value)">
+          <span class="search-icon">🔍</span>
+        </div>
+        <div id="depositSearchHint" style="color:#888;font-size:0.85rem;padding:6px 0;display:none">搜尋中…</div>
+        <ul class="case-list" id="depositList"></ul>
+        <!-- 選取後的定金資訊顯示 -->
+        <div id="depositSelected" style="display:none;background:#f0f9f0;border:1px solid #b3ddb3;border-radius:8px;padding:12px;margin-top:8px">
+          <div style="font-weight:600;margin-bottom:4px">✅ 已選定金單</div>
+          <div id="depositSelectedInfo" style="font-size:0.9rem;color:#333;line-height:1.6"></div>
+          <div id="depositEarnestDisplay" style="margin-top:6px;font-size:0.95rem;font-weight:600;color:#1a7a1a"></div>
+          <div style="font-size:0.78rem;color:#888;margin-top:2px">送出後「定金轉服務費」會自動加入明細，請依實際服務費調整（半月／一月）</div>
+          <button onclick="clearDeposit()" style="margin-top:8px;padding:4px 12px;font-size:0.8rem;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer">重新選擇</button>
+        </div>
+      </div>
+
+      <!-- 無定金區塊 -->
+      <div id="noDepositArea" style="display:none">
+        <div class="field-group">
+          <label class="field-label">租客姓名<span class="field-required">＊</span></label>
+          <input type="text" class="field-input" id="tenantNameInput" placeholder="租客全名">
+        </div>
+        <div class="field-group" style="margin-bottom:0">
+          <label class="field-label">租客電話<span class="field-required">＊</span></label>
+          <input type="tel" class="field-input" id="tenantPhoneInput" placeholder="0912-345-678">
+        </div>
+      </div>
+    </div>
+
     <!-- STEP 3 -->
     <div class="step-view" id="step3">
       <h1 class="step-title">收了什麼錢？</h1>
@@ -1010,6 +1061,14 @@ const state = {
   paymentMethodLandlord: null,
   transferCodeL: '',
   uploadFileLandlord: null,
+  // deposit step (step 2.5, tenant only)
+  hasDeposit: null,
+  depositNo: '',
+  depositTenantName: '',
+  depositTenantPhone: '',
+  depositEarnestAmt: 0,
+  tenantNameManual: '',
+  tenantPhoneManual: '',
 };
 
 /* ======================================================
@@ -1125,8 +1184,11 @@ function showStep(n) {
   if (el) el.classList.add('active');
 
   // 進度
-  document.getElementById('progressLabel').textContent = `第 ${n} 步 / 共 5 步`;
-  document.getElementById('progressFill').style.width = `${(n / 5) * 100}%`;
+  // step25 = tenant-only deposit step; total 6 for tenant, 5 for landlord
+  const STEPS = (state.payer === 'tenant') ? 6 : 5;
+  const dispN = (n === 25) ? 3 : (state.payer === 'tenant' && n >= 3) ? n + 1 : n;
+  document.getElementById('progressLabel').textContent = `第 ${dispN} 步 / 共 ${STEPS} 步`;
+  document.getElementById('progressFill').style.width = `${(dispN / STEPS) * 100}%`;
 
   // 上一步
   document.getElementById('btnBack').classList.toggle('hidden', n === 1);
@@ -1154,7 +1216,12 @@ function showStep(n) {
 
 function goNext() {
   if (!validate(state.step)) return;
-  if (state.step === 2) commitStep2();
+  if (state.step === 2) {
+    commitStep2();
+    if (state.payer === 'tenant') { showStep(25); return; }
+    showStep(3); return;
+  }
+  if (state.step === 25) { commitStep25(); showStep(3); return; }
   if (state.step === 3) buildStep4();
   if (state.step === 4) buildSummary();
   if (state.step === 5) { submitForm(); return; }
@@ -1162,6 +1229,8 @@ function goNext() {
 }
 
 function goBack() {
+  if (state.step === 3 && state.payer === 'tenant') { showStep(25); return; }
+  if (state.step === 25) { showStep(2); return; }
   if (state.step > 1) showStep(state.step - 1);
 }
 
@@ -1261,6 +1330,17 @@ function buildStep3() {
   state.receiptItems = [];
   document.getElementById('receiptRows').innerHTML = '';
   updateTotal();
+  // tenant + 有定金 → 自動預帶「定金轉服務費」行
+  if (state.payer === 'tenant' && state.hasDeposit && state.depositEarnestAmt > 0) {
+    addReceiptRow('定金轉服務費');
+    const lastItem = state.receiptItems[state.receiptItems.length - 1];
+    if (lastItem) {
+      lastItem.amount = state.depositEarnestAmt;
+      const ai = document.getElementById('rowAmt-' + lastItem.id);
+      if (ai) { ai.value = state.depositEarnestAmt; }
+      updateTotal();
+    }
+  }
 }
 
 let rowCounter = 0;
@@ -1499,6 +1579,89 @@ async function submitForm() {
   }
 }
 
+/* ======================================================
+   STEP 2.5 定金
+   ====================================================== */
+function setDepositChoice(hasDeposit) {
+  state.hasDeposit = hasDeposit;
+  document.getElementById('dep-yes').classList.toggle('selected', hasDeposit);
+  document.getElementById('dep-no').classList.toggle('selected', !hasDeposit);
+  document.getElementById('depositSearchArea').style.display = hasDeposit ? 'block' : 'none';
+  document.getElementById('noDepositArea').style.display = hasDeposit ? 'none' : 'block';
+  if (!hasDeposit) clearDeposit();
+}
+
+let depositSearchTimeout = null;
+function handleDepositSearch(val) {
+  clearTimeout(depositSearchTimeout);
+  const list = document.getElementById('depositList');
+  const hint = document.getElementById('depositSearchHint');
+  if (!val || val.trim().length < 2) { list.innerHTML = ''; hint.style.display = 'none'; return; }
+  hint.style.display = 'block';
+  depositSearchTimeout = setTimeout(async () => {
+    const BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+    try {
+      const resp = await fetch(BASE + '/searchDeposits?q=' + encodeURIComponent(val.trim()));
+      const json = await resp.json().catch(() => ({}));
+      hint.style.display = 'none';
+      if (!resp.ok || !json.ok) { list.innerHTML = '<li style="padding:8px;color:#c00">搜尋失敗，請重試</li>'; return; }
+      const deps = json.deposits || [];
+      if (deps.length === 0) { list.innerHTML = '<li style="padding:8px;color:#888">沒有符合的定金單</li>'; return; }
+      const fmt = new Intl.NumberFormat('zh-TW');
+      list.innerHTML = deps.map(d => `
+        <li class="case-item" onclick="selectDeposit(${d.rid}, ${JSON.stringify(d.depositNo)}, ${JSON.stringify(d.tenantName)}, ${JSON.stringify(d.tenantPhone)}, ${d.earnestAmt}, ${JSON.stringify(d.caseName)})">
+          <span class="case-item-icon">📋</span>
+          <span class="case-item-text">
+            <div class="case-item-name">${d.depositNo}　${d.tenantName}</div>
+            <div class="case-item-code">${d.caseName || '（無案名）'}　定金 $ ${fmt.format(d.earnestAmt)}</div>
+          </span>
+          <span class="case-check">✓</span>
+        </li>
+      `).join('');
+    } catch (e) {
+      hint.style.display = 'none';
+      list.innerHTML = '<li style="padding:8px;color:#c00">網路錯誤，請重試</li>';
+    }
+  }, 400);
+}
+
+function selectDeposit(rid, depositNo, tenantName, tenantPhone, earnestAmt, caseName) {
+  state.depositNo          = depositNo;
+  state.depositTenantName  = tenantName;
+  state.depositTenantPhone = tenantPhone;
+  state.depositEarnestAmt  = earnestAmt;
+  document.getElementById('depositList').innerHTML = '';
+  document.getElementById('depositSearch').value = '';
+  const fmt = new Intl.NumberFormat('zh-TW');
+  document.getElementById('depositSelectedInfo').innerHTML =
+    '<b>' + depositNo + '</b>　' + tenantName + '　' + tenantPhone + '<br>' + (caseName || '');
+  document.getElementById('depositEarnestDisplay').textContent =
+    '此定金單要約定金：$ ' + fmt.format(earnestAmt);
+  document.getElementById('depositSelected').style.display = 'block';
+  const sw = document.getElementById('depositSearchArea').querySelector('.search-wrap');
+  if (sw) sw.style.display = 'none';
+  document.getElementById('depositSearchHint').style.display = 'none';
+}
+
+function clearDeposit() {
+  state.depositNo = ''; state.depositTenantName = ''; state.depositTenantPhone = ''; state.depositEarnestAmt = 0;
+  const sel = document.getElementById('depositSelected');
+  if (sel) sel.style.display = 'none';
+  const sw = document.getElementById('depositSearchArea') && document.getElementById('depositSearchArea').querySelector('.search-wrap');
+  if (sw) sw.style.display = '';
+  const dl = document.getElementById('depositList');
+  if (dl) dl.innerHTML = '';
+  const ds = document.getElementById('depositSearch');
+  if (ds) ds.value = '';
+}
+
+function commitStep25() {
+  if (state.hasDeposit === false) {
+    state.tenantNameManual  = (document.getElementById('tenantNameInput')  || {value:''}).value.trim();
+    state.tenantPhoneManual = (document.getElementById('tenantPhoneInput') || {value:''}).value.trim();
+  }
+}
+
 function buildRagicFormData() {
   const isTenant = state.payer === 'tenant';
   const fd = new FormData();
@@ -1558,6 +1721,17 @@ function buildRagicFormData() {
   // 備註欄：記錄經辦業務姓名
   // 經辦人員：寫外部帳號 email 到 1000602
   if (state.staffEmail) fd.append("1000602", state.staffEmail);
+
+  // deposit & tenant fields (tenant flow only)
+  if (isTenant) {
+    if (state.hasDeposit && state.depositNo) {
+      fd.append("1000789", state.depositNo);
+      // 定金轉服務費行已在 buildStep3 via addReceiptRow 加入 receiptItems，隨正常 forEach 送出
+    } else if (state.hasDeposit === false) {
+      if (state.tenantNameManual)  fd.append("1000599", state.tenantNameManual);
+      if (state.tenantPhoneManual) fd.append("1000779", state.tenantPhoneManual);
+    }
+  }
 
   return fd;
 }
@@ -1635,6 +1809,14 @@ function resetAll() {
     paymentMethodLandlord:null, transferCodeL:'', uploadFileLandlord:null,
   });
   rowCounter = 0; selectedCaseId = null; caseFilter = '';
+  Object.assign(state, { hasDeposit: null, depositNo: '', depositTenantName: '', depositTenantPhone: '', depositEarnestAmt: 0, tenantNameManual: '', tenantPhoneManual: '' });
+  ['dep-yes','dep-no'].forEach(function(id) { var el = document.getElementById(id); if (el) el.classList.remove('selected'); });
+  ['depositSearchArea','noDepositArea','depositSelected'].forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  var dlist = document.getElementById('depositList'); if (dlist) dlist.innerHTML = '';
+  var dsearch = document.getElementById('depositSearch'); if (dsearch) dsearch.value = '';
+  var tni = document.getElementById('tenantNameInput'); if (tni) tni.value = '';
+  var tpi = document.getElementById('tenantPhoneInput'); if (tpi) tpi.value = '';
+  var sw = document.getElementById('depositSearchArea') && document.getElementById('depositSearchArea').querySelector('.search-wrap'); if (sw) sw.style.display = '';
 
   document.getElementById('mainContent').style.display = '';
   document.getElementById('footerNav').classList.remove('hidden');
@@ -1673,6 +1855,18 @@ function validate(step) {
   if (step === 1) {
     if (!state.payer) { showToast('請先選擇付款對象'); return false; }
     if (!state.staffName) { showToast('請選擇你的名字（經辦業務）'); return false; }
+  }
+  if (step === 25) {
+    if (state.hasDeposit === null) { showToast('\u8acb\u9078\u64c7\u662f\u5426\u6709\u5b9a\u91d1'); return false; }
+    if (state.hasDeposit) {
+      if (!state.depositNo) { showToast('\u8acb\u9078\u64c7\u4e00\u7b46\u5b9a\u91d1\u55ae'); return false; }
+    } else {
+      const tn = (document.getElementById('tenantNameInput') || {value:''}).value.trim();
+      const tp = (document.getElementById('tenantPhoneInput') || {value:''}).value.trim();
+      if (!tn) { showToast('\u8acb\u586b\u5beb\u79df\u5ba2\u59d3\u540d'); return false; }
+      if (!tp) { showToast('\u8acb\u586b\u5beb\u79df\u5ba2\u96fb\u8a71'); return false; }
+    }
+    return true;
   }
   if (step === 2) {
     const isManual = document.getElementById('manualFields').classList.contains('open');
