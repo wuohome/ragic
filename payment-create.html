@@ -1330,16 +1330,19 @@ function buildStep3() {
   state.receiptItems = [];
   document.getElementById('receiptRows').innerHTML = '';
   updateTotal();
-  // tenant + 有定金 → 自動預帶「定金轉服務費」行
+  // tenant + 有定金 → 自動預帶「定金轉服務費」行（setTimeout 確保 DOM 渲染後再加）
   if (state.payer === 'tenant' && state.hasDeposit && state.depositEarnestAmt > 0) {
-    addReceiptRow('定金轉服務費');
-    const lastItem = state.receiptItems[state.receiptItems.length - 1];
-    if (lastItem) {
-      lastItem.amount = state.depositEarnestAmt;
-      const ai = document.getElementById('rowAmt-' + lastItem.id);
-      if (ai) { ai.value = state.depositEarnestAmt; }
-      updateTotal();
-    }
+    const _preAmt = state.depositEarnestAmt;
+    setTimeout(function() {
+      addReceiptRow('定金轉服務費');
+      const lastItem = state.receiptItems[state.receiptItems.length - 1];
+      if (lastItem) {
+        lastItem.amount = _preAmt;
+        const ai = document.getElementById('rowAmt-' + lastItem.id);
+        if (ai) { ai.value = _preAmt; }
+        updateTotal();
+      }
+    }, 50);
   }
 }
 
