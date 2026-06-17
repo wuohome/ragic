@@ -131,6 +131,176 @@
     @media (min-width: 768px) {
       .subtable th, .subtable td { padding: 9px 12px; font-size: 0.95rem; }
     }
+
+    /* ═══════════════════════════════════════════════
+       A4 列印版型（設計稿整合）
+       ─ 螢幕上隱藏，列印時才顯示
+       ─ 對應 id: print-receipt-area
+    ═══════════════════════════════════════════════ */
+    :root {
+      --pr-orange:  #E8622A;
+      --pr-navy:    #2D3B4E;
+      --pr-yellow:  #F5C842;
+      --pr-bg-gray: #F8F9FA;
+      --pr-border:  #D0D5DD;
+      --pr-text-main: #1C2630;
+      --pr-text-mute: #5A6475;
+      --pr-font: 'PingFang TC', 'Noto Sans TC', -apple-system, 'Microsoft JhengHei', sans-serif;
+    }
+    #print-receipt-area {
+      display: none; /* 螢幕上隱藏 */
+    }
+    .pr-paper {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto;
+      background: #fff;
+      padding: 14mm 16mm 14mm 16mm;
+      position: relative;
+      font-family: var(--pr-font);
+    }
+    .pr-top-accent {
+      height: 5px;
+      background: linear-gradient(90deg, var(--pr-orange) 0%, var(--pr-yellow) 100%);
+      border-radius: 4px 4px 0 0;
+      position: absolute;
+      top: 0; left: 0; right: 0;
+    }
+    .pr-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 10px;
+      border-bottom: 2.5px solid var(--pr-navy);
+      margin-bottom: 10px;
+    }
+    .pr-brand-block { display: flex; align-items: center; gap: 10px; }
+    .pr-logo-mark { width: 40px; height: 40px; flex-shrink: 0; }
+    .pr-brand-name-block { display: flex; flex-direction: column; gap: 1px; }
+    .pr-brand-zh { font-size: 15pt; font-weight: 700; color: var(--pr-navy); letter-spacing: 0.06em; line-height: 1.2; }
+    .pr-brand-en { font-size: 7pt; color: var(--pr-text-mute); letter-spacing: 0.12em; text-transform: uppercase; }
+    .pr-doc-title { text-align: right; }
+    .pr-doc-title h1 { font-size: 22pt; font-weight: 800; color: var(--pr-orange); letter-spacing: 0.3em; line-height: 1; }
+    .pr-doc-title .pr-doc-sub { font-size: 7.5pt; color: var(--pr-text-mute); letter-spacing: 0.08em; margin-top: 3px; }
+    .pr-meta-bar {
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--pr-navy); color: #fff;
+      border-radius: 3px; padding: 5px 12px; margin-bottom: 12px;
+    }
+    .pr-meta-bar .pr-meta-item { display: flex; align-items: center; gap: 8px; font-size: 8.5pt; }
+    .pr-meta-bar .pr-meta-label { opacity: 0.65; letter-spacing: 0.08em; }
+    .pr-meta-bar .pr-meta-value { font-weight: 700; font-size: 9.5pt; letter-spacing: 0.04em; }
+    .pr-section-title {
+      font-size: 8pt; font-weight: 700; color: var(--pr-orange);
+      letter-spacing: 0.14em; text-transform: uppercase;
+      margin-bottom: 6px; display: flex; align-items: center; gap: 6px;
+    }
+    .pr-section-title::after { content: ''; flex: 1; height: 1px; background: var(--pr-border); }
+    .pr-payer-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 0; border: 1px solid var(--pr-border); border-radius: 3px;
+      overflow: hidden; margin-bottom: 14px;
+    }
+    .pr-payer-cell { padding: 7px 10px; border-right: 1px solid var(--pr-border); border-bottom: 1px solid var(--pr-border); }
+    .pr-payer-cell:nth-child(3), .pr-payer-cell:nth-child(6) { border-right: none; }
+    .pr-payer-cell:nth-child(4), .pr-payer-cell:nth-child(5), .pr-payer-cell:nth-child(6) { border-bottom: none; }
+    .pr-payer-cell.span2 { grid-column: span 2; }
+    .pr-cell-label { font-size: 7pt; color: var(--pr-text-mute); letter-spacing: 0.06em; margin-bottom: 3px; }
+    .pr-cell-value { font-size: 10.5pt; font-weight: 600; color: var(--pr-text-main); line-height: 1.3; }
+    .pr-detail-table { width: 100%; border-collapse: collapse; font-size: 10pt; margin-bottom: 0; }
+    .pr-detail-table thead tr { background: var(--pr-navy); color: #fff; }
+    .pr-detail-table thead th { padding: 6px 10px; font-size: 8pt; font-weight: 600; letter-spacing: 0.08em; text-align: left; }
+    .pr-detail-table thead th:last-child { text-align: right; }
+    .pr-detail-table tbody tr { border-bottom: 1px solid var(--pr-border); }
+    .pr-detail-table tbody tr:last-child { border-bottom: 2px solid var(--pr-border); }
+    .pr-detail-table tbody tr:nth-child(even) { background: var(--pr-bg-gray); }
+    .pr-detail-table tbody td { padding: 8px 10px; color: var(--pr-text-main); vertical-align: middle; }
+    .pr-detail-table tbody td:last-child { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .pr-total-block {
+      display: flex; justify-content: space-between; align-items: stretch;
+      background: #F0F4F8; border: 1.5px solid var(--pr-border);
+      border-top: none; border-radius: 0 0 4px 4px; margin-bottom: 14px; overflow: hidden;
+    }
+    .pr-total-chinese { padding: 10px 14px; border-right: 1.5px solid var(--pr-border); flex: 1; }
+    .pr-total-chinese .pr-chinese-label { font-size: 7pt; color: var(--pr-text-mute); letter-spacing: 0.06em; margin-bottom: 3px; }
+    .pr-total-chinese .pr-chinese-amount { font-size: 10pt; font-weight: 700; color: var(--pr-navy); letter-spacing: 0.04em; }
+    .pr-total-number { padding: 10px 16px; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; min-width: 180px; }
+    .pr-total-number .pr-total-label { font-size: 7pt; color: var(--pr-text-mute); letter-spacing: 0.1em; margin-bottom: 2px; }
+    .pr-total-number .pr-total-amount { font-size: 20pt; font-weight: 800; color: var(--pr-orange); letter-spacing: 0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .pr-total-number .pr-currency-unit { font-size: 10pt; font-weight: 500; color: var(--pr-orange); margin-right: 2px; }
+    .pr-payment-row { display: flex; gap: 10px; margin-bottom: 14px; }
+    .pr-payment-cell { flex: 1; border: 1px solid var(--pr-border); border-radius: 3px; padding: 7px 10px; }
+    .pr-sig-section-title {
+      font-size: 8pt; font-weight: 700; color: var(--pr-orange);
+      letter-spacing: 0.14em; margin-bottom: 6px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .pr-sig-section-title::after { content: ''; flex: 1; height: 1px; background: var(--pr-border); }
+    .pr-sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .pr-sig-box {
+      border: 1px solid var(--pr-border); border-radius: 3px;
+      height: 72px; display: flex; flex-direction: column;
+      justify-content: flex-end; padding: 6px 10px; position: relative;
+    }
+    .pr-sig-box .pr-sig-label { font-size: 7pt; color: var(--pr-text-mute); letter-spacing: 0.06em; }
+    .pr-sig-box.pr-seal-box {
+      background: repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(232,98,42,0.04) 6px, rgba(232,98,42,0.04) 7px);
+    }
+    .pr-seal-circle {
+      width: 44px; height: 44px; border: 2px dashed #E8622A55; border-radius: 50%;
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -68%);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .pr-seal-circle span { font-size: 6pt; color: #E8622A55; letter-spacing: 0.05em; }
+    .pr-sig-img { max-height: 48px; max-width: 100%; display: block; }
+    .pr-doc-footer {
+      border-top: 1.5px solid var(--pr-navy); padding-top: 8px;
+      display: flex; justify-content: space-between; align-items: flex-end;
+    }
+    .pr-footer-company { font-size: 8pt; color: var(--pr-navy); font-weight: 700; letter-spacing: 0.06em; }
+    .pr-footer-remark { font-size: 7pt; color: #B0B8C4; text-align: right; line-height: 1.6; }
+
+    /* ── @media print ── */
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 12mm;
+      }
+      /* 隱藏所有互動 UI */
+      #loader, #step-1, #step-2, #step-success, #step-failed,
+      #pdf-export-area, .screen-hint,
+      body > .max-w-4xl { display: none !important; }
+
+      /* 顯示列印版型 */
+      #print-receipt-area { display: block !important; }
+
+      body {
+        background: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      .pr-paper {
+        width: 100%;
+        min-height: unset;
+        box-shadow: none;
+        border-radius: 0;
+        margin: 0;
+        padding: 0;
+      }
+      .pr-top-accent { display: none; }
+      * {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .pr-meta-bar {
+        background: var(--pr-navy) !important;
+        color: #fff !important;
+      }
+      .pr-detail-table thead tr {
+        background: var(--pr-navy) !important;
+        color: #fff !important;
+      }
+    }
   </style>
 </head>
 
@@ -479,6 +649,150 @@
       本憑單採電子簽名方式簽署，簽署人確認並同意以電子方式簽署本文件，其法律效力與本人親自簽名相同。
     </div>
   </div>
+
+  <!-- ═══════════════════════════════════════════
+       A4 列印版型區（螢幕隱藏，列印才顯示）
+       id 都帶 pr_ 前綴避免與互動區 id 衝突
+  ═══════════════════════════════════════════ -->
+  <div id="print-receipt-area">
+    <div class="pr-paper">
+      <div class="pr-top-accent"></div>
+
+      <!-- ① HEADER -->
+      <div class="pr-header">
+        <div class="pr-brand-block">
+          <svg class="pr-logo-mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="40" height="40" rx="6" fill="#E8622A"/>
+            <rect x="7" y="24" width="6" height="10" rx="2" fill="white"/>
+            <rect x="17" y="17" width="6" height="17" rx="2" fill="white"/>
+            <rect x="27" y="10" width="6" height="24" rx="2" fill="white"/>
+          </svg>
+          <div class="pr-brand-name-block">
+            <span class="pr-brand-zh">窩的家</span>
+            <span class="pr-brand-en">Wuohome Real Estate Co., Ltd.</span>
+          </div>
+        </div>
+        <div class="pr-doc-title">
+          <h1>收 款 憑 單</h1>
+          <div class="pr-doc-sub">Payment Receipt</div>
+        </div>
+      </div>
+
+      <!-- ② META BAR：憑單編號 + 收款日期 + 付款對象 -->
+      <div class="pr-meta-bar">
+        <div class="pr-meta-item">
+          <span class="pr-meta-label">憑單編號</span>
+          <span class="pr-meta-value" id="pr_no">—</span>
+        </div>
+        <div class="pr-meta-item">
+          <span class="pr-meta-label">收款日期</span>
+          <span class="pr-meta-value" id="pr_date">—</span>
+        </div>
+        <div class="pr-meta-item">
+          <span class="pr-meta-label">付款對象</span>
+          <span class="pr-meta-value" id="pr_role">—</span>
+        </div>
+      </div>
+
+      <!-- ③ PAYER INFO -->
+      <div class="pr-section-title">付款人資訊</div>
+      <div class="pr-payer-grid">
+        <div class="pr-payer-cell">
+          <div class="pr-cell-label">付款人姓名</div>
+          <div class="pr-cell-value" id="pr_payer_name">—</div>
+        </div>
+        <div class="pr-payer-cell">
+          <div class="pr-cell-label">聯絡電話</div>
+          <div class="pr-cell-value" id="pr_payer_phone">—</div>
+        </div>
+        <div class="pr-payer-cell">
+          <div class="pr-cell-label">開立日期</div>
+          <div class="pr-cell-value" id="pr_issue_date">—</div>
+        </div>
+        <div class="pr-payer-cell span2">
+          <div class="pr-cell-label">案名</div>
+          <div class="pr-cell-value" id="pr_case_name">—</div>
+        </div>
+        <div class="pr-payer-cell">
+          <div class="pr-cell-label">地址</div>
+          <div class="pr-cell-value" id="pr_addr">—</div>
+        </div>
+      </div>
+
+      <!-- ④ PAYMENT DETAIL TABLE -->
+      <div class="detail-section">
+        <div class="pr-section-title">收款明細</div>
+        <table class="pr-detail-table">
+          <thead>
+            <tr>
+              <th style="width:80px">類型</th>
+              <th>項目說明</th>
+              <th style="width:120px;text-align:right">金額（元）</th>
+            </tr>
+          </thead>
+          <tbody id="pr_subtable_body">
+            <tr><td colspan="3" style="text-align:center;color:#888;padding:10px">（無明細）</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ⑤ TOTAL BLOCK -->
+      <div class="pr-total-block">
+        <div class="pr-total-chinese">
+          <div class="pr-chinese-label">國字大寫金額</div>
+          <div class="pr-chinese-amount" id="pr_amount_chinese">—</div>
+        </div>
+        <div class="pr-total-number">
+          <div class="pr-total-label">合　計</div>
+          <div class="pr-total-amount">
+            <span class="pr-currency-unit">NT$</span><span id="pr_amount_number">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ⑥ PAYMENT METHOD -->
+      <div class="pr-section-title" style="margin-top:14px">付款資訊</div>
+      <div class="pr-payment-row">
+        <div class="pr-payment-cell">
+          <div class="pr-cell-label">付款方式</div>
+          <div class="pr-cell-value" id="pr_pay_method">—</div>
+        </div>
+        <div class="pr-payment-cell">
+          <div class="pr-cell-label">匯款後五碼</div>
+          <div class="pr-cell-value" id="pr_remit">—</div>
+        </div>
+        <div class="pr-payment-cell">
+          <div class="pr-cell-label">承辦人員</div>
+          <div class="pr-cell-value" id="pr_agent">—</div>
+        </div>
+      </div>
+
+      <!-- ⑦ SIGNATURE / SEAL AREA -->
+      <div class="pr-sig-section-title" id="pr_sig_section_label">簽收與用印</div>
+      <div class="pr-sig-row">
+        <div class="pr-sig-box">
+          <img id="pr_sig_img" class="pr-sig-img" style="display:none;" src="" alt="簽名">
+          <div class="pr-sig-label" id="pr_sig_label">付款人簽名</div>
+        </div>
+        <div class="pr-sig-box">
+          <div class="pr-sig-label">收款人員簽名</div>
+        </div>
+        <div class="pr-sig-box pr-seal-box">
+          <div class="pr-seal-circle"><span>公司用印</span></div>
+          <div class="pr-sig-label">公司用印</div>
+        </div>
+      </div>
+
+      <!-- ⑧ FOOTER -->
+      <div class="pr-doc-footer">
+        <div class="pr-footer-company">窩的家房屋租售有限公司</div>
+        <div class="pr-footer-remark">
+          本憑單一式兩份，付款人與公司各執一份<br>
+          ＊簽署即確認以電子簽名方式完成簽收，效力等同親簽
+        </div>
+      </div>
+    </div>
+  </div><!-- end #print-receipt-area -->
 
   <script>
     const WORKER_BASE = "https://wuohome-ragic-proxy.wuohome.workers.dev";
@@ -983,6 +1297,7 @@
       const amtKey  = getSubAmtKey();
       renderSubtable("show_subtable_body", subtableData, typeKey, itemKey, amtKey);
       renderPdfSubtable(subtableData, typeKey, itemKey, amtKey);
+      renderPrintArea();
     }
 
     function initSignature() {
@@ -1252,6 +1567,143 @@
       alert("請查看頁面下方的黑色診斷框。\nROLE=" + ROLE + "\n檢查欄位：" + checkIds.join(", "));
     }
 
+    // ═══════════════════════════════════════════════════
+    // 國字大寫轉換（整數元，最大到億）
+    // ═══════════════════════════════════════════════════
+    function numberToChinese(num) {
+      const n = Math.round(Math.abs(parseFloat(String(num).replace(/[^0-9.]/g, '')) || 0));
+      if (n === 0) return '新臺幣 零元整';
+      const digits  = ['零','壹','貳','參','肆','伍','陸','柒','捌','玖'];
+      const units   = ['','拾','佰','仟'];
+      const bigUnits = ['','萬','億'];
+      function groupStr(g) { // 處理 0~9999
+        if (g === 0) return '零';
+        let s = '';
+        let needZero = false;
+        for (let i = 3; i >= 0; i--) {
+          const d = Math.floor(g / Math.pow(10, i)) % 10;
+          if (d !== 0) {
+            if (needZero) { s += '零'; needZero = false; }
+            s += digits[d] + (i > 0 ? units[i] : '');
+          } else if (s !== '') {
+            needZero = true;
+          }
+        }
+        return s;
+      }
+      const yi  = Math.floor(n / 100000000);
+      const wan = Math.floor((n % 100000000) / 10000);
+      const ge  = n % 10000;
+      let result = '';
+      if (yi > 0)  result += groupStr(yi) + '億';
+      if (wan > 0) {
+        if (yi > 0 && wan < 1000) result += '零';
+        result += groupStr(wan) + '萬';
+      }
+      if (ge > 0) {
+        if ((yi > 0 || wan > 0) && ge < 1000) result += '零';
+        result += groupStr(ge);
+      }
+      return '新臺幣 ' + result + '元整';
+    }
+
+    // ═══════════════════════════════════════════════════
+    // A4 列印版型填值
+    // ═══════════════════════════════════════════════════
+    function renderPrintArea() {
+      if (!currentRecord) return;
+
+      const pr = (id) => document.getElementById(id);
+      const gv = (keys) => getValue(currentRecord, Array.isArray(keys) ? keys : [keys]);
+
+      // ① meta bar
+      pr('pr_no').textContent   = gv([FIELDS.no, '憑單編號']) || '—';
+      pr('pr_date').textContent = gv([FIELDS.date, '收款日期']) || '—';
+      pr('pr_role').textContent = ROLE || '—';
+
+      // ② payer info
+      const payerName  = gv(getNameField());
+      const payerPhone = gv(getPhoneField());
+      const caseName   = gv([FIELDS.case_name, '案名']) || gv([FIELDS.case_name2, '公司件案名']) || '—';
+      const addr       = gv([FIELDS.addr, '地址']) || gv([FIELDS.addr2, '公司件地址']) || '—';
+      pr('pr_payer_name').textContent  = payerName  || '—';
+      pr('pr_payer_phone').textContent = payerPhone || '—';
+      pr('pr_issue_date').textContent  = gv([FIELDS.date, '收款日期']) || '—';
+      pr('pr_case_name').textContent   = caseName;
+      pr('pr_addr').textContent        = addr;
+
+      // ③ 金額：千分位 + 國字大寫
+      let rawTotal = gv(getTotalField());
+      if (!rawTotal || String(rawTotal).trim() === '' || String(rawTotal).trim() === '0') {
+        // fallback: sum subtable
+        const subKey = ROLE === '房東' ? '_subtable_1001701' : '_subtable_1000777';
+        const amtFid = ROLE === '房東' ? '1001700' : '1000775';
+        const subData = currentRecord[subKey];
+        if (subData && typeof subData === 'object') {
+          let sum = 0;
+          for (const k of Object.keys(subData)) {
+            const row = subData[k];
+            if (!row) continue;
+            const v = row[amtFid] || row['金額'] || '0';
+            sum += parseFloat(String(v).replace(/[^0-9.-]/g, '')) || 0;
+          }
+          if (sum > 0) rawTotal = sum;
+        }
+      }
+      const numericTotal = Math.round(parseFloat(String(rawTotal || '0').replace(/[^0-9.-]/g, '')) || 0);
+      pr('pr_amount_number').textContent = numericTotal.toLocaleString('zh-TW');
+      pr('pr_amount_chinese').textContent = numberToChinese(numericTotal);
+
+      // ④ 付款方式 + 後五碼 + 承辦人
+      pr('pr_pay_method').textContent = formatPayMethod(gv(getPayField())) || '—';
+      pr('pr_remit').textContent = gv(getRemitField()) || '（現金，不適用）';
+      pr('pr_agent').textContent = gv([FIELDS.agent, '經辦人員']) || '—';
+
+      // ⑤ 子表格
+      const subtableData = currentRecord[getSubtableKey()];
+      const typeKey = getSubTypeKey();
+      const itemKey = getSubItemKey();
+      const amtKey  = getSubAmtKey();
+      const tbody = pr('pr_subtable_body');
+      if (tbody) {
+        tbody.innerHTML = '';
+        const dataRows = [];
+        if (subtableData && typeof subtableData === 'object') {
+          for (const k of Object.keys(subtableData).sort((a, b) => Number(a) - Number(b))) {
+            const row = subtableData[k];
+            if (!row || typeof row !== 'object') continue;
+            const type = row[typeKey] || row['類型'] || '';
+            const item = row[itemKey] || row['項目'] || '';
+            const amt  = row[amtKey]  || row['金額'] || '';
+            if (type || item || amt) dataRows.push({ type, item, amt });
+          }
+        }
+        if (dataRows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#888;padding:10px">（無明細）</td></tr>';
+        } else {
+          for (const r of dataRows) {
+            const tr = document.createElement('tr');
+            const amtNum = parseFloat(String(r.amt).replace(/[^0-9.-]/g, '')) || 0;
+            tr.innerHTML = `<td>${r.type}</td><td>${r.item}</td><td>${amtNum.toLocaleString('zh-TW')}</td>`;
+            tbody.appendChild(tr);
+          }
+        }
+      }
+
+      // ⑥ 簽名圖（若已有）
+      const sigFieldId = getSigFieldId();
+      const sigVal = gv([sigFieldId]);
+      const prSigImg = pr('pr_sig_img');
+      if (prSigImg && sigVal && sigVal.startsWith('data:image')) {
+        prSigImg.src = sigVal;
+        prSigImg.style.display = 'block';
+      }
+      // 簽名 section label
+      const sigLabel = ROLE === '租客' ? '租客簽名' : '房東簽名';
+      if (pr('pr_sig_section_label')) pr('pr_sig_section_label').textContent = '簽收與用印（' + sigLabel + '）';
+      if (pr('pr_sig_label')) pr('pr_sig_label').textContent = sigLabel;
+    }
+
     window.onload = () => {
       $("btn-test").onclick = () => {
         recordId = $("test-id-input").value.trim();
@@ -1278,7 +1730,12 @@
         $("loader-spinner").classList.add('hidden');
         $("loader-text").innerHTML = "⚠️ 此連結異常（編號 <b>" + recordId + "</b>），無法顯示收款憑單。<br><br>請聯繫為您服務的窩的家業務，請業務重新傳送確認連結。<br><br><span style='color:#888;font-size:13px'>（業務端排查：Ragic 建單後請先按「公式全部重跑」再複製連結）</span>";
       } else {
-        executeLoad();
+        executeLoad().then(() => {
+          // ?print=1 自動列印（資料載入後才觸發，確保版型已填值）
+          if (new URLSearchParams(location.search).get('print') === '1') {
+            setTimeout(() => window.print(), 600);
+          }
+        });
       }
     };
   </script>
