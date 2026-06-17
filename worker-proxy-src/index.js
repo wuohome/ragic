@@ -48,6 +48,8 @@ const ALLOWED_ACTIONS = {
   verifyRefund:          { method: 'GET' },
   // Group J: 591拋轉刊登包 (toss591.html, read-only single record)
   getToss591:            { method: 'GET' },
+  // Group K: deposit.html — business staff quick-create 定金/斡旋 record (payments/1)
+  createDeposit:         { method: 'POST' },
 };
 
 const PAYMENT_SOURCE_SHEETS = {
@@ -83,6 +85,40 @@ const REFUND_FIELDS_WHITELIST = new Set([
 const REFUND_SIGNATURE_FIELDS = new Set(['1002113']);
 
 const PAYMENT_SOURCE_FIELDS_WHITELIST = new Set(['1001642', '1000808']);
+
+// Group K: deposit.html — createDeposit allowed EIDs (payments/1)
+// Only these fields may be written; all others from the form are silently dropped.
+const DEPOSIT_FIELDS_WHITELIST = new Set([
+  '1002054', // 選擇分類
+  '1000790', // 案名/連結
+  '1002055', // 公司件案名
+  '1000799', // 地址
+  '1002056', // 公司件地址
+  '1000818', // 租金
+  '1000819', // 押金
+  '1000821', // 租金內含稅金
+  '1000822', // 租金內含管理費
+  '1000824', // 租期
+  '1000826', // 租金內含車位
+  '1000828', // 車位類型
+  '1000829', // 車位編號
+  '1000830', // 付款方式
+  '1000831', // 要約條件
+  '1000832', // 要約定金
+  '1000798', // 定金收款日期
+  '1000833', // 簽約日
+  '1000834', // 起租日
+  '1000835', // 定金付法
+  '1000836', // 匯款後五碼
+  '1000820', // 物件來源
+  '1000793', // 經辦人員
+  '1000838', // 經辦電話
+  '1001815', // 選擇群組
+  '1000839', // 服務費
+  '1000792', // 租客姓名
+  '1000808', // 租客電話
+  '1000837', // 租客職業
+]);
 
 const HR_FIELDS_WHITELIST = new Set([
   '3000933','3000947','3001021','3000954','3000956','3001020','3001022','3000945',
@@ -387,8 +423,9 @@ async function answerCallbackQuery(env, callbackQueryId) {
 
 // ============ Ragic helpers ============
 
-async function postUrlEncodedToRagic(env, sheetPath, paramsString) {
-  const upstream = await fetch(`${env.RAGIC_BASE}/${sheetPath}?api`, {
+async function postUrlEncodedToRagic(env, sheetPath, paramsString, extraQuery = '') {
+  const qs = extraQuery ? `&${extraQuery}` : '';
+  const upstream = await fetch(`${env.RAGIC_BASE}/${sheetPath}?api${qs}`, {
     method: 'POST',
     headers: {
       'Authorization': 'Basic ' + env.RAGIC_KEY,
@@ -1510,6 +1547,48 @@ export default {
         return jsonResp(clean, 200, allowedOrigin);
       }
 
+      // ============ Group K: createDeposit — deposit.html quick-create (payments/1) ============
+      if (action === 'createDeposit') {
+        let body;
+        try { body = await request.json(); } catch { return jsonResp({ error: 'bad_json' }, 400, allowedOrigin); }
+        const fields = body?.fields;
+        if (!fields || typeof fields !== 'object') return jsonResp({ error: 'missing_fields' }, 400, allowedOrigin);
+        const fieldKeys = Object.keys(fields);
+        if (fieldKeys.length === 0) return jsonResp({ error: 'empty_fields' }, 400, allowedOrigin);
+
+        // Build URLSearchParams with whitelist-filtered fields only; unknown EIDs are silently dropped.
+        const params = new URLSearchParams();
+        for (const [k, v] of Object.entries(fields)) {
+          if (!DEPOSIT_FIELDS_WHITELIST.has(k)) continue; // drop unknown EIDs silently
+          const strVal = String(v == null ? '' : v);
+          if (strVal.length > 5000) return jsonResp({ error: 'value_too_long', key: k, len: strVal.length }, 400, allowedOrigin);
+          params.append(k, strVal);
+        }
+        if (params.toString().length === 0) return jsonResp({ error: 'no_valid_fields' }, 400, allowedOrigin);
+
+        // POST to payments/1 (no record id = new record)
+        // doLinkLoad=first: execute Link&Load before formula; doFormula=true: compute formula fields (e.g. 1002057) at write time
+        const { upstream, data } = await postUrlEncodedToRagic(env, 'payments/1', params.toString(), 'doLinkLoad=first&doFormula=true');
+        const fail = detectUpstreamFailure(upstream, data);
+        if (fail) return jsonResp({ status: 'ERROR', msg: fail.msg || fail.error || 'upstream_error' }, 502, allowedOrigin);
+
+        const ragicId = data?.ragicId;
+        if (!ragicId) return jsonResp({ status: 'ERROR', msg: 'no_ragicId_in_response', raw: data }, 502, allowedOrigin);
+
+        // Read back the new record to get auto-generated 定金單編號 (EID 1000796)
+        let depositNo = '';
+        try {
+          const { upstream: ru, data: rd } = await getFromRagic(env, `payments/1/${ragicId}`, 'naming=EID');
+          if (ru.ok && rd && typeof rd === 'object') {
+            // Single-record GET wraps in { "<rid>": {...} }
+            const rec = rd[String(ragicId)] || Object.values(rd)[0] || {};
+            depositNo = String(rec['1000796'] || '');
+          }
+        } catch { /* depositNo stays '' if read-back fails */ }
+
+        return jsonResp({ status: 'SUCCESS', ragicId, depositNo }, 200, allowedOrigin);
+      }
+
       // ============ Group E: client diagnostic ============
       if (action === 'diagnostic') {
         let body;
@@ -1534,7 +1613,8 @@ export default {
       }
 
     } catch (e) {
-      return jsonResp({ error: 'internal' }, 500, allowedOrigin);
+      console.error('[worker catch]', String(e), e?.stack);
+      return jsonResp({ error: 'internal', msg: String(e) }, 500, allowedOrigin);
     }
 
     return jsonResp({ error: 'not_implemented', action }, 501, allowedOrigin);
