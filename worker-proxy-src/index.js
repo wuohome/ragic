@@ -1,4 +1,4 @@
-// wuohome-ragic-proxy v12 — add getToss591 endpoint for 591拋轉 MVP
+// wuohome-ragic-proxy v19 — restore registerDevelopment (route was disabled after false data alarm)
 // Worker directly calls Telegram API on failure (no Mac Mini hop).
 // Mac Mini notify-server retains /telegram-webhook for callback_query button handling.
 
@@ -19,7 +19,11 @@ const ALLOWED_ACTIONS = {
   listOutreach:     { method: 'GET' },
   listCommission:   { method: 'GET' },
   listClients:      { method: 'GET' },
+  listGoals:        { method: 'GET' },
   submitHrOnboarding: { method: 'POST' },
+  // Group H2: bcard survey (in-service staff name list + update 3 fields)
+  getBcardStaff:    { method: 'GET' },
+  submitBcardSurvey: { method: 'POST' },
   // Group C: earnest + payment-receipt (sync, kept for 60-day observation)
   getEarnest:            { method: 'GET' },
   submitEarnest:         { method: 'POST' },
@@ -27,6 +31,7 @@ const ALLOWED_ACTIONS = {
   verifyPaymentReceipt:  { method: 'GET' },
   getPaymentSource:      { method: 'GET' },
   submitPaymentReceipt:  { method: 'POST' },
+  createPaymentReceipt:  { method: 'POST' },  // Group C2: 建立新收款單
   submitPaymentSource:   { method: 'POST' },
   // Group D: earnest async queue (Phase 1B)
   submitEarnestAsync:    { method: 'POST' },
@@ -48,8 +53,21 @@ const ALLOWED_ACTIONS = {
   verifyRefund:          { method: 'GET' },
   // Group J: 591拋轉刊登包 (toss591.html, read-only single record)
   getToss591:            { method: 'GET' },
-  // Group K: deposit.html — business staff quick-create 定金/斡旋 record (payments/1)
+  // Group K: 591 撒單雷達 (extension, token-gated)
+  check591Collision:     { method: 'POST' },
+  // Group L: 591 一鍵登記開發 (extension, token-gated, Joan-only in testing)
+  // Group L: 591 一鍵登記開發 (extension, token-gated, Joan-only in testing)
+  registerDevelopment:   { method: 'POST' },
+  // Group N: payment-create.html — search active cases
+  searchCases:           { method: 'GET' },  // Group N: in-management case list for 收款單建立
+  searchStaff:           { method: 'GET' },  // Group N2: active staff list for 經辦人員 dropdown
+  searchDeposits:        { method: 'GET' },  // Group N3: deposit list for 定金單 lookup
+  // Group M: Ragic email validate (extension, CORS-allowed)
+  checkRagicEmail:       { method: 'GET' },
+  // Group O: deposit.html — business staff quick-create 定金/斡旋 record (payments/1)
   createDeposit:         { method: 'POST' },
+  // Group P: bug report -- staff pages send screenshot + description to OPS Telegram
+  reportBug:             { method: 'POST' },
 };
 
 const PAYMENT_SOURCE_SHEETS = {
@@ -86,8 +104,8 @@ const REFUND_SIGNATURE_FIELDS = new Set(['1002113']);
 
 const PAYMENT_SOURCE_FIELDS_WHITELIST = new Set(['1001642', '1000808']);
 
-// Group K: deposit.html — createDeposit allowed EIDs (payments/1)
-// Only these fields may be written; all others from the form are silently dropped.
+// Group O: deposit.html — createDeposit allowed EIDs (payments/1)
+// Only these fields may be written; all others from the body are silently dropped.
 const DEPOSIT_FIELDS_WHITELIST = new Set([
   '1002054', // 選擇分類
   '1000790', // 案名/連結
@@ -113,7 +131,7 @@ const DEPOSIT_FIELDS_WHITELIST = new Set([
   '1000820', // 物件來源
   '1000793', // 經辦人員
   '1000838', // 經辦電話
-  '1001815', // 選擇群組
+  // 1001815 選擇群組 — 故意不列入白名單；Worker 端固定注入，前端無法覆蓋
   '1000839', // 服務費
   '1000792', // 租客姓名
   '1000808', // 租客電話
@@ -130,6 +148,14 @@ const HR_FIELDS_WHITELIST = new Set([
   '1000868','1000870','1000925',
 ]);
 const HR_MAX_FILE_BYTES = 5 * 1024 * 1024;
+
+// Group H2: bcard survey — only these 3 fields are writable by staff self-service
+// 1002556（名片調查填寫時間）is intentionally excluded: proxy writes it server-side, not client
+const BCARD_FIELDS_WHITELIST = new Set([
+  '3000975', // 主要手機號碼
+  '1002554', // 營業員證號
+  '1002555', // 租賃住宅管理人員證號
+]);
 
 const PATH_PREFIX = [
   { prefix: 'deleteLeave/',          method: 'DELETE', op: 'deleteLeave' },
@@ -290,6 +316,7 @@ const SHEET_MAP = {
   listOutreach:   'property-data-kept/17',
   listCommission: 'property-data-kept/25',
   listClients:    'property-data-kept/8',
+  listGoals:      'shanshans/5',
 };
 
 const KV_PREFIX = 'submission:earnest:';
@@ -936,6 +963,61 @@ export default {
         return jsonResp({ ok: true, ragicId: data?.ragicId }, 200, allowedOrigin);
       }
 
+      // ============ Group H2: bcard survey ============
+      if (action === 'getBcardStaff') {
+        // Returns ONLY { rid, name } pairs for active staff — never exposes full record
+        const qs = 'naming=EID&where=3000945,eq,' + encodeURIComponent('在職') + '&limit=0,500';
+        const { upstream, data } = await getFromRagic(env, 'ragicforms4/20004', qs);
+        if (!upstream.ok) return jsonResp({ error: 'upstream_error', code: upstream.status }, 502, allowedOrigin);
+        const staff = [];
+        for (const [rid, record] of Object.entries(data || {})) {
+          if (!/^\d+$/.test(rid)) continue;
+          const name = record['3000933'];
+          if (!name) continue;
+          const bcardTs = record['1002556'];
+          if (bcardTs && String(bcardTs).trim() !== '') continue; // already submitted
+          staff.push({ rid, name });
+        }
+        staff.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+        return jsonResp({ staff }, 200, allowedOrigin);
+      }
+
+      if (action === 'submitBcardSurvey') {
+        const rid = url.searchParams.get('rid');
+        if (!rid || !validRid(rid)) return jsonResp({ error: 'invalid_rid' }, 400, allowedOrigin);
+        let body;
+        try { body = await request.json(); } catch { return jsonResp({ error: 'invalid_json' }, 400, allowedOrigin); }
+        const params = new URLSearchParams();
+        for (const [key, value] of Object.entries(body)) {
+          if (!BCARD_FIELDS_WHITELIST.has(key)) return jsonResp({ error: 'invalid_field', key }, 400, allowedOrigin);
+          if (typeof value !== 'string' || value.length > 200) return jsonResp({ error: 'value_invalid', key }, 400, allowedOrigin);
+          params.append(key, value);
+        }
+        if (params.toString() === '') return jsonResp({ error: 'empty_body' }, 400, allowedOrigin);
+        const upstream = await fetch(
+          env.RAGIC_BASE + '/ragicforms4/20004/' + rid + '?api',
+          { method: 'POST', headers: { 'Authorization': 'Basic ' + env.RAGIC_KEY, 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() }
+        );
+        const text = await upstream.text();
+        let data = null; try { data = JSON.parse(text); } catch {}
+        const fail = detectUpstreamFailure(upstream, data);
+        if (fail) return jsonResp(fail, 502, allowedOrigin);
+        // Write bcard survey timestamp server-side (not client-controlled, not in whitelist)
+        const now = new Date();
+        const tpe = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+        const tsStr = tpe.getUTCFullYear() + '-'
+          + String(tpe.getUTCMonth() + 1).padStart(2, '0') + '-'
+          + String(tpe.getUTCDate()).padStart(2, '0') + ' '
+          + String(tpe.getUTCHours()).padStart(2, '0') + ':'
+          + String(tpe.getUTCMinutes()).padStart(2, '0');
+        await fetch(
+          env.RAGIC_BASE + '/ragicforms4/20004/' + rid + '?api',
+          { method: 'POST', headers: { 'Authorization': 'Basic ' + env.RAGIC_KEY, 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: '1002556=' + encodeURIComponent(tsStr) }
+        );
+        return jsonResp({ ok: true }, 200, allowedOrigin);
+      }
+
       // ============ Group C: earnest + payment-receipt (sync) ============
       if (action === 'getEarnest') {
         let rid = url.searchParams.get('rid');
@@ -971,7 +1053,8 @@ export default {
       }
 
       if (action === 'getPaymentReceipt' || action === 'verifyPaymentReceipt') {
-        let rid = url.searchParams.get('rid');
+        // Accept both ?rid= (numeric ragicId or 憑單編號) and ?code= (憑單編號 alias)
+        let rid = url.searchParams.get('rid') || url.searchParams.get('code');
         if (!rid) return jsonResp({ error: 'invalid_rid' }, 400, allowedOrigin);
         if (!validRid(rid)) {
           // rid may be a 憑單編號 like "202605-032" — look it up by field 1000781
@@ -1012,6 +1095,121 @@ export default {
         const fail = detectUpstreamFailure(upstream, data);
         if (fail) return jsonResp(fail, 502, allowedOrigin);
         return jsonResp({ ok: true, ragicId: data?.ragicId || parsed.rid }, 200, allowedOrigin);
+      }
+
+      // ============ Group C2: createPaymentReceipt — 業務建立新收款單 ============
+      if (action === 'createPaymentReceipt') {
+        const ct = request.headers.get('Content-Type') || '';
+        if (!ct.toLowerCase().startsWith('multipart/form-data')) {
+          return jsonResp({ error: 'expect_multipart' }, 400, allowedOrigin);
+        }
+        let form;
+        try { form = await request.formData(); } catch {
+          return jsonResp({ error: 'bad_multipart' }, 400, allowedOrigin);
+        }
+
+        // Whitelist: 主表 14 欄 + 子表格兩組 (租客/房東)
+        const CREATE_PAYMENT_MAIN_FIELDS = new Set([
+          '1000782', // 對象(房東/租客)
+          '1000772', // 收款日期
+          '1002051', // 選擇分類
+          '1000597', // 案名(連結欄)
+          '1002052', // 公司件案名
+          '1000767', // 地址（直接寫，不等 Link&Load auto-sync）
+          '1000773', // 備註（存「經辦：姓名」）
+          '1002053', // 公司件地址
+          '1000773', // 備註
+          '1000602', // 經辦人員(email)
+          '1000789', // 定金單編號（連結欄，寫顯示文字 No.YYYYMMDD-NNN）
+          '1000599', // 租客姓名（無定金單時手填）
+          '1000779', // 租客電話（無定金單時手填）
+          '1000785', // 付款方式-租客
+          '1000780', // 後五碼-租客
+          '1002076', // 付款方式-房東
+          '1000603', // 後五碼-房東
+          '1000784', // 租客付款證明(檔案)
+          '1000650', // 房東匯款截圖(檔案)
+        ]);
+        // 子表格欄位 (租客收付款明細 key=1000777 + 房東服務費明細 key=1001701)
+        const CREATE_PAYMENT_SUBTABLE_FIELD_IDS = new Set([
+          '1000774', '1000776', '1000775', // 租客子表格 type/項目/金額
+          '1001698', '1001699', '1001700', // 房東子表格 type/項目/金額
+        ]);
+
+        const outForm = new FormData();
+        for (const [key, value] of form.entries()) {
+          // 子表格 key 格式: 1000774_-1, 1000775_-2 ...
+          const subtableMatch = key.match(/^(\d{7})_(-\d+)$/);
+          if (subtableMatch) {
+            const fieldId = subtableMatch[1];
+            if (!CREATE_PAYMENT_SUBTABLE_FIELD_IDS.has(fieldId)) {
+              return jsonResp({ error: 'invalid_subtable_field', key }, 400, allowedOrigin);
+            }
+            // 金額欄位只允許數字（防注入）
+            if (fieldId === '1000775' || fieldId === '1001700') {
+              if (!/^-?\d+(\.\d+)?$/.test(String(value))) {
+                return jsonResp({ error: 'invalid_amount', key }, 400, allowedOrigin);
+              }
+            }
+            const strVal = String(value).slice(0, 500);
+            outForm.append(key, strVal);
+            continue;
+          }
+          // 主表欄位
+          if (!/^\d{7}$/.test(key)) continue; // 跳過 _xxx 非欄位 key
+          if (!CREATE_PAYMENT_MAIN_FIELDS.has(key)) {
+            return jsonResp({ error: 'invalid_field', key, reason: 'not_whitelisted' }, 400, allowedOrigin);
+          }
+          // 檔案欄位: 透傳 File object
+          if (value instanceof File) {
+            if (value.size > 20 * 1024 * 1024) {
+              return jsonResp({ error: 'file_too_large', key }, 400, allowedOrigin);
+            }
+            outForm.append(key, value, value.name);
+          } else {
+            const strVal = String(value).slice(0, 2000);
+            outForm.append(key, strVal);
+          }
+        }
+
+        // POST 新建 record 到 payments/2
+        const upstream = await fetch(`${env.RAGIC_BASE}/payments/2?api&v=3&doLinkLoad=first&doFormula=true`, {
+          method: 'POST',
+          headers: { 'Authorization': 'Basic ' + env.RAGIC_KEY },
+          body: outForm,
+        });
+        const text = await upstream.text();
+        let data = null;
+        try { data = JSON.parse(text); } catch {}
+        const fail = detectUpstreamFailure(upstream, data);
+        if (fail) return jsonResp(fail, 502, allowedOrigin);
+
+        const newRid = data?.ragicId || data?.rv;
+        if (!newRid) return jsonResp({ error: 'no_rid_returned', raw: text.slice(0, 200) }, 502, allowedOrigin);
+
+        // 讀回新建 record：(1) 取憑單編號(1000781)；(2) 驗對象欄(1000782)有值（Bug 3 防呆）
+        let voucherCode = '';
+        try {
+          const readUpstream = await fetch(
+            `${env.RAGIC_BASE}/payments/2/${newRid}?api=true&v=3&naming=EID`,
+            { headers: { 'Authorization': 'Basic ' + env.RAGIC_KEY } }
+          );
+          const readData = await readUpstream.json().catch(() => ({}));
+          const rec = readData[String(newRid)];
+          if (!rec) {
+            return jsonResp({ error: 'verify_failed', reason: 'record_not_found_after_create', ragicId: newRid }, 502, allowedOrigin);
+          }
+          // 對象欄(1000782)必須有值，否則視為寫入失敗（防謊報成功）
+          const subjectVal = rec['1000782'];
+          if (!subjectVal || String(subjectVal).trim() === '') {
+            return jsonResp({ error: 'verify_failed', reason: '1000782_empty_after_create', ragicId: newRid }, 502, allowedOrigin);
+          }
+          voucherCode = rec['1000781'] || '';
+        } catch (e) {
+          return jsonResp({ error: 'verify_read_failed', ragicId: newRid, msg: String(e) }, 502, allowedOrigin);
+        }
+
+        return jsonResp({ ok: true, ragicId: newRid, voucherCode }, 200, allowedOrigin);
       }
 
       if (action === 'submitPaymentSource') {
@@ -1547,7 +1745,421 @@ export default {
         return jsonResp(clean, 200, allowedOrigin);
       }
 
-      // ============ Group K: createDeposit — deposit.html quick-create (payments/1) ============
+      // ============ Group K: check591Collision â 591æå®é·é (extension, token-gated) ============
+      if (action === 'check591Collision') {
+        // Token gate
+        const token = request.headers.get('X-WH-Token');
+        if (!token || token !== env.WH_EXT_TOKEN) {
+          return new Response(JSON.stringify({ error: 'forbidden' }), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+
+        let body591;
+        try {
+          // Use arrayBuffer + TextDecoder to force UTF-8 decoding (avoids CF json() charset ambiguity)
+          const buf = await request.arrayBuffer();
+          const text = new TextDecoder('utf-8').decode(buf);
+          body591 = JSON.parse(text);
+        } catch { return jsonResp({ error: 'bad_json' }, 400, allowedOrigin); }
+        const id591 = (body591 && body591.id591 ? String(body591.id591) : '').trim();
+        const addr  = (body591 && body591.addr  ? String(body591.addr)  : '').trim();
+
+        if (!id591 || !/^\d{5,12}$/.test(id591)) {
+          return jsonResp({ error: 'invalid_id591' }, 400, allowedOrigin);
+        }
+
+        const ragicBase = env.RAGIC_BASE;
+        const ragicKey  = env.RAGIC_KEY;
+
+        // Build Ragic query URLs using URL object + searchParams to avoid CF fetch URL re-encoding issues.
+        // Ragic where format: '1000055,like,value' — searchParams.set encodes the full string correctly.
+
+        function ragicUrl(base, sheet, params) {
+          const u = new URL(base + '/' + sheet);
+          for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+          return u.toString();
+        }
+
+        // Query A: sheet10, 591é£çµ (1000113) like id591 — subtables=0 for full fields
+        const urlA = ragicUrl(ragicBase, 'property-data-kept/10', { api: 'true', naming: 'EID', subtables: '0', where: '1000113,like,' + id591 });
+        const qA = fetch(urlA, { headers: { Authorization: 'Basic ' + ragicKey } })
+          .then(function(r){ return r.json(); }).catch(function(){ return {}; });
+
+        // Query B: sheet10, å°å (1000055) like addr — subtables=0, searchParams handles CJK encoding
+        const urlB = addr ? ragicUrl(ragicBase, 'property-data-kept/10', { api: 'true', naming: 'EID', subtables: '0', where: '1000055,like,' + addr }) : null;
+        const qB = urlB
+          ? fetch(urlB, { headers: { Authorization: 'Basic ' + ragicKey } })
+              .then(function(r){ return r.json(); }).catch(function(){ return {}; })
+          : Promise.resolve({});
+
+        // Query C: sheet17, ææ591é£çµ (1002233) like id591 — Basic Auth returns 106, use APIKey param
+        const urlC = ragicUrl(ragicBase, 'property-data-kept/17', { api: 'true', naming: 'EID', subtables: '0', where: '1002233,like,' + id591, APIKey: ragicKey });
+        const qC = fetch(urlC)
+          .then(function(r){ return r.json(); }).catch(function(){ return {}; });
+
+        // Query D: sheet17, å½æ´å°å (1000903) like addr
+        const urlD = addr ? ragicUrl(ragicBase, 'property-data-kept/17', { api: 'true', naming: 'EID', subtables: '0', where: '1000903,like,' + addr, APIKey: ragicKey }) : null;
+        const qD = urlD
+          ? fetch(urlD)
+              .then(function(r){ return r.json(); }).catch(function(){ return {}; })
+          : Promise.resolve({});
+
+        const results = await Promise.all([qA, qB, qC, qD]);
+        const resA = results[0], resB = results[1], resC = results[2], resD = results[3];
+
+        // Parse sheet10 â kept[]
+        // 1000707=çæ, 1001313=è² è²¬äºº1 email, 1000055=å°å, 1000113=591é£çµ
+        const kept = [];
+        const seenKeptRid = new Set();
+        const sheet10Entries = Object.assign({}, resA, resB);
+        for (const rid in sheet10Entries) {
+          if (rid === '_total' || rid === '_max') continue;
+          const rec = sheet10Entries[rid];
+          if (!rec || typeof rec !== 'object') continue;
+          if (seenKeptRid.has(rid)) continue;
+          seenKeptRid.add(rid);
+          const link591 = rec['1000113'] || '';
+          const matchType = link591.indexOf(id591) >= 0 ? 'id' : 'addr';
+          kept.push({
+            match:   matchType,
+            status:  rec['1000707'] || '',
+            owner:   rec['1001313'] || '',
+            address: rec['1000055'] || '',
+          });
+        }
+
+        // Parse sheet17 â dev[]
+        // 1000876=å±ä¸»çæ, 1000897=ä¸»è¦éç¼äºº email, 1000903=å½æ´å°å
+        const dev = [];
+        const seenDevRid = new Set();
+        const sheet17Entries = Object.assign({}, resC, resD);
+        for (const rid in sheet17Entries) {
+          if (rid === '_total' || rid === '_max') continue;
+          const rec = sheet17Entries[rid];
+          if (!rec || typeof rec !== 'object') continue;
+          if (seenDevRid.has(rid)) continue;
+          seenDevRid.add(rid);
+          const links591 = rec['1002233'] || '';
+          const matchType = links591.indexOf(id591) >= 0 ? 'id' : 'addr';
+          dev.push({
+            match:       matchType,
+            ownerStatus: rec['1000876'] || '',
+            developer:   rec['1000897'] || '',
+            addresses:   rec['1000903'] || '',
+          });
+        }
+
+        return jsonResp({ kept, dev }, 200, allowedOrigin);
+      }
+
+      // ============ Group L: registerDevelopment — 一鍵登記開發 (token-gated, Joan-only in testing) ============
+      if (action === 'registerDevelopment') {
+        // Token gate — bare Response (not jsonResp): token-gated path is NOT a CORS path
+        const tokenJoan = request.headers.get('X-WH-Token');
+        if (!tokenJoan || tokenJoan !== env.WH_EXT_TOKEN_JOAN) {
+          return new Response('403 Forbidden', { status: 403 });
+        }
+
+        // Parse body (arrayBuffer + TextDecoder — avoids CF json() UTF-8 ambiguity for CJK)
+        let rbody;
+        try {
+          const rbuf = await request.arrayBuffer();
+          const rtxt = new TextDecoder('utf-8').decode(rbuf);
+          rbody = JSON.parse(rtxt);
+        } catch { return new Response('400 bad_json', { status: 400 }); }
+
+        // Field whitelist — only these 5 IDs are accepted
+        const ALLOWED_FIELD_IDS_RD = new Set(['1000262', '1001642', '1000897', '1000633_-1', '1000636_-1']);
+        const FIELD_ID_RE_RD = /^\d{7}(?:_-?\d{1,3})?$/;
+
+        const { ownerName, phone, developerEmail, link591, address, id591 } = rbody || {};
+
+        // Check required fields
+        if (!ownerName || !developerEmail || !link591 || !address || !id591) {
+          return new Response(JSON.stringify({ error: 'missing_required_fields' }), {
+            status: 400, headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const writeFields = {
+          '1000262': String(ownerName).slice(0, 50),        // 屋主名
+          '1001642': String(phone || '').slice(0, 30),      // 電話(轉接號)
+          '1000897': String(developerEmail).slice(0, 100),  // 開發人 email
+          '1000633_-1': String(link591).slice(0, 255),      // 子表: 591連結
+          '1000636_-1': String(address).slice(0, 200),      // 子表: 地址
+        };
+
+        // Validate field IDs against whitelist (defensive)
+        for (const fid of Object.keys(writeFields)) {
+          if (!FIELD_ID_RE_RD.test(fid) || !ALLOWED_FIELD_IDS_RD.has(fid)) {
+            return new Response(JSON.stringify({ error: 'invalid_field_id', field: fid }), {
+              status: 400, headers: { 'Content-Type': 'application/json' }
+            });
+          }
+        }
+
+        const ragicBaseRD = env.RAGIC_BASE;
+        const ragicKeyRD  = env.RAGIC_KEY;
+
+        // ── Backend collision self-check (do NOT trust any frontend flag) ──
+        function ragicUrlRD(base, sheet, params) {
+          const u = new URL(base + '/' + sheet);
+          for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+          return u.toString();
+        }
+
+        let collisionDeveloper = null;
+        try {
+          const id591str = String(id591).trim();
+          // Check sheet17 dev records (1002233 = 所有591連結 formula col)
+          const urlRDC = ragicUrlRD(ragicBaseRD, 'property-data-kept/17', {
+            api: 'true', naming: 'EID', subtables: '0',
+            where: '1002233,like,' + id591str, APIKey: ragicKeyRD
+          });
+          // Check sheet10 kept records (1000113 = 591連結)
+          const urlRDA = ragicUrlRD(ragicBaseRD, 'property-data-kept/10', {
+            api: 'true', naming: 'EID', subtables: '0',
+            where: '1000113,like,' + id591str
+          });
+          const [resRDC, resRDA] = await Promise.all([
+            fetch(urlRDC).then(r => r.json()).catch(() => ({})),
+            fetch(urlRDA, { headers: { Authorization: 'Basic ' + ragicKeyRD } }).then(r => r.json()).catch(() => ({})),
+          ]);
+          // sheet17: 1000897 = 開發人 email
+          for (const rid in resRDC) {
+            if (rid === '_total' || rid === '_max') continue;
+            const rec = resRDC[rid];
+            if (!rec || typeof rec !== 'object') continue;
+            const existingDev = rec['1000897'] || '';
+            if (existingDev && existingDev !== developerEmail) {
+              collisionDeveloper = existingDev;
+              break;
+            }
+          }
+          // sheet10: 1001313 = 負責人1 email
+          if (!collisionDeveloper) {
+            for (const rid in resRDA) {
+              if (rid === '_total' || rid === '_max') continue;
+              const rec = resRDA[rid];
+              if (!rec || typeof rec !== 'object') continue;
+              const existingOwner = rec['1001313'] || '';
+              if (existingOwner && existingOwner !== developerEmail) {
+                collisionDeveloper = existingOwner;
+                break;
+              }
+            }
+          }
+        } catch (e) { /* collision check failure is non-fatal, proceed with write */ }
+
+        // ── Write to sheet 17 ──
+        // Note: Basic Auth returns 106 for /17; must use URL param APIKey (§3 坑)
+        const writeUrlRD = new URL(ragicBaseRD + '/property-data-kept/17');
+        writeUrlRD.searchParams.set('api', 'true');
+        writeUrlRD.searchParams.set('APIKey', ragicKeyRD);
+        const params17 = new URLSearchParams();
+        for (const [fid, val] of Object.entries(writeFields)) {
+          params17.set(fid, val);
+        }
+
+        let ragicId = null;
+        let writeOk = false;
+        try {
+          const writeRes = await fetch(writeUrlRD.toString(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params17.toString(),
+          });
+          const writeData = await writeRes.json().catch(() => ({}));
+          if (writeData && writeData.ragicId) {
+            ragicId = String(writeData.ragicId);
+            writeOk = true;
+          } else if (writeData && writeData.status === 'SUCCESS') {
+            writeOk = true;
+          }
+        } catch (e) {
+          return new Response(JSON.stringify({ error: 'write_failed', detail: String(e) }), {
+            status: 502, headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (!writeOk) {
+          return new Response(JSON.stringify({ error: 'ragic_write_failed' }), {
+            status: 502, headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        // ── Non-blocking Telegram notification on collision ──
+        // Decoupled from write: failure here does NOT roll back registration
+        if (collisionDeveloper) {
+          const nowRD = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+          const tgLines = [
+            '🚨 <b>撞單登記</b>',
+            '',
+            '登記人：' + escapeHtml(developerEmail),
+            '591 連結：' + escapeHtml(link591),
+            '地址：' + escapeHtml(address),
+            '原開發人：' + escapeHtml(collisionDeveloper),
+            '時間：' + nowRD,
+          ];
+          if (ragicId) tgLines.push('開發募集 ID：' + ragicId);
+          const tgTextRD = tgLines.join('\n');
+          ctx.waitUntil(
+            sendTelegramMessage(env, tgTextRD, ragicId || 'collision').catch(() => {})
+          );
+        }
+
+        return new Response(JSON.stringify({
+          ok: true,
+          ragicId,
+          collision: collisionDeveloper ? { existingDeveloper: collisionDeveloper } : null,
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+
+
+      // ============ Group M: checkRagicEmail — validate Ragic login email ============
+      if (action === 'checkRagicEmail') {
+        const emailParam = url.searchParams.get('email');
+        if (!emailParam || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailParam) || emailParam.length > 100) {
+          return jsonResp({ error: 'invalid_email' }, 400, allowedOrigin);
+        }
+        // Query ragic-setup/5 field 1 (Ragic login email = Google email)
+        const ragicBase = env.RAGIC_BASE;
+        const ragicKey  = env.RAGIC_KEY;
+        const u = new URL(ragicBase + '/ragic-setup/5');
+        u.searchParams.set('api', 'true');
+        u.searchParams.set('naming', 'EID');
+        u.searchParams.set('limit', '1');
+        u.searchParams.set('where', '1,eq,' + emailParam);
+        let setupData = {};
+        try {
+          const res = await fetch(u.toString(), { headers: { Authorization: 'Basic ' + ragicKey } });
+          setupData = await res.json().catch(() => ({}));
+        } catch (e) {
+          return jsonResp({ error: 'upstream_error' }, 502, allowedOrigin);
+        }
+        const rids = Object.keys(setupData).filter(k => k !== '_total' && k !== '_max');
+        if (rids.length > 0) {
+          const rec = setupData[rids[0]];
+          const displayName = rec ? (rec['4'] || '') : '';
+          return jsonResp({ valid: true, displayName }, 200, allowedOrigin);
+        }
+        return jsonResp({ valid: false }, 200, allowedOrigin);
+      }
+
+      // ============ Group N2: searchStaff — 取在職業務員清單供 payment-create.html 使用 ============
+      if (action === 'searchStaff') {
+        const u = new URL(env.RAGIC_BASE + '/ragicforms4/20004');
+        u.searchParams.set('api', 'true');
+        u.searchParams.set('v', '3');
+        u.searchParams.set('naming', 'EID');
+        u.searchParams.set('limit', '0,200');
+        u.searchParams.set('where', '3000945,eq,在職');
+        let staffData = {};
+        try {
+          const res = await fetch(u.toString(), {
+            headers: { Authorization: 'Basic ' + env.RAGIC_KEY }
+          });
+          staffData = await res.json().catch(() => ({}));
+        } catch (e) {
+          return jsonResp({ error: 'upstream_error' }, 502, allowedOrigin);
+        }
+        const rids = Object.keys(staffData).filter(k => k !== '_total' && k !== '_max');
+        const staff = rids.map(rid => {
+          const rec = staffData[rid];
+          return {
+            rid: Number(rid),
+            name: rec['3000933'] || '',
+            englishName: rec['3000947'] || '',
+            dept: rec["3000937"] || "",
+            email: rec["3000976"] || "",
+            phone: rec["3000975"] || ""
+          };
+        }).filter(s => s.name);
+        staff.sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'));
+        return jsonResp({ ok: true, staff }, 200, allowedOrigin);
+      }
+
+      // ============ Group N3: searchDeposits ============
+      if (action === 'searchDeposits') {
+        const q = (url.searchParams.get('q') || '').trim().slice(0, 50);
+        if (!q) return jsonResp({ ok: true, deposits: [] }, 200, allowedOrigin);
+        const fetchDep = async (fid, val) => {
+          const uu = new URL(env.RAGIC_BASE + '/payments/1');
+          uu.searchParams.set('api', 'true');
+          uu.searchParams.set('v', '3');
+          uu.searchParams.set('naming', 'EID');
+          uu.searchParams.set('limit', '0,100');
+          uu.searchParams.set('where', fid + ',like,' + val);
+          const res = await fetch(uu.toString(), { headers: { Authorization: 'Basic ' + env.RAGIC_KEY } });
+          return res.json().catch(() => ({}));
+        };
+        let dMap = {};
+        try {
+          const [byNo, byName] = await Promise.all([fetchDep('1000796', q), fetchDep('1000792', q)]);
+          for (const src of [byNo, byName]) {
+            for (const [rid, rec] of Object.entries(src)) {
+              if (rid === '_total' || rid === '_max' || typeof rec !== 'object') continue;
+              dMap[rid] = rec;
+            }
+          }
+        } catch (e) {
+          return jsonResp({ error: 'upstream_error' }, 502, allowedOrigin);
+        }
+        const deposits = Object.entries(dMap).map(([rid, rec]) => ({
+          rid: Number(rid),
+          depositNo:   rec['1000796'] || '',
+          caseName:    rec['1000790'] || '',
+          tenantName:  rec['1000792'] || '',
+          tenantPhone: rec['1000808'] || '',
+          earnestAmt:  Number(rec['1000832'] || 0),
+        })).filter(d => d.depositNo);
+        deposits.sort((a, b) => b.rid - a.rid);
+        return jsonResp({ ok: true, deposits }, 200, allowedOrigin);
+      }
+
+            // ============ Group N: searchCases — 取在管物件清單供 payment-create.html 使用 ============
+      if (action === 'searchCases') {
+        const q = (url.searchParams.get('q') || '').trim().slice(0, 50);
+        const u = new URL(env.RAGIC_BASE + '/operation/4');
+        u.searchParams.set('api', 'true');
+        u.searchParams.set('v', '3');
+        u.searchParams.set('naming', 'EID');
+        u.searchParams.set('limit', '0,200');
+        // filter: 狀態=代租中
+        u.searchParams.set('where', '1000707,eq,代租中');
+        let casesData = {};
+        try {
+          const res = await fetch(u.toString(), {
+            headers: { Authorization: 'Basic ' + env.RAGIC_KEY }
+          });
+          casesData = await res.json().catch(() => ({}));
+        } catch (e) {
+          return jsonResp({ error: 'upstream_error' }, 502, allowedOrigin);
+        }
+        const rids = Object.keys(casesData).filter(k => k !== '_total' && k !== '_max');
+        let cases = rids.map(rid => {
+          const rec = casesData[rid];
+          return {
+            rid: Number(rid),
+            name: rec['1000050'] || '',
+            address: rec['1000055'] || ''
+          };
+        }).filter(c => c.name);
+        // if search query provided, filter client-side
+        if (q) {
+          const ql = q.toLowerCase();
+          cases = cases.filter(c =>
+            c.name.toLowerCase().includes(ql) ||
+            c.address.toLowerCase().includes(ql)
+          );
+        }
+        cases.sort((a, b) => b.rid - a.rid); // newest first
+        return jsonResp({ ok: true, cases }, 200, allowedOrigin);
+      }
+
+      // ============ Group O: createDeposit — deposit.html quick-create (payments/1) ============
       if (action === 'createDeposit') {
         let body;
         try { body = await request.json(); } catch { return jsonResp({ error: 'bad_json' }, 400, allowedOrigin); }
@@ -1566,6 +2178,11 @@ export default {
         }
         if (params.toString().length === 0) return jsonResp({ error: 'no_valid_fields' }, 400, allowedOrigin);
 
+        // Force-inject 選擇群組 (1001815) — repeated key = multi-select in Ragic.
+        // Never read from frontend; ensures group permission isolation is always set.
+        params.append('1001815', 'X-User');
+        params.append('1001815', 'X-租賃部');
+
         // POST to payments/1 (no record id = new record)
         // doLinkLoad=first: execute Link&Load before formula; doFormula=true: compute formula fields (e.g. 1002057) at write time
         const { upstream, data } = await postUrlEncodedToRagic(env, 'payments/1', params.toString(), 'doLinkLoad=first&doFormula=true');
@@ -1580,7 +2197,6 @@ export default {
         try {
           const { upstream: ru, data: rd } = await getFromRagic(env, `payments/1/${ragicId}`, 'naming=EID');
           if (ru.ok && rd && typeof rd === 'object') {
-            // Single-record GET wraps in { "<rid>": {...} }
             const rec = rd[String(ragicId)] || Object.values(rd)[0] || {};
             depositNo = String(rec['1000796'] || '');
           }
@@ -1612,9 +2228,132 @@ export default {
         return jsonResp({ ok: true }, 200, allowedOrigin);
       }
 
+      // ============ Group P: reportBug -- screenshot + description to OPS Telegram ============
+      if (action === 'reportBug') {
+        let body;
+        try { body = await request.json(); } catch { return jsonResp({ error: 'bad_json' }, 400, allowedOrigin); }
+
+        // Extra origin guard (on top of CORS)
+        const reqOrigin = request.headers.get('Origin') || '';
+        const reqReferer = request.headers.get('Referer') || '';
+        const ALLOWED_REPORT_ORIGINS = [
+          'https://wuohome.github.io',
+          'https://schedule.wuohome.com.tw',
+          'https://map.wuohome.com.tw',
+          'https://from.wuohome.com.tw',
+        ];
+        const originOk = ALLOWED_REPORT_ORIGINS.some(function(o) { return reqOrigin.startsWith(o) || reqReferer.startsWith(o); });
+        if (!originOk) return jsonResp({ error: 'forbidden_origin' }, 403, allowedOrigin);
+
+        const bugDesc    = body.description;
+        const bugType    = body.type;
+        const pageUrl    = body.url;
+        const pageTitle  = body.title;
+        const userAgent  = body.userAgent;
+        const screenshot = body.screenshot;
+        const uploads    = body.uploads;
+
+        if (!bugDesc || typeof bugDesc !== 'string' || bugDesc.trim().length < 3) {
+          return jsonResp({ error: 'description_required' }, 400, allowedOrigin);
+        }
+        const VALID_TYPES = ['功能異常', '版面問題', '資料錯誤', '建議', '其他'];
+        const safeType  = (typeof bugType === 'string' && VALID_TYPES.includes(bugType)) ? bugType : '其他';
+        const safeDesc  = bugDesc.trim().slice(0, 1000);
+        const safeUrl   = (typeof pageUrl === 'string' ? pageUrl : '').slice(0, 500);
+        const safeTitle = (typeof pageTitle === 'string' ? pageTitle : '').slice(0, 200);
+        const safeUA    = (typeof userAgent === 'string' ? userAgent : '').slice(0, 300);
+
+        var uaShort = (function() {
+          if (!safeUA) return '未知';
+          var m = safeUA.match(/\(([^)]+)\)/);
+          var platform = m ? m[1].split(';')[0].trim() : '未知平台';
+          var browser = safeUA.indexOf('Chrome') >= 0 ? 'Chrome'
+                      : safeUA.indexOf('Firefox') >= 0 ? 'Firefox'
+                      : safeUA.indexOf('Safari') >= 0 ? 'Safari' : '其他';
+          return platform + ' / ' + browser;
+        })();
+
+        var nowTW = new Date().toLocaleString('zh-TW', {
+          timeZone: 'Asia/Taipei',
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+        });
+
+        var captionParts = [
+          '🐛 問題回報',
+          '類型：' + safeType,
+          '頁面：' + (safeTitle || '（無標題）') + '（' + (safeUrl || '—') + '）',
+          '描述：' + safeDesc,
+          '裝置：' + uaShort,
+          '時間：' + nowTW,
+        ];
+        var caption = captionParts.join('\n');
+
+        var BOT_TOKEN = env.OPS_BOT_TOKEN;
+        if (!BOT_TOKEN) return jsonResp({ error: 'server_config_error' }, 500, allowedOrigin);
+        var CHAT_ID = '8163308207';
+        var TG_BASE = 'https://api.telegram.org/bot' + BOT_TOKEN;
+
+        var images = [];
+        if (screenshot && typeof screenshot === 'string' && screenshot.indexOf('data:image/') === 0) {
+          images.push(screenshot);
+        }
+        if (Array.isArray(uploads)) {
+          for (var i = 0; i < Math.min(uploads.length, 5); i++) {
+            var up = uploads[i];
+            if (up && typeof up === 'string' && up.indexOf('data:image/') === 0) images.push(up);
+          }
+        }
+
+        function dataUrlToBytes(dataUrl) {
+          var b64 = dataUrl.split(',')[1];
+          if (!b64) return null;
+          var bin = atob(b64);
+          var bytes = new Uint8Array(bin.length);
+          for (var j = 0; j < bin.length; j++) bytes[j] = bin.charCodeAt(j);
+          return bytes;
+        }
+
+        async function sendPhoto(dataUrl, cap) {
+          var bytes = dataUrlToBytes(dataUrl);
+          if (!bytes || bytes.length > 10 * 1024 * 1024) return { ok: false };
+          var form = new FormData();
+          form.append('chat_id', CHAT_ID);
+          form.append('photo', new Blob([bytes], { type: 'image/jpeg' }), 'screenshot.jpg');
+          if (cap) form.append('caption', cap.slice(0, 1024));
+          var res = await fetch(TG_BASE + '/sendPhoto', { method: 'POST', body: form });
+          return res.json().catch(function() { return { ok: false }; });
+        }
+
+        if (images.length === 0) {
+          var res = await fetch(TG_BASE + '/sendMessage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: CHAT_ID, text: caption }),
+          });
+          var json = await res.json().catch(function() { return {}; });
+          if (!json.ok) return jsonResp({ error: 'telegram_error', detail: json.description }, 502, allowedOrigin);
+          return jsonResp({ ok: true }, 200, allowedOrigin);
+        }
+
+        var firstResult = await sendPhoto(images[0], caption);
+        if (!firstResult.ok) {
+          var res2 = await fetch(TG_BASE + '/sendMessage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: CHAT_ID, text: caption + '\n\n⚠️ 截圖上傳失敗' }),
+          });
+          var json2 = await res2.json().catch(function() { return {}; });
+          if (!json2.ok) return jsonResp({ error: 'telegram_error', detail: json2.description }, 502, allowedOrigin);
+          return jsonResp({ ok: true, warn: 'screenshot_failed' }, 200, allowedOrigin);
+        }
+        for (var k = 1; k < images.length; k++) {
+          await sendPhoto(images[k], '').catch(function() {});
+        }
+        return jsonResp({ ok: true }, 200, allowedOrigin);
+      }
     } catch (e) {
-      console.error('[worker catch]', String(e), e?.stack);
-      return jsonResp({ error: 'internal', msg: String(e) }, 500, allowedOrigin);
+      return jsonResp({ error: 'internal' }, 500, allowedOrigin);
     }
 
     return jsonResp({ error: 'not_implemented', action }, 501, allowedOrigin);
