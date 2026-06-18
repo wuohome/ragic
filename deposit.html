@@ -2385,7 +2385,7 @@ async function submitForm() {
       successSignLink = earnestLink;
 
       // 組給房客的招呼訊息
-      successMsgText = `您好，這是您在窩的家承租物件的定金收據，請點下方連結確認並完成線上簽名：\n${earnestLink}`;
+      successMsgText = `【優式窩的家三重加盟店 – 定金收據確認通知】\n房客您好，請點擊下方連結填寫並簽署定金收據，以完成確認程序。\n\n🔗 確認連結：${earnestLink}`;
 
       // 填成功頁
       document.getElementById("successDepositNo").textContent = result.depositNo || result.ragicId;
