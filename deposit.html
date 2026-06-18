@@ -2148,6 +2148,13 @@ function selectStaff(realIdx) {
   document.getElementById("eid1000793").value = r.name;
   document.getElementById("eid1000793_email").value = r.email || "";
 
+  // 自動帶入經辦電話（可手動覆寫）
+  if (r.phone) {
+    document.getElementById("eid1000838").value = r.phone;
+    clearErr("err-staffPhone");
+    clearInputErr(document.getElementById("eid1000838"));
+  }
+
   // 顯示已選 pill
   document.getElementById("staffSelectedPillText").textContent = "已選：" + r.name;
   document.getElementById("staffSelectedPill").classList.add("visible");
@@ -2164,6 +2171,7 @@ function clearStaffSelection(keepPicker) {
   selectedStaffIdx = -1;
   document.getElementById("eid1000793").value = "";
   document.getElementById("eid1000793_email").value = "";
+  document.getElementById("eid1000838").value = "";
   document.getElementById("staffSelectedPill").classList.remove("visible");
   document.getElementById("staffSelectedPillText").textContent = "";
 
