@@ -440,14 +440,18 @@
     const $ = (id) => document.getElementById(id);
 
     // 解析 URL
+    // 同時接受 ?code=No.YYYYMMDD-NNN（新式）、?rid=<數字>（舊式 deposit.html 產的連結）
+    // 以及 ?id= 別名。Worker getEarnest 兩種都能處理。
     const href = window.location.href;
     const matchCode = href.match(/[?&]code=([^&#]+)/i);
-    const matchId = href.match(/[?&]id=([^&#]+)/i);
+    const matchRid  = href.match(/[?&]rid=([^&#]+)/i);
+    const matchId   = href.match(/[?&]id=([^&#]+)/i);
     if (matchCode) recordId = matchCode[1];
+    else if (matchRid) recordId = matchRid[1];
     else if (matchId) recordId = matchId[1];
     else {
         const urlParams = new URLSearchParams(window.location.search);
-        recordId = urlParams.get('code') || urlParams.get('id');
+        recordId = urlParams.get('code') || urlParams.get('rid') || urlParams.get('id');
     }
     if (recordId) recordId = recordId.trim();
 
