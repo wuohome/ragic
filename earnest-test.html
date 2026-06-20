@@ -46,6 +46,67 @@
     
     .big-btn { transition: all 0.2s; cursor: pointer; }
     .big-btn:active { transform: scale(0.96); opacity: 0.9; }
+
+    /* 【層2】逐條確認卡片 */
+    .term-card {
+      border: 2.5px solid #cbd5e1;
+      border-radius: 1.25rem;
+      padding: 1rem 1.25rem;
+      margin-bottom: 0.75rem;
+      transition: all 0.25s;
+      background: #fff;
+    }
+    .term-card.confirmed {
+      border-color: #16a34a;
+      background: #f0fdf4;
+    }
+    .term-text {
+      font-size: 1rem;
+      line-height: 1.65;
+      color: #334155;
+      margin-bottom: 0.75rem;
+      font-weight: 600;
+    }
+    @media (min-width: 768px) {
+      .term-text { font-size: 1.2rem; }
+    }
+    .term-confirm-btn {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border-radius: 0.875rem;
+      font-weight: 900;
+      font-size: 1.1rem;
+      cursor: pointer;
+      border: 2.5px solid #94a3b8;
+      background: #f1f5f9;
+      color: #475569;
+      transition: all 0.2s;
+    }
+    @media (min-width: 768px) {
+      .term-confirm-btn { font-size: 1.4rem; padding: 1rem 1.25rem; }
+    }
+    .term-confirm-btn.done {
+      border-color: #16a34a;
+      background: #16a34a;
+      color: #fff;
+    }
+    .term-confirm-btn:active { transform: scale(0.97); }
+    /* 簽名區 gating */
+    #sign-gate-msg {
+      display: none;
+      background: #fef9c3;
+      border: 2px solid #fbbf24;
+      border-radius: 1rem;
+      padding: 0.85rem 1.1rem;
+      color: #92400e;
+      font-weight: 700;
+      font-size: 1rem;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    @media (min-width: 768px) {
+      #sign-gate-msg { font-size: 1.2rem; }
+    }
     
     /* 簽名板高度在手機上稍微縮小，避免佔據太多空間 */
     #signature-pad { background: #ffffff; border: 3px dashed #3b82f6; border-radius: 20px; width: 100%; height: 250px; touch-action: none; }
@@ -226,18 +287,41 @@
         </div>
       </div>
 
+      <!-- 【層2】逐條確認區 -->
       <div class="mb-8 md:mb-12">
-          <p class="font-black text-xl md:text-2xl mb-2 md:mb-4 text-slate-800">重要約定：</p>
-          <ul class="text-sm md:text-base space-y-2 text-slate-700 list-none">
-              <li>壹、上述條件由房客確認無誤，付定金後成立要約。</li>
-              <li>貳、如房東不同意上述條件，則定金無息全額退還於房客。</li>
-              <li>參、如房東同意上述條件，但因另有考量因素導致無法簽約，則定金無息全數退還於房客，不需支付額外費用。</li>
-              <li>肆、如房東同意上述條件，但房客因故反悔不租或超過簽約日仍不辦理簽約者，定金不予退還。</li>
-              <li>伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="show_service_fee" class="font-bold underline text-blue-700">-</span> 作為服務費。</li>
-          </ul>
+        <p class="font-black text-xl md:text-2xl mb-4 md:mb-6 text-slate-800">重要約定（請逐條確認）：</p>
+
+        <div class="term-card" id="term-card-1">
+          <p class="term-text">壹、上述條件由房客確認無誤，付定金後成立要約。</p>
+          <button class="term-confirm-btn" id="term-btn-1" onclick="confirmTerm(1)">我已了解 ✓</button>
+        </div>
+
+        <div class="term-card" id="term-card-2">
+          <p class="term-text">貳、如房東不同意上述條件，則定金無息全額退還於房客。</p>
+          <button class="term-confirm-btn" id="term-btn-2" onclick="confirmTerm(2)">我已了解 ✓</button>
+        </div>
+
+        <div class="term-card" id="term-card-3">
+          <p class="term-text">參、如房東同意上述條件，但因另有考量因素導致無法簽約，則定金無息全數退還於房客，不需支付額外費用。</p>
+          <button class="term-confirm-btn" id="term-btn-3" onclick="confirmTerm(3)">我已了解 ✓</button>
+        </div>
+
+        <div class="term-card" id="term-card-4">
+          <p class="term-text">肆、如房東同意上述條件，但房客因故反悔不租或超過簽約日仍不辦理簽約者，定金不予退還。</p>
+          <button class="term-confirm-btn" id="term-btn-4" onclick="confirmTerm(4)">我已了解 ✓</button>
+        </div>
+
+        <div class="term-card" id="term-card-5">
+          <p class="term-text">伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="show_service_fee" class="font-bold underline text-blue-700">-</span> 作為服務費。</p>
+          <button class="term-confirm-btn" id="term-btn-5" onclick="confirmTerm(5)">我已了解 ✓</button>
+        </div>
       </div>
 
-      <div class="mb-6 md:mb-10 text-center">
+      <!-- Gating 提示：五條未勾完時顯示 -->
+      <div id="sign-gate-msg">請先逐條確認上方五點重要約定，才能進行簽名。</div>
+
+      <!-- 簽名區：五條全確認前隱藏 -->
+      <div id="sign-section" class="hidden mb-6 md:mb-10 text-center">
         <label class="block text-2xl md:text-4xl font-black text-slate-800 mb-6 md:mb-10 underline decoration-blue-500 decoration-4 md:decoration-8 underline-offset-[8px] md:underline-offset-[16px]">房客簽名處</label>
         <div class="relative">
             <canvas id="signature-pad"></canvas>
@@ -247,7 +331,8 @@
 
       <div class="flex flex-col md:flex-row gap-4 md:gap-6 mt-8 md:mt-12">
         <button id="btn-back" class="order-2 md:order-1 flex-1 bg-slate-200 text-slate-500 text-xl md:text-3xl font-black py-4 md:py-7 rounded-2xl md:rounded-3xl">回上一步</button>
-        <button id="btn-submit" class="order-1 md:order-2 big-btn flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white text-xl md:text-4xl font-black py-4 md:py-7 rounded-2xl md:rounded-3xl shadow-2xl">簽好了，送出 ✅</button>
+        <!-- 送出按鈕：五條未勾完前保持禁用 -->
+        <button id="btn-submit" disabled class="order-1 md:order-2 big-btn flex-[2] bg-slate-300 text-slate-400 text-xl md:text-4xl font-black py-4 md:py-7 rounded-2xl md:rounded-3xl shadow cursor-not-allowed">請先確認重要約定</button>
       </div>
     </div>
 
@@ -380,6 +465,11 @@
                   <li style="margin-bottom: 5px;">肆、如房東同意上述條件，但房客因故反悔不租或超過簽約日仍不辦理簽約者，定金不予退還。</li>
                   <li>伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="pdf_service_fee" style="font-weight: bold; text-decoration: underline;">-</span> 作為服務費。</li>
               </ul>
+          </div>
+
+          <!-- 【層2】留證文字：送出時由 JS 寫入時間戳 -->
+          <div id="pdf_confirm_line" style="margin-top: 18px; padding: 10px 14px; background: #f0fdf4; border: 2px solid #16a34a; border-radius: 8px; font-size: 13px; font-weight: 700; color: #14532d;">
+            房客已於 <span id="pdf_confirm_time">—</span> 逐條確認並同意上述重要約定。
           </div>
 
           <div style="display: flex; justify-content: space-between; margin-top: 50px; padding: 0 10px; border-top: 3px solid #000; padding-top: 30px;">
@@ -625,10 +715,70 @@
       if($("pdf_occ")) $("pdf_occ").innerText = occ;
     }
 
+    /* ── 【層2】逐條確認邏輯 ────────────────────────────── */
+    const TOTAL_TERMS = 5;
+    const termsConfirmed = new Array(TOTAL_TERMS + 1).fill(false); // index 1-5
+
+    function confirmTerm(n) {
+      termsConfirmed[n] = true;
+      const card = document.getElementById('term-card-' + n);
+      const btn  = document.getElementById('term-btn-' + n);
+      if (card) card.classList.add('confirmed');
+      if (btn)  { btn.classList.add('done'); btn.textContent = '✅ 已確認'; btn.disabled = true; }
+      checkAllTerms();
+    }
+
+    function checkAllTerms() {
+      const allDone = termsConfirmed.slice(1).every(Boolean);
+      const gateMsg   = document.getElementById('sign-gate-msg');
+      const signSec   = document.getElementById('sign-section');
+      const submitBtn = $('btn-submit');
+
+      if (allDone) {
+        if (gateMsg)   gateMsg.style.display = 'none';
+        if (signSec)   signSec.classList.remove('hidden');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.className = submitBtn.className
+            .replace('bg-slate-300 text-slate-400 cursor-not-allowed shadow', '')
+            .trim();
+          submitBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'shadow-2xl');
+          submitBtn.textContent = '簽好了，送出 ✅';
+        }
+        // 簽名 canvas 需在可見後初始化（hidden 時 offsetWidth=0）
+        setTimeout(initSignature, 100);
+      } else {
+        if (gateMsg)   gateMsg.style.display = 'block';
+      }
+    }
+
+    function resetTerms() {
+      for (let i = 1; i <= TOTAL_TERMS; i++) {
+        termsConfirmed[i] = false;
+        const card = document.getElementById('term-card-' + i);
+        const btn  = document.getElementById('term-btn-' + i);
+        if (card) card.classList.remove('confirmed');
+        if (btn)  { btn.classList.remove('done'); btn.textContent = '我已了解 ✓'; btn.disabled = false; }
+      }
+      const gateMsg   = document.getElementById('sign-gate-msg');
+      const signSec   = document.getElementById('sign-section');
+      const submitBtn = $('btn-submit');
+      if (gateMsg)   gateMsg.style.display = 'none';
+      if (signSec)   signSec.classList.add('hidden');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'shadow-2xl');
+        submitBtn.classList.add('bg-slate-300', 'text-slate-400', 'cursor-not-allowed', 'shadow');
+        submitBtn.textContent = '請先確認重要約定';
+      }
+    }
+    /* ───────────────────────────────────────────────────── */
+
     function goStep(n) {
       if (n === 2) {
         updatePreviewFromForm();
-        setTimeout(initSignature, 250);
+        resetTerms(); // 每次進 step-2 重置確認狀態
+        // initSignature 留給 checkAllTerms 在五條全勾後再觸發
       }
       $("step-1").classList.add('hidden'); $("step-2").classList.add('hidden');
       $("step-" + n).classList.remove('hidden'); window.scrollTo(0, 0);
@@ -682,6 +832,14 @@
     let _lastFd = null;
 
     async function buildFormData() {
+      // 【層2】留證時間戳（台灣時區 GMT+8）
+      const now = new Date();
+      const twOffset = 8 * 60; // 分鐘
+      const twDate = new Date(now.getTime() + (twOffset - now.getTimezoneOffset()) * 60000);
+      const pad = n => String(n).padStart(2, '0');
+      const confirmTs = `${twDate.getUTCFullYear()}-${pad(twDate.getUTCMonth()+1)}-${pad(twDate.getUTCDate())} ${pad(twDate.getUTCHours())}:${pad(twDate.getUTCMinutes())}`;
+      if ($("pdf_confirm_time")) $("pdf_confirm_time").textContent = confirmTs;
+
       const sigData = signaturePad.toDataURL("image/png");
       if($("pdf_signature_img")) $("pdf_signature_img").src = sigData;
       if($("hidden_signature")) $("hidden_signature").value = sigData;
