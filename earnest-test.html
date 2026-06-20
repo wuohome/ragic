@@ -274,7 +274,7 @@
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 px-2 md:px-6 mb-8 md:mb-12 border-b-2 pb-6 md:pb-10">
             <div class="space-y-2 md:space-y-4">
-                <p class="text-lg md:text-2xl font-bold">房客（簽名）：<span id="show_final_name" class="underline px-2 md:px-4">-</span></p>
+                <p class="text-lg md:text-2xl font-bold">房客姓名：<span id="show_final_name" class="underline px-2 md:px-4">-</span></p>
                 <!-- 這裡會顯示 Step 1 修改後的電話 -->
                 <p class="text-base md:text-xl">電話：<span id="show_final_phone">-</span></p>
                 <p class="text-base md:text-xl">職業：<span id="show_final_occ">-</span></p>
@@ -324,6 +324,10 @@
           <p class="font-black text-xl md:text-3xl text-slate-800 mb-4 md:mb-6 text-center underline decoration-blue-500 decoration-4 underline-offset-8">房客簽名欄</p>
           <div class="relative rounded-2xl overflow-hidden">
             <canvas id="signature-pad"></canvas>
+            <!-- 未簽名時顯示的提示文字（簽名後由 JS 隱藏） -->
+            <div id="sig-placeholder" class="absolute inset-0 flex items-center justify-center pointer-events-none" style="border-radius:20px;">
+              <p class="text-slate-300 text-lg md:text-2xl font-bold select-none">請在此處簽名</p>
+            </div>
             <!-- 截 PDF 時顯示 img 替換 canvas；正常操作時顯示 canvas -->
             <img id="sig-img-for-pdf" style="display:none; width:100%; border:3px dashed #3b82f6; border-radius:20px; background:#fff;" alt="簽名">
             <button id="btn-clear" class="absolute top-2 right-2 md:top-4 md:right-4 bg-slate-100 text-slate-600 px-4 md:px-8 py-2 md:py-4 rounded-lg md:rounded-xl font-black text-xs md:text-sm shadow border border-slate-300 no-pdf">清除重寫</button>
@@ -487,7 +491,7 @@
 
           <div style="display: flex; justify-content: space-between; margin-top: 50px; padding: 0 10px; border-top: 3px solid #000; padding-top: 30px;">
               <div style="width: 55%;">
-                  <p style="font-size: 24px; font-weight: bold; margin-bottom: 35px;">房客（簽名）：<img id="pdf_signature_img_legacy" style="display: inline-block; vertical-align: middle; max-height: 90px;"></p>
+                  <p style="font-size: 24px; font-weight: bold; margin-bottom: 35px;">房客姓名：<img id="pdf_signature_img_legacy" style="display: inline-block; vertical-align: middle; max-height: 90px;"></p>
                   <p style="font-size: 18px;">電話：<span id="pdf_phone">-</span></p>
                   <p style="font-size: 18px;">職業：<span id="pdf_occ">-</span></p>
               </div>
@@ -711,6 +715,16 @@
       canvas.width = canvas.offsetWidth * ratio; canvas.height = canvas.offsetHeight * ratio;
       canvas.getContext("2d").scale(ratio, ratio);
       signaturePad = new SignaturePad(canvas, { minWidth: 0.8, maxWidth: 2.2, penColor: "black" });
+      // 簽名開始時隱藏 placeholder
+      signaturePad.addEventListener("beginStroke", () => {
+        const ph = $("sig-placeholder"); if (ph) ph.style.display = "none";
+      });
+    }
+
+    function resetSignaturePlaceholder() {
+      // 清除重寫後還原 placeholder
+      const ph = $("sig-placeholder");
+      if (ph && signaturePad && signaturePad.isEmpty()) ph.style.display = "";
     }
 
     function updatePreviewFromForm() {
@@ -1057,7 +1071,7 @@
     window.onload = () => {
       $("btn-test").onclick = () => { recordId = $("test-id-input").value.trim(); $("test-mode-ui").classList.add('hidden'); executeLoad(); };
       $("btn-next").onclick = () => goStep(2); $("btn-back").onclick = () => goStep(1);
-      $("btn-clear").onclick = () => signaturePad.clear(); $("btn-submit").onclick = () => submitData();
+      $("btn-clear").onclick = () => { signaturePad.clear(); resetSignaturePlaceholder(); }; $("btn-submit").onclick = () => submitData();
       if (!recordId) { $("loader-spinner").classList.add('hidden'); $("loader-text").innerText = "請輸入 Record ID"; $("test-mode-ui").classList.remove('hidden'); }
       else if (isSuspiciousCode(recordId)) {
         $("loader-spinner").classList.add('hidden');
