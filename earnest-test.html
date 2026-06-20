@@ -47,28 +47,25 @@
     .big-btn { transition: all 0.2s; cursor: pointer; }
     .big-btn:active { transform: scale(0.96); opacity: 0.9; }
 
-    /* 【層2】逐條確認卡片 */
+    /* 【正式版】條款純文字排版（無框卡片） */
     .term-card {
-      border: 2.5px solid #cbd5e1;
-      border-radius: 1.25rem;
-      padding: 1rem 1.25rem;
-      margin-bottom: 0.75rem;
-      transition: all 0.25s;
-      background: #fff;
+      padding: 0.25rem 0;
+      margin-bottom: 0.5rem;
+      transition: none;
+      background: transparent;
     }
     .term-card.confirmed {
-      border-color: #16a34a;
-      background: #f0fdf4;
+      /* 確認後無視覺變化（互動側才顯示總確認按鈕變綠），PDF 不顯示 */
     }
     .term-text {
-      font-size: 1rem;
-      line-height: 1.65;
-      color: #334155;
-      margin-bottom: 0.75rem;
-      font-weight: 600;
+      font-size: 0.95rem;
+      line-height: 1.7;
+      color: #1e293b;
+      margin-bottom: 0;
+      font-weight: 500;
     }
     @media (min-width: 768px) {
-      .term-text { font-size: 1.2rem; }
+      .term-text { font-size: 1.1rem; }
     }
     .term-confirm-btn {
       width: 100%;
@@ -91,6 +88,29 @@
       color: #fff;
     }
     .term-confirm-btn:active { transform: scale(0.97); }
+    /* 傳統收據底部簽名欄樣式 */
+    .receipt-sign-footer {
+      border-top: 2px solid #334155;
+      margin-top: 1rem;
+      padding-top: 0.75rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    .receipt-sign-col {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .receipt-sign-col .sign-label {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .receipt-sign-col .sign-field {
+      font-size: 0.9rem;
+      color: #334155;
+    }
     /* 簽名區 gating */
     #sign-gate-msg {
       display: none;
@@ -109,9 +129,9 @@
     }
     
     /* 簽名板高度在手機上稍微縮小，避免佔據太多空間 */
-    #signature-pad { background: #ffffff; border: 3px dashed #3b82f6; border-radius: 20px; width: 100%; height: 250px; touch-action: none; }
+    #signature-pad { background: #ffffff; border: 1px solid #94a3b8; border-radius: 4px; width: 100%; height: 180px; touch-action: none; }
     @media (min-width: 768px) {
-        #signature-pad { height: 320px; }
+        #signature-pad { height: 220px; }
     }
 
     #loader { background: rgba(255, 255, 255, 0.98); z-index: 100; }
@@ -272,23 +292,9 @@
             簽約請攜帶：定金收據、押租金、服務費尾款、印章、雙證件影本3份。
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 px-2 md:px-6 mb-8 md:mb-12 border-b-2 pb-6 md:pb-10">
-            <div class="space-y-2 md:space-y-4">
-                <p class="text-lg md:text-2xl font-bold">房客姓名：<span id="show_final_name" class="underline px-2 md:px-4">-</span></p>
-                <!-- 這裡會顯示 Step 1 修改後的電話 -->
-                <p class="text-base md:text-xl">電話：<span id="show_final_phone">-</span></p>
-                <p class="text-base md:text-xl">職業：<span id="show_final_occ">-</span></p>
-            </div>
-            <div class="text-left md:text-right space-y-2 md:space-y-4 mt-4 md:mt-0">
-                <p class="text-xs md:text-sm font-bold text-slate-500">優式租售管理 - 窩的家三重加盟店</p>
-                <p class="text-lg md:text-2xl font-bold">經辦人員：<span id="show_agent">-</span></p>
-                <p class="text-base md:text-xl">電話：<span id="show_agent_phone">-</span></p>
-            </div>
-        </div>
-
-        <!-- 【合一版】重要約定 + 總確認按鈕（在收據範圍內）-->
-        <div class="mt-6 md:mt-8 pt-4 md:pt-6 border-t-2 border-slate-200">
-          <p class="font-black text-xl md:text-2xl mb-4 md:mb-6 text-slate-800">重要約定（請確認）：</p>
+        <!-- 【正式版】重要約定五條（純文字條款，無框卡片）-->
+        <div class="mt-4 md:mt-6 pt-4 md:pt-5 border-t border-slate-300">
+          <p style="font-weight:900; font-size:1rem; margin-bottom:0.6rem; color:#1e293b;">重要約定：</p>
 
           <div class="term-card" id="term-card-1">
             <p class="term-text">壹、上述條件由房客確認無誤，付定金後成立要約。</p>
@@ -307,31 +313,43 @@
           </div>
 
           <div class="term-card" id="term-card-5">
-            <p class="term-text">伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="show_service_fee" class="font-bold underline text-blue-700">-</span> 作為服務費。</p>
+            <p class="term-text">伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="show_service_fee" class="font-bold underline">-</span> 作為服務費。</p>
           </div>
 
-          <!-- 一個總確認按鈕，grandpa 大字風格 -->
-          <button class="term-confirm-btn no-pdf mt-4 md:mt-6" id="btn-confirm-all" onclick="confirmAll()">以上五點我已了解並同意 ✓</button>
+          <!-- 一個總確認按鈕（互動用，PDF 隱藏）-->
+          <button class="term-confirm-btn no-pdf mt-4 md:mt-5" id="btn-confirm-all" onclick="confirmAll()">以上五點我已了解並同意 ✓</button>
         </div>
 
-        <!-- 【合一版】留證行（PDF 截圖時也在這裡，hidden 直到總確認）-->
-        <div id="pdf_confirm_line" class="hidden mt-4 md:mt-6 px-3 md:px-4 py-3 md:py-4 rounded-xl border-2 border-emerald-500 bg-emerald-50 text-emerald-800 font-bold text-sm md:text-base">
+        <!-- 留證行（PDF 截圖時顯示，hidden 直到總確認）-->
+        <div id="pdf_confirm_line" class="hidden mt-2" style="font-size:0.8rem; color:#475569; padding-top:0.35rem;">
           房客已於 <span id="pdf_confirm_time">—</span> 確認並同意上述重要約定。
         </div>
 
-        <!-- 【合一版】簽名欄：五條全確認後顯示，直接在收據內 -->
-        <div id="sign-section" class="hidden mt-6 md:mt-10 pt-6 md:pt-8 border-t-2 border-slate-300">
-          <p class="font-black text-xl md:text-3xl text-slate-800 mb-4 md:mb-6 text-center underline decoration-blue-500 decoration-4 underline-offset-8">房客簽名欄</p>
-          <div class="relative rounded-2xl overflow-hidden">
-            <canvas id="signature-pad"></canvas>
-            <!-- 未簽名時顯示的提示文字（簽名後由 JS 隱藏） -->
-            <div id="sig-placeholder" class="absolute inset-0 flex items-center justify-center pointer-events-none" style="border-radius:20px;">
-              <p class="text-slate-300 text-lg md:text-2xl font-bold select-none">請在此處簽名</p>
+        <!-- 傳統收據底部簽名欄：橫線 + 左（房客簽名 canvas）+ 右（經辦人員）-->
+        <div class="receipt-sign-footer mt-4 md:mt-6">
+            <!-- 左欄：房客簽名 -->
+            <div class="receipt-sign-col">
+                <span class="sign-label">房客（簽名）：<span id="show_final_name" class="font-normal">-</span></span>
+                <!-- 簽名 canvas（確認後顯示）-->
+                <div id="sign-section" class="hidden mt-2" style="width:100%;">
+                  <div class="relative">
+                    <canvas id="signature-pad"></canvas>
+                    <div id="sig-placeholder" class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <p class="text-slate-300 text-sm font-bold select-none">請在此處簽名</p>
+                    </div>
+                    <img id="sig-img-for-pdf" style="display:none; width:100%; border:1px solid #94a3b8; background:#fff;" alt="簽名">
+                    <button id="btn-clear" class="absolute top-1 right-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-black text-xs shadow border border-slate-300 no-pdf">清除重寫</button>
+                  </div>
+                </div>
+                <span class="sign-field mt-2">電話：<span id="show_final_phone">-</span></span>
+                <span class="sign-field">職業：<span id="show_final_occ">-</span></span>
             </div>
-            <!-- 截 PDF 時顯示 img 替換 canvas；正常操作時顯示 canvas -->
-            <img id="sig-img-for-pdf" style="display:none; width:100%; border:3px dashed #3b82f6; border-radius:20px; background:#fff;" alt="簽名">
-            <button id="btn-clear" class="absolute top-2 right-2 md:top-4 md:right-4 bg-slate-100 text-slate-600 px-4 md:px-8 py-2 md:py-4 rounded-lg md:rounded-xl font-black text-xs md:text-sm shadow border border-slate-300 no-pdf">清除重寫</button>
-          </div>
+            <!-- 右欄：經辦人員 -->
+            <div class="receipt-sign-col text-right">
+                <span class="sign-label">經辦人員：<span id="show_agent" class="font-normal">-</span></span>
+                <span class="sign-field mt-2">電話：<span id="show_agent_phone">-</span></span>
+                <span class="sign-field" style="font-size:0.78rem; color:#64748b; margin-top:0.25rem;">優式租售管理 - 窩的家三重加盟店</span>
+            </div>
         </div>
 
       </div><!-- end receipt-preview-container -->
