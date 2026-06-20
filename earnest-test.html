@@ -285,51 +285,66 @@
                 <p class="text-base md:text-xl">電話：<span id="show_agent_phone">-</span></p>
             </div>
         </div>
-      </div>
 
-      <!-- 【層2】逐條確認區 -->
-      <div class="mb-8 md:mb-12">
-        <p class="font-black text-xl md:text-2xl mb-4 md:mb-6 text-slate-800">重要約定（請逐條確認）：</p>
+        <!-- 【合一版】重要約定 + 逐條確認按鈕（在收據範圍內）-->
+        <div class="mt-6 md:mt-8 pt-4 md:pt-6 border-t-2 border-slate-200">
+          <p class="font-black text-xl md:text-2xl mb-4 md:mb-6 text-slate-800">重要約定（請逐條確認）：</p>
 
-        <div class="term-card" id="term-card-1">
-          <p class="term-text">壹、上述條件由房客確認無誤，付定金後成立要約。</p>
-          <button class="term-confirm-btn" id="term-btn-1" onclick="confirmTerm(1)">我已了解 ✓</button>
+          <div class="term-card" id="term-card-1">
+            <p class="term-text">壹、上述條件由房客確認無誤，付定金後成立要約。</p>
+            <button class="term-confirm-btn no-pdf" id="term-btn-1" onclick="confirmTerm(1)">我已了解 ✓</button>
+          </div>
+
+          <div class="term-card" id="term-card-2">
+            <p class="term-text">貳、如房東不同意上述條件，則定金無息全額退還於房客。</p>
+            <button class="term-confirm-btn no-pdf" id="term-btn-2" onclick="confirmTerm(2)">我已了解 ✓</button>
+          </div>
+
+          <div class="term-card" id="term-card-3">
+            <p class="term-text">參、如房東同意上述條件，但因另有考量因素導致無法簽約，則定金無息全數退還於房客，不需支付額外費用。</p>
+            <button class="term-confirm-btn no-pdf" id="term-btn-3" onclick="confirmTerm(3)">我已了解 ✓</button>
+          </div>
+
+          <div class="term-card" id="term-card-4">
+            <p class="term-text">肆、如房東同意上述條件，但房客因故反悔不租或超過簽約日仍不辦理簽約者，定金不予退還。</p>
+            <button class="term-confirm-btn no-pdf" id="term-btn-4" onclick="confirmTerm(4)">我已了解 ✓</button>
+          </div>
+
+          <div class="term-card" id="term-card-5">
+            <p class="term-text">伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="show_service_fee" class="font-bold underline text-blue-700">-</span> 作為服務費。</p>
+            <button class="term-confirm-btn no-pdf" id="term-btn-5" onclick="confirmTerm(5)">我已了解 ✓</button>
+          </div>
         </div>
 
-        <div class="term-card" id="term-card-2">
-          <p class="term-text">貳、如房東不同意上述條件，則定金無息全額退還於房客。</p>
-          <button class="term-confirm-btn" id="term-btn-2" onclick="confirmTerm(2)">我已了解 ✓</button>
+        <!-- 【合一版】留證行（PDF 截圖時也在這裡，hidden 直到五條全確認）-->
+        <div id="pdf_confirm_line" class="hidden mt-4 md:mt-6 px-3 md:px-4 py-3 md:py-4 rounded-xl border-2 border-emerald-500 bg-emerald-50 text-emerald-800 font-bold text-sm md:text-base">
+          房客已於 <span id="pdf_confirm_time">—</span> 逐條確認並同意上述重要約定。
         </div>
 
-        <div class="term-card" id="term-card-3">
-          <p class="term-text">參、如房東同意上述條件，但因另有考量因素導致無法簽約，則定金無息全數退還於房客，不需支付額外費用。</p>
-          <button class="term-confirm-btn" id="term-btn-3" onclick="confirmTerm(3)">我已了解 ✓</button>
-        </div>
-
-        <div class="term-card" id="term-card-4">
-          <p class="term-text">肆、如房東同意上述條件，但房客因故反悔不租或超過簽約日仍不辦理簽約者，定金不予退還。</p>
-          <button class="term-confirm-btn" id="term-btn-4" onclick="confirmTerm(4)">我已了解 ✓</button>
-        </div>
-
-        <div class="term-card" id="term-card-5">
-          <p class="term-text">伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="show_service_fee" class="font-bold underline text-blue-700">-</span> 作為服務費。</p>
-          <button class="term-confirm-btn" id="term-btn-5" onclick="confirmTerm(5)">我已了解 ✓</button>
-        </div>
-      </div>
-
-      <!-- Gating 提示：五條未勾完時顯示 -->
-      <div id="sign-gate-msg">請先逐條確認上方五點重要約定，才能進行簽名。</div>
-
-      <!-- 簽名區：五條全確認前隱藏 -->
-      <div id="sign-section" class="hidden mb-6 md:mb-10 text-center">
-        <label class="block text-2xl md:text-4xl font-black text-slate-800 mb-6 md:mb-10 underline decoration-blue-500 decoration-4 md:decoration-8 underline-offset-[8px] md:underline-offset-[16px]">房客簽名處</label>
-        <div class="relative">
+        <!-- 【合一版】簽名欄：五條全確認後顯示，直接在收據內 -->
+        <div id="sign-section" class="hidden mt-6 md:mt-10 pt-6 md:pt-8 border-t-2 border-slate-300">
+          <p class="font-black text-xl md:text-3xl text-slate-800 mb-4 md:mb-6 text-center underline decoration-blue-500 decoration-4 underline-offset-8">房客簽名欄</p>
+          <div class="relative rounded-2xl overflow-hidden">
             <canvas id="signature-pad"></canvas>
-            <button id="btn-clear" class="absolute top-2 right-2 md:top-4 md:right-4 bg-slate-100 text-slate-600 px-4 md:px-8 py-2 md:py-4 rounded-lg md:rounded-xl font-black text-xs md:text-sm shadow border border-slate-300">清除重寫</button>
+            <!-- 截 PDF 時顯示 img 替換 canvas；正常操作時顯示 canvas -->
+            <img id="sig-img-for-pdf" style="display:none; width:100%; border:3px dashed #3b82f6; border-radius:20px; background:#fff;" alt="簽名">
+            <button id="btn-clear" class="absolute top-2 right-2 md:top-4 md:right-4 bg-slate-100 text-slate-600 px-4 md:px-8 py-2 md:py-4 rounded-lg md:rounded-xl font-black text-xs md:text-sm shadow border border-slate-300 no-pdf">清除重寫</button>
+          </div>
         </div>
+
+      </div><!-- end receipt-preview-container -->
+
+      <!-- Gating 提示（在收據外，不進 PDF）-->
+      <div id="sign-gate-msg" class="no-pdf">請先逐條確認上方五點重要約定，才能進行簽名。</div>
+
+      <!-- 預覽/下載 PDF 按鈕（在簽名前即可用，不進 PDF）-->
+      <div class="mt-4 md:mt-6 no-pdf">
+        <button id="btn-preview-pdf" onclick="previewAndDownloadPDF()" class="w-full big-btn bg-blue-50 hover:bg-blue-100 text-blue-700 border-2 border-blue-300 font-black py-3 md:py-5 rounded-2xl md:rounded-3xl text-base md:text-xl">
+          📄 預覽 / 下載 PDF（簽名前可先確認）
+        </button>
       </div>
 
-      <div class="flex flex-col md:flex-row gap-4 md:gap-6 mt-8 md:mt-12">
+      <div class="flex flex-col md:flex-row gap-4 md:gap-6 mt-4 md:mt-6 no-pdf">
         <button id="btn-back" class="order-2 md:order-1 flex-1 bg-slate-200 text-slate-500 text-xl md:text-3xl font-black py-4 md:py-7 rounded-2xl md:rounded-3xl">回上一步</button>
         <!-- 送出按鈕：五條未勾完前保持禁用 -->
         <button id="btn-submit" disabled class="order-1 md:order-2 big-btn flex-[2] bg-slate-300 text-slate-400 text-xl md:text-4xl font-black py-4 md:py-7 rounded-2xl md:rounded-3xl shadow cursor-not-allowed">請先確認重要約定</button>
@@ -467,14 +482,14 @@
               </ul>
           </div>
 
-          <!-- 【層2】留證文字：送出時由 JS 寫入時間戳 -->
-          <div id="pdf_confirm_line" style="margin-top: 18px; padding: 10px 14px; background: #f0fdf4; border: 2px solid #16a34a; border-radius: 8px; font-size: 13px; font-weight: 700; color: #14532d;">
-            房客已於 <span id="pdf_confirm_time">—</span> 逐條確認並同意上述重要約定。
+          <!-- 【legacy / 廢棄】pdf-export-area 已不再截圖，ID 加 _legacy 避免 duplicate -->
+          <div id="pdf_confirm_line_legacy" style="margin-top: 18px; padding: 10px 14px; background: #f0fdf4; border: 2px solid #16a34a; border-radius: 8px; font-size: 13px; font-weight: 700; color: #14532d;">
+            房客已於 <span id="pdf_confirm_time_legacy">—</span> 逐條確認並同意上述重要約定。
           </div>
 
           <div style="display: flex; justify-content: space-between; margin-top: 50px; padding: 0 10px; border-top: 3px solid #000; padding-top: 30px;">
               <div style="width: 55%;">
-                  <p style="font-size: 24px; font-weight: bold; margin-bottom: 35px;">房客（簽名）：<img id="pdf_signature_img" style="display: inline-block; vertical-align: middle; max-height: 90px;"></p>
+                  <p style="font-size: 24px; font-weight: bold; margin-bottom: 35px;">房客（簽名）：<img id="pdf_signature_img_legacy" style="display: inline-block; vertical-align: middle; max-height: 90px;"></p>
                   <p style="font-size: 18px;">電話：<span id="pdf_phone">-</span></p>
                   <p style="font-size: 18px;">職業：<span id="pdf_occ">-</span></p>
               </div>
@@ -745,10 +760,19 @@
           submitBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'shadow-2xl');
           submitBtn.textContent = '簽好了，送出 ✅';
         }
+        // 【合一版】五條全確認 → 顯示留證行並填時間戳
+        const now = new Date();
+        const twDate = new Date(now.getTime() + (8 * 60 - now.getTimezoneOffset()) * 60000);
+        const pad = n => String(n).padStart(2, '0');
+        const ts = `${twDate.getUTCFullYear()}-${pad(twDate.getUTCMonth()+1)}-${pad(twDate.getUTCDate())} ${pad(twDate.getUTCHours())}:${pad(twDate.getUTCMinutes())}`;
+        if ($("pdf_confirm_time")) $("pdf_confirm_time").textContent = ts;
+        if ($("pdf_confirm_line")) $("pdf_confirm_line").classList.remove('hidden');
         // 簽名 canvas 需在可見後初始化（hidden 時 offsetWidth=0）
         setTimeout(initSignature, 100);
       } else {
         if (gateMsg)   gateMsg.style.display = 'block';
+        // 未全確認時隱藏留證行
+        if ($("pdf_confirm_line")) $("pdf_confirm_line").classList.add('hidden');
       }
     }
 
@@ -765,6 +789,7 @@
       const submitBtn = $('btn-submit');
       if (gateMsg)   gateMsg.style.display = 'none';
       if (signSec)   signSec.classList.add('hidden');
+      if ($("pdf_confirm_line")) $("pdf_confirm_line").classList.add('hidden');
       if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'shadow-2xl');
@@ -784,17 +809,76 @@
       $("step-" + n).classList.remove('hidden'); window.scrollTo(0, 0);
     }
 
-    // 【新增】產生 PDF Blob 的共用函式
-    // 2026-05-17 緊急修復 file_too_large：scale 2→1.5、PNG→JPEG q=0.85，體積降約 70%
-    async function generatePDFBlob() {
-        const element = $("pdf-export-area");
-        const canvas = await html2canvas(element, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' });
+    // 【合一版】產生 PDF Blob：截 receipt-preview-container（可見 DOM），所見即所簽
+    // .no-pdf 元素（確認按鈕、gating 訊息）截圖前隱藏，截完後還原
+    // canvas 簽名截圖前換成 <img>，截完後還原
+    async function generatePDFBlob(opts = {}) {
+        const element = $("receipt-preview-container");
+
+        // 1. 隱藏 .no-pdf 元素（按鈕、清除重寫、gating 等不需出現在 PDF）
+        const noPdfEls = element.querySelectorAll('.no-pdf');
+        noPdfEls.forEach(el => el.dataset._origDisplay = el.style.display || '');
+        noPdfEls.forEach(el => el.style.display = 'none');
+
+        // 2. canvas 簽名 → img（html2canvas 截 canvas 有時不穩定）
+        const sigCanvas = $("signature-pad");
+        const sigImg = $("sig-img-for-pdf");
+        const hasSignature = signaturePad && !signaturePad.isEmpty();
+        if (hasSignature && sigCanvas && sigImg) {
+            sigImg.src = signaturePad.toDataURL("image/png");
+            sigImg.style.display = "block";
+            sigCanvas.style.display = "none";
+        }
+
+        // 3. 確保留證行可見（若已全確認）
+        const confirmLine = $("pdf_confirm_line");
+        let confirmWasHidden = false;
+        if (confirmLine && confirmLine.classList.contains('hidden')) {
+            confirmWasHidden = true;
+            // 若是「預覽 PDF」在簽名前呼叫，留證行維持 hidden；僅在 buildFormData 時（已全確認）才顯示
+        }
+
+        await new Promise(r => setTimeout(r, 80));
+
+        const htmlCanvas = await html2canvas(element, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff', logging: false });
+
+        // 4. 還原
+        noPdfEls.forEach(el => { el.style.display = el.dataset._origDisplay; delete el.dataset._origDisplay; });
+        if (hasSignature && sigCanvas && sigImg) {
+            sigImg.style.display = "none";
+            sigCanvas.style.display = "block";
+        }
+
         const imgWidth = 210;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        const imgHeight = (htmlCanvas.height * imgWidth) / htmlCanvas.width;
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', [imgWidth, imgHeight]);
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, imgWidth, imgHeight);
+        pdf.addImage(htmlCanvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, imgWidth, imgHeight);
         return pdf.output('blob');
+    }
+
+    // 預覽/下載 PDF（簽名前即可用，截的是當下畫面）
+    async function previewAndDownloadPDF() {
+        if (/Line\//i.test(navigator.userAgent)) {
+            alert("⚠️ LINE 內建瀏覽器無法下載 PDF\n\n請點右上角「⋯」→「在 Safari / Chrome 中開啟」→ 再按一次此按鈕。");
+            return;
+        }
+        const btn = $("btn-preview-pdf");
+        btn.innerText = "PDF 產生中..."; btn.disabled = true;
+        try {
+            const pdfBlob = await generatePDFBlob({ preview: true });
+            const url = URL.createObjectURL(pdfBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `定金收據預覽_${getValue(currentRecord, FIELDS.no)}.pdf`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error(err);
+            alert("下載失敗，請截圖存檔。");
+        } finally {
+            btn.innerText = "📄 預覽 / 下載 PDF（簽名前可先確認）"; btn.disabled = false;
+        }
     }
 
     // 下載按鈕 (現在可以重用生成邏輯)
@@ -806,8 +890,13 @@
         }
         const btn = event.currentTarget; btn.innerText = "PDF 產生中..."; btn.disabled = true;
         try {
+            // 【合一版】送出後 step-2 是 hidden，截圖前暫時顯示 receipt-preview-container
+            const step2 = $("step-2");
+            const wasHidden = step2 && step2.classList.contains('hidden');
+            if (wasHidden) { step2.style.visibility = 'hidden'; step2.style.position = 'fixed'; step2.style.top = '-9999px'; step2.classList.remove('hidden'); }
+            await new Promise(r => setTimeout(r, 50));
             const pdfBlob = await generatePDFBlob();
-            // 建立下載連結
+            if (wasHidden) { step2.classList.add('hidden'); step2.style.visibility = ''; step2.style.position = ''; step2.style.top = ''; }
             const url = URL.createObjectURL(pdfBlob);
             const a = document.createElement('a');
             a.href = url;
@@ -816,11 +905,11 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-        } catch (err) { 
+        } catch (err) {
             console.error(err);
-            alert("下載失敗，請先截圖存檔。"); 
-        } finally { 
-            btn.innerText = "📥 下載備份 PDF"; btn.disabled = false; 
+            alert("下載失敗，請先截圖存檔。");
+        } finally {
+            btn.innerText = "📥 下載備份 PDF"; btn.disabled = false;
         }
     }
 
@@ -838,11 +927,13 @@
       const twDate = new Date(now.getTime() + (twOffset - now.getTimezoneOffset()) * 60000);
       const pad = n => String(n).padStart(2, '0');
       const confirmTs = `${twDate.getUTCFullYear()}-${pad(twDate.getUTCMonth()+1)}-${pad(twDate.getUTCDate())} ${pad(twDate.getUTCHours())}:${pad(twDate.getUTCMinutes())}`;
+      // 【合一版】留證時間寫進 receipt-preview-container 裡的留證行，同時顯示它
       if ($("pdf_confirm_time")) $("pdf_confirm_time").textContent = confirmTs;
+      if ($("pdf_confirm_line")) $("pdf_confirm_line").classList.remove('hidden');
 
       const sigData = signaturePad.toDataURL("image/png");
-      if($("pdf_signature_img")) $("pdf_signature_img").src = sigData;
       if($("hidden_signature")) $("hidden_signature").value = sigData;
+      // sig-img-for-pdf 由 generatePDFBlob 內部處理（截圖前換 img，截完還原 canvas）
 
       await new Promise(r => setTimeout(r, 100));
 
