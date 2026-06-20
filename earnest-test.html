@@ -286,39 +286,37 @@
             </div>
         </div>
 
-        <!-- 【合一版】重要約定 + 逐條確認按鈕（在收據範圍內）-->
+        <!-- 【合一版】重要約定 + 總確認按鈕（在收據範圍內）-->
         <div class="mt-6 md:mt-8 pt-4 md:pt-6 border-t-2 border-slate-200">
-          <p class="font-black text-xl md:text-2xl mb-4 md:mb-6 text-slate-800">重要約定（請逐條確認）：</p>
+          <p class="font-black text-xl md:text-2xl mb-4 md:mb-6 text-slate-800">重要約定（請確認）：</p>
 
           <div class="term-card" id="term-card-1">
             <p class="term-text">壹、上述條件由房客確認無誤，付定金後成立要約。</p>
-            <button class="term-confirm-btn no-pdf" id="term-btn-1" onclick="confirmTerm(1)">我已了解 ✓</button>
           </div>
 
           <div class="term-card" id="term-card-2">
             <p class="term-text">貳、如房東不同意上述條件，則定金無息全額退還於房客。</p>
-            <button class="term-confirm-btn no-pdf" id="term-btn-2" onclick="confirmTerm(2)">我已了解 ✓</button>
           </div>
 
           <div class="term-card" id="term-card-3">
             <p class="term-text">參、如房東同意上述條件，但因另有考量因素導致無法簽約，則定金無息全數退還於房客，不需支付額外費用。</p>
-            <button class="term-confirm-btn no-pdf" id="term-btn-3" onclick="confirmTerm(3)">我已了解 ✓</button>
           </div>
 
           <div class="term-card" id="term-card-4">
             <p class="term-text">肆、如房東同意上述條件，但房客因故反悔不租或超過簽約日仍不辦理簽約者，定金不予退還。</p>
-            <button class="term-confirm-btn no-pdf" id="term-btn-4" onclick="confirmTerm(4)">我已了解 ✓</button>
           </div>
 
           <div class="term-card" id="term-card-5">
             <p class="term-text">伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="show_service_fee" class="font-bold underline text-blue-700">-</span> 作為服務費。</p>
-            <button class="term-confirm-btn no-pdf" id="term-btn-5" onclick="confirmTerm(5)">我已了解 ✓</button>
           </div>
+
+          <!-- 一個總確認按鈕，grandpa 大字風格 -->
+          <button class="term-confirm-btn no-pdf mt-4 md:mt-6" id="btn-confirm-all" onclick="confirmAll()">以上五點我已了解並同意 ✓</button>
         </div>
 
-        <!-- 【合一版】留證行（PDF 截圖時也在這裡，hidden 直到五條全確認）-->
+        <!-- 【合一版】留證行（PDF 截圖時也在這裡，hidden 直到總確認）-->
         <div id="pdf_confirm_line" class="hidden mt-4 md:mt-6 px-3 md:px-4 py-3 md:py-4 rounded-xl border-2 border-emerald-500 bg-emerald-50 text-emerald-800 font-bold text-sm md:text-base">
-          房客已於 <span id="pdf_confirm_time">—</span> 逐條確認並同意上述重要約定。
+          房客已於 <span id="pdf_confirm_time">—</span> 確認並同意上述重要約定。
         </div>
 
         <!-- 【合一版】簽名欄：五條全確認後顯示，直接在收據內 -->
@@ -335,7 +333,7 @@
       </div><!-- end receipt-preview-container -->
 
       <!-- Gating 提示（在收據外，不進 PDF）-->
-      <div id="sign-gate-msg" class="no-pdf">請先逐條確認上方五點重要約定，才能進行簽名。</div>
+      <div id="sign-gate-msg" class="no-pdf">請先確認上方重要約定，才能進行簽名。</div>
 
       <!-- 預覽/下載 PDF 按鈕（在簽名前即可用，不進 PDF）-->
       <div class="mt-4 md:mt-6 no-pdf">
@@ -730,59 +728,53 @@
       if($("pdf_occ")) $("pdf_occ").innerText = occ;
     }
 
-    /* ── 【層2】逐條確認邏輯 ────────────────────────────── */
-    const TOTAL_TERMS = 5;
-    const termsConfirmed = new Array(TOTAL_TERMS + 1).fill(false); // index 1-5
+    /* ── 【總確認按鈕】邏輯（一個按鈕取代五個）────────────── */
+    let allTermsConfirmed = false;
 
-    function confirmTerm(n) {
-      termsConfirmed[n] = true;
-      const card = document.getElementById('term-card-' + n);
-      const btn  = document.getElementById('term-btn-' + n);
-      if (card) card.classList.add('confirmed');
-      if (btn)  { btn.classList.add('done'); btn.textContent = '✅ 已確認'; btn.disabled = true; }
-      checkAllTerms();
-    }
-
-    function checkAllTerms() {
-      const allDone = termsConfirmed.slice(1).every(Boolean);
-      const gateMsg   = document.getElementById('sign-gate-msg');
-      const signSec   = document.getElementById('sign-section');
-      const submitBtn = $('btn-submit');
-
-      if (allDone) {
-        if (gateMsg)   gateMsg.style.display = 'none';
-        if (signSec)   signSec.classList.remove('hidden');
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.className = submitBtn.className
-            .replace('bg-slate-300 text-slate-400 cursor-not-allowed shadow', '')
-            .trim();
-          submitBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'shadow-2xl');
-          submitBtn.textContent = '簽好了，送出 ✅';
-        }
-        // 【合一版】五條全確認 → 顯示留證行並填時間戳
-        const now = new Date();
-        const twDate = new Date(now.getTime() + (8 * 60 - now.getTimezoneOffset()) * 60000);
-        const pad = n => String(n).padStart(2, '0');
-        const ts = `${twDate.getUTCFullYear()}-${pad(twDate.getUTCMonth()+1)}-${pad(twDate.getUTCDate())} ${pad(twDate.getUTCHours())}:${pad(twDate.getUTCMinutes())}`;
-        if ($("pdf_confirm_time")) $("pdf_confirm_time").textContent = ts;
-        if ($("pdf_confirm_line")) $("pdf_confirm_line").classList.remove('hidden');
-        // 簽名 canvas 需在可見後初始化（hidden 時 offsetWidth=0）
-        setTimeout(initSignature, 100);
-      } else {
-        if (gateMsg)   gateMsg.style.display = 'block';
-        // 未全確認時隱藏留證行
-        if ($("pdf_confirm_line")) $("pdf_confirm_line").classList.add('hidden');
+    function confirmAll() {
+      allTermsConfirmed = true;
+      // 按鈕變綠 + 禁用
+      const btn = $('btn-confirm-all');
+      if (btn) { btn.classList.add('done'); btn.textContent = '✅ 已確認同意'; btn.disabled = true; }
+      // 五條卡片全部標綠
+      for (let i = 1; i <= 5; i++) {
+        const card = document.getElementById('term-card-' + i);
+        if (card) card.classList.add('confirmed');
       }
+      // 顯示留證行 + 填時間戳
+      const now = new Date();
+      const twDate = new Date(now.getTime() + (8 * 60 - now.getTimezoneOffset()) * 60000);
+      const pad = n => String(n).padStart(2, '0');
+      const ts = `${twDate.getUTCFullYear()}-${pad(twDate.getUTCMonth()+1)}-${pad(twDate.getUTCDate())} ${pad(twDate.getUTCHours())}:${pad(twDate.getUTCMinutes())}`;
+      if ($("pdf_confirm_time")) $("pdf_confirm_time").textContent = ts;
+      if ($("pdf_confirm_line")) $("pdf_confirm_line").classList.remove('hidden');
+      // 解鎖 gating
+      const gateMsg = document.getElementById('sign-gate-msg');
+      const signSec = document.getElementById('sign-section');
+      const submitBtn = $('btn-submit');
+      if (gateMsg)   gateMsg.style.display = 'none';
+      if (signSec)   signSec.classList.remove('hidden');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.className = submitBtn.className
+          .replace('bg-slate-300 text-slate-400 cursor-not-allowed shadow', '')
+          .trim();
+        submitBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'shadow-2xl');
+        submitBtn.textContent = '簽好了，送出 ✅';
+      }
+      // canvas 在 hidden 解除後才能初始化
+      setTimeout(initSignature, 100);
     }
 
     function resetTerms() {
-      for (let i = 1; i <= TOTAL_TERMS; i++) {
-        termsConfirmed[i] = false;
+      allTermsConfirmed = false;
+      // 重置總確認按鈕
+      const btn = $('btn-confirm-all');
+      if (btn) { btn.classList.remove('done'); btn.textContent = '以上五點我已了解並同意 ✓'; btn.disabled = false; }
+      // 重置五條卡片顏色
+      for (let i = 1; i <= 5; i++) {
         const card = document.getElementById('term-card-' + i);
-        const btn  = document.getElementById('term-btn-' + i);
         if (card) card.classList.remove('confirmed');
-        if (btn)  { btn.classList.remove('done'); btn.textContent = '我已了解 ✓'; btn.disabled = false; }
       }
       const gateMsg   = document.getElementById('sign-gate-msg');
       const signSec   = document.getElementById('sign-section');
