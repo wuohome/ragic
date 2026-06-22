@@ -2377,10 +2377,16 @@ async function submitForm() {
 
     if (result && result.status === "SUCCESS") {
       // 連結加 openExternalBrowser=1，確保 LINE webview 跳外部瀏覽器
-      // 優先用定金單編號（語意化），無編號時退回 rid fallback（earnest.html 兩種皆可吃）
-      const linkParam = result.depositNo
-        ? `code=${encodeURIComponent(result.depositNo)}`
-        : `rid=${result.ragicId}`;
+      // 優先序：token（UUID，不可猜，IDOR fix 2026-06-22）> depositNo code > rid fallback
+      // token 存在時發給房客的連結用 ?token= ，完全避免 IDOR；舊連結向後相容仍能用
+      let linkParam;
+      if (result.depositToken) {
+        linkParam = `token=${encodeURIComponent(result.depositToken)}`;
+      } else if (result.depositNo) {
+        linkParam = `code=${encodeURIComponent(result.depositNo)}`;
+      } else {
+        linkParam = `rid=${result.ragicId}`;
+      }
       const earnestLink = `https://wuohome.github.io/ragic/earnest.html?${linkParam}&openExternalBrowser=1`;
       successSignLink = earnestLink;
 
