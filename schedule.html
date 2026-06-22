@@ -752,7 +752,7 @@ const App = () => {
         try {
             setProgress({ text: "載入資料...", current: 0, total: 0 });
             // 讀取累計樓層打掃次數（從員工表）
-            const fcMap = {}; // fcMap[name] = { "1F":n, "2F":n, "3F":n }
+            const fcMap = {}; // fcMap[name] = { "1F":n, "2F":n, "3F":n, "4F":n }
             const empRagicIds = {}; // empRagicIds[name] = ragicId
             allEmployees.forEach(e => {
                 fcMap[e.name] = { ...e.fc };
@@ -909,7 +909,7 @@ const App = () => {
                 const todayManual = manualByDate[dateStr] || [];
                 const manualFloors = new Set(todayManual.map(m => m.floor).filter(f => f));
                 const manualEmps = new Set(todayManual.map(m => m.empName).filter(n => n));
-                const availFloors = ["1F", "3F", "2F"].filter(f => !manualFloors.has(f));
+                const availFloors = ["1F", "3F", "2F", "4F"].filter(f => !manualFloors.has(f));
                 if (availFloors.length === 0) continue; // 全部手動排完，無需自動補
 
                 const d = new Date(year, month-1, day);
