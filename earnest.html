@@ -440,18 +440,26 @@
     const $ = (id) => document.getElementById(id);
 
     // 解析 URL
-    // 同時接受 ?code=No.YYYYMMDD-NNN（新式）、?rid=<數字>（舊式 deposit.html 產的連結）
-    // 以及 ?id= 別名。Worker getEarnest 兩種都能處理。
+    // 優先序 token > code > rid > id（token = UUID, IDOR fix 2026-06-22）
+    // ?token=<uuid>  新式不可猜 token，Worker getEarnest?token= 精確比對欄位 1002558
+    // ?code=No.YYYYMMDD-NNN  舊式定金單編號（向後相容）
+    // ?rid=<數字>  舊式 record id（向後相容，deposit.html fallback 仍在用）
+    // ?id= 別名
     const href = window.location.href;
+    const matchToken = href.match(/[?&]token=([^&#]+)/i);
     const matchCode = href.match(/[?&]code=([^&#]+)/i);
     const matchRid  = href.match(/[?&]rid=([^&#]+)/i);
     const matchId   = href.match(/[?&]id=([^&#]+)/i);
-    if (matchCode) recordId = matchCode[1];
+    let useToken = false;
+    if (matchToken) { recordId = matchToken[1]; useToken = true; }
+    else if (matchCode) recordId = matchCode[1];
     else if (matchRid) recordId = matchRid[1];
     else if (matchId) recordId = matchId[1];
     else {
         const urlParams = new URLSearchParams(window.location.search);
-        recordId = urlParams.get('code') || urlParams.get('rid') || urlParams.get('id');
+        const t = urlParams.get('token');
+        if (t) { recordId = t; useToken = true; }
+        else recordId = urlParams.get('code') || urlParams.get('rid') || urlParams.get('id');
     }
     if (recordId) recordId = recordId.trim();
 
@@ -538,7 +546,11 @@
       $("loader-text").innerText = "開啟中...";
       loadTimer = setTimeout(() => { if (!currentRecord) $("loader-text").innerText = "讀取逾時"; }, 10000);
       try {
-        const res = await fetch(`${WORKER_BASE_URL}/getEarnest?rid=${encodeURIComponent(recordId)}`);
+        // useToken set by URL parser: true when ?token= present (IDOR fix 2026-06-22)
+        const earnestParam = useToken
+          ? `token=${encodeURIComponent(recordId)}`
+          : `rid=${encodeURIComponent(recordId)}`;
+        const res = await fetch(`${WORKER_BASE_URL}/getEarnest?${earnestParam}`);
         clearTimeout(loadTimer);
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
