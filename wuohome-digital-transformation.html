@@ -820,6 +820,30 @@
     html { scroll-behavior: auto; }
     * { transition: none !important; }
   }
+
+  /* ── Image Lightbox（點圖放大）── */
+  .container img { cursor: zoom-in; transition: opacity 0.15s; }
+  .container img:hover { opacity: 0.9; }
+  #imgLightbox {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 9999;
+    align-items: center; justify-content: center;
+    padding: 24px;
+    cursor: zoom-out;
+  }
+  #imgLightbox.open { display: flex; }
+  #imgLightbox img {
+    max-width: 96vw; max-height: 94vh;
+    border-radius: 8px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    cursor: zoom-out;
+  }
+  #imgLightbox .lb-hint {
+    position: fixed; top: 16px; right: 20px;
+    color: rgba(255,255,255,0.7); font-size: 0.8rem;
+  }
 </style>
 </head>
 <body>
@@ -1782,6 +1806,28 @@ document.querySelectorAll('.sidebar-nav a').forEach(function(a) {
 
   window.addEventListener('scroll', onScroll, { passive: true });
   onScroll();
+})();
+
+// Image lightbox（點圖放大）
+(function() {
+  var box = document.createElement('div');
+  box.id = 'imgLightbox';
+  var big = document.createElement('img');
+  var hint = document.createElement('div');
+  hint.className = 'lb-hint';
+  hint.textContent = '點任意處或按 Esc 關閉';
+  box.appendChild(big);
+  box.appendChild(hint);
+  document.body.appendChild(box);
+  function closeBox() { box.classList.remove('open'); big.src = ''; }
+  box.addEventListener('click', closeBox);
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeBox(); });
+  document.querySelectorAll('.container img').forEach(function(im) {
+    im.addEventListener('click', function() {
+      big.src = im.currentSrc || im.src;
+      box.classList.add('open');
+    });
+  });
 })();
 </script>
 
