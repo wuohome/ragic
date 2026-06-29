@@ -268,6 +268,7 @@ const OWN_PUBLIC_FIELD_IDS = new Set([
   '1000218', // smoking
   '1000220', // householdReg
   '1000221', // rentalSubsidy
+  '1002090', // team/source label (e.g. 享寓) for map coloring; not owner-sensitive
   '1002098', // SHARING (open/internal filter)
   '1000058', // mainArea
 ]);
