@@ -794,15 +794,23 @@ const App = () => {
                 if (hired < prevStart) veteranNames.push(e.name);
                 else newNames.push(e.name);
             });
-            if (veteranNames.length > 0 && newNames.length > 0) {
-                const avg = veteranNames.reduce((s, n) => s + (countMap[n]||0), 0) / veteranNames.length;
-                newNames.forEach(n => { countMap[n] = Math.round(avg); });
+            // 長假免追債：上月整月請假者（列於 SC.LONG_LEAVE_CREDIT），該月比照新人給平均、不追債
+            const prevKey = `${prevYear}/${String(prevMonth).padStart(2,"0")}`;
+            const creditNames = allEmployees
+                .filter(e => (SC.LONG_LEAVE_CREDIT?.[e.name] || []).includes(prevKey))
+                .map(e => e.name);
+            // 補平均的對象 = 新人 ∪ 長假者；基準 = 老員工但排除長假者（避免長假者的 0 次拉低平均）
+            const avgTargets = [...new Set([...newNames, ...creditNames])];
+            const baseNames = veteranNames.filter(n => !creditNames.includes(n));
+            if (baseNames.length > 0 && avgTargets.length > 0) {
+                const avg = baseNames.reduce((s, n) => s + (countMap[n]||0), 0) / baseNames.length;
+                avgTargets.forEach(n => { countMap[n] = Math.round(avg); });
 
-                // 對齊各樓層 fcMap：新人 1F/2F/3F 起始值 = 老員工平均
-                // 避免「新人 fc=0 永遠排 1F 排序最前」造成的 1F 偏向（bug：曾宇謙/高晶晶/鐘晟鈺 1F 比例 67-100%）
+                // 對齊各樓層 fcMap：起始值 = 老員工平均
+                // 避免「fc=0 永遠排 1F 排序最前」造成的 1F 偏向（bug：曾宇謙/高晶晶/鐘晟鈺 1F 比例 67-100%）
                 for (const fl of ["1F", "2F", "3F", "4F"]) {
-                    const fcAvg = veteranNames.reduce((s, n) => s + (fcMap[n]?.[fl] || 0), 0) / veteranNames.length;
-                    newNames.forEach(n => {
+                    const fcAvg = baseNames.reduce((s, n) => s + (fcMap[n]?.[fl] || 0), 0) / baseNames.length;
+                    avgTargets.forEach(n => {
                         if (!fcMap[n]) fcMap[n] = {"1F":0, "2F":0, "3F":0, "4F":0};
                         fcMap[n][fl] = Math.round(fcAvg);
                     });
@@ -814,6 +822,7 @@ const App = () => {
             console.log("排班月份:", year, "/", month);
             console.log("上月 countMap (排序):", Object.entries(countMap).sort((a,b) => a[1]-b[1]).map(([n,c]) => `${n}:${c}`).join(", "));
             console.log("新人(用平均):", newNames?.join(", ") || "無");
+            console.log("長假免追債(用平均):", creditNames?.join(", ") || "無");
             console.log("老員工數:", veteranNames?.length || "N/A");
 
             // 掃描當月值日：保留手動(isAuto=No)並登記佔用樓層/人，其他(Yes/未掃)列入刪除
