@@ -747,7 +747,7 @@ const App = () => {
 
     const handleAutoSchedule = async () => {
         if (employees.length === 0) { showToast("尚未載入員工資料", false); return; }
-        const okAutoDuty = await openConfirm(`確定要自動預排 ${year} 年 ${month} 月的值日生？\n每天 4 位（1F/2F/3F/4F），現有的自動排班紀錄會被覆蓋。`);
+        const okAutoDuty = await openConfirm(`確定要自動預排 ${year} 年 ${month} 月的值日生？\n每天 3 位（1F/2F/3F），週五加排 4F；清運值日（🗑️）不受影響、會保留。現有的自動排班紀錄會被覆蓋。`);
         if (!okAutoDuty) return;
 
         setAutoScheduling(true);
@@ -828,6 +828,7 @@ const App = () => {
             // 掃描當月值日：保留手動(isAuto=No)並登記佔用樓層/人，其他(Yes/未掃)列入刪除
             setProgress({ text: "清除舊紀錄...", current: 0, total: 0 });
             const manualByDate = {}; // dateStr -> [{ empName, floor }]
+            const trashByDate = {}; // dateStr -> [清運值日的人]（保留不刪、當天不重複排樓層）
             const toDelete = [];
             Object.entries(allLeaveForDuty)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
@@ -840,6 +841,14 @@ const App = () => {
                     const y = parseInt(parts[0]), m = parseInt(parts[1]);
                     if (y !== year || m !== month) return;
                     const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
+                    const noteRaw = f[CONFIG.F_LEAVE.NOTE] || "";
+                    // 清運值日（🗑️）不由自動排管理：一律保留不刪，並記下當天清運的人
+                    if (SC.isTrashDuty(noteRaw)) {
+                        const tEmp = f[CONFIG.F_LEAVE.EMP] || "";
+                        if (!trashByDate[date]) trashByDate[date] = [];
+                        if (tEmp) trashByDate[date].push(tEmp);
+                        return;
+                    }
                     if (isAuto === "No") {
                         const empName = f[CONFIG.F_LEAVE.EMP] || "";
                         const note = f[CONFIG.F_LEAVE.NOTE] || "";
@@ -920,7 +929,9 @@ const App = () => {
                 const todayManual = manualByDate[dateStr] || [];
                 const manualFloors = new Set(todayManual.map(m => m.floor).filter(f => f));
                 const manualEmps = new Set(todayManual.map(m => m.empName).filter(n => n));
-                const availFloors = ["1F", "3F", "2F", "4F"].filter(f => !manualFloors.has(f));
+                // 4 樓只在週五排（週三沒垃圾車、六日多數人沒上班 → 4 樓定週五掃）；其他天只排 1F/2F/3F
+                const baseFloors = new Date(year, month-1, day).getDay() === 5 ? ["1F", "3F", "2F", "4F"] : ["1F", "3F", "2F"];
+                const availFloors = baseFloors.filter(f => !manualFloors.has(f));
                 if (availFloors.length === 0) continue; // 全部手動排完，無需自動補
 
                 const d = new Date(year, month-1, day);
@@ -940,6 +951,8 @@ const App = () => {
                 });
                 // 手動已排的人今天不重複排
                 manualEmps.forEach(n => onLeaveToday.add(n));
+                // 當天清運值日（🗑️）的人不重複排樓層
+                (trashByDate[dateStr] || []).forEach(n => onLeaveToday.add(n));
 
                 // 值班+值日重疊（夫妻也適用，已預算進 countMap）
                 const todayZhiban = zhibanByDate[dateStr] || "";
