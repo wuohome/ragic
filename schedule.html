@@ -82,7 +82,7 @@ const DEPT_ORDER = SC.DEPT_ORDER;
 // 見紅休人員（設計部 + 瓊安）
 const GOV_REST_EMPLOYEES = new Set(SC.GOV_REST_NAMES);
 
-// 2026/03/30 起搬到平安街，每天 4 位值日生（1F/2F/3F/4F）
+// 2026/07 起：1F/2F/3F 每天；4F 只在週五
 const FLOORS = SC.FLOORS;
 const FLOOR_COLORS = SC.FLOOR_COLORS;
 
@@ -442,6 +442,8 @@ const App = () => {
             if (saving[dutyKey]) return;
             const current = duties[dateStr] || [];
             const myDuties = current.filter(d => d.empName === empName);
+            const dutyDay = parseInt(dateStr.split("/")[2], 10);
+            const allowedFloors = SC.expectedDutyFloors(year, month, dutyDay);
 
             const empObj = allEmployees.find(e => e.name === empName);
             setSaving(s => ({...s, [dutyKey]: true}));
@@ -450,7 +452,7 @@ const App = () => {
                     // 同人多層：檢查是否還有空樓層可加
                     const myFloors = myDuties.map(d => d.floor);
                     const usedFloors = current.map(d => d.floor);
-                    const canAddFloor = FLOORS.filter(f => !usedFloors.includes(f) && !myFloors.includes(f));
+                    const canAddFloor = allowedFloors.filter(f => !usedFloors.includes(f) && !myFloors.includes(f));
                     if (canAddFloor.length > 0 && !myDuties.some(d => d.missed)) {
                         // 還有空樓層且沒有未掃狀態 → 問要加層還是標未掃
                         const action = await openActionSelect(`${empName} 已排 ${myFloors.join("+")}，要做什麼？`, [
@@ -519,9 +521,9 @@ const App = () => {
                 } else {
                     // 分配空樓層中此人次數最少的
                     const usedFloors = current.map(d => d.floor);
-                    const availFloors = FLOORS.filter(f => !usedFloors.includes(f));
-                    if (availFloors.length === 0 && current.length >= FLOORS.length) {
-                        showToast(`${dateStr} 已有 ${FLOORS.length} 位值日生`, false);
+                    const availFloors = allowedFloors.filter(f => !usedFloors.includes(f));
+                    if (availFloors.length === 0 && current.length >= allowedFloors.length) {
+                        showToast(`${dateStr} 已有 ${allowedFloors.length} 位值日生`, false);
                         setSaving(s => { const n = {...s}; delete n[dutyKey]; return n; });
                         return;
                     }
@@ -753,7 +755,7 @@ const App = () => {
         setAutoScheduling(true);
         try {
             setProgress({ text: "載入資料...", current: 0, total: 0 });
-            // 讀取累計樓層打掃次數（從員工表）
+            // 讀取累計樓層打掃次數（從歷史值日紀錄即時計算）
             const fcMap = {}; // fcMap[name] = { "1F":n, "2F":n, "3F":n, "4F":n }
             const empRagicIds = {}; // empRagicIds[name] = ragicId
             allEmployees.forEach(e => {
@@ -930,7 +932,7 @@ const App = () => {
                 const manualFloors = new Set(todayManual.map(m => m.floor).filter(f => f));
                 const manualEmps = new Set(todayManual.map(m => m.empName).filter(n => n));
                 // 4 樓只在週五排（週三沒垃圾車、六日多數人沒上班 → 4 樓定週五掃）；其他天只排 1F/2F/3F
-                const baseFloors = new Date(year, month-1, day).getDay() === 5 ? ["1F", "3F", "2F", "4F"] : ["1F", "3F", "2F"];
+                const baseFloors = SC.expectedDutyFloors(year, month, day);
                 const availFloors = baseFloors.filter(f => !manualFloors.has(f));
                 if (availFloors.length === 0) continue; // 全部手動排完，無需自動補
 
@@ -1056,7 +1058,8 @@ const App = () => {
                 dutyCounts[a.empName] = (dutyCounts[a.empName] || 0) + 1;
             }));
             console.log("=== 排班結果 ===");
-            console.log("總天數:", Object.keys(newDuties).length, "天 ×4 =", Object.keys(newDuties).length * 4, "slots");
+            const plannedSlots = Object.values(newDuties).reduce((s, arr) => s + arr.length, 0);
+            console.log("總天數:", Object.keys(newDuties).length, "天，實際預排筆數 =", plannedSlots, "slots");
             console.log("分配結果 (排序):", Object.entries(dutyCounts).sort((a,b) => b[1]-a[1]).map(([n,c]) => `${n}:${c}`).join(", "));
             console.log("夫妻 Plan A 選中天數:", Object.entries(newDuties).filter(([d, arr]) => {
                 const names = arr.map(a => a.empName);
@@ -1105,7 +1108,7 @@ const App = () => {
             // 更新本地員工樓層次數
             setAllEmployees(prev => prev.map(e => changedEmps.has(e.name) ? {...e, fc: {...fcMap[e.name]}} : e));
             const totalRecords = Object.values(newDuties).reduce((s, a) => s + a.length, 0);
-            showToast(`已完成自動預排 ${Object.keys(newDuties).length} 天 × ${FLOORS.length} 樓 = ${totalRecords} 筆`);
+            showToast(`已完成自動預排 ${Object.keys(newDuties).length} 天，共 ${totalRecords} 筆（平日 3 樓、週五 4 樓）`);
         } catch(e) {
             console.error(e);
             showToast("自動預排失敗: " + e.message, false);

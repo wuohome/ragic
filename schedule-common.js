@@ -152,3 +152,9 @@ SC.isBirthday = (emp, month, day) => {
 
 // ── 清運值日判斷（值日紀錄的備註含清運關鍵字 → 視為清運值日）──
 SC.isTrashDuty = (note) => SC.TRASH_DUTY_KEYWORDS.some(kw => (note || "").includes(kw));
+
+// ── 每日應排樓層：1F/2F/3F 每天；4F 只在週五 ──
+SC.expectedDutyFloors = (year, month, day) => {
+    const isFriday = new Date(year, month - 1, day).getDay() === 5;
+    return isFriday ? ["1F", "3F", "2F", "4F"] : ["1F", "3F", "2F"];
+};
