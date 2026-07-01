@@ -79,6 +79,10 @@ const SC = {
     FLOORS: ["1F", "2F", "3F", "4F"],
     FLOOR_COLORS: { "1F": "#3b82f6", "2F": "#8b5cf6", "3F": "#0891b2", "4F": "#ea580c" },
 
+    // ── 清運值日關鍵字（備註含任一即為清運值日，不佔樓層格）──
+    // 與 n8n 點名判斷關鍵字保持一致，異動需同步兩邊
+    TRASH_DUTY_KEYWORDS: ["清運", "垃圾", "全棟", "全樓", "倒垃圾"],
+
     // ── 夫妻同排 ──
     COUPLES: [["張忠豪", "蕭頤臻"]],
 
@@ -140,3 +144,6 @@ SC.isBirthday = (emp, month, day) => {
     const bp = emp.birthday.split("/");
     return parseInt(bp[1]) === month && parseInt(bp[2]) === day;
 };
+
+// ── 清運值日判斷（值日紀錄的備註含清運關鍵字 → 視為清運值日）──
+SC.isTrashDuty = (note) => SC.TRASH_DUTY_KEYWORDS.some(kw => (note || "").includes(kw));
