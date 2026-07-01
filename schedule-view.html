@@ -94,6 +94,8 @@ const STATUS_CONFIG = {
   '4F未掃':{ bg:'#ffb3c6', text:'#000', label:'4F未掃' },
   '值未掃':{ bg:'#ffb3c6', text:'#000', label:'未掃' },
   '未掃':   { bg:'#ffb3c6', text:'#000', label:'未掃' },   // summary 合計用
+  '清運':  { bg:'#3b82f6', text:'#fff', label:'🗑️' },      // 全棟垃圾清運（沿用值日藍）
+  '清運未掃':{ bg:'#ffb3c6', text:'#000', label:'🗑️未掃' },
   '見紅休':{ bg:'#9ca3af', text:'#fff', label:'休假' },
   '禁休':  { bg:'#be123c', text:'#fff', label:'\u{1F6AB}' },
 };
@@ -196,10 +198,11 @@ async function loadDutiesAndNoRest(year, month) {
       const key = empName + '__' + date;
       const note = r[SC.F_LEAVE.NOTE] || '';
       const floor = /^(1F|2F|3F|4F)$/.test(note) ? note : '';
+      const isTrash = SC.isTrashDuty(note); // 清運值日：備註含清運關鍵字，不佔樓層格
       const isAutoVal = r[SC.F_LEAVE.IS_AUTO] || '';
       const missed = isAutoVal === '未掃';
       if (!duties[key]) duties[key] = [];
-      duties[key].push({ ragicId: rid, empName, date, floor, missed });
+      duties[key].push({ ragicId: rid, empName, date, floor, missed, note, isTrash });
     } else if (type === '禁休') {
       const date = r[SC.F_LEAVE.DATE];
       const reason = r[SC.F_LEAVE.NOTE] || '';
@@ -268,7 +271,9 @@ function getCellStatuses(emp, y, m, d, leaves, duties, noRest) {
   for (const dutyRec of dutyRecs) {
     let key;
     if (dutyRec.missed) {
-      key = dutyRec.floor ? dutyRec.floor + '未掃' : '值未掃';
+      key = dutyRec.isTrash ? '清運未掃' : (dutyRec.floor ? dutyRec.floor + '未掃' : '值未掃');
+    } else if (dutyRec.isTrash) {
+      key = '清運';
     } else {
       key = /^(1F|2F|3F|4F)$/.test(dutyRec.floor) ? dutyRec.floor : (dutyRec.floor || '值日');
     }

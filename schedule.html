@@ -344,9 +344,11 @@ const App = () => {
                         const note = f[CONFIG.F_LEAVE.NOTE] || "";
                         const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
                         const floor = (note.match(/^(1F|2F|3F|4F)$/) || [""])[0];
+                        // 清運值日：備註含清運關鍵字（不是樓層），純顯示標記，不佔樓層格
+                        const isTrash = SC.isTrashDuty(note);
                         if (!dmap[date]) dmap[date] = [];
                         const missed = isAuto === "未掃";
-                        dmap[date].push({ ragicId: id, empName: emp, isAuto, note, floor, missed });
+                        dmap[date].push({ ragicId: id, empName: emp, isAuto, note, floor, missed, isTrash });
                     } else {
                         // leaves[key] 為陣列，支援同日多種類型（如 排休+值班）
                         const k = `${emp}|${date}`;
@@ -1513,6 +1515,7 @@ const App = () => {
                                 if (!nrInfo && isPastOrToday) {
                                     const floorGroup = { "1F": [], "2F": [], "3F": [], "4F": [], "_none": [] };
                                     dutyList.forEach(d => {
+                                        if (d.isTrash) return; // 清運值日不佔樓層格，不列入樓層驗證
                                         const slot = ["1F","2F","3F","4F"].includes(d.floor) ? d.floor : "_none";
                                         floorGroup[slot].push(d.empName);
                                     });
@@ -1582,12 +1585,14 @@ const App = () => {
                                                 }
                                             });
 
-                                            // 值日段（missed = 未掃，正常 = 樓層色）
+                                            // 值日段（missed = 未掃，正常 = 樓層色 / 清運🗑️沿用值日藍）
                                             if (myDuties.length > 0) {
                                                 myDuties.forEach(d => {
                                                     if (d.missed) {
-                                                        const floorShort = d.floor || "值";
-                                                        segments.push({ color: "#ffb3c6", label: `${floorShort}未掃`, short: `${floorShort}掃`, missed: true });
+                                                        const floorShort = d.isTrash ? "🗑️" : (d.floor || "值");
+                                                        segments.push({ color: "#ffb3c6", label: `${floorShort}未掃`, short: `${floorShort}掃`, missed: true, title: d.isTrash ? d.note : undefined });
+                                                    } else if (d.isTrash) {
+                                                        segments.push({ color: "#3b82f6", label: "🗑️", short: "🗑️", missed: false, title: d.note });
                                                     } else {
                                                         const floorShort = d.floor || "值";
                                                         segments.push({ color: FLOOR_COLORS[d.floor] || "#3b82f6", label: floorShort, short: floorShort, missed: false });
