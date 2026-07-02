@@ -98,10 +98,13 @@ def get_sa_clients():
 
 
 def is_zero_perf_anomaly(total_perf, gsheet_data, now=None):
-    """sanity check: non-day1, employees>=10, total==0 => anomaly"""
+    """sanity check: non-day1-5, employees>=10, total==0 => anomaly.
+    FIX-2026-07-02-month-roller: 豁免期由僅 day==1 放寬到 day<=5，
+    因 com.joan.perf-month-roller 於每月初自動建出全 0 空表屬正常態，
+    原本只豁免 1 號會讓本 cron 每 30 分鐘誤報 zero-perf + 擋 commit。"""
     from datetime import datetime
     now = now or datetime.now()
-    if now.day == 1:
+    if now.day <= 5:
         return False
     if len(gsheet_data) < 10:
         return False
