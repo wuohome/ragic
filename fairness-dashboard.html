@@ -66,7 +66,7 @@ function BookTable({ title, ledger, bookKey, colorClass }) {
         <div className="mb-8">
             <h3 className={`text-lg font-bold mb-2 ${colorClass}`}>{title}</h3>
             <div className="overflow-x-auto">
-                <table className="w-full text-sm bg-white rounded shadow-sm">
+                <table className="min-w-max w-full text-sm bg-white rounded shadow-sm">
                     <thead>
                         <tr className="bg-slate-100">
                             <th className="px-3 py-2 text-left">姓名</th>
@@ -128,7 +128,7 @@ function MonthActualTable({ leaveRecords, employees, ym }) {
         <div className="mb-8">
             <h3 className="text-lg font-bold mb-2 text-slate-700">本月實際排班（{ym}，僅事實，不代表公平判定）</h3>
             <div className="overflow-x-auto">
-                <table className="w-full text-sm bg-white rounded shadow-sm">
+                <table className="min-w-max w-full text-sm bg-white rounded shadow-sm">
                     <thead>
                         <tr className="bg-slate-100">
                             <th className="px-3 py-2 text-left">姓名</th>
@@ -169,7 +169,7 @@ function CleaningFeeTable({ feePreview }) {
                 <div className="text-sm text-slate-400">7/1 起目前無未完成紀錄。</div>
             ) : (
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm bg-white rounded shadow-sm">
+                    <table className="min-w-max w-full text-sm bg-white rounded shadow-sm">
                         <thead>
                             <tr className="bg-slate-100">
                                 <th className="px-3 py-2 text-left">姓名</th>
