@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>窩的家 — 公平帳儀表板</title>
+    <script>
+    (function(){
+      var u = new URL(location.href);
+      if (!u.searchParams.has('v')) {
+        u.searchParams.set('v', new Date().toISOString().slice(0,10).replace(/-/g,''));
+        location.replace(u.toString());
+      }
+    })();
+    </script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.7/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #f8fafc; font-family: "Microsoft JhengHei","Noto Sans TC",sans-serif; }
+        table { border-collapse: collapse; }
+        th, td { border: 1px solid #e2e8f0; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spin { animation: spin .8s linear infinite; }
+    </style>
+</head>
+<body>
+<div id="root"></div>
+<script src="schedule-common.js"></script>
+<script type="text/babel">
+
+const { useState, useEffect, useMemo } = React;
+
+function Spinner() {
+    return <div className="spin" style={{
+        width: 32, height: 32, border: "4px solid #e2e8f0", borderTopColor: "#3f5262",
+        borderRadius: "50%", margin: "0 auto",
+    }}/>;
+}
+
+function todayStr() {
+    const d = new Date();
+    return SC.fmtDate(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+
+function BookTable({ title, ledger, bookKey, colorClass }) {
+    // 排行：由高到低（依 pre701+post701 合計 debt）
+    const rows = Object.entries(ledger)
+        .map(([name, acct]) => {
+            const pre = acct[bookKey].pre701;
+            const post = acct[bookKey].post701;
+            return {
+                name,
+                preExpected: pre.expected, preActual: pre.actual, preDebt: pre.debt,
+                postExpected: post.expected, postActual: post.actual, postDebt: post.debt,
+                totalDebt: pre.debt + post.debt,
+            };
+        })
+        .sort((a, b) => b.totalDebt - a.totalDebt);
+
+    return (
+        <div className="mb-8">
+            <h3 className={`text-lg font-bold mb-2 ${colorClass}`}>{title}</h3>
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm bg-white rounded shadow-sm">
+                    <thead>
+                        <tr className="bg-slate-100">
+                            <th className="px-3 py-2 text-left">姓名</th>
+                            <th className="px-3 py-2" colSpan={3}>7/1 前歷史（應/實/欠）</th>
+                            <th className="px-3 py-2" colSpan={3}>7/1 後新制（應/實/欠）</th>
+                            <th className="px-3 py-2">長期欠帳合計</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map(r => (
+                            <tr key={r.name} className={r.totalDebt > 0.5 ? "bg-red-50" : ""}>
+                                <td className="px-3 py-1.5 font-medium">{r.name}</td>
+                                <td className="px-2 py-1.5 text-center text-slate-500">{r.preExpected.toFixed(1)}</td>
+                                <td className="px-2 py-1.5 text-center text-slate-500">{r.preActual.toFixed(1)}</td>
+                                <td className="px-2 py-1.5 text-center">{r.preDebt.toFixed(1)}</td>
+                                <td className="px-2 py-1.5 text-center text-slate-500">{r.postExpected.toFixed(1)}</td>
+                                <td className="px-2 py-1.5 text-center text-slate-500">{r.postActual.toFixed(1)}</td>
+                                <td className="px-2 py-1.5 text-center">{r.postDebt.toFixed(1)}</td>
+                                <td className={`px-3 py-1.5 text-center font-bold ${r.totalDebt > 0.5 ? "text-red-600" : r.totalDebt < -0.5 ? "text-green-600" : "text-slate-400"}`}>
+                                    {r.totalDebt > 0 ? "欠 " : r.totalDebt < 0 ? "多做 " : ""}{Math.abs(r.totalDebt).toFixed(1)}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <div className="text-xs text-slate-400 mt-1">
+                應=應完成量(expected)／實=實際完成量(actual)／欠=欠帳(debt=應-實，負數代表多做)。7/1 前後分開累計，不合併判定。
+            </div>
+        </div>
+    );
+}
+
+function MonthActualTable({ leaveRecords, employees, ym }) {
+    // 本月實際排班：樓層值日 + 清運 + 值班 各自次數（不看 expected，只看事實）
+    const [year, month] = ym.split("/").map(Number);
+    const stats = {};
+    employees.forEach(e => { stats[e.name] = { floor: 0, trash: 0, zhiban: 0, missed: 0 }; });
+    Object.entries(leaveRecords)
+        .filter(([k, v]) => typeof v === "object" && !k.startsWith("_"))
+        .forEach(([id, f]) => {
+            const date = f[SC.F_LEAVE.DATE] || "";
+            if (!date.startsWith(ym + "/")) return;
+            const emp = f[SC.F_LEAVE.EMP] || "";
+            const type = f[SC.F_LEAVE.TYPE] || "";
+            const isAuto = f[SC.F_LEAVE.IS_AUTO] || "";
+            const note = f[SC.F_LEAVE.NOTE] || "";
+            if (!stats[emp]) return;
+            if (type === "值日") {
+                if (isAuto === "未掃") { stats[emp].missed++; return; }
+                if (SC.isTrashDuty(note)) stats[emp].trash++;
+                else if (/^(1F|2F|3F|4F)$/.test(note)) stats[emp].floor++;
+            } else if (type === "值班" && isAuto !== "未值班") {
+                stats[emp].zhiban++;
+            }
+        });
+    const rows = Object.entries(stats).filter(([, s]) => s.floor + s.trash + s.zhiban + s.missed > 0);
+    return (
+        <div className="mb-8">
+            <h3 className="text-lg font-bold mb-2 text-slate-700">本月實際排班（{ym}，僅事實，不代表公平判定）</h3>
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm bg-white rounded shadow-sm">
+                    <thead>
+                        <tr className="bg-slate-100">
+                            <th className="px-3 py-2 text-left">姓名</th>
+                            <th className="px-3 py-2">樓層值日</th>
+                            <th className="px-3 py-2">清運</th>
+                            <th className="px-3 py-2">值班</th>
+                            <th className="px-3 py-2">未掃/未值班</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map(([name, s]) => (
+                            <tr key={name}>
+                                <td className="px-3 py-1.5 font-medium">{name}</td>
+                                <td className="px-2 py-1.5 text-center">{s.floor}</td>
+                                <td className="px-2 py-1.5 text-center">{s.trash}</td>
+                                <td className="px-2 py-1.5 text-center">{s.zhiban}</td>
+                                <td className="px-2 py-1.5 text-center">{s.missed > 0 ? <span className="text-red-500 font-bold">{s.missed}</span> : "—"}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
+function CleaningFeeTable({ feePreview }) {
+    const rows = Object.entries(feePreview)
+        .filter(([, v]) => v.feeTotal > 0)
+        .sort((a, b) => b[1].feeTotal - a[1].feeTotal);
+    return (
+        <div className="mb-8">
+            <h3 className="text-lg font-bold mb-2 text-amber-700">未完成 / 環境清潔費狀態（7/1 起新制，僅顯示試算，未接扣款）</h3>
+            <div className="bg-amber-50 border border-amber-200 rounded p-3 mb-2 text-xs text-amber-800">
+                ⚠️ 本表僅計算「若照新制應收多少」，<b>不會實際扣款、不會通知員工</b>。是否真的開始收費由 Joan 另行確認並串接流程。
+            </div>
+            {rows.length === 0 ? (
+                <div className="text-sm text-slate-400">7/1 起目前無未完成紀錄。</div>
+            ) : (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm bg-white rounded shadow-sm">
+                        <thead>
+                            <tr className="bg-slate-100">
+                                <th className="px-3 py-2 text-left">姓名</th>
+                                <th className="px-3 py-2">未掃樓層次數（200/次）</th>
+                                <th className="px-3 py-2">未清運次數（300/次）</th>
+                                <th className="px-3 py-2">試算金額</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.map(([name, v]) => (
+                                <tr key={name}>
+                                    <td className="px-3 py-1.5 font-medium">{name}</td>
+                                    <td className="px-2 py-1.5 text-center">{v.floorMissed}</td>
+                                    <td className="px-2 py-1.5 text-center">{v.trashMissed}</td>
+                                    <td className="px-2 py-1.5 text-center font-bold text-amber-700">{v.feeTotal.toLocaleString()} 元</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function App() {
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [employees, setEmployees] = useState([]);
+    const [leaveRecords, setLeaveRecords] = useState(null);
+    const [ledger, setLedger] = useState(null);
+    const [feePreview, setFeePreview] = useState(null);
+    const today = todayStr();
+    const curYM = today.slice(0, 7);
+
+    const load = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const empJson = await SC.proxyFetch("listEmployees");
+            const emps = Object.entries(empJson)
+                .filter(([k, v]) => typeof v === "object" && !k.startsWith("_"))
+                .map(([id, f]) => ({
+                    ragicId: id,
+                    name: f[SC.F_EMP.NAME] || "",
+                    dept: f[SC.F_EMP.DEPT] || "",
+                    status: f[SC.F_EMP.STATUS] || "",
+                    hire: f[SC.F_EMP.HIRE] || "",
+                    hireDate: f[SC.F_EMP.HIRE_DATE] || "9999/12/31",
+                }))
+                .filter(e => e.name && e.status === "在職" && e.dept !== "經營階層" && e.hire !== "兼職");
+            setEmployees(emps);
+
+            // 拉全歷史（3/30 起，不限 type）供三本帳計算
+            const leaveJson = await SC.proxyFetch(
+                `listLeaves?dateFrom=${encodeURIComponent(SC.FAIRNESS_HIST_START)}&dateTo=${encodeURIComponent(today)}`
+            );
+            setLeaveRecords(leaveJson);
+
+            const l = SC.computeFairnessLedger(emps, leaveJson, today);
+            setLedger(l);
+            setFeePreview(SC.computeCleaningFeePreview(leaveJson, today));
+        } catch (e) {
+            console.error(e);
+            setError(e.message || String(e));
+        }
+        setLoading(false);
+    };
+
+    useEffect(() => { load(); }, []);
+
+    if (loading) {
+        return (
+            <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+                <Spinner/>
+                <div className="text-slate-500 text-sm">計算公平帳中（讀取排休表歷史紀錄）…</div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+                <div className="text-red-500">載入失敗：{error}</div>
+                <button onClick={load} className="px-4 py-2 bg-slate-700 text-white rounded">重試</button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="max-w-6xl mx-auto p-4 md:p-8">
+            <header className="mb-6 flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    <h1 className="text-2xl font-black text-slate-800">📊 公平帳儀表板</h1>
+                    <div className="text-xs text-slate-400 mt-1">
+                        統計區間：{SC.FAIRNESS_HIST_START} ～ {today}（截至今天）｜制度分水嶺 {SC.FAIRNESS_CUTOVER_DATE}
+                    </div>
+                </div>
+                <div className="flex gap-2">
+                    <button onClick={load} className="px-3 py-1.5 text-sm bg-slate-100 hover:bg-slate-200 rounded">🔄 重新整理</button>
+                    <a href="schedule-view.html" className="px-3 py-1.5 text-sm bg-slate-700 text-white rounded">← 返回排班表</a>
+                </div>
+            </header>
+
+            <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-6 text-xs text-blue-800">
+                💡 三本帳各自獨立：樓層打掃帳／清運帳／值班帳。本月被排很多不代表不公平，要看「長期欠帳合計」才知道是「追債中」還是「排過頭」。新人到職未滿 {SC.NEWBIE_PROTECTION.NO_SCHEDULE_DAYS} 天不背 expected，15-{SC.NEWBIE_PROTECTION.HALF_WEIGHT_DAYS} 天半權重（此門檻為規格書預設值，待 Joan 最終確認）。
+            </div>
+
+            <MonthActualTable leaveRecords={leaveRecords} employees={employees} ym={curYM}/>
+            <BookTable title="🧹 樓層打掃帳（長期欠帳排行，由高到低）" ledger={ledger} bookKey="floor" colorClass="text-blue-700"/>
+            <BookTable title="🗑️ 清運帳（長期欠帳排行，由高到低）" ledger={ledger} bookKey="trash" colorClass="text-teal-700"/>
+            <BookTable title="🕗 值班帳（長期欠帳排行，由高到低）" ledger={ledger} bookKey="zhiban" colorClass="text-orange-700"/>
+            <CleaningFeeTable feePreview={feePreview}/>
+
+            <div className="text-xs text-slate-300 mt-10 text-center">
+                資料來源：Ragic ragicforms4/2（排休/值班/值日紀錄）＋ ragicforms4/20004（員工在職名單）。全部 runtime 即時計算，未寫回 Ragic。
+            </div>
+        </div>
+    );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

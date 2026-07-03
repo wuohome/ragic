@@ -466,6 +466,29 @@ function EntryScreen({ onPersonal, onTeam }) {
           <div style={{ fontSize: 17, fontWeight: 800, color: '#3f5262' }}>全體排班</div>
           <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 6 }}>白板總覽（唯讀）</div>
         </button>
+
+        {/* Fairness ledger dashboard button */}
+        <a href="fairness-dashboard.html" style={{
+          background: '#fff', border: '2px solid #f59e0b',
+          borderRadius: 16, padding: '28px 36px',
+          cursor: 'pointer', textAlign: 'center', textDecoration: 'none',
+          boxShadow: '0 4px 20px rgba(245,158,11,0.15)',
+          transition: 'transform 0.15s, box-shadow 0.15s',
+          minWidth: 180, display: 'block',
+        }}
+          onMouseEnter={e => {
+            e.currentTarget.style.transform = 'translateY(-3px)';
+            e.currentTarget.style.boxShadow = '0 8px 28px rgba(245,158,11,0.28)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.transform = '';
+            e.currentTarget.style.boxShadow = '0 4px 20px rgba(245,158,11,0.15)';
+          }}
+        >
+          <div style={{ fontSize: 40, marginBottom: 10 }}>📊</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: '#92400e' }}>公平帳</div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 6 }}>長期欠帳排行 · 追債制度</div>
+        </a>
       </div>
 
       <div style={{ marginTop: 48, fontSize: 11, color: '#cbd5e1' }}>
