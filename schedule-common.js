@@ -288,7 +288,12 @@ SC.computeFairnessLedger = (employees, leaveRecords, todayStr) => {
                 ledger[e.name].floor[period].expected += perSlotExpected * w;
             });
         }
-        // actual：當天實際完成的樓層值日（非未掃、非清運）
+        // actual：當天實際完成的樓層值日（非清運）
+        // 「是否計入8天」欄位（1000966）語意＝排班來源，不是完成狀態：
+        //   Yes = 系統自動排、No = 手動變更（人工排/換班）——兩者都是「真的排了、真的做了」
+        //   只有寫入 "未掃"（值日）/ "未值班"（值班）這個特殊字串才代表「排了但沒做」
+        // 排除條件對齊既有 schedule-view.html loadEmployees/上月統計口徑（`isAuto !== '未掃'` 才計入 duty++），
+        // 不可誤把 "No" 當未完成排除，那是手動變更的正常紀錄（查證見踩坑速查）
         dayRecs.forEach(r => {
             if (r.type !== "值日") return;
             if (SC.isTrashDuty(r.note)) return; // 清運另計
@@ -318,7 +323,7 @@ SC.computeFairnessLedger = (employees, leaveRecords, todayStr) => {
         dayRecs.forEach(r => {
             if (r.type !== "值日") return;
             if (!SC.isTrashDuty(r.note)) return;
-            if (r.isAuto === "未掃") return;
+            if (r.isAuto === "未掃") return; // No=手動變更仍算完成，理由同上方樓層帳註解
             if (!ledger[r.empName]) return;
             ledger[r.empName].trash[period].actual += 1;
         });
@@ -341,7 +346,7 @@ SC.computeFairnessLedger = (employees, leaveRecords, todayStr) => {
         }
         dayRecs.forEach(r => {
             if (r.type !== "值班") return;
-            if (r.isAuto === "未值班") return;
+            if (r.isAuto === "未值班") return; // No=手動變更仍算完成，理由同上方樓層帳註解
             if (!ledger[r.empName]) return;
             ledger[r.empName].zhiban[period].actual += 1;
         });
