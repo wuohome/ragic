@@ -20,6 +20,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -86,6 +87,39 @@ def get_sa_clients():
     return build('sheets', 'v4', credentials=creds, cache_discovery=False), sa_email
 
 
+def execute_with_retry(request, max_retries: int = 4, base_delay: int = 5):
+    """對 Drive/Sheets API request 的 .execute() 加 exponential backoff retry。
+
+    2026-07-06 PERFFIX 根因：本腳本的 Drive 呼叫（get_oauth_drive）走 rclone 預設共用
+    OAuth client（project 202264815644，未設自訂 client_id/secret，見 rclone config dump），
+    該 client 的配額是全球 rclone 使用者共用池，偶發被別人瞬間打滿導致我們收到
+    429 / 403 rateLimitExceeded（不是我方呼叫量過大——本腳本正常只打 1~2 次 Drive list）。
+    永久解法是換成自己專用的 OAuth client_id（需 GCP console 建立 + 一次性瀏覽器授權，
+    已標記給 Joan/main，見交付摘要），這裡先做重試作立即緩解。
+
+    只重試「配額類」錯誤（429，或 403 且訊息含 rateLimitExceeded/userRateLimitExceeded）：
+    這類錯誤代表請求在 Google 端閘道就被擋下、從未真正送到後端執行，重試不會造成重複寫入
+    （即使是 files.copy / permissions.create 這種非冪等操作也安全）。
+    其他錯誤（404/401/5xx 等非配額類）不重試、原樣往上拋，避免掩蓋真實故障。
+    """
+    from googleapiclient.errors import HttpError
+    for attempt in range(max_retries + 1):
+        try:
+            return request.execute()
+        except HttpError as e:
+            status = getattr(e.resp, 'status', None)
+            body = str(e)
+            is_rate_limit = status == 429 or (
+                status == 403 and ('rateLimitExceeded' in body or 'userRateLimitExceeded' in body)
+            )
+            if not is_rate_limit or attempt == max_retries:
+                raise
+            delay = base_delay * (2 ** attempt)
+            log(f'[retry] Drive/Sheets API 遇配額限制（HTTP {status}），{delay}s 後重試'
+                f'（第 {attempt + 1}/{max_retries} 次）: {body[:200]}')
+            time.sleep(delay)
+
+
 def send_ops_alert(msg: str):
     sys.path.insert(0, str(Path.home() / '.claude' / 'scripts'))
     try:
@@ -124,7 +158,7 @@ def _pick_exact_month_sheet(files: list, roc_year: int, month: int) -> Optional[
 def find_exact_month_sheet(drive, roc_year: int, month: int) -> list:
     """回傳母 folder 內檔名精確符合「{roc}年{month}月業績表」的所有檔案（可能 0/1/多筆）"""
     name_q = f'{roc_year}年{month}月業績表'
-    resp = drive.files().list(
+    resp = execute_with_retry(drive.files().list(
         q=(
             f'"{PARENT_FOLDER_ID}" in parents'
             f' and mimeType="application/vnd.google-apps.spreadsheet"'
@@ -135,7 +169,7 @@ def find_exact_month_sheet(drive, roc_year: int, month: int) -> list:
         orderBy='modifiedTime desc',
         supportsAllDrives=True,
         includeItemsFromAllDrives=True,
-    ).execute()
+    ))
     files = resp.get('files', [])
     target = _norm(name_q)
     return [f for f in files if _norm(f.get('name')) == target]
@@ -291,18 +325,18 @@ def wipe_new_sheet(oauth_drive, sa_sheets, sheet_id: str, roc_year: int, month: 
     """把複製出來的新表清空明細（保留標題/人名/公式）。
     步驟：授權 SA writer → SA 讀 grid data（含 userEnteredValue）→ 組 requests → batchUpdate"""
     log(f'授權 SA ({sa_email}) 為新表 writer…')
-    oauth_drive.permissions().create(
+    execute_with_retry(oauth_drive.permissions().create(
         fileId=sheet_id,
         body={'type': 'user', 'role': 'writer', 'emailAddress': sa_email},
         supportsAllDrives=True,
         sendNotificationEmail=False,
-    ).execute()
+    ))
 
-    meta = sa_sheets.spreadsheets().get(
+    meta = execute_with_retry(sa_sheets.spreadsheets().get(
         spreadsheetId=sheet_id,
         includeGridData=True,
         fields='sheets(properties(title,sheetId,gridProperties),data(rowData(values(userEnteredValue))))'
-    ).execute()
+    ))
 
     all_requests = []
     for sh in meta['sheets']:
@@ -355,9 +389,9 @@ def wipe_new_sheet(oauth_drive, sa_sheets, sheet_id: str, roc_year: int, month: 
     BATCH_SIZE = 300
     for k in range(0, len(all_requests), BATCH_SIZE):
         chunk = all_requests[k:k + BATCH_SIZE]
-        sa_sheets.spreadsheets().batchUpdate(
+        execute_with_retry(sa_sheets.spreadsheets().batchUpdate(
             spreadsheetId=sheet_id, body={'requests': chunk}
-        ).execute()
+        ))
         log(f'  batchUpdate 送出 {len(chunk)} requests（{k}~{k+len(chunk)}/{len(all_requests)}）')
 
     return True
@@ -368,10 +402,10 @@ def sanity_check(sa_sheets, sheet_id: str) -> tuple:
     (a) 「成交案源名稱」與「總計」之間全空
     (b) 兩個「總計」列的數字欄位值為 0 或空
     回傳 (ok: bool, detail: str)"""
-    meta = sa_sheets.spreadsheets().get(
+    meta = execute_with_retry(sa_sheets.spreadsheets().get(
         spreadsheetId=sheet_id, includeGridData=False,
         fields='sheets(properties(title))'
-    ).execute()
+    ))
     titles = [s['properties']['title'] for s in meta['sheets']]
     problems = []
 
@@ -379,9 +413,9 @@ def sanity_check(sa_sheets, sheet_id: str) -> tuple:
         if title in ('測試', '收訂', '業績表'):
             continue
         try:
-            data = sa_sheets.spreadsheets().values().get(
+            data = execute_with_retry(sa_sheets.spreadsheets().values().get(
                 spreadsheetId=sheet_id, range=f"'{title}'!A1:N200"
-            ).execute()
+            ))
             rows = data.get('values', [])
         except Exception as e:
             problems.append(f'{title}: fetch fail {e}')
@@ -456,11 +490,11 @@ def ensure(roc: int, month: int):
     log(f"上月表命中：{src['name']} (id={src['id']})，開始複製…")
 
     new_name = f'{roc}年{month}月業績表'
-    copied = oauth_drive.files().copy(
+    copied = execute_with_retry(oauth_drive.files().copy(
         fileId=src['id'],
         body={'name': new_name, 'parents': [PARENT_FOLDER_ID]},
         supportsAllDrives=True,
-    ).execute()
+    ))
     new_id = copied['id']
     log(f'已複製 -> {new_id}')
 
@@ -468,9 +502,9 @@ def ensure(roc: int, month: int):
     if not ok:
         msg = f'❌ {new_name} 清空 batchUpdate 失敗（無 requests 產生），請人工檢查'
         log(msg)
-        oauth_drive.files().update(
+        execute_with_retry(oauth_drive.files().update(
             fileId=new_id, body={'name': f'{new_name}_DRAFT_清空失敗'}, supportsAllDrives=True
-        ).execute()
+        ))
         send_ops_alert(msg)
         sys.exit(1)
         return
@@ -479,9 +513,9 @@ def ensure(roc: int, month: int):
     if not check_ok:
         msg = f'❌ {new_name} sanity check 失敗，已改名避免業績 cron 誤讀：\n{detail}'
         log(msg)
-        oauth_drive.files().update(
+        execute_with_retry(oauth_drive.files().update(
             fileId=new_id, body={'name': f'{new_name}_DRAFT_清空失敗'}, supportsAllDrives=True
-        ).execute()
+        ))
         send_ops_alert(msg)
         sys.exit(1)
         return
