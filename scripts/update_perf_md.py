@@ -101,7 +101,14 @@ def is_zero_perf_anomaly(total_perf, gsheet_data, now=None):
     """sanity check: non-day1-5, employees>=10, total==0 => anomaly.
     FIX-2026-07-02-month-roller: 豁免期由僅 day==1 放寬到 day<=5，
     因 com.joan.perf-month-roller 於每月初自動建出全 0 空表屬正常態，
-    原本只豁免 1 號會讓本 cron 每 30 分鐘誤報 zero-perf + 擋 commit。"""
+    原本只豁免 1 號會讓本 cron 每 30 分鐘誤報 zero-perf + 擋 commit。
+
+    注意（2026-07-06 PERFFIX）：本函式只判斷「是否進入 0 業績異常分支」（擋 push 與否），
+    不判斷「要不要大聲推 OPS bot」——那件事由呼叫端依 sheet_has_signal（代管/續約等
+    非成交類別是否有值）決定，見 main() 呼叫處與 maybe_alert_zero_perf 的 quiet 參數。
+    這樣設計是因為珊珊本來就月中才登打成交/續約，導致每月 6 號（day>5 首日）固定觸發
+    這條 anomaly 分支，但那是良性狀態（sheet 讀得到、只是還沒登打），不該真的擋 push
+    誤判成「sheet 壞掉/讀空/權限被撤」而狂推 OPS 假警報。"""
     from datetime import datetime
     now = now or datetime.now()
     if now.day <= 5:
@@ -111,8 +118,19 @@ def is_zero_perf_anomaly(total_perf, gsheet_data, now=None):
     return total_perf == 0
 
 
-def maybe_alert_zero_perf(roc_year, month):
-    """Send Telegram OPS alert for zero-perf anomaly. 30-min throttle."""
+def maybe_alert_zero_perf(roc_year, month, quiet=False):
+    """Send Telegram OPS alert for zero-perf anomaly. 30-min throttle.
+
+    quiet=True（2026-07-06 PERFFIX）：呼叫端已判定代管/續約等非成交類別有非零值，
+    代表這張 sheet 確實讀得到、是有效的，只是珊珊還沒登打成交/續約（每月 6 號固定態），
+    不是「sheet 壞掉/讀到空表/SA 權限被撤」那種真實故障。這種情況照舊擋 push（不讓 0
+    蓋掉儀表板），但降級成一行 log、不推 OPS bot，避免每月固定假警報洗版。
+    只有「所有類別（含代管）全 0」才走下面真正大聲告警的分支——這是 2026-05-18 曾發生
+    誤 push stale 空表把真實 872,365 業績蓋成 0 的事故留下的保護，不可削弱。"""
+    if quiet:
+        print(f"[sanity] ℹ️  {roc_year}/{month} 業績=0 但代管/續約等非成交類別有值，"
+              f"判定 sheet 有效（僅未登打）— 照舊擋 push，跳過 OPS 大聲通知", file=sys.stderr)
+        return False
     import time, urllib.parse
     THROTTLE_SEC = 30 * 60
     state_file = __import__("pathlib").Path.home() / ".claude" / "state" / "perf-sanity-throttle.txt"
@@ -770,11 +788,28 @@ def main():
         print("[sanity] PERF_FORCE_ZERO=1 detected, forcing total_perf=0 for fault injection test", file=sys.stderr)
         total_perf = 0
         gsheet_data = {f"emp{i}": 0 for i in range(15)}  # 確保 len>=10
+        # FIX-2026-07-06-PERFFIX: 額外測試鉤子——模擬「sheet 真的全空」(連代管/續約都 0)，
+        # 用來驗證大聲告警分支在 mgmt-aware 改動後仍然正常觸發（不可與 PERF_FORCE_ZERO 分開用）。
+        if os.environ.get("PERF_FORCE_ZERO_ALL_CATEGORIES") == "1":
+            print("[sanity] PERF_FORCE_ZERO_ALL_CATEGORIES=1 detected, forcing extras (代管/續約)=0 too",
+                  file=sys.stderr)
+            extras = {k: {'renewal': 0, 'mgmt': 0} for k in extras} if extras else extras
 
     # ── L51 sanity check：0 業績異常擋寫入 ─────────────────────
     if is_zero_perf_anomaly(total_perf, gsheet_data):
-        print(f"[sanity] ⚠️ {roc_year}/{month} 0 業績異常，中止寫入", file=sys.stderr)
-        maybe_alert_zero_perf(roc_year, month)
+        total_renewal = sum(v.get('renewal', 0) for v in extras.values()) if extras else 0
+        total_mgmt = sum(v.get('mgmt', 0) for v in extras.values()) if extras else 0
+        # FIX-2026-07-06-PERFFIX-mgmt-aware: 代管/續約等非成交類別有值 => sheet 確實讀得到、
+        # 有效，只是珊珊還沒登打成交/續約（每月 6 號固定態）。仍擋 push，但不推 OPS 大聲告警；
+        # 只有「所有類別全 0」才維持原本大聲告警（疑似 sheet 壞掉/讀空/權限被撤，保護不可削弱）。
+        sheet_has_signal = (total_mgmt != 0) or (total_renewal != 0)
+        print(
+            f"[sanity] ⚠️ {roc_year}/{month} 0 業績異常，中止寫入 "
+            f"(全店業績=0, 續約={fmt_num(total_renewal)}, 代管={fmt_num(total_mgmt)}, "
+            f"sheet_has_signal={sheet_has_signal})",
+            file=sys.stderr,
+        )
+        maybe_alert_zero_perf(roc_year, month, quiet=sheet_has_signal)
         sys.exit(2)
 
     original = vault_md.read_text(encoding='utf-8')

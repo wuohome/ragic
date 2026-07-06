@@ -1,10 +1,23 @@
 #!/bin/bash
 # Mac Mini 版 perf-update（取代 Windows run-perf-update.ps1）
-# 由 launchd com.joan.perf-update 每天 20:00 觸發
+# 由 launchd com.joan.perf-update 每 15 分鐘（:00/:15/:30/:45）觸發
+PROJECT_DIR="$HOME/Projects/wuohome-ragic"
+
+# FIX-2026-07-06-PERFFIX-git-lock: com.joan.perf-month-roller 每天 07:00 跟本 job 的
+# :00 那班同一秒觸發，兩者都對這個 repo 做 git fetch/reset/commit/push，會搶
+# .git/index.lock；更嚴重的是 `git reset --hard` 若插進本腳本「cp 完 data/perf.md
+# 但還沒 commit」的空檔，會把還沒提交的變更蓋掉（資料損毀風險，不只是報錯）。
+# 用共用 flock（scripts/with_git_lock.py）把整支腳本序列化，涵蓋 launchd 觸發跟手動執行。
+GIT_LOCK="$PROJECT_DIR/.git/wuohome-cron.lock"
+if [ -z "$WUOHOME_GIT_LOCK_HELD" ]; then
+  export WUOHOME_GIT_LOCK_HELD=1
+  exec /opt/homebrew/bin/python3 "$PROJECT_DIR/scripts/with_git_lock.py" "$GIT_LOCK" -- \
+    /bin/bash "$PROJECT_DIR/scripts/run-perf-update.sh" "$@"
+fi
+
 set -e
 set -o pipefail  # 讓 tee 接的 python fail 真正中斷 sh（避免 silent commit stale data）
 
-PROJECT_DIR="$HOME/Projects/wuohome-ragic"
 VAULT_MD="$HOME/Vaults/Joan/窩的家/管理部/全店每月業績表.md"
 REPO_PERF_MD="$PROJECT_DIR/data/perf.md"
 LOG_DIR="$HOME/Library/Logs/perf-update"
