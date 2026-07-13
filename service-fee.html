@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>窩的家｜協力人員自助請款</title>
+  <script>
+  (function(){
+    var u = new URL(location.href);
+    if (!u.searchParams.has('v')) {
+      u.searchParams.set('v', new Date().toISOString().slice(0,10).replace(/-/g,''));
+      location.replace(u.toString());
+    }
+  })();
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+  <!-- 引入 PDF 產生套件（照抄 earnest.html / payment-receipt.html 既有機制）-->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+    body { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; background:#F5F7FA; }
+    .card { background:#fff; border-radius:18px; padding:22px 20px; box-shadow:0 6px 24px rgba(43,58,74,.10); }
+    .field { margin-bottom:16px; }
+    .field:last-child { margin-bottom:0; }
+    label { display:block; font-size:13px; font-weight:700; margin-bottom:6px; color:#2B3A4A; }
+    input[type=text], input[type=tel], input[type=number], select {
+      width:100%; font-size:16px; border:2px solid #E3E8EE; border-radius:12px; padding:11px 14px;
+      outline:none; transition:border-color .15s; background:#fff; color:#2B3A4A; -webkit-appearance:none;
+    }
+    input:focus, select:focus { border-color:#FF5A4D; }
+    .big-btn { transition:all .2s; cursor:pointer; }
+    .big-btn:active { transform:scale(.96); opacity:.9; }
+    #signature-pad { background:#fff; border:3px dashed #3b82f6; border-radius:16px; width:100%; height:200px; touch-action:none; }
+    #loader { background:rgba(255,255,255,.98); z-index:100; }
+    .calc-box { background:linear-gradient(135deg,#FFF8E8 0%,#FFF1D6 100%); border:1.5px solid #FFE3A8; border-radius:16px; padding:16px 18px; }
+
+    /* PDF 專用區域，畫面外渲染 */
+    #pdf-export-area { width:850px; padding:40px; background:white; position:absolute; left:-9999px; top:0; }
+    .receipt-table { border-collapse:collapse; width:100%; }
+    .receipt-table th, .receipt-table td { border:1.5px solid #000; padding:12px 14px; font-size:15px; vertical-align:middle; }
+    .receipt-table th { background:#f8fafc; font-weight:900; text-align:left; width:150px; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <div id="loader" class="fixed inset-0 flex flex-col items-center justify-center">
+    <div class="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-red-500 mb-4"></div>
+    <p id="loader-text" class="text-gray-600 font-bold">連結確認中...</p>
+  </div>
+
+  <div id="error-view" class="hidden max-w-md mx-auto p-6 pt-24 text-center">
+    <div class="text-5xl mb-4">⚠️</div>
+    <p id="error-text" class="text-gray-700 font-bold">連結無效，請聯繫窩的家管理部確認連結。</p>
+  </div>
+
+  <div id="form-view" class="hidden max-w-md mx-auto p-4 pb-24">
+    <div class="mb-5 mt-4">
+      <h1 class="text-xl font-black text-gray-800">🧾 協力人員自助請款</h1>
+      <p id="greet-text" class="text-sm text-gray-500 mt-2 leading-relaxed">請填寫本次服務資料</p>
+    </div>
+
+    <!-- 首次：完整資料（僅需填寫一次） -->
+    <div id="kyc-section" class="card mb-4 hidden">
+      <h2 class="font-bold text-gray-700 mb-3">基本資料（僅需填寫一次）</h2>
+      <div class="field"><label>姓名 *</label><input type="text" id="f_name" maxlength="30" placeholder="真實姓名"></div>
+      <div class="field"><label>身分證字號 / 居留證號 *</label><input type="text" id="f_idNumber" maxlength="12" placeholder="A123456789"></div>
+      <div class="field"><label>國籍</label><input type="text" id="f_nationality" maxlength="20" value="中華民國"></div>
+      <div class="field"><label>聯絡地址 *</label><input type="text" id="f_address" maxlength="100" placeholder="戶籍或通訊地址"></div>
+      <div class="field"><label>聯絡電話 *</label><input type="tel" id="f_phone" maxlength="20" placeholder="09xxxxxxxx"></div>
+      <div class="field"><label>銀行 *</label>
+        <select id="f_bankName"><option value="">請選擇銀行</option></select>
+      </div>
+      <div class="field"><label>分行名稱（選填）</label><input type="text" id="f_branchName" maxlength="30" placeholder="例如：三重分行"></div>
+      <div class="field"><label>銀行帳號 *</label><input type="text" id="f_bankAccount" maxlength="30" placeholder="不含空格" inputmode="numeric"></div>
+      <div class="field"><label>收款戶名 *</label><input type="text" id="f_accountHolder" maxlength="30" placeholder="與帳號姓名一致"></div>
+    </div>
+
+    <!-- 每次都要填 -->
+    <div class="card mb-4">
+      <h2 class="font-bold text-gray-700 mb-3">本次請款內容</h2>
+      <div class="field"><label>服務項目 *</label><input type="text" id="f_itemName" maxlength="50" placeholder="例如：會計服務費" value="會計服務費"></div>
+      <div class="field"><label>服務期間 *</label><input type="text" id="f_servicePeriod" maxlength="30" placeholder="例如：2026年7月"></div>
+      <div class="field"><label>本次給付金額（未扣稅前）*</label>
+        <input type="number" id="f_amount" min="0" inputmode="numeric" placeholder="0">
+      </div>
+    </div>
+
+    <div class="calc-box mb-4">
+      <div class="text-xs font-bold text-amber-700 mb-2">📊 稅額試算</div>
+      <div class="flex justify-between text-sm py-1"><span>給付總額</span><span id="calc_amount" class="font-bold">$0</span></div>
+      <div class="flex justify-between text-sm py-1 text-red-600"><span>執行業務所得扣繳稅額（10%，&gt;$2,000 才扣）</span><span id="calc_tax" class="font-bold">-$0</span></div>
+      <div class="flex justify-between text-sm py-1 text-red-600"><span>二代健保補充保費（2.11%，≥$20,000 才扣）</span><span id="calc_health" class="font-bold">-$0</span></div>
+      <div class="flex justify-between text-base py-2 border-t border-amber-300 mt-1"><span class="font-black">實付金額</span><span id="calc_net" class="font-black text-amber-700">$0</span></div>
+    </div>
+
+    <div class="card mb-4">
+      <h2 class="font-bold text-gray-700 mb-3">簽名確認</h2>
+      <canvas id="signature-pad"></canvas>
+      <button id="btn-clear-sig" type="button" class="mt-2 text-sm text-blue-500 underline">清除重簽</button>
+    </div>
+
+    <button id="btn-submit" class="big-btn w-full bg-gradient-to-r from-red-500 to-red-600 text-white font-black text-lg py-4 rounded-2xl shadow-lg">送出請款 ✊</button>
+    <p class="text-xs text-gray-400 text-center mt-4">送出後系統將自動產生採購/請款單並存入公司系統</p>
+  </div>
+
+  <div id="done-view" class="hidden max-w-md mx-auto p-6 pt-20 text-center">
+    <div class="w-20 h-20 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-4xl text-white mx-auto mb-4 shadow-lg">✓</div>
+    <h2 class="text-xl font-black text-gray-800 mb-2">已送出！</h2>
+    <p class="text-gray-500 mb-6">您的請款資料已成功建立</p>
+    <div class="card text-left">
+      <div class="flex justify-between py-2 border-b"><span class="text-gray-500">單號</span><span id="done_po" class="font-bold">—</span></div>
+      <div class="flex justify-between py-2 border-b"><span class="text-gray-500">給付總額</span><span id="done_amount" class="font-bold">—</span></div>
+      <div class="flex justify-between py-2"><span class="text-gray-500">實付金額</span><span id="done_net" class="font-bold text-green-600">—</span></div>
+    </div>
+    <p class="text-xs text-gray-400 mt-6">下次請款請直接使用同一個連結，無需重新登記資料。</p>
+  </div>
+
+  <!-- PDF 產生用（隱藏，畫面外渲染） -->
+  <div id="pdf-export-area">
+    <div style="font-size:28px; font-weight:900; text-align:center; margin-bottom:20px;">勞務報酬給付明細</div>
+    <table class="receipt-table" style="margin-bottom:24px;">
+      <tr><th>姓名</th><td id="pdf_name"></td><th>服務期間</th><td id="pdf_period"></td></tr>
+      <tr id="pdf_row_id"><th>身分證字號</th><td id="pdf_idnumber"></td><th>國籍</th><td id="pdf_nationality"></td></tr>
+      <tr id="pdf_row_addr"><th>聯絡地址</th><td colspan="3" id="pdf_address"></td></tr>
+      <tr id="pdf_row_bank"><th>收款帳戶</th><td colspan="3" id="pdf_bank"></td></tr>
+      <tr><th>服務項目</th><td colspan="3" id="pdf_item"></td></tr>
+      <tr><th>給付總額</th><td id="pdf_amount"></td><th>扣繳稅額</th><td id="pdf_tax"></td></tr>
+      <tr><th>二代健保</th><td id="pdf_health"></td><th>實付金額</th><td id="pdf_net" style="font-weight:900;"></td></tr>
+      <tr><th>簽署日期</th><td colspan="3" id="pdf_date"></td></tr>
+    </table>
+    <div style="text-align:right; font-size:14px; margin-bottom:8px;">領款人簽名：</div>
+    <div style="text-align:right;"><img id="pdf_signature_img" style="height:100px; border-bottom:1px solid #000;"></div>
+  </div>
+
+  <script>
+    const WORKER_BASE_URL = "https://wuohome-ragic-proxy.wuohome.workers.dev";
+    const BANK_OPTIONS = [
+      "(822) 中國信託","(004) 台灣銀行","(005) 土地銀行","(006) 合作金庫","(007) 第一銀行",
+      "(008) 華南銀行","(009) 彰化銀行","(011) 上海商業","(012) 台北富邦","(013) 國泰世華",
+      "(016) 高雄銀行","(017) 兆豐國際","(021) 花旗銀行","(050) 台灣中小企銀","(052) 渣打國際",
+      "(053) 台中銀行","(054) 京城銀行","(081) 滙豐銀行","(101) 瑞興銀行","(102) 華泰銀行",
+      "(103) 新光銀行","(108) 陽信銀行","(118) 板信銀行","(147) 三信商業","(289) 王道銀行",
+      "(700) 郵局","(803) 聯邦銀行","(805) 遠東商銀","(806) 元大銀行","(807) 永豐銀行",
+      "(808) 玉山銀行","(809) 凱基銀行","(810) 星展銀行","(812) 台新銀行","(815) 日盛銀行",
+      "(816) 安泰銀行"
+    ];
+
+    const $ = (id) => document.getElementById(id);
+    let signaturePad = null;
+    let mode = null; // 'first' | 'recurring'
+    let vendorName = '';
+    let token = null;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    token = (urlParams.get('token') || '').trim();
+
+    function showError(msg) {
+      $("loader").classList.add('hidden');
+      $("error-text").innerText = msg;
+      $("error-view").classList.remove('hidden');
+    }
+
+    function fmtMoney(n) { return "$" + Number(n || 0).toLocaleString('zh-TW'); }
+
+    function calcTax() {
+      const amount = Number($("f_amount").value) || 0;
+      const tax = amount > 2000 ? Math.floor(amount * 0.10) : 0;
+      const health = amount >= 20000 ? Math.round(amount * 0.0211) : 0;
+      const net = amount - tax - health;
+      $("calc_amount").innerText = fmtMoney(amount);
+      $("calc_tax").innerText = "-" + fmtMoney(tax);
+      $("calc_health").innerText = "-" + fmtMoney(health);
+      $("calc_net").innerText = fmtMoney(net);
+      return { amount, tax, health, net };
+    }
+    $("f_amount").addEventListener('input', calcTax);
+
+    function fillBankSelect() {
+      const sel = $("f_bankName");
+      BANK_OPTIONS.forEach(function(o){
+        const opt = document.createElement('option');
+        opt.value = o; opt.textContent = o;
+        sel.appendChild(opt);
+      });
+    }
+
+    function initSignature() {
+      const canvas = $("signature-pad");
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      canvas.width = canvas.offsetWidth * ratio;
+      canvas.height = canvas.offsetHeight * ratio;
+      canvas.getContext("2d").scale(ratio, ratio);
+      signaturePad = new SignaturePad(canvas, { minWidth: 0.8, maxWidth: 2.2, penColor: "black" });
+    }
+    $("btn-clear-sig").addEventListener('click', function(){ if (signaturePad) signaturePad.clear(); });
+
+    async function boot() {
+      fillBankSelect();
+      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRe.test(token)) {
+        showError("連結格式錯誤，請聯繫窩的家管理部重新取得連結。");
+        return;
+      }
+      try {
+        const res = await fetch(`${WORKER_BASE_URL}/getServiceFeeIdentity?token=${encodeURIComponent(token)}`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          showError("載入失敗（" + (err.error || res.status) + "），請聯繫窩的家管理部。");
+          return;
+        }
+        const data = await res.json();
+        if (data.exists) {
+          mode = 'recurring';
+          vendorName = data.name || '';
+          $("greet-text").innerText = "哈囉，" + vendorName + "，請填寫本月請款金額即可，無需重填個人資料。";
+          $("kyc-section").classList.add('hidden');
+        } else {
+          mode = 'first';
+          $("greet-text").innerText = "這是您第一次使用本連結，請完整填寫以下資料（僅需填寫一次，之後每月只需填金額）。";
+          $("kyc-section").classList.remove('hidden');
+        }
+        $("loader").classList.add('hidden');
+        $("form-view").classList.remove('hidden');
+        setTimeout(initSignature, 200);
+      } catch (e) {
+        showError("網路連線有問題，請檢查網路後重新整理頁面。");
+      }
+    }
+    boot();
+
+    function buildPdfContent(calc) {
+      $("pdf_name").innerText = mode === 'first' ? $("f_name").value.trim() : vendorName;
+      $("pdf_period").innerText = $("f_servicePeriod").value.trim();
+      $("pdf_item").innerText = $("f_itemName").value.trim();
+      $("pdf_amount").innerText = fmtMoney(calc.amount);
+      $("pdf_tax").innerText = fmtMoney(calc.tax);
+      $("pdf_health").innerText = fmtMoney(calc.health);
+      $("pdf_net").innerText = fmtMoney(calc.net);
+      const now = new Date();
+      $("pdf_date").innerText = now.getFullYear() + "/" + String(now.getMonth()+1).padStart(2,'0') + "/" + String(now.getDate()).padStart(2,'0');
+
+      if (mode === 'first') {
+        $("pdf_row_id").style.display = '';
+        $("pdf_row_addr").style.display = '';
+        $("pdf_row_bank").style.display = '';
+        $("pdf_idnumber").innerText = $("f_idNumber").value.trim();
+        $("pdf_nationality").innerText = $("f_nationality").value.trim() || '中華民國';
+        $("pdf_address").innerText = $("f_address").value.trim();
+        $("pdf_bank").innerText = $("f_bankName").value + " " + $("f_branchName").value + " " + $("f_bankAccount").value + "（戶名：" + $("f_accountHolder").value + "）";
+      } else {
+        $("pdf_row_id").style.display = 'none';
+        $("pdf_row_addr").style.display = 'none';
+        $("pdf_row_bank").style.display = 'none';
+      }
+    }
+
+    // 【共用函式】產生 PDF Blob（照抄 earnest.html / payment-receipt.html 既有機制）
+    async function generatePDFBlob() {
+      const element = $("pdf-export-area");
+      const canvas = await html2canvas(element, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' });
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', [imgWidth, imgHeight]);
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, imgWidth, imgHeight);
+      return pdf.output('blob');
+    }
+
+    function validateForm() {
+      if (mode === 'first') {
+        if (!$("f_name").value.trim()) return "請填寫姓名";
+        if (!$("f_idNumber").value.trim()) return "請填寫身分證字號/居留證號";
+        if (!$("f_address").value.trim()) return "請填寫聯絡地址";
+        if (!$("f_phone").value.trim()) return "請填寫聯絡電話";
+        if (!$("f_bankName").value) return "請選擇銀行";
+        if (!$("f_bankAccount").value.trim()) return "請填寫銀行帳號";
+        if (!$("f_accountHolder").value.trim()) return "請填寫收款戶名";
+      }
+      if (!$("f_itemName").value.trim()) return "請填寫服務項目";
+      if (!$("f_servicePeriod").value.trim()) return "請填寫服務期間";
+      const amount = Number($("f_amount").value);
+      if (!amount || amount <= 0) return "請填寫本次給付金額";
+      if (!signaturePad || signaturePad.isEmpty()) return "請先完成簽名";
+      return null;
+    }
+
+    $("btn-submit").addEventListener('click', async function () {
+      const err = validateForm();
+      if (err) { alert(err); return; }
+      const btn = $("btn-submit");
+      btn.disabled = true; btn.innerText = "處理中...";
+
+      try {
+        const calc = calcTax();
+        buildPdfContent(calc);
+        await new Promise(r => setTimeout(r, 100));
+        const sigData = signaturePad.toDataURL("image/png");
+        $("pdf_signature_img").src = sigData;
+        await new Promise(r => setTimeout(r, 100));
+
+        const pdfBlob = await generatePDFBlob();
+        const personName = mode === 'first' ? $("f_name").value.trim() : vendorName;
+        const fileName = "勞務報酬單_" + personName + "_" + $("f_servicePeriod").value.trim() + ".pdf";
+        const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
+
+        const fd = new FormData();
+        fd.append("token", token);
+        fd.append("mode", mode);
+        fd.append("itemName", $("f_itemName").value.trim());
+        fd.append("servicePeriod", $("f_servicePeriod").value.trim());
+        fd.append("amount", String(calc.amount));
+        fd.append("tax", String(calc.tax));
+        fd.append("health", String(calc.health));
+        fd.append("netAmount", String(calc.net));
+        fd.append("pdf", pdfFile, fileName);
+
+        if (mode === 'first') {
+          fd.append("name", $("f_name").value.trim());
+          fd.append("idNumber", $("f_idNumber").value.trim());
+          fd.append("address", $("f_address").value.trim());
+          fd.append("phone", $("f_phone").value.trim());
+          fd.append("nationality", $("f_nationality").value.trim() || "中華民國");
+          fd.append("bankName", $("f_bankName").value);
+          fd.append("branchName", $("f_branchName").value.trim());
+          fd.append("bankAccount", $("f_bankAccount").value.trim());
+          fd.append("accountHolder", $("f_accountHolder").value.trim());
+        }
+
+        const res = await fetch(`${WORKER_BASE_URL}/createServiceFeeOrder`, { method: "POST", body: fd });
+        const body = await res.json().catch(() => ({}));
+
+        if (res.ok && body.ok) {
+          $("form-view").classList.add('hidden');
+          $("done_po").innerText = body.poNumber || "（單號稍後可於系統查詢）";
+          $("done_amount").innerText = fmtMoney(body.amount);
+          $("done_net").innerText = fmtMoney(body.net);
+          $("done-view").classList.remove('hidden');
+          window.scrollTo(0, 0);
+        } else if (body.error === 'token_already_registered') {
+          alert("您的資料已完成登記，頁面將重新整理，請直接用「本月請款」重新送出金額即可。");
+          location.reload();
+        } else {
+          alert("送出失敗（" + (body.error || res.status) + "），請稍後再試一次或聯繫窩的家管理部。");
+          btn.disabled = false; btn.innerText = "送出請款 ✊";
+        }
+      } catch (e) {
+        console.error(e);
+        alert("送出時發生錯誤，請檢查網路後再試一次。");
+        btn.disabled = false; btn.innerText = "送出請款 ✊";
+      }
+    });
+  </script>
+</body>
+</html>
