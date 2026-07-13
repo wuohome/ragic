@@ -36,6 +36,13 @@
       .receipt-table th, .receipt-table td { padding: 6px 5px; font-size: 0.82rem; }
     }
 
+    /* === PDF 專用表格樣式（2026-07-14 改版：比照 Joan 提供的舊 GAS 系統真實產出範例 jerry_勞報單.pdf 版型，
+       正式表格式版面，非 receipt-table 的卡片風格）===
+       table-layout:fixed 用 <colgroup> 固定四欄寬度（20/30/15/35%），沿用既有 word-break 防長字串撐破坑 */
+    .pdf-table { border-collapse: collapse; width: 100%; border: 1px solid #000; table-layout: fixed; }
+    .pdf-table th, .pdf-table td { border: 1px solid #000; padding: 8px; font-size: 12px; vertical-align: middle; word-break: break-word; overflow-wrap: anywhere; text-align: left; }
+    .pdf-table th { background: #eee; font-weight: 700; }
+
     .big-btn { transition: all 0.2s; cursor: pointer; }
     .big-btn:active { transform: scale(0.96); opacity: 0.9; }
 
@@ -208,8 +215,8 @@
     <!-- 失敗畫面 -->
     <div id="step-failed" class="hidden bg-white rounded-3xl md:rounded-[3rem] shadow-2xl p-8 md:p-16 border-t-[10px] md:border-t-[16px] border-red-500 text-center">
       <div class="text-6xl md:text-8xl mb-4 md:mb-8">⚠️</div>
-      <h1 class="text-2xl md:text-4xl font-black text-red-700 mb-4 md:mb-6">送出異常</h1>
-      <p class="text-slate-600 text-base md:text-xl font-medium mb-4 md:mb-6">系統無法確認請款單是否成功建立。<br>請先下載 PDF 備份，再聯絡窩的家管理部確認。</p>
+      <h1 id="failed-title" class="text-2xl md:text-4xl font-black text-red-700 mb-4 md:mb-6">送出異常</h1>
+      <p id="failed-message" class="text-slate-600 text-base md:text-xl font-medium mb-4 md:mb-6">系統無法確認請款單是否成功建立。<br>請先下載 PDF 備份，再聯絡窩的家管理部確認。</p>
       <p id="failed-detail" class="text-slate-400 text-xs md:text-sm mb-6 md:mb-10"></p>
       <div class="space-y-4">
         <button onclick="downloadReceiptPDF()" class="big-btn w-full bg-slate-700 hover:bg-slate-900 text-white font-black py-4 md:py-8 rounded-2xl md:rounded-3xl text-lg md:text-3xl shadow-xl">
@@ -230,24 +237,25 @@
 
   </div>
 
-  <!-- PDF 匯出區（隱藏在視圖外，照抄 payment-receipt.html 機制）-->
+  <!-- PDF 匯出區（隱藏在視圖外，照抄 payment-receipt.html 機制）
+       2026-07-14 改版：比照 Joan 提供的舊 GAS 系統真實產出範例 jerry_勞報單.pdf 版型 -->
   <div id="pdf-export-area">
-    <div style="display:flex; justify-content:space-between; align-items:center; font-size:15px; font-weight:700; margin-bottom:8px;">
-      <span>窩的家 協力人員自助請款</span>
-      <span id="pdf_date"></span>
-    </div>
-    <div style="font-size:28px; font-weight:900; text-align:center; margin-bottom:20px;">勞務報酬給付明細</div>
-    <table class="receipt-table" style="margin-bottom:24px;">
-      <tr><th>姓名</th><td id="pdf_name"></td><th>服務期間</th><td id="pdf_period"></td></tr>
-      <tr id="pdf_row_id"><th>身分證字號</th><td id="pdf_idnumber"></td><th>國籍</th><td id="pdf_nationality"></td></tr>
-      <tr id="pdf_row_addr"><th>聯絡地址</th><td colspan="3" id="pdf_address"></td></tr>
-      <tr id="pdf_row_bank"><th>收款帳戶</th><td colspan="3" id="pdf_bank"></td></tr>
-      <tr><th>服務項目</th><td colspan="3" id="pdf_item"></td></tr>
+    <div style="text-align:center; font-size:24px; font-weight:900; margin-bottom:2px;">勞務報酬單</div>
+    <div style="text-align:center; font-size:11px; color:#888; margin-bottom:18px;">(電子簽署存檔)</div>
+    <table class="pdf-table">
+      <colgroup>
+        <col style="width:20%"><col style="width:30%"><col style="width:15%"><col style="width:35%">
+      </colgroup>
+      <tr><th>專案/事由</th><td colspan="3" id="pdf_item"></td></tr>
+      <tr><th>給付單位</th><td colspan="3">窩的家裝潢管理顧問有限公司<br>(統編: 83054190)<br>241新北市三重區大榮街20號1樓</td></tr>
+      <tr><th>領款人</th><td id="pdf_name"></td><th>身分證號</th><td id="pdf_idnumber"></td></tr>
+      <tr id="pdf_row_addr"><th>戶籍地址</th><td colspan="3" id="pdf_address"></td></tr>
+      <tr><th>聯絡電話</th><td id="pdf_phone"></td><th>所得類別</th><td>9A（執行業務所得）</td></tr>
+      <tr id="pdf_row_bank"><th>匯款帳戶</th><td colspan="3" id="pdf_bank"></td></tr>
       <tr><th>給付總額</th><td id="pdf_amount"></td><th>扣繳稅額</th><td id="pdf_tax"></td></tr>
-      <tr><th>二代健保</th><td id="pdf_health"></td><th>實付金額</th><td id="pdf_net" style="font-weight:900;"></td></tr>
+      <tr><th>二代健保</th><td id="pdf_health"></td><th style="background:#ffebee;">實領金額</th><td id="pdf_net" style="background:#ffebee; color:#d32f2f; font-weight:900;"></td></tr>
+      <tr><th style="height:100px;">領款人<br>簽章</th><td colspan="3" style="text-align:center;"><img id="pdf_signature_img" style="height:80px;"></td></tr>
     </table>
-    <div style="text-align:right; font-size:14px; margin-bottom:8px;">領款人簽名：</div>
-    <div style="text-align:right;"><img id="pdf_signature_img" style="height:100px; border-bottom:1px solid #000;"></div>
   </div>
 
   <script>
@@ -404,27 +412,26 @@
     function buildPdfContent(calc) {
       const personName = mode === 'first' ? $("f_name").value.trim() : vendorName;
       $("pdf_name").innerText = personName;
-      $("pdf_period").innerText = $("f_servicePeriod").value.trim();
-      $("pdf_item").innerText = $("f_itemName").value.trim();
+      $("pdf_item").innerText = $("f_itemName").value.trim() + "（服務期間：" + $("f_servicePeriod").value.trim() + "）";
       $("pdf_amount").innerText = fmtMoney(calc.amount);
       $("pdf_tax").innerText = fmtMoney(calc.tax);
       $("pdf_health").innerText = fmtMoney(calc.health);
       $("pdf_net").innerText = fmtMoney(calc.net);
-      const now = new Date();
-      $("pdf_date").innerText = now.getFullYear() + "/" + String(now.getMonth() + 1).padStart(2, '0') + "/" + String(now.getDate()).padStart(2, '0');
 
       if (mode === 'first') {
-        $("pdf_row_id").style.display = '';
         $("pdf_row_addr").style.display = '';
         $("pdf_row_bank").style.display = '';
         $("pdf_idnumber").innerText = $("f_idNumber").value.trim();
-        $("pdf_nationality").innerText = $("f_nationality").value.trim() || '中華民國';
+        $("pdf_phone").innerText = $("f_phone").value.trim();
         $("pdf_address").innerText = $("f_address").value.trim();
-        $("pdf_bank").innerText = $("f_bankName").value + " " + $("f_branchName").value + " " + $("f_bankAccount").value + "（戶名：" + $("f_accountHolder").value + "）";
+        const bankCodeMatch = /\((\d{3})\)/.exec($("f_bankName").value || '');
+        const bankCode = bankCodeMatch ? bankCodeMatch[1] : ($("f_bankName").value || '');
+        $("pdf_bank").innerText = "代碼：" + bankCode + " / 帳號：" + $("f_bankAccount").value;
       } else {
-        $("pdf_row_id").style.display = 'none';
         $("pdf_row_addr").style.display = 'none';
         $("pdf_row_bank").style.display = 'none';
+        $("pdf_idnumber").innerText = '';
+        $("pdf_phone").innerText = '';
       }
     }
 
@@ -547,6 +554,9 @@
         } else if (body.error === 'token_already_registered') {
           alert("您的資料已完成登記，頁面將重新整理，請直接用「本月請款」重新送出金額即可。");
           location.reload();
+        } else if (body.error === 'vendor_name_conflict' || body.error === 'vendor_idnumber_conflict') {
+          // 2026-07-14 加：姓名或身分證字號與系統既有其他資料重複，非網路/系統錯誤，需人工確認身分
+          showFailed(body.error, "姓名／證號重複", "您填寫的姓名或身分證字號與系統中既有其他資料相同，為避免財務資料誤植，需要窩的家管理部人工確認身分後才能繼續。<br>請先下載 PDF 備份，並聯絡窩的家管理部。");
         } else {
           throw new Error("SUBMIT_" + (body.error || postRes.status));
         }
@@ -576,12 +586,16 @@
     }
     $("btn-submit").addEventListener('click', () => submitData());
 
-    // ============ 失敗畫面（逐字照抄 payment-receipt.html showFailed / retryUpload）============
-    function showFailed(code) {
+    // ============ 失敗畫面（照抄 payment-receipt.html showFailed / retryUpload；
+    //   2026-07-14 加 title/message 覆寫參數，讓特定錯誤碼（如姓名/證號重複）能顯示更明確訊息，
+    //   每次呼叫都重設回預設文字，避免上一次的覆寫內容殘留到下一次不同類型的失敗 ============
+    function showFailed(code, title, message) {
       $("loader").classList.add('hidden');
       $("step-2").classList.add('hidden');
       $("step-success").classList.add('hidden');
       $("step-failed").classList.remove('hidden');
+      $("failed-title").innerText = title || "送出異常";
+      $("failed-message").innerHTML = message || "系統無法確認請款單是否成功建立。<br>請先下載 PDF 備份，再聯絡窩的家管理部確認。";
       if ($("failed-detail")) $("failed-detail").innerText = "錯誤代碼：" + (code || "UNKNOWN");
       window.scrollTo(0, 0);
     }
