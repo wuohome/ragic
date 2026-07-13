@@ -428,15 +428,21 @@
       }
     }
 
-    // ============ PDF 產生（逐字照抄 payment-receipt.html generatePDFBlob）============
-    // 2026-05-17 緊急修復 file_too_large：scale 2→1.5、PNG→JPEG q=0.85，體積降約 70%（沿用同一組參數）
+    // ============ PDF 產生（照抄 payment-receipt.html generatePDFBlob 核心邏輯；
+    //   2026-05-17 緊急修復 file_too_large：scale 2→1.5、PNG→JPEG q=0.85，體積降約 70%，沿用同一組參數）
+    // 2026-07-13 E2E 實測補一個 payment-receipt.html 原版沒踩過的坑：
+    //   原版內容天生窄長（單欄 label/value），imgWidth(210) < imgHeight 恆成立，'p' portrait 不會出錯。
+    //   本頁內容是雙欄寬表格，畫面較「矮胖」，算出 imgWidth > imgHeight 時 jsPDF 仍宣告 'p' 會被內部
+    //   自動轉正（w/h 互換），但 addImage 還是照原始 imgWidth/imgHeight 畫，導致圖片比實際頁面寬、右側被裁掉。
+    //   修法：改用真正尺寸判斷 orientation('p'/'l')，不要恆固定 'p'。
     async function generatePDFBlob() {
       const element = $("pdf-export-area");
       const canvas = await html2canvas(element, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' });
       const imgWidth = 210;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const orientation = imgWidth > imgHeight ? 'l' : 'p';
       const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF('p', 'mm', [imgWidth, imgHeight]);
+      const pdf = new jsPDF(orientation, 'mm', [imgWidth, imgHeight]);
       pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, imgWidth, imgHeight);
       return pdf.output('blob');
     }
