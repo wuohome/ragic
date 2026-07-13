@@ -135,6 +135,27 @@
             <input type="text" id="f_accountHolder" maxlength="60" placeholder="與帳號姓名一致"
               class="grandpa-input w-full text-lg md:text-2xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-4 outline-none font-bold bg-white shadow-inner">
           </div>
+
+          <!-- 2026-07-13 補回：身分證正反面 + 存摺封面照片（舊 GAS 系統原有功能，轉 Ragic 架構時掉的缺口）
+               僅 mode=first 需要，回訪不需重傳。accept=image/* + capture=environment 方便手機直接拍照。 -->
+          <div>
+            <label class="block text-base md:text-xl font-black text-slate-600 mb-1 md:mb-2">身分證正面照片 *</label>
+            <input type="file" id="f_idFront" accept="image/*" capture="environment"
+              class="w-full text-sm md:text-lg border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-4 bg-white shadow-inner font-bold">
+            <p class="text-xs md:text-sm text-slate-400 mt-1 ml-1">檔案大小上限 5MB，請確認字跡清晰可辨識</p>
+          </div>
+          <div>
+            <label class="block text-base md:text-xl font-black text-slate-600 mb-1 md:mb-2">身分證反面照片 *</label>
+            <input type="file" id="f_idBack" accept="image/*" capture="environment"
+              class="w-full text-sm md:text-lg border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-4 bg-white shadow-inner font-bold">
+            <p class="text-xs md:text-sm text-slate-400 mt-1 ml-1">檔案大小上限 5MB</p>
+          </div>
+          <div>
+            <label class="block text-base md:text-xl font-black text-slate-600 mb-1 md:mb-2">存摺封面照片 *</label>
+            <input type="file" id="f_bankbookCover" accept="image/*" capture="environment"
+              class="w-full text-sm md:text-lg border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-4 bg-white shadow-inner font-bold">
+            <p class="text-xs md:text-sm text-slate-400 mt-1 ml-1">檔案大小上限 5MB，請確認可清楚看到銀行代碼與帳號</p>
+          </div>
         </div>
 
         <!-- 每次都要填 -->
@@ -256,6 +277,22 @@
       <tr><th>二代健保</th><td id="pdf_health"></td><th style="background:#ffebee;">實領金額</th><td id="pdf_net" style="background:#ffebee; color:#d32f2f; font-weight:900;"></td></tr>
       <tr><th style="height:100px;">領款人<br>簽章</th><td colspan="3" style="text-align:center;"><img id="pdf_signature_img" style="height:80px;"></td></tr>
     </table>
+
+    <!-- 2026-07-13 補回：附件一/附件二 圖片區塊，比照 Joan 提供的舊系統範例 jerry_勞報單.pdf 版型。
+         僅 mode=first 有資料（回訪沒有重傳照片），mode=recurring 時整段 display:none。 -->
+    <div id="pdf_row_idcard" style="margin-top:16px;">
+      <div style="font-size:13px; font-weight:900; margin-bottom:6px;">附件一：身分證正反面</div>
+      <table style="width:100%; border-collapse:collapse;">
+        <tr>
+          <td style="width:50%; border:1px solid #000; text-align:center; padding:6px; vertical-align:middle;"><img id="pdf_idfront_img" style="max-width:100%; max-height:220px;"></td>
+          <td style="width:50%; border:1px solid #000; text-align:center; padding:6px; vertical-align:middle;"><img id="pdf_idback_img" style="max-width:100%; max-height:220px;"></td>
+        </tr>
+      </table>
+    </div>
+    <div id="pdf_row_bankbook" style="margin-top:16px;">
+      <div style="font-size:13px; font-weight:900; margin-bottom:6px;">附件二：存摺封面</div>
+      <div style="border:1px solid #000; text-align:center; padding:6px;"><img id="pdf_bankbook_img" style="max-width:100%; max-height:260px;"></div>
+    </div>
   </div>
 
   <script>
@@ -354,6 +391,8 @@
       window.scrollTo(0, 0);
     }
 
+    const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
     function validateStep1() {
       if (mode === 'first') {
         if (!$("f_name").value.trim()) return "請填寫姓名";
@@ -363,6 +402,16 @@
         if (!$("f_bankName").value) return "請選擇銀行";
         if (!$("f_bankAccount").value.trim()) return "請填寫銀行帳號";
         if (!$("f_accountHolder").value.trim()) return "請填寫收款戶名";
+        // 2026-07-13 補回：身分證正反面 + 存摺封面照片（僅 mode=first 需要）
+        const idFrontFile = $("f_idFront").files[0];
+        const idBackFile = $("f_idBack").files[0];
+        const bankbookFile = $("f_bankbookCover").files[0];
+        if (!idFrontFile) return "請上傳身分證正面照片";
+        if (!idBackFile) return "請上傳身分證反面照片";
+        if (!bankbookFile) return "請上傳存摺封面照片";
+        if (idFrontFile.size > PHOTO_MAX_BYTES) return "身分證正面照片超過 5MB，請重新拍攝或壓縮後再上傳";
+        if (idBackFile.size > PHOTO_MAX_BYTES) return "身分證反面照片超過 5MB，請重新拍攝或壓縮後再上傳";
+        if (bankbookFile.size > PHOTO_MAX_BYTES) return "存摺封面照片超過 5MB，請重新拍攝或壓縮後再上傳";
       }
       if (!$("f_itemName").value.trim()) return "請填寫服務項目";
       if (!$("f_servicePeriod").value.trim()) return "請填寫服務期間";
@@ -409,7 +458,28 @@
       });
     }
 
-    function buildPdfContent(calc) {
+    // 2026-07-13 補回：File → data URL（給 <img> 顯示用，html2canvas 抓 data URL 不會有 CORS 問題）
+    function fileToDataURL(file) {
+      return new Promise(function (resolve, reject) {
+        if (!file) { resolve(''); return; }
+        const reader = new FileReader();
+        reader.onload = function () { resolve(reader.result); };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+    // 確保 <img> 真的載入完成才交給 html2canvas 擷取，避免抓到空白圖
+    function waitImgLoad(imgEl) {
+      return new Promise(function (resolve) {
+        if (!imgEl.src) { resolve(); return; }
+        if (imgEl.complete) { resolve(); return; }
+        imgEl.onload = function () { resolve(); };
+        imgEl.onerror = function () { resolve(); };
+      });
+    }
+
+    // 2026-07-13：改成 async，因為要等身分證/存摺照片轉 data URL 完成才能交給 html2canvas
+    async function buildPdfContent(calc) {
       const personName = mode === 'first' ? $("f_name").value.trim() : vendorName;
       $("pdf_name").innerText = personName;
       $("pdf_item").innerText = $("f_itemName").value.trim() + "（服務期間：" + $("f_servicePeriod").value.trim() + "）";
@@ -427,11 +497,25 @@
         const bankCodeMatch = /\((\d{3})\)/.exec($("f_bankName").value || '');
         const bankCode = bankCodeMatch ? bankCodeMatch[1] : ($("f_bankName").value || '');
         $("pdf_bank").innerText = "代碼：" + bankCode + " / 帳號：" + $("f_bankAccount").value;
+
+        // 附件一/附件二：身分證正反面 + 存摺封面
+        $("pdf_row_idcard").style.display = '';
+        $("pdf_row_bankbook").style.display = '';
+        const idFrontFile = $("f_idFront").files[0];
+        const idBackFile = $("f_idBack").files[0];
+        const bankbookFile = $("f_bankbookCover").files[0];
+        const urls = await Promise.all([fileToDataURL(idFrontFile), fileToDataURL(idBackFile), fileToDataURL(bankbookFile)]);
+        $("pdf_idfront_img").src = urls[0];
+        $("pdf_idback_img").src = urls[1];
+        $("pdf_bankbook_img").src = urls[2];
+        await Promise.all([$("pdf_idfront_img"), $("pdf_idback_img"), $("pdf_bankbook_img")].map(waitImgLoad));
       } else {
         $("pdf_row_addr").style.display = 'none';
         $("pdf_row_bank").style.display = 'none';
         $("pdf_idnumber").innerText = '';
         $("pdf_phone").innerText = '';
+        $("pdf_row_idcard").style.display = 'none';
+        $("pdf_row_bankbook").style.display = 'none';
       }
     }
 
@@ -465,7 +549,7 @@
       btn.innerText = "PDF 產生中...";
       btn.disabled = true;
       try {
-        if (lastCalc) buildPdfContent(lastCalc);
+        if (lastCalc) await buildPdfContent(lastCalc);
         const pdfBlob = await generatePDFBlob();
         const url = URL.createObjectURL(pdfBlob);
         const a = document.createElement('a');
@@ -500,8 +584,8 @@
       try {
         const calc = lastCalc || calcTax();
 
-        // 1. 同步簽名到 PDF 區域
-        buildPdfContent(calc);
+        // 1. 同步簽名到 PDF 區域（含身分證/存摺照片轉 data URL，故 await）
+        await buildPdfContent(calc);
         const sigData = signaturePad.toDataURL("image/png");
         $("pdf_signature_img").src = sigData;
 
@@ -538,6 +622,11 @@
           fd.append("branchName", $("f_branchName").value.trim());
           fd.append("bankAccount", $("f_bankAccount").value.trim());
           fd.append("accountHolder", $("f_accountHolder").value.trim());
+          // 2026-07-13 補回：身分證正反面 + 存摺封面照片原始檔（不只嵌入 PDF 縮圖，
+          // Worker 端會再追加寫入 finance2/5 附件欄位 1000663 保存一份原始證據）
+          fd.append("idFrontPhoto", $("f_idFront").files[0]);
+          fd.append("idBackPhoto", $("f_idBack").files[0]);
+          fd.append("bankbookPhoto", $("f_bankbookCover").files[0]);
         }
 
         const postRes = await fetch(`${WORKER_BASE}/createServiceFeeOrder`, { method: "POST", body: fd });
