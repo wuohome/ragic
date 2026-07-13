@@ -268,7 +268,10 @@
         <col style="width:20%"><col style="width:30%"><col style="width:15%"><col style="width:35%">
       </colgroup>
       <tr><th>專案/事由</th><td colspan="3" id="pdf_item"></td></tr>
-      <tr><th>給付單位</th><td colspan="3">窩的家裝潢管理顧問有限公司<br>(統編: 83054190)<br>241新北市三重區大榮街20號1樓</td></tr>
+      <!-- 2026-07-13 修正：舊地址「大榮街20號1樓」是母公司茉茉國際的舊登記地址，跟本公司統編83054190無關。
+           窩的家裝潢管理顧問有限公司（統編83054190）現在的實際承租地址是平安街59號（該公司正是集團共用辦公室
+           租約的原始承租人，見[[窩的家/管理部/稅務/集團共用辦公室租約評估]]）。公司名/統編不變，只改地址。 -->
+      <tr><th>給付單位</th><td colspan="3">窩的家裝潢管理顧問有限公司<br>(統編: 83054190)<br>241新北市三重區平安街59號</td></tr>
       <tr><th>領款人</th><td id="pdf_name"></td><th>身分證號</th><td id="pdf_idnumber"></td></tr>
       <tr id="pdf_row_addr"><th>戶籍地址</th><td colspan="3" id="pdf_address"></td></tr>
       <tr><th>聯絡電話</th><td id="pdf_phone"></td><th>所得類別</th><td>9A（執行業務所得）</td></tr>
@@ -393,9 +396,30 @@
 
     const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 
+    // 2026-07-13 補：使用者自然輸入常見「帶空格分段」（存摺帳號常印成「2888 9003 0413」，照抄很自然）
+    // 或「全形數字/符號」（CJK 輸入法有時預設全形），但 Worker 端嚴格 regex（如 validSfAccount 只收
+    // 數字+連字號）會直接擋下，變成「使用者沒做錯事卻被系統拒絕」。normalize 後再驗證，不要只擋不救。
+    // 全形 ASCII 字元（U+FF01-FF5E，涵蓋數字/字母/連字號等符號）→ 半形，用固定 offset 0xFEE0 換算。
+    function normalizeFullWidth(str) {
+      if (typeof str !== 'string') return '';
+      return str.replace(/[！-～]/g, function (ch) {
+        return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+      });
+    }
+    // 全形轉半形 + 去除所有空白（含全形空格 U+3000）。用於「格式嚴格不容許空白」的欄位（身分證字號/銀行帳號）。
+    function normalizeStrict(str) {
+      return normalizeFullWidth(str).replace(/\s/g, '');
+    }
+
     function validateStep1() {
       if (mode === 'first') {
         if (!$("f_name").value.trim()) return "請填寫姓名";
+        // normalize 後寫回輸入框，讓後續 buildPdfContent／submitData 讀到的都是乾淨值，不用每個讀取點各自處理一次。
+        // 電話號碼欄位本身允許內含空格分隔（Worker validPhone regex 本來就容許），只轉全形不去空白，
+        // 保留使用者慣用的分段可讀性；身分證字號/銀行帳號欄位格式嚴格不容許任何空白，兩者都要去空白。
+        $("f_idNumber").value = normalizeStrict($("f_idNumber").value);
+        $("f_phone").value = normalizeFullWidth($("f_phone").value);
+        $("f_bankAccount").value = normalizeStrict($("f_bankAccount").value);
         if (!$("f_idNumber").value.trim()) return "請填寫身分證字號/居留證號";
         if (!$("f_address").value.trim()) return "請填寫聯絡地址";
         if (!$("f_phone").value.trim()) return "請填寫聯絡電話";
