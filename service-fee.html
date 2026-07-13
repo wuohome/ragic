@@ -36,7 +36,7 @@
       .receipt-table th, .receipt-table td { padding: 6px 5px; font-size: 0.82rem; }
     }
 
-    /* === PDF 專用表格樣式（2026-07-14 改版：比照 Joan 提供的舊 GAS 系統真實產出範例 jerry_勞報單.pdf 版型，
+    /* === PDF 專用表格樣式（2026-07-13 改版：比照 Joan 提供的舊 GAS 系統真實產出範例 jerry_勞報單.pdf 版型，
        正式表格式版面，非 receipt-table 的卡片風格）===
        table-layout:fixed 用 <colgroup> 固定四欄寬度（20/30/15/35%），沿用既有 word-break 防長字串撐破坑 */
     .pdf-table { border-collapse: collapse; width: 100%; border: 1px solid #000; table-layout: fixed; }
@@ -238,7 +238,7 @@
   </div>
 
   <!-- PDF 匯出區（隱藏在視圖外，照抄 payment-receipt.html 機制）
-       2026-07-14 改版：比照 Joan 提供的舊 GAS 系統真實產出範例 jerry_勞報單.pdf 版型 -->
+       2026-07-13 改版：比照 Joan 提供的舊 GAS 系統真實產出範例 jerry_勞報單.pdf 版型 -->
   <div id="pdf-export-area">
     <div style="text-align:center; font-size:24px; font-weight:900; margin-bottom:2px;">勞務報酬單</div>
     <div style="text-align:center; font-size:11px; color:#888; margin-bottom:18px;">(電子簽署存檔)</div>
@@ -555,7 +555,7 @@
           alert("您的資料已完成登記，頁面將重新整理，請直接用「本月請款」重新送出金額即可。");
           location.reload();
         } else if (body.error === 'vendor_name_conflict' || body.error === 'vendor_idnumber_conflict') {
-          // 2026-07-14 加：姓名或身分證字號與系統既有其他資料重複，非網路/系統錯誤，需人工確認身分
+          // 2026-07-13 加：姓名或身分證字號與系統既有其他資料重複，非網路/系統錯誤，需人工確認身分
           showFailed(body.error, "姓名／證號重複", "您填寫的姓名或身分證字號與系統中既有其他資料相同，為避免財務資料誤植，需要窩的家管理部人工確認身分後才能繼續。<br>請先下載 PDF 備份，並聯絡窩的家管理部。");
         } else {
           throw new Error("SUBMIT_" + (body.error || postRes.status));
@@ -587,7 +587,7 @@
     $("btn-submit").addEventListener('click', () => submitData());
 
     // ============ 失敗畫面（照抄 payment-receipt.html showFailed / retryUpload；
-    //   2026-07-14 加 title/message 覆寫參數，讓特定錯誤碼（如姓名/證號重複）能顯示更明確訊息，
+    //   2026-07-13 加 title/message 覆寫參數，讓特定錯誤碼（如姓名/證號重複）能顯示更明確訊息，
     //   每次呼叫都重設回預設文字，避免上一次的覆寫內容殘留到下一次不同類型的失敗 ============
     function showFailed(code, title, message) {
       $("loader").classList.add('hidden');
