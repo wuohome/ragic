@@ -161,15 +161,26 @@
         <!-- 每次都要填 -->
         <div class="space-y-5 md:space-y-8">
           <h2 class="text-lg md:text-2xl font-black text-slate-700">本次請款內容</h2>
-          <div>
+          <!-- 2026-07-14：服務項目僅 mode=first 顯示/需要填寫，回訪沿用預設值不重問
+               （Joan 拍板：回訪表單只需要「服務起訖日／金額／簽名」四項，其餘個資與服務項目都不重填）-->
+          <div id="item-section">
             <label class="block text-base md:text-xl font-black text-slate-600 mb-1 md:mb-2">服務項目 *</label>
             <input type="text" id="f_itemName" maxlength="50" value="會計服務費"
               class="grandpa-input w-full text-lg md:text-2xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-4 outline-none font-bold bg-white shadow-inner">
           </div>
-          <div>
-            <label class="block text-base md:text-xl font-black text-slate-600 mb-1 md:mb-2">服務期間 *</label>
-            <input type="text" id="f_servicePeriod" maxlength="30" placeholder="例如：2026年7月"
-              class="grandpa-input w-full text-lg md:text-2xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-4 outline-none font-bold bg-yellow-50 shadow-inner">
+          <!-- 2026-07-14：服務期間改起訖兩個 date input（首次/回訪都要填），取代原本單一自由文字欄位。
+               伺服器端（Worker）組成「YYYY/MM/DD ~ YYYY/MM/DD」寫入 Ragic 採購說明/子表格規格內容欄。 -->
+          <div class="grid grid-cols-2 gap-3 md:gap-6">
+            <div>
+              <label class="block text-base md:text-xl font-black text-slate-600 mb-1 md:mb-2">服務起始日 *</label>
+              <input type="date" id="f_serviceStart"
+                class="grandpa-input w-full text-base md:text-2xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-4 outline-none font-bold bg-yellow-50 shadow-inner">
+            </div>
+            <div>
+              <label class="block text-base md:text-xl font-black text-slate-600 mb-1 md:mb-2">服務結束日 *</label>
+              <input type="date" id="f_serviceEnd"
+                class="grandpa-input w-full text-base md:text-2xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-4 outline-none font-bold bg-yellow-50 shadow-inner">
+            </div>
           </div>
           <div>
             <label class="block text-base md:text-xl font-black text-slate-600 mb-1 md:mb-2">本次給付金額（未扣稅前）*</label>
@@ -182,7 +193,7 @@
         <div class="readonly-field bg-amber-50 border-amber-200">
           <div class="text-xs md:text-sm font-bold text-amber-700 mb-2">📊 稅額試算</div>
           <div class="flex justify-between text-sm md:text-base py-1"><span>給付總額</span><span id="calc_amount" class="font-bold">$0</span></div>
-          <div class="flex justify-between text-sm md:text-base py-1 text-red-600"><span>執行業務所得扣繳稅額（10%，&gt;$2,000 才扣）</span><span id="calc_tax" class="font-bold">-$0</span></div>
+          <div class="flex justify-between text-sm md:text-base py-1 text-red-600"><span>執行業務所得扣繳稅額（10%，給付達 $20,000 才扣）</span><span id="calc_tax" class="font-bold">-$0</span></div>
           <div class="flex justify-between text-sm md:text-base py-1 text-red-600"><span>二代健保補充保費（2.11%，≥$20,000 才扣）</span><span id="calc_health" class="font-bold">-$0</span></div>
           <div class="flex justify-between text-base md:text-lg py-2 border-t border-amber-300 mt-1"><span class="font-black">實付金額</span><span id="calc_net" class="font-black text-amber-700">$0</span></div>
         </div>
@@ -339,9 +350,13 @@
       });
     }
 
+    // 2026-07-14 P1 修復：執行業務所得(9A)扣繳率10%，「每次應扣繳稅額不超過2,000元（即給付額不超過20,000元）
+    // 免予扣繳」——正確門檻是「給付額>20,000才起扣」，不是「floor(金額*10%)>2,000才免扣」（後者在
+    // 20,001~20,009 這段會因先取整被誤判免扣，且用「應扣稅額」倒推「給付額」門檻本身就繞了一圈邏輯）。
+    // 真實事故：Esther $16,994 曾被誤扣 $1,699（見規格書「稅額計算」章節）。給付額剛好20,000 → 仍免扣。
     function calcTax() {
       const amount = Number($("f_amount").value) || 0;
-      const tax = amount > 2000 ? Math.floor(amount * 0.10) : 0;
+      const tax = amount > 20000 ? Math.round(amount * 0.10) : 0;
       const health = amount >= 20000 ? Math.round(amount * 0.0211) : 0;
       const net = amount - tax - health;
       $("calc_amount").innerText = fmtMoney(amount);
@@ -371,12 +386,15 @@
         if (data.exists) {
           mode = 'recurring';
           vendorName = data.name || '';
-          $("greet-text").innerText = "哈囉，" + vendorName + "，請填寫本月請款金額即可，無需重填個人資料。";
+          $("greet-text").innerText = "哈囉，" + vendorName + "，請填寫本月服務起訖日與金額即可，無需重填個人資料。";
           $("kyc-section").classList.add('hidden');
+          // 2026-07-14：回訪表單只需要「服務起訖日／金額／簽名」四項，服務項目沿用預設值不重問
+          $("item-section").classList.add('hidden');
         } else {
           mode = 'first';
-          $("greet-text").innerText = "這是您第一次使用本連結，請完整填寫以下資料（僅需填寫一次，之後每月只需填金額）。";
+          $("greet-text").innerText = "這是您第一次使用本連結，請完整填寫以下資料（僅需填寫一次，之後每月只需填服務起訖日與金額）。";
           $("kyc-section").classList.remove('hidden');
+          $("item-section").classList.remove('hidden');
         }
         $("loader").classList.add('hidden');
         $("step-1").classList.remove('hidden');
@@ -437,17 +455,30 @@
         if (idBackFile.size > PHOTO_MAX_BYTES) return "身分證反面照片超過 5MB，請重新拍攝或壓縮後再上傳";
         if (bankbookFile.size > PHOTO_MAX_BYTES) return "存摺封面照片超過 5MB，請重新拍攝或壓縮後再上傳";
       }
-      if (!$("f_itemName").value.trim()) return "請填寫服務項目";
-      if (!$("f_servicePeriod").value.trim()) return "請填寫服務期間";
+      if (mode === 'first' && !$("f_itemName").value.trim()) return "請填寫服務項目";
+      if (!$("f_serviceStart").value) return "請填寫服務起始日";
+      if (!$("f_serviceEnd").value) return "請填寫服務結束日";
+      if ($("f_serviceEnd").value < $("f_serviceStart").value) return "服務結束日不能早於服務起始日";
       const amount = Number($("f_amount").value);
       if (!amount || amount <= 0) return "請填寫本次給付金額";
       return null;
     }
 
+    // date input 原生值是 "2026-07-01"，Worker/Ragic 慣用格式是 "2026/07/01"
+    function dateInputToSlash(v) { return (v || '').replace(/-/g, '/'); }
+    // 顯示用「服務期間」組字串（起始日 ~ 結束日）
+    function servicePeriodDisplay() {
+      return dateInputToSlash($("f_serviceStart").value) + " ~ " + dateInputToSlash($("f_serviceEnd").value);
+    }
+    // 檔名用（"/" 在檔名裡會被當路徑分隔符，改用純數字＋dash）
+    function servicePeriodFilenameSafe() {
+      return $("f_serviceStart").value.replace(/-/g, '') + "-" + $("f_serviceEnd").value.replace(/-/g, '');
+    }
+
     function renderStep2Preview(calc) {
       const personName = mode === 'first' ? $("f_name").value.trim() : vendorName;
       $("show_name").innerText = personName;
-      $("show_period").innerText = $("f_servicePeriod").value.trim();
+      $("show_period").innerText = servicePeriodDisplay();
       $("show_item").innerText = $("f_itemName").value.trim();
       $("show_amount").innerText = fmtMoney(calc.amount);
       $("show_tax").innerText = fmtMoney(calc.tax);
@@ -506,7 +537,7 @@
     async function buildPdfContent(calc) {
       const personName = mode === 'first' ? $("f_name").value.trim() : vendorName;
       $("pdf_name").innerText = personName;
-      $("pdf_item").innerText = $("f_itemName").value.trim() + "（服務期間：" + $("f_servicePeriod").value.trim() + "）";
+      $("pdf_item").innerText = $("f_itemName").value.trim() + "（服務期間：" + servicePeriodDisplay() + "）";
       $("pdf_amount").innerText = fmtMoney(calc.amount);
       $("pdf_tax").innerText = fmtMoney(calc.tax);
       $("pdf_health").innerText = fmtMoney(calc.health);
@@ -579,7 +610,7 @@
         const a = document.createElement('a');
         a.href = url;
         const personName = mode === 'first' ? $("f_name").value.trim() : vendorName;
-        a.download = `勞務報酬單_${personName}_${$("f_servicePeriod").value.trim()}.pdf`;
+        a.download = `勞務報酬單_${personName}_${servicePeriodFilenameSafe()}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -621,7 +652,7 @@
 
         // 4. 準備 PDF File 物件
         const personName = mode === 'first' ? $("f_name").value.trim() : vendorName;
-        const fileName = `勞務報酬單_${personName}_${$("f_servicePeriod").value.trim()}.pdf`;
+        const fileName = `勞務報酬單_${personName}_${servicePeriodFilenameSafe()}.pdf`;
         const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
 
         // 5. 組 FormData → createServiceFeeOrder via Worker proxy
@@ -630,7 +661,8 @@
         fd.append("token", token);
         fd.append("mode", mode);
         fd.append("itemName", $("f_itemName").value.trim());
-        fd.append("servicePeriod", $("f_servicePeriod").value.trim());
+        fd.append("serviceStart", dateInputToSlash($("f_serviceStart").value));
+        fd.append("serviceEnd", dateInputToSlash($("f_serviceEnd").value));
         fd.append("amount", String(calc.amount));
         fd.append("tax", String(calc.tax));
         fd.append("health", String(calc.health));
