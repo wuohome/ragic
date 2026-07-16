@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>工務工作台｜窩的家</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif; }
+    button, input, select, textarea, summary { min-height: 44px; }
+    .focus-ring:focus { outline: 3px solid rgba(234,88,12,.2); border-color: #ea580c; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-800">
+  <div id="invalidLink" class="hidden min-h-screen items-center justify-center p-6">
+    <div class="w-full max-w-md rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm">
+      <div class="mb-3 text-4xl" aria-hidden="true">🔒</div>
+      <h1 class="text-xl font-bold text-slate-900">連結無效，請聯絡管理員</h1>
+      <p class="mt-2 text-sm text-slate-500">請使用管理員提供的工務專屬連結。</p>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+        <div><p class="text-xs font-bold tracking-widest text-orange-600">窩的家・工務</p><h1 class="text-xl font-extrabold text-slate-900">報修工作台</h1></div>
+        <div class="flex items-center gap-2"><span id="updatedAt" class="hidden text-xs text-slate-500 sm:inline"></span><button id="refreshButton" type="button" class="rounded-xl border border-slate-300 px-4 text-sm font-bold hover:bg-slate-50">重新整理</button></div>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-7xl space-y-6 px-4 py-5">
+      <div id="globalMessage" class="rounded-2xl border border-slate-200 bg-white p-5 text-center text-sm text-slate-500">載入中…</div>
+
+      <section aria-labelledby="statsTitle">
+        <div class="mb-3 flex items-end justify-between"><div><p class="text-xs font-bold tracking-widest text-slate-500">THIS MONTH</p><h2 id="statsTitle" class="text-xl font-extrabold text-slate-900">月統計</h2></div></div>
+        <div id="monthlyStats" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"></div>
+        <div class="mt-3 grid gap-3 lg:grid-cols-2">
+          <div class="rounded-2xl border border-slate-200 bg-white p-5"><h3 class="font-extrabold">各狀態</h3><div id="statusStats" class="mt-3 space-y-2"></div></div>
+          <div class="rounded-2xl border border-slate-200 bg-white p-5"><h3 class="font-extrabold">各業務</h3><div id="staffStats" class="mt-3 space-y-2"></div></div>
+        </div>
+      </section>
+
+      <section aria-labelledby="boardTitle">
+        <div class="mb-3"><p class="text-xs font-bold tracking-widest text-slate-500">ACTION BOARD</p><h2 id="boardTitle" class="text-xl font-extrabold text-slate-900">今日待辦</h2><p class="text-sm text-slate-500">逾時案件會以紅色顯示；已派工與施工中案件集中在驗收區追蹤。</p></div>
+        <div class="grid items-start gap-4 xl:grid-cols-3">
+          <section class="rounded-2xl border border-amber-200 bg-amber-50/60 p-3" aria-labelledby="costTitle">
+            <div class="flex items-center justify-between px-2 py-2"><h3 id="costTitle" class="font-extrabold text-amber-950">等我報成本</h3><span id="costCount" class="rounded-full bg-amber-200 px-2 py-1 text-xs font-bold">0</span></div>
+            <div id="costTodo" class="space-y-3"></div>
+          </section>
+          <section class="rounded-2xl border border-blue-200 bg-blue-50/60 p-3" aria-labelledby="dispatchTitle">
+            <div class="flex items-center justify-between px-2 py-2"><h3 id="dispatchTitle" class="font-extrabold text-blue-950">等我派工</h3><span id="dispatchCount" class="rounded-full bg-blue-200 px-2 py-1 text-xs font-bold">0</span></div>
+            <div id="dispatchTodo" class="space-y-3"></div>
+          </section>
+          <section class="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-3" aria-labelledby="acceptTitle">
+            <div class="flex items-center justify-between px-2 py-2"><h3 id="acceptTitle" class="font-extrabold text-emerald-950">等我驗收</h3><span id="acceptCount" class="rounded-full bg-emerald-200 px-2 py-1 text-xs font-bold">0</span></div>
+            <div id="acceptTodo" class="space-y-3"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="pointer-events-none fixed bottom-5 left-1/2 z-50 hidden -translate-x-1/2 rounded-full bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg" role="status"></div>
+
+<script>
+'use strict';
+const API_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+const REPAIR_TOKEN = new URLSearchParams(window.location.search).get('token')?.trim() || '';
+const COST_STATUSES = new Set(['新進件']);
+const DISPATCH_STATUSES = new Set(['已報價', '已收款']);
+const ACCEPT_STATUSES = new Set(['已派工', '施工中', '完工待驗收']);
+const CLOSED_STATUSES = new Set(['已結案', '已取消']);
+let allRepairs = [];
+let vendors = [];
+
+const byId = (id) => document.getElementById(id);
+const clean = (value) => String(value ?? '').trim();
+const money = (value) => Number(value || 0).toLocaleString('zh-TW');
+
+async function internalFetch(action, options = {}) {
+  const headers = new Headers(options.headers || {});
+  headers.set('X-WH-Repair-Token', REPAIR_TOKEN);
+  const response = await fetch(`${API_BASE}/${action}`, { ...options, headers });
+  let data;
+  try { data = await response.json(); }
+  catch { throw new Error('伺服器回應格式錯誤'); }
+  if (!response.ok || !data.ok) throw new Error(clean(data.error || data.message) || `操作失敗（${response.status}）`);
+  return data;
+}
+
+function make(tag, classes, text) {
+  const node = document.createElement(tag);
+  if (classes) node.className = classes;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function showToast(message) {
+  const toast = byId('toast'); toast.textContent = message; toast.classList.remove('hidden');
+  window.setTimeout(() => toast.classList.add('hidden'), 2400);
+}
+
+function field(repair, names, fallback = '') {
+  for (const name of names) if (repair?.[name] !== undefined && repair[name] !== null && repair[name] !== '') return repair[name];
+  return fallback;
+}
+function statusOf(repair) { return clean(field(repair, ['status', '案件狀態'], '狀態未提供')); }
+function ridOf(repair) { return clean(field(repair, ['rid', '_ragicId', 'id'])); }
+
+function isOverdue(repair) {
+  if (repair.overdue === true || clean(repair.overdue).toLowerCase() === 'true') return true;
+  const days = Number(field(repair, ['elapsedDays', 'daysOpen', '已申報天數'], 0));
+  if (Number.isFinite(days) && days > 2) return true;
+  const due = new Date(field(repair, ['dueAt', 'deadline'], ''));
+  return !Number.isNaN(due.getTime()) && due.getTime() < Date.now();
+}
+
+function infoRow(label, value) {
+  const row = make('div', 'grid grid-cols-[72px_1fr] gap-2 text-sm');
+  row.append(make('span', 'text-slate-500', label), make('span', 'break-words font-medium text-slate-800', clean(value) || '—'));
+  return row;
+}
+
+function button(text, classes, handler) {
+  const node = make('button', `rounded-xl px-3 text-sm font-bold ${classes}`, text); node.type = 'button'; node.addEventListener('click', handler); return node;
+}
+
+function baseCard(repair) {
+  const overdue = isOverdue(repair);
+  const card = make('article', `rounded-xl border bg-white p-4 shadow-sm ${overdue ? 'border-red-400 ring-2 ring-red-100' : 'border-slate-200'}`);
+  const head = make('div', 'flex items-start justify-between gap-2');
+  const left = make('div');
+  left.append(make('p', 'text-xs font-bold text-slate-500', clean(field(repair, ['ticketNo', '單號'], '尚未編號'))));
+  left.append(make('h4', 'mt-1 font-extrabold text-slate-900', clean(field(repair, ['category', 'item', '問題分類'], '報修案件'))));
+  const badge = make('span', `shrink-0 rounded-full px-2 py-1 text-xs font-bold ${overdue ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'}`, overdue ? `逾時・${statusOf(repair)}` : statusOf(repair));
+  head.append(left, badge); card.append(head);
+  const info = make('div', 'mt-3 space-y-1');
+  info.append(infoRow('地址', field(repair, ['address', '房屋地址'])));
+  info.append(infoRow('房號', field(repair, ['room', '房號'])));
+  info.append(infoRow('說明', field(repair, ['description', '問題描述'])));
+  info.append(infoRow('聯絡人', field(repair, ['contactName', 'name', '姓名'])));
+  info.append(infoRow('電話', field(repair, ['contactPhone', 'phone', '聯絡電話'])));
+  info.append(infoRow('可約時間', field(repair, ['availableTime', '可配合時段'])));
+  card.append(info);
+  return card;
+}
+
+function numberInput(placeholder, required = true) {
+  const input = make('input', 'focus-ring w-full rounded-xl border border-slate-300 px-3 text-sm');
+  input.type = 'number'; input.inputMode = 'numeric'; input.min = '0'; input.step = '1'; input.placeholder = placeholder; input.required = required; return input;
+}
+function textArea(placeholder) { const node = make('textarea', 'focus-ring w-full rounded-xl border border-slate-300 p-3 text-sm'); node.rows = 2; node.placeholder = placeholder; return node; }
+
+function addCancel(card, repair) {
+  if (CLOSED_STATUSES.has(statusOf(repair))) return;
+  const details = make('details', 'mt-3 border-t border-slate-100 pt-2');
+  details.append(make('summary', 'cursor-pointer py-2 text-sm font-semibold text-slate-500', '取消案件'));
+  const reason = textArea('取消原因（必填）');
+  const submit = button('確認取消', 'mt-2 w-full border border-red-300 text-red-700 disabled:bg-slate-100', async () => {
+    const value = clean(reason.value);
+    if (!value) { reason.focus(); showToast('請填取消原因'); return; }
+    if (!window.confirm('確定取消這張案件？')) return;
+    submit.disabled = true; submit.textContent = '處理中…';
+    try { await internalFetch('repairCancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rid: ridOf(repair), reason: value }) }); showToast('案件已取消'); await loadAll(); }
+    catch (error) { showToast(error.message); }
+    finally { submit.disabled = false; submit.textContent = '確認取消'; }
+  });
+  details.append(reason, submit); card.append(details);
+}
+
+function costCard(repair) {
+  const card = baseCard(repair);
+  const form = make('div', 'mt-4 space-y-2 rounded-xl bg-amber-50 p-3');
+  const companyCost = numberInput('公司成本價（必填）');
+  const estimateNote = textArea('詢價備註（可留空）');
+  const vendorActualCost = numberInput('廠商實際成本（可留空）', false);
+  const submit = button('送出報價資訊', 'w-full bg-amber-600 text-white disabled:bg-slate-400', async () => {
+    const amount = Number(clean(companyCost.value));
+    const actualRaw = clean(vendorActualCost.value);
+    const actual = actualRaw === '' ? undefined : Number(actualRaw);
+    if (!Number.isFinite(amount) || amount < 0 || !Number.isInteger(amount)) { companyCost.focus(); showToast('公司成本價需為 0 以上整數'); return; }
+    if (actual !== undefined && (!Number.isFinite(actual) || actual < 0 || !Number.isInteger(actual))) { vendorActualCost.focus(); showToast('廠商實際成本需為 0 以上整數'); return; }
+    const payload = { rid: ridOf(repair), companyCost: amount, estimateNote: clean(estimateNote.value) };
+    if (actual !== undefined) payload.vendorActualCost = actual;
+    submit.disabled = true; submit.textContent = '送出中…';
+    try { await internalFetch('repairQuoteCost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); showToast('報價資訊已送出'); await loadAll(); }
+    catch (error) { showToast(error.message); }
+    finally { submit.disabled = false; submit.textContent = '送出報價資訊'; }
+  });
+  form.append(companyCost, estimateNote, vendorActualCost, submit); card.append(form); addCancel(card, repair); return card;
+}
+
+function vendorName(vendor) { return clean(typeof vendor === 'string' ? vendor : field(vendor, ['name', 'vendorName', '廠商名稱'])); }
+
+function dispatchCard(repair) {
+  const card = baseCard(repair);
+  const paid = statusOf(repair) === '已收款';
+  const notice = make('p', `mt-3 rounded-xl p-3 text-sm font-bold ${paid ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`, paid ? '已確認收款，可安排派工' : '尚未收款，派工功能已鎖定');
+  const form = make('div', 'mt-3 space-y-2');
+  const select = make('select', 'focus-ring w-full rounded-xl border border-slate-300 bg-white px-3 text-sm');
+  select.append(make('option', '', '請選擇廠商'));
+  vendors.map(vendorName).filter(Boolean).forEach((name) => { const option = make('option', '', name); option.value = name; select.append(option); });
+  const date = make('input', 'focus-ring w-full rounded-xl border border-slate-300 px-3 text-sm'); date.type = 'datetime-local';
+  const submit = button(paid ? '確認派工' : '未收款，無法派工', `w-full ${paid ? 'bg-blue-600 text-white' : 'cursor-not-allowed bg-slate-300 text-slate-600'}`, async () => {
+    if (!paid) return;
+    const selectedVendor = clean(select.value); const scheduledAt = clean(date.value);
+    if (!selectedVendor) { select.focus(); showToast('請選擇廠商'); return; }
+    if (!scheduledAt || Number.isNaN(new Date(scheduledAt).getTime())) { date.focus(); showToast('請選擇施工日期與時間'); return; }
+    submit.disabled = true; submit.textContent = '派工中…';
+    try { await internalFetch('repairDispatch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rid: ridOf(repair), vendorName: selectedVendor, scheduledAt }) }); showToast('派工成功'); await loadAll(); }
+    catch (error) { showToast(error.message); }
+    finally { submit.disabled = !paid; submit.textContent = paid ? '確認派工' : '未收款，無法派工'; }
+  });
+  select.disabled = !paid; date.disabled = !paid; submit.disabled = !paid;
+  form.append(select, date, submit); card.append(notice, form); addCancel(card, repair); return card;
+}
+
+function filePicker(text) {
+  const label = make('label', 'flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700', text);
+  const input = make('input', 'sr-only'); input.type = 'file'; input.accept = 'image/*'; label.append(input);
+  const name = make('span', 'ml-2 truncate text-xs font-normal text-slate-500', '未選擇'); label.append(name);
+  input.addEventListener('change', () => { name.textContent = input.files?.[0]?.name || '未選擇'; });
+  return { label, input };
+}
+
+function acceptCard(repair) {
+  const card = baseCard(repair);
+  const state = make('p', 'mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-800', `目前階段：${statusOf(repair)}${statusOf(repair) === '完工待驗收' ? '，請進行驗收' : '，可持續追蹤或直接驗收'}`);
+  const acceptBox = make('div', 'mt-3 rounded-xl border border-emerald-200 p-3');
+  acceptBox.append(make('p', 'mb-2 text-sm font-extrabold text-emerald-800', '驗收通過'));
+  const acceptPhoto = filePicker('附上驗收照片（可留空）');
+  const acceptButton = button('通過並結案', 'mt-2 w-full bg-emerald-600 text-white disabled:bg-slate-400', async () => {
+    const body = new FormData(); body.append('rid', ridOf(repair)); if (acceptPhoto.input.files?.[0]) body.append('photo', acceptPhoto.input.files[0]);
+    acceptButton.disabled = true; acceptButton.textContent = '處理中…';
+    try { await internalFetch('repairAccept', { method: 'POST', body }); showToast('驗收完成，案件已結案'); await loadAll(); }
+    catch (error) { showToast(error.message); }
+    finally { acceptButton.disabled = false; acceptButton.textContent = '通過並結案'; }
+  });
+  acceptBox.append(acceptPhoto.label, acceptButton);
+  const rejectBox = make('div', 'mt-3 rounded-xl border border-red-200 p-3');
+  rejectBox.append(make('p', 'mb-2 text-sm font-extrabold text-red-800', '驗收退回'));
+  const reason = textArea('請填寫缺失（必填）'); const rejectPhoto = filePicker('附上缺失照片（可留空）');
+  const rejectButton = button('退回施工中', 'mt-2 w-full border border-red-300 text-red-700 disabled:bg-slate-100', async () => {
+    const value = clean(reason.value); if (!value) { reason.focus(); showToast('請填寫驗收缺失'); return; }
+    const body = new FormData(); body.append('rid', ridOf(repair)); body.append('reason', value); if (rejectPhoto.input.files?.[0]) body.append('photo', rejectPhoto.input.files[0]);
+    rejectButton.disabled = true; rejectButton.textContent = '退回中…';
+    try { await internalFetch('repairReject', { method: 'POST', body }); showToast('已退回施工中'); await loadAll(); }
+    catch (error) { showToast(error.message); }
+    finally { rejectButton.disabled = false; rejectButton.textContent = '退回施工中'; }
+  });
+  rejectBox.append(reason, rejectPhoto.label, rejectButton); card.append(state, acceptBox, rejectBox); addCancel(card, repair); return card;
+}
+
+function emptyCard(text) { return make('div', 'rounded-xl border border-dashed border-slate-300 bg-white/70 p-6 text-center text-sm text-slate-500', text); }
+
+function metric(label, value, accent = 'text-slate-900') {
+  const card = make('div', 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm'); card.append(make('p', 'text-sm font-bold text-slate-500', label), make('p', `mt-2 text-3xl font-black ${accent}`, value)); return card;
+}
+
+function objectEntries(value) {
+  if (Array.isArray(value)) return value.map((item, index) => [clean(field(item, ['name', 'status', 'label'], `項目 ${index + 1}`)), item]);
+  return value && typeof value === 'object' ? Object.entries(value) : [];
+}
+
+function renderStats(stats = {}) {
+  const monthTotal = field(stats, ['monthTotal', 'total', '本月單量'], allRepairs.length);
+  const companyProfit = field(stats, ['companyProfit', 'profit', '公司利潤'], 0);
+  const closed = field(stats, ['closed', 'closedCount', '已結案'], allRepairs.filter((r) => statusOf(r) === '已結案').length);
+  const open = field(stats, ['open', 'openCount'], allRepairs.filter((r) => !CLOSED_STATUSES.has(statusOf(r))).length);
+  byId('monthlyStats').replaceChildren(metric('本月單量', `${Number(monthTotal) || 0} 筆`, 'text-orange-600'), metric('進行中', `${Number(open) || 0} 筆`, 'text-blue-600'), metric('已結案', `${Number(closed) || 0} 筆`, 'text-emerald-600'), metric('公司利潤', `NT$ ${money(companyProfit)}`, 'text-violet-600'));
+
+  const statusData = field(stats, ['byStatus', 'statuses', 'statusCounts'], {});
+  const statusEntries = objectEntries(statusData);
+  const statusContainer = byId('statusStats'); statusContainer.replaceChildren();
+  if (!statusEntries.length) {
+    const counts = new Map(); allRepairs.forEach((r) => counts.set(statusOf(r), (counts.get(statusOf(r)) || 0) + 1));
+    counts.forEach((count, name) => statusEntries.push([name, count]));
+  }
+  statusEntries.forEach(([name, value]) => { const count = typeof value === 'object' ? field(value, ['count', 'total'], 0) : value; const row = make('div', 'flex items-center justify-between border-b border-slate-100 py-2 text-sm'); row.append(make('span', 'text-slate-600', name), make('span', 'font-extrabold', `${Number(count) || 0} 筆`)); statusContainer.append(row); });
+  if (!statusEntries.length) statusContainer.append(make('p', 'text-sm text-slate-500', '本月尚無資料'));
+
+  const staffData = field(stats, ['byStaff', 'staff', 'staffStats'], []);
+  const staffEntries = objectEntries(staffData); const staffContainer = byId('staffStats'); staffContainer.replaceChildren();
+  staffEntries.forEach(([name, value]) => {
+    const count = typeof value === 'object' ? field(value, ['count', 'total'], 0) : value;
+    const profit = typeof value === 'object' ? field(value, ['profit', 'staffProfit', '業務利潤'], 0) : 0;
+    const row = make('div', 'flex items-center justify-between gap-3 border-b border-slate-100 py-2 text-sm');
+    const detail = make('div', 'text-right'); detail.append(make('p', 'font-extrabold', `${Number(count) || 0} 筆`), make('p', 'text-xs text-slate-500', `業務利潤 NT$ ${money(profit)}`)); row.append(make('span', 'break-words text-slate-700', name), detail); staffContainer.append(row);
+  });
+  if (!staffEntries.length) staffContainer.append(make('p', 'text-sm text-slate-500', '本月尚無業務統計'));
+}
+
+function renderBoard() {
+  const cost = allRepairs.filter((r) => COST_STATUSES.has(statusOf(r)));
+  const dispatch = allRepairs.filter((r) => DISPATCH_STATUSES.has(statusOf(r)));
+  const accept = allRepairs.filter((r) => ACCEPT_STATUSES.has(statusOf(r)));
+  const groups = [
+    { items: cost, container: byId('costTodo'), count: byId('costCount'), render: costCard, empty: '目前沒有待報價案件' },
+    { items: dispatch, container: byId('dispatchTodo'), count: byId('dispatchCount'), render: dispatchCard, empty: '目前沒有待派工案件' },
+    { items: accept, container: byId('acceptTodo'), count: byId('acceptCount'), render: acceptCard, empty: '目前沒有待驗收案件' },
+  ];
+  groups.forEach((group) => {
+    group.container.replaceChildren(); group.count.textContent = String(group.items.length);
+    if (!group.items.length) group.container.append(emptyCard(group.empty));
+    else group.items.sort((a, b) => Number(isOverdue(b)) - Number(isOverdue(a))).forEach((repair) => group.container.append(group.render(repair)));
+  });
+}
+
+async function loadAll() {
+  const message = byId('globalMessage'); message.className = 'rounded-2xl border border-slate-200 bg-white p-5 text-center text-sm text-slate-500'; message.textContent = '載入中…'; message.classList.remove('hidden');
+  try {
+    const data = await internalFetch('repairListAll');
+    allRepairs = Array.isArray(data.repairs) ? data.repairs : [];
+    vendors = Array.isArray(data.vendors) ? data.vendors : [];
+    renderStats(data.stats || {}); renderBoard();
+    message.classList.add('hidden'); byId('updatedAt').textContent = `更新：${new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`;
+  } catch (error) { message.textContent = `載入失敗：${error.message}`; message.className = 'rounded-2xl border border-red-200 bg-red-50 p-5 text-center text-sm text-red-700'; }
+}
+
+byId('refreshButton').addEventListener('click', loadAll);
+if (!REPAIR_TOKEN) {
+  byId('invalidLink').classList.remove('hidden'); byId('invalidLink').classList.add('flex');
+} else {
+  byId('app').classList.remove('hidden'); loadAll();
+}
+</script>
+</body>
+</html>
