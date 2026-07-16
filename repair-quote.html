@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>修繕報價單｜窩的家</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-800">
+  <main class="mx-auto flex min-h-screen max-w-2xl items-center px-4 py-10">
+    <section class="w-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
+      <header class="bg-slate-900 px-6 py-7 text-white sm:px-10">
+        <p class="text-xs font-bold tracking-[0.28em] text-orange-300">WUOHOME SERVICE</p>
+        <h1 class="mt-2 text-2xl font-black">修繕報價單</h1>
+      </header>
+
+      <div id="loadingState" class="p-10 text-center">
+        <div class="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-orange-500"></div>
+        <p class="mt-4 text-sm text-slate-500">報價內容載入中…</p>
+      </div>
+
+      <div id="errorState" class="hidden p-10 text-center">
+        <div class="text-4xl" aria-hidden="true">🔗</div>
+        <h2 class="mt-3 text-xl font-extrabold text-slate-900">無法開啟報價單</h2>
+        <p id="errorMessage" class="mt-2 text-sm text-slate-500">請確認連結是否完整。</p>
+      </div>
+
+      <div id="quoteState" class="hidden px-6 py-8 sm:px-10">
+        <div class="flex flex-col gap-5 border-b border-slate-200 pb-7 sm:flex-row sm:items-end sm:justify-between">
+          <div><p class="text-xs font-bold tracking-widest text-slate-400">服務公司</p><p id="companyName" class="mt-1 text-xl font-black text-slate-900"></p></div>
+          <div class="sm:text-right"><p class="text-xs font-bold tracking-widest text-slate-400">單號</p><p id="ticketNo" class="mt-1 font-bold text-slate-700"></p></div>
+        </div>
+        <dl class="space-y-6 py-7">
+          <div><dt class="text-xs font-bold tracking-widest text-slate-400">服務項目</dt><dd id="item" class="mt-2 text-lg font-extrabold text-slate-900"></dd></div>
+          <div><dt class="text-xs font-bold tracking-widest text-slate-400">內容說明</dt><dd id="description" class="mt-2 whitespace-pre-wrap break-words leading-7 text-slate-700"></dd></div>
+        </dl>
+        <div class="rounded-2xl bg-orange-50 p-6 text-right">
+          <p class="text-sm font-bold text-orange-800">報價總額</p>
+          <p id="total" class="mt-1 text-4xl font-black tracking-tight text-orange-600"></p>
+        </div>
+        <p class="mt-6 text-center text-xs text-slate-400">此頁為唯讀報價資訊，如有疑問請聯絡服務人員。</p>
+      </div>
+    </section>
+  </main>
+
+<script>
+'use strict';
+const API_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+const quoteKey = new URLSearchParams(window.location.search).get('quote')?.trim() || '';
+const byId = (id) => document.getElementById(id);
+const clean = (value) => String(value ?? '').trim();
+
+function showError(message) {
+  byId('loadingState').classList.add('hidden');
+  byId('quoteState').classList.add('hidden');
+  byId('errorMessage').textContent = message;
+  byId('errorState').classList.remove('hidden');
+}
+
+async function loadQuote() {
+  if (!quoteKey) { showError('連結不完整，請向服務人員索取正確網址。'); return; }
+  try {
+    const response = await fetch(`${API_BASE}/repairQuoteView?quote=${encodeURIComponent(quoteKey)}`);
+    let data;
+    try { data = await response.json(); }
+    catch { throw new Error('服務暫時無法回應，請稍後再試。'); }
+    if (!response.ok || !data.ok || !data.quote) throw new Error(clean(data.error || data.message) || '這份報價單目前無法讀取。');
+    const view = data.quote;
+    byId('companyName').textContent = clean(view.companyName) || '窩的家';
+    byId('ticketNo').textContent = clean(view.ticketNo) || '—';
+    byId('item').textContent = clean(view.item) || '修繕服務';
+    byId('description').textContent = clean(view.description) || '依現場確認內容辦理';
+    const rawTotal = clean(view.total);
+    const amount = Number(rawTotal);
+    if (!rawTotal || !Number.isFinite(amount) || amount < 0) throw new Error('報價資料不完整，請聯絡服務人員。');
+    byId('total').textContent = `NT$ ${amount.toLocaleString('zh-TW')}`;
+    byId('loadingState').classList.add('hidden');
+    byId('quoteState').classList.remove('hidden');
+  } catch (error) { showError(error.message || '載入失敗，請稍後再試。'); }
+}
+
+loadQuote();
+</script>
+</body>
+</html>

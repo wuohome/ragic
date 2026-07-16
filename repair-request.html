@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>工務報修｜窩的家</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { color-scheme: light; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif; }
+    button, input, select, textarea, label.touch { min-height: 44px; }
+    .focus-ring:focus { outline: 3px solid rgba(234,88,12,.22); border-color: #ea580c; }
+    .step-panel[hidden] { display: none; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800">
+  <div id="invalidLink" class="hidden min-h-screen items-center justify-center p-6">
+    <div class="w-full max-w-md rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm">
+      <div class="mb-3 text-4xl" aria-hidden="true">🔒</div>
+      <h1 class="text-xl font-bold text-slate-900">連結無效，請聯絡管理員</h1>
+      <p class="mt-2 text-sm text-slate-500">請由管理員提供的專屬連結進入。</p>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <div class="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+        <div>
+          <p class="text-xs font-semibold tracking-widest text-orange-600">窩的家・工務</p>
+          <h1 class="text-lg font-extrabold text-slate-900">報修申請</h1>
+        </div>
+        <button id="refreshButton" type="button" class="rounded-xl border border-slate-300 px-4 text-sm font-semibold hover:bg-slate-50">重新整理</button>
+      </div>
+    </header>
+
+    <main class="mx-auto grid max-w-5xl gap-6 px-4 py-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+      <section class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="border-b border-slate-100 p-5">
+          <h2 class="text-xl font-extrabold text-slate-900">建立報修單</h2>
+          <p id="stepLabel" class="mt-1 text-sm text-slate-500">第 1 步，共 3 步</p>
+          <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+            <div id="progressBar" class="h-full w-1/3 rounded-full bg-orange-500 transition-all"></div>
+          </div>
+        </div>
+
+        <form id="repairForm" class="p-5" novalidate>
+          <section class="step-panel space-y-4" data-step="1">
+            <div>
+              <label for="address" class="mb-1 block text-sm font-bold">地址 <span class="text-red-600">*</span></label>
+              <input id="address" name="address" type="text" autocomplete="street-address" placeholder="可直接手填完整地址" class="focus-ring w-full rounded-xl border border-slate-300 px-3" required>
+              <p class="mt-1 text-xs text-slate-500">不限在管物件，找不到時直接填寫即可。</p>
+            </div>
+            <div>
+              <label for="room" class="mb-1 block text-sm font-bold">房號／樓層 <span class="text-red-600">*</span></label>
+              <input id="room" name="room" type="text" placeholder="例：3 樓 A 室" class="focus-ring w-full rounded-xl border border-slate-300 px-3" required>
+            </div>
+            <div>
+              <label for="category" class="mb-1 block text-sm font-bold">問題分類 <span class="text-red-600">*</span></label>
+              <select id="category" name="category" class="focus-ring w-full rounded-xl border border-slate-300 bg-white px-3" required>
+                <option value="">請選擇</option>
+                <option>水電</option><option>泥作</option><option>木作</option><option>家電</option><option>門鎖</option><option>其他</option>
+              </select>
+            </div>
+            <div>
+              <label for="urgency" class="mb-1 block text-sm font-bold">急迫度 <span class="text-red-600">*</span></label>
+              <select id="urgency" name="urgency" class="focus-ring w-full rounded-xl border border-slate-300 bg-white px-3" required>
+                <option value="">請選擇</option>
+                <option value="一般">一般（可安排時間）</option>
+                <option value="急件">急件（影響生活）</option>
+                <option value="緊急">緊急（有安全風險）</option>
+              </select>
+            </div>
+          </section>
+
+          <section class="step-panel space-y-4" data-step="2" hidden>
+            <div>
+              <label for="description" class="mb-1 block text-sm font-bold">問題描述 <span class="text-red-600">*</span></label>
+              <textarea id="description" name="description" rows="5" placeholder="發生位置、狀況、已嘗試處理方式" class="focus-ring w-full rounded-xl border border-slate-300 p-3" required></textarea>
+            </div>
+            <div>
+              <label for="availableTime" class="mb-1 block text-sm font-bold">可配合時段 <span class="text-red-600">*</span></label>
+              <input id="availableTime" name="availableTime" type="text" placeholder="例：平日 18:30 後、週六上午" class="focus-ring w-full rounded-xl border border-slate-300 px-3" required>
+            </div>
+            <div>
+              <label for="photo" class="touch flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-orange-300 bg-orange-50 px-4 py-4 text-center font-bold text-orange-700">選擇問題照片（可多張）</label>
+              <input id="photo" name="photo" type="file" accept="image/*" multiple class="sr-only">
+              <p id="photoLabel" class="mt-2 text-center text-xs text-slate-500">尚未選擇照片；非必填</p>
+              <div id="photoPreview" class="mt-3 grid grid-cols-3 gap-2"></div>
+            </div>
+          </section>
+
+          <section class="step-panel space-y-4" data-step="3" hidden>
+            <div>
+              <label for="contactName" class="mb-1 block text-sm font-bold">聯絡人 <span class="text-red-600">*</span></label>
+              <input id="contactName" name="contactName" type="text" autocomplete="name" class="focus-ring w-full rounded-xl border border-slate-300 px-3" required>
+            </div>
+            <div>
+              <label for="contactPhone" class="mb-1 block text-sm font-bold">聯絡電話 <span class="text-red-600">*</span></label>
+              <input id="contactPhone" name="contactPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="0912-345-678" class="focus-ring w-full rounded-xl border border-slate-300 px-3" required>
+            </div>
+            <div class="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+              送出後可在右側「我的報修單」追蹤進度。請再次確認聯絡電話與地址。
+            </div>
+          </section>
+
+          <p id="formMessage" class="mt-4 hidden rounded-xl p-3 text-sm" role="status"></p>
+          <div class="mt-5 flex gap-3">
+            <button id="backButton" type="button" class="hidden w-28 rounded-xl border border-slate-300 font-bold">上一步</button>
+            <button id="nextButton" type="button" class="flex-1 rounded-xl bg-orange-600 font-bold text-white hover:bg-orange-700">下一步</button>
+            <button id="submitButton" type="submit" class="hidden flex-1 rounded-xl bg-orange-600 font-bold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:bg-slate-400">送出報修</button>
+          </div>
+        </form>
+      </section>
+
+      <section>
+        <div class="mb-3 flex items-end justify-between">
+          <div><h2 class="text-xl font-extrabold text-slate-900">我的報修單</h2><p class="text-sm text-slate-500">需要你處理的案件會排在最前面</p></div>
+          <span id="repairCount" class="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold">0 筆</span>
+        </div>
+        <div id="listMessage" class="rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">載入中…</div>
+        <div id="repairList" class="space-y-4"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="pointer-events-none fixed bottom-5 left-1/2 z-50 hidden -translate-x-1/2 rounded-full bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg" role="status"></div>
+
+<script>
+'use strict';
+const API_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+const REPAIR_TOKEN = new URLSearchParams(window.location.search).get('token')?.trim() || '';
+const ACTION_STATUSES = new Set(['已報成本', '已報價']);
+const CLOSED_STATUSES = new Set(['已結案', '已取消']);
+let currentStep = 1;
+let repairs = [];
+
+const byId = (id) => document.getElementById(id);
+const money = (value) => Number(value || 0).toLocaleString('zh-TW');
+const clean = (value) => String(value ?? '').trim();
+
+async function internalFetch(action, options = {}) {
+  const headers = new Headers(options.headers || {});
+  headers.set('X-WH-Repair-Token', REPAIR_TOKEN);
+  const response = await fetch(`${API_BASE}/${action}`, { ...options, headers });
+  let data;
+  try { data = await response.json(); }
+  catch { throw new Error('伺服器回應格式錯誤'); }
+  if (!response.ok || !data.ok) throw new Error(clean(data.error || data.message) || `操作失敗（${response.status}）`);
+  return data;
+}
+
+function showToast(message) {
+  const toast = byId('toast');
+  toast.textContent = message;
+  toast.classList.remove('hidden');
+  window.setTimeout(() => toast.classList.add('hidden'), 2200);
+}
+
+function setMessage(target, message, type = 'error') {
+  target.textContent = message;
+  target.className = `mt-4 rounded-xl p-3 text-sm ${type === 'success' ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`;
+}
+
+function make(tag, classes, text) {
+  const node = document.createElement(tag);
+  if (classes) node.className = classes;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function showStep(step) {
+  currentStep = step;
+  document.querySelectorAll('.step-panel').forEach((panel) => { panel.hidden = Number(panel.dataset.step) !== step; });
+  byId('stepLabel').textContent = `第 ${step} 步，共 3 步`;
+  byId('progressBar').style.width = `${step / 3 * 100}%`;
+  byId('backButton').classList.toggle('hidden', step === 1);
+  byId('nextButton').classList.toggle('hidden', step === 3);
+  byId('submitButton').classList.toggle('hidden', step !== 3);
+  byId('formMessage').classList.add('hidden');
+}
+
+function validateStep(step) {
+  const panel = document.querySelector(`[data-step="${step}"]`);
+  const fields = [...panel.querySelectorAll('[required]')];
+  for (const field of fields) {
+    field.value = clean(field.value);
+    if (!field.value) {
+      field.focus();
+      setMessage(byId('formMessage'), `請填寫「${field.previousElementSibling?.textContent?.replace('*', '').trim() || '必填欄位'}」`);
+      return false;
+    }
+  }
+  if (step === 3) {
+    const phone = clean(byId('contactPhone').value).replace(/[\s-]/g, '');
+    if (!/^0\d{8,9}$/.test(phone)) {
+      byId('contactPhone').focus();
+      setMessage(byId('formMessage'), '請輸入有效的市話或手機號碼');
+      return false;
+    }
+  }
+  return true;
+}
+
+function fieldValue(repair, names, fallback = '') {
+  for (const name of names) if (repair?.[name] !== undefined && repair[name] !== null && repair[name] !== '') return repair[name];
+  return fallback;
+}
+
+function repairStatus(repair) { return clean(fieldValue(repair, ['status', '案件狀態'], '狀態未提供')); }
+function repairRid(repair) { return clean(fieldValue(repair, ['rid', '_ragicId', 'id'])); }
+function needsAction(repair) { return ACTION_STATUSES.has(repairStatus(repair)); }
+
+function appendInfo(parent, label, value) {
+  if (value === '' || value === null || value === undefined) return;
+  const row = make('div', 'grid grid-cols-[76px_1fr] gap-2 text-sm');
+  row.append(make('span', 'text-slate-500', label), make('span', 'break-words font-medium text-slate-800', clean(value)));
+  parent.append(row);
+}
+
+function actionButton(text, classes, handler) {
+  const button = make('button', `rounded-xl px-4 text-sm font-bold ${classes}`, text);
+  button.type = 'button';
+  button.addEventListener('click', handler);
+  return button;
+}
+
+function renderMarginAction(card, repair) {
+  const rid = repairRid(repair);
+  const companyCost = Number(fieldValue(repair, ['companyCost', 'cost'], 0));
+  const box = make('div', 'mt-4 rounded-xl border border-orange-200 bg-orange-50 p-4');
+  box.append(make('p', 'text-sm font-bold text-orange-900', `基準金額 NT$ ${money(companyCost)}`));
+  const label = make('label', 'mt-3 block text-xs font-bold text-slate-700', '你的加價');
+  const input = make('input', 'focus-ring mt-1 w-full rounded-xl border border-slate-300 bg-white px-3');
+  input.type = 'number'; input.min = '0'; input.step = '1'; input.inputMode = 'numeric'; input.placeholder = '請輸入 0 以上整數';
+  const total = make('p', 'mt-2 text-sm font-extrabold text-orange-700', `客戶總價：NT$ ${money(companyCost)}`);
+  input.addEventListener('input', () => {
+    const margin = Number(input.value);
+    total.textContent = `客戶總價：NT$ ${money(companyCost + (Number.isFinite(margin) && margin >= 0 ? margin : 0))}`;
+  });
+  const submit = actionButton('確認並產生報價連結', 'mt-3 w-full bg-orange-600 text-white disabled:bg-slate-400', async () => {
+    const margin = Number(clean(input.value));
+    if (!Number.isFinite(margin) || margin < 0 || !Number.isInteger(margin)) { showToast('請輸入 0 以上整數'); input.focus(); return; }
+    submit.disabled = true; submit.textContent = '處理中…';
+    try {
+      const data = await internalFetch('repairSetMargin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rid, margin }) });
+      const quoteUrl = clean(data.quoteUrl);
+      if (!quoteUrl) throw new Error('報價已更新，但未取得報價連結，請聯絡管理員');
+      const link = make('div', 'mt-3 rounded-xl bg-white p-3');
+      link.append(make('p', 'break-all text-xs text-slate-600', quoteUrl));
+      const copy = actionButton('複製報價連結', 'mt-2 w-full border border-orange-300 text-orange-700', async () => {
+        try { await navigator.clipboard.writeText(quoteUrl); showToast('已複製報價連結'); }
+        catch { showToast('無法自動複製，請長按連結複製'); }
+      });
+      link.append(copy); box.append(link);
+      showToast(`已更新：${clean(data.status || '已報價')}`);
+    } catch (error) { showToast(error.message); }
+    finally { submit.disabled = false; submit.textContent = '確認並產生報價連結'; }
+  });
+  box.append(label, input, total, submit); card.append(box);
+}
+
+function renderPaymentAction(card, repair) {
+  const rid = repairRid(repair);
+  const box = make('div', 'mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4');
+  const label = make('label', 'touch flex cursor-pointer items-center justify-center rounded-xl border border-emerald-300 bg-white px-3 text-sm font-bold text-emerald-700', '選擇收款證明');
+  const input = make('input', 'sr-only'); input.type = 'file'; input.accept = 'image/*'; input.required = true;
+  label.append(input);
+  const fileName = make('p', 'mt-2 text-xs text-slate-500', '尚未選擇檔案');
+  input.addEventListener('change', () => { fileName.textContent = input.files?.[0]?.name || '尚未選擇檔案'; });
+  const submit = actionButton('回報已收款', 'mt-3 w-full bg-emerald-600 text-white disabled:bg-slate-400', async () => {
+    if (!input.files?.[0]) { showToast('請先選擇收款證明'); return; }
+    const body = new FormData(); body.append('rid', rid); body.append('proof', input.files[0]);
+    submit.disabled = true; submit.textContent = '上傳中…';
+    try { await internalFetch('repairReportPayment', { method: 'POST', body }); showToast('收款回報成功'); await loadRepairs(); }
+    catch (error) { showToast(error.message); }
+    finally { submit.disabled = false; submit.textContent = '回報已收款'; }
+  });
+  box.append(label, fileName, submit); card.append(box);
+}
+
+function renderCancelAction(card, repair) {
+  const details = make('details', 'mt-3 border-t border-slate-100 pt-3');
+  details.append(make('summary', 'cursor-pointer py-2 text-sm font-semibold text-slate-500', '取消此案件'));
+  const reason = make('textarea', 'focus-ring mt-2 w-full rounded-xl border border-slate-300 p-3 text-sm');
+  reason.rows = 2; reason.placeholder = '請填取消原因';
+  const button = actionButton('確認取消', 'mt-2 w-full border border-red-300 text-red-700 disabled:bg-slate-100', async () => {
+    const value = clean(reason.value);
+    if (!value) { showToast('請填取消原因'); reason.focus(); return; }
+    if (!window.confirm('確定取消這張報修單？')) return;
+    button.disabled = true; button.textContent = '取消中…';
+    try { await internalFetch('repairCancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rid: repairRid(repair), reason: value }) }); showToast('案件已取消'); await loadRepairs(); }
+    catch (error) { showToast(error.message); }
+    finally { button.disabled = false; button.textContent = '確認取消'; }
+  });
+  details.append(reason, button); card.append(details);
+}
+
+function renderRepair(repair) {
+  const status = repairStatus(repair);
+  const card = make('article', `rounded-2xl border bg-white p-5 shadow-sm ${needsAction(repair) ? 'border-orange-400 ring-2 ring-orange-100' : 'border-slate-200'}`);
+  const head = make('div', 'flex items-start justify-between gap-3');
+  const left = make('div');
+  left.append(make('p', 'text-xs font-bold text-slate-500', clean(fieldValue(repair, ['ticketNo', '單號'], '尚未編號'))));
+  left.append(make('h3', 'mt-1 font-extrabold text-slate-900', clean(fieldValue(repair, ['category', 'item', '問題分類'], '報修案件'))));
+  const badge = make('span', `shrink-0 rounded-full px-3 py-1 text-xs font-bold ${needsAction(repair) ? 'bg-orange-100 text-orange-800' : 'bg-slate-100 text-slate-700'}`, status);
+  head.append(left, badge); card.append(head);
+  const info = make('div', 'mt-3 space-y-1');
+  appendInfo(info, '地址', fieldValue(repair, ['address', '房屋地址']));
+  appendInfo(info, '房號', fieldValue(repair, ['room', '房號']));
+  appendInfo(info, '說明', fieldValue(repair, ['description', '問題描述']));
+  appendInfo(info, '建立時間', fieldValue(repair, ['createdAt', 'repairTime', '報修時間']));
+  card.append(info);
+  if (status === '已報成本') renderMarginAction(card, repair);
+  if (status === '已報價') renderPaymentAction(card, repair);
+  if (!CLOSED_STATUSES.has(status)) renderCancelAction(card, repair);
+  return card;
+}
+
+async function loadRepairs() {
+  const message = byId('listMessage');
+  message.classList.remove('hidden'); message.textContent = '載入中…';
+  byId('repairList').replaceChildren();
+  try {
+    const data = await internalFetch('repairListMine');
+    repairs = Array.isArray(data.repairs) ? data.repairs : [];
+    repairs.sort((a, b) => Number(needsAction(b)) - Number(needsAction(a)));
+    byId('repairCount').textContent = `${repairs.length} 筆`;
+    if (!repairs.length) { message.textContent = '目前沒有報修單'; return; }
+    message.classList.add('hidden');
+    const fragment = document.createDocumentFragment();
+    repairs.forEach((repair) => fragment.append(renderRepair(repair)));
+    byId('repairList').append(fragment);
+  } catch (error) { message.textContent = `載入失敗：${error.message}`; message.className = 'rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700'; }
+}
+
+byId('nextButton').addEventListener('click', () => { if (validateStep(currentStep)) showStep(currentStep + 1); });
+byId('backButton').addEventListener('click', () => showStep(currentStep - 1));
+byId('refreshButton').addEventListener('click', loadRepairs);
+byId('photo').addEventListener('change', (event) => {
+  const files = [...(event.target.files || [])];
+  byId('photoLabel').textContent = files.length ? `已選擇 ${files.length} 張照片` : '尚未選擇照片；非必填';
+  const preview = byId('photoPreview'); preview.replaceChildren();
+  files.forEach((file) => { const image = make('img', 'h-20 w-full rounded-lg object-cover'); image.alt = '問題照片預覽'; image.src = URL.createObjectURL(file); image.addEventListener('load', () => URL.revokeObjectURL(image.src), { once: true }); preview.append(image); });
+});
+
+byId('repairForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!validateStep(3)) return;
+  const form = event.currentTarget;
+  const body = new FormData();
+  for (const name of ['address', 'room', 'category', 'description', 'contactName', 'contactPhone', 'availableTime', 'urgency']) body.append(name, clean(form.elements[name].value));
+  [...form.elements.photo.files].forEach((file) => body.append('photo', file));
+  const button = byId('submitButton'); button.disabled = true; button.textContent = '送出中…';
+  try {
+    const data = await internalFetch('repairCreate', { method: 'POST', body });
+    setMessage(byId('formMessage'), `送出成功！單號：${clean(data.ticketNo || data.rid)}，狀態：${clean(data.status)}`, 'success');
+    form.reset(); byId('photoPreview').replaceChildren(); byId('photoLabel').textContent = '尚未選擇照片；非必填'; showStep(1); byId('formMessage').classList.remove('hidden');
+    await loadRepairs();
+  } catch (error) { setMessage(byId('formMessage'), `送出失敗：${error.message}`); }
+  finally { button.disabled = false; button.textContent = '送出報修'; }
+});
+
+if (!REPAIR_TOKEN) {
+  byId('invalidLink').classList.remove('hidden'); byId('invalidLink').classList.add('flex');
+} else {
+  byId('app').classList.remove('hidden');
+  showStep(1);
+  loadRepairs();
+}
+</script>
+</body>
+</html>
