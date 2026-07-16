@@ -49,6 +49,7 @@ for (const [name, file] of Object.entries(pages)) {
 const html = Object.fromEntries(Object.keys(pages).map((name) => [name, source(name)]));
 for (const [name, text] of Object.entries(html)) {
   check(balancedHtml(text), `${path.basename(pages[name])} 基本標籤正確閉合`);
+  check(/<meta\s+name=["']referrer["']\s+content=["']no-referrer["']/i.test(text), `${path.basename(pages[name])} 設定 no-referrer`);
 }
 const internalNames = ['request', 'console'];
 
@@ -58,7 +59,7 @@ for (const name of internalNames) {
   check(/<!doctype html>/i.test(text) && /<html\b/i.test(text) && /<\/html>/i.test(text), `${label} 有完整 HTML 外框`);
   check(/<head\b/i.test(text) && /<\/head>/i.test(text) && /<body\b/i.test(text) && /<\/body>/i.test(text), `${label} 有完整 head/body`);
   check(text.includes('cdn.tailwindcss.com'), `${label} 載入 Tailwind CDN`);
-  check(!/ap15\.ragic\.com|APIKey|Authorization\s*[:=]\s*['"]?Basic/i.test(text), `${label} 不直連 Ragic 或夾帶管理憑證`);
+  check(!/fetch\s*\([^\n]*ap15\.ragic\.com|APIKey|Authorization\s*[:=]\s*['"]?Basic/i.test(text), `${label} 不直打 Ragic API 或夾帶管理憑證`);
   check(text.includes('https://wuohome-ragic-proxy.wuohome.workers.dev'), `${label} 僅使用指定 Worker`);
   check(text.includes(".get('token')") || text.includes('.get("token")'), `${label} 從 URL 讀取 token`);
   check(text.includes('X-WH-Repair-Token'), `${label} 內部 request 帶 X-WH-Repair-Token`);
@@ -66,7 +67,9 @@ for (const name of internalNames) {
   check((text.match(/\bfetch\s*\(/g) || []).length === 1, `${label} 沒有繞過 internalFetch 的 fetch`);
   check(text.includes('連結無效，請聯絡管理員'), `${label} 缺 token 時顯示明確錯誤`);
   check(text.includes('if (!REPAIR_TOKEN)') && /\}\s*else\s*\{/.test(text), `${label} 缺 token 時不啟動 API 載入`);
-  check(!/localStorage\s*\.\s*setItem|localStorage\s*\[/.test(text), `${label} 不把 token 寫入 localStorage`);
+  check(!/localStorage/.test(text), `${label} 完全不使用 localStorage`);
+  check(/sessionStorage\s*\.\s*(getItem|setItem)/.test(text), `${label} 以 sessionStorage 保存 token`);
+  check(/history\.replaceState/.test(text), `${label} 讀取 token 後清除 URL query`);
   check(!/\.innerHTML\s*=|insertAdjacentHTML|outerHTML\s*=/.test(text), `${label} 不用 HTML 字串注入動態資料`);
   check(/min-height\s*:\s*44px|min-h-11/.test(text), `${label} 觸控目標至少 44px`);
 }
@@ -76,12 +79,23 @@ check(html.request.includes('repairListMine'), '業務頁支援 repairListMine')
 check(html.request.includes('repairSetMargin'), '業務頁支援 repairSetMargin');
 check(html.request.includes('repairReportPayment'), '業務頁支援 repairReportPayment');
 check(html.request.includes('repairCancel'), '業務頁支援 repairCancel');
+check(/internalFetch\s*\(\s*[`'\"]searchCases(?:\?q=)?/.test(html.request), '業務頁透過 internalFetch 載入物件搜尋');
+check(/<datalist\b/i.test(html.request), '業務頁提供物件 datalist 輔助且仍可手填');
+check(/name="photo"[^>]*required/i.test(html.request), '業務發單照片為必填');
+check(/最多\s*4|1[–-]4/.test(html.request) && html.request.includes('5MiB'), '業務頁顯示照片數量與容量限制');
+check(html.request.includes('重新產生報價連結'), '已報價案件可重新產生報價連結');
+check(html.request.includes('data.partial') && html.request.includes('quoteSlot.replaceChildren'), '報價部分成功可安全恢復且不累積失效連結');
 for (const field of ['address', 'room', 'category', 'description', 'contactName', 'contactPhone', 'availableTime', 'urgency', 'photo']) {
   check(html.request.includes(`name="${field}"`), `業務頁含欄位 ${field}`);
 }
-for (const action of ['repairListAll', 'repairQuoteCost', 'repairDispatch', 'repairAccept', 'repairReject', 'repairCancel']) {
+for (const action of ['repairListAll', 'repairQuoteCost', 'repairDispatch', 'repairComplete', 'repairAccept', 'repairReject', 'repairCancel']) {
   check(html.console.includes(action), `工作台支援 ${action}`);
 }
+check(html.console.includes('reporter'), '工作台聯絡人讀取 Worker reporter');
+check(html.console.includes('paymentProofUrls') && html.console.includes('finishedPhotoUrls'), '工作台顯示安全付款與完工附件');
+check(html.console.includes('actualDescription'), '工作台顯示實際施作說明');
+check(html.console.includes('byOwner') && html.console.includes('margin'), '工作台讀取統一 byOwner/margin 統計');
+check(/rel\s*=\s*['"]noopener noreferrer['"]/.test(html.console) || /\.rel\s*=\s*['"]noopener noreferrer['"]/.test(html.console), '工作台附件連結使用 noopener noreferrer');
 for (const id of ['costTodo', 'dispatchTodo', 'acceptTodo', 'monthlyStats']) {
   check(html.console.includes(`id="${id}"`), `工作台含必要區塊 ${id}`);
 }
@@ -95,6 +109,7 @@ const quoteActions = [...quote.matchAll(/repair[A-Z][A-Za-z]+/g)].map((m) => m[0
 check(quoteActions.length > 0 && quoteActions.every((name) => name === 'repairQuoteView'), '客戶頁只呼叫 repairQuoteView');
 check(!quote.includes('X-WH-Repair-Token') && !/searchParams\.get\(['"]token['"]\)/.test(quote), '客戶頁不載入內部 token');
 check(!/localStorage/.test(quote), '客戶頁不使用 localStorage');
+check(/history\.replaceState/.test(quote), '客戶頁讀取 quote 後清除 URL query');
 check(!/\.innerHTML\s*=|insertAdjacentHTML|outerHTML\s*=/.test(quote), '客戶頁動態資料使用安全 DOM');
 for (const id of ['companyName', 'ticketNo', 'item', 'description', 'total']) check(quote.includes(`id="${id}"`), `客戶頁含顯示欄位 ${id}`);
 

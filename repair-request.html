@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
   <title>工務報修｜窩的家</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -47,8 +48,9 @@
           <section class="step-panel space-y-4" data-step="1">
             <div>
               <label for="address" class="mb-1 block text-sm font-bold">地址 <span class="text-red-600">*</span></label>
-              <input id="address" name="address" type="text" autocomplete="street-address" placeholder="可直接手填完整地址" class="focus-ring w-full rounded-xl border border-slate-300 px-3" required>
-              <p class="mt-1 text-xs text-slate-500">不限在管物件，找不到時直接填寫即可。</p>
+              <input id="address" name="address" type="text" list="caseOptions" autocomplete="street-address" placeholder="搜尋在管物件或直接手填完整地址" class="focus-ring w-full rounded-xl border border-slate-300 px-3" required>
+              <datalist id="caseOptions"></datalist>
+              <p class="mt-1 text-xs text-slate-500">輸入關鍵字可帶出在管物件；載入失敗或找不到時仍可直接手填。</p>
             </div>
             <div>
               <label for="room" class="mb-1 block text-sm font-bold">房號／樓層 <span class="text-red-600">*</span></label>
@@ -83,8 +85,8 @@
             </div>
             <div>
               <label for="photo" class="touch flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-orange-300 bg-orange-50 px-4 py-4 text-center font-bold text-orange-700">選擇問題照片（可多張）</label>
-              <input id="photo" name="photo" type="file" accept="image/*" multiple class="sr-only">
-              <p id="photoLabel" class="mt-2 text-center text-xs text-slate-500">尚未選擇照片；非必填</p>
+              <input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple required class="sr-only">
+              <p id="photoLabel" class="mt-2 text-center text-xs text-slate-500">必填 1–4 張；單張最多 5MiB、合計最多 20MiB（JPEG／PNG／WebP／HEIC／HEIF）</p>
               <div id="photoPreview" class="mt-3 grid grid-cols-3 gap-2"></div>
             </div>
           </section>
@@ -128,7 +130,21 @@
 <script>
 'use strict';
 const API_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
-const REPAIR_TOKEN = new URLSearchParams(window.location.search).get('token')?.trim() || '';
+function loadRepairToken() {
+  const currentUrl = new URL(window.location.href);
+  const fromUrl = currentUrl.searchParams.get('token')?.trim() || '';
+  let stored = '';
+  try {
+    if (fromUrl) sessionStorage.setItem('wuohomeRepairToken', fromUrl);
+    stored = sessionStorage.getItem('wuohomeRepairToken')?.trim() || '';
+  } catch { stored = ''; }
+  if (currentUrl.searchParams.has('token')) {
+    currentUrl.searchParams.delete('token');
+    history.replaceState(null, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
+  }
+  return fromUrl || stored;
+}
+const REPAIR_TOKEN = loadRepairToken();
 const ACTION_STATUSES = new Set(['已報成本', '已報價']);
 const CLOSED_STATUSES = new Set(['已結案', '已取消']);
 let currentStep = 1;
@@ -168,6 +184,28 @@ function make(tag, classes, text) {
   return node;
 }
 
+function validProblemPhotos(files) {
+  const allowed = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+  if (files.length < 1 || files.length > 4) { showToast('請選擇 1–4 張照片'); return false; }
+  if (files.some((file) => !allowed.has(file.type) || file.size <= 0 || file.size > 5 * 1024 * 1024)) { showToast('照片須為指定格式，且單張不得超過 5MiB'); return false; }
+  if (files.reduce((sum, file) => sum + file.size, 0) > 20 * 1024 * 1024) { showToast('照片合計不得超過 20MiB'); return false; }
+  return true;
+}
+
+let caseSearchTimer;
+async function loadCaseOptions(query = '') {
+  try {
+    const data = await internalFetch(`searchCases?q=${encodeURIComponent(query)}`);
+    const options = byId('caseOptions'); options.replaceChildren();
+    for (const item of Array.isArray(data.cases) ? data.cases : []) {
+      const option = document.createElement('option');
+      option.value = clean(item.address || item.name);
+      option.label = clean(item.name || item.address);
+      if (option.value) options.append(option);
+    }
+  } catch { /* 搜尋輔助失敗不阻擋手填地址 */ }
+}
+
 function showStep(step) {
   currentStep = step;
   document.querySelectorAll('.step-panel').forEach((panel) => { panel.hidden = Number(panel.dataset.step) !== step; });
@@ -183,13 +221,20 @@ function validateStep(step) {
   const panel = document.querySelector(`[data-step="${step}"]`);
   const fields = [...panel.querySelectorAll('[required]')];
   for (const field of fields) {
-    field.value = clean(field.value);
-    if (!field.value) {
-      field.focus();
-      setMessage(byId('formMessage'), `請填寫「${field.previousElementSibling?.textContent?.replace('*', '').trim() || '必填欄位'}」`);
-      return false;
+    if (field.type === 'file') {
+      if (!field.files?.length) {
+        field.focus(); setMessage(byId('formMessage'), '請至少選擇一張問題照片'); return false;
+      }
+    } else {
+      field.value = clean(field.value);
+      if (!field.value) {
+        field.focus();
+        setMessage(byId('formMessage'), `請填寫「${field.previousElementSibling?.textContent?.replace('*', '').trim() || '必填欄位'}」`);
+        return false;
+      }
     }
   }
+  if (step === 2 && !validProblemPhotos([...byId('photo').files])) return false;
   if (step === 3) {
     const phone = clean(byId('contactPhone').value).replace(/[\s-]/g, '');
     if (!/^0\d{8,9}$/.test(phone)) {
@@ -224,51 +269,63 @@ function actionButton(text, classes, handler) {
   return button;
 }
 
-function renderMarginAction(card, repair) {
+function renderMarginAction(card, repair, regenerate = false) {
   const rid = repairRid(repair);
   const companyCost = Number(fieldValue(repair, ['companyCost', 'cost'], 0));
   const box = make('div', 'mt-4 rounded-xl border border-orange-200 bg-orange-50 p-4');
   box.append(make('p', 'text-sm font-bold text-orange-900', `基準金額 NT$ ${money(companyCost)}`));
   const label = make('label', 'mt-3 block text-xs font-bold text-slate-700', '你的加價');
   const input = make('input', 'focus-ring mt-1 w-full rounded-xl border border-slate-300 bg-white px-3');
-  input.type = 'number'; input.min = '0'; input.step = '1'; input.inputMode = 'numeric'; input.placeholder = '請輸入 0 以上整數';
-  const total = make('p', 'mt-2 text-sm font-extrabold text-orange-700', `客戶總價：NT$ ${money(companyCost)}`);
+  input.type = 'number'; input.min = '0'; input.max = '10000000'; input.step = '1'; input.inputMode = 'numeric'; input.placeholder = '請輸入 0 以上整數';
+  if (regenerate) input.value = String(Number(fieldValue(repair, ['margin'], 0)) || 0);
+  const total = make('p', 'mt-2 text-sm font-extrabold text-orange-700', `客戶總價：NT$ ${money(companyCost + Number(input.value || 0))}`);
+  const quoteSlot = make('div', 'mt-3');
   input.addEventListener('input', () => {
     const margin = Number(input.value);
     total.textContent = `客戶總價：NT$ ${money(companyCost + (Number.isFinite(margin) && margin >= 0 ? margin : 0))}`;
   });
-  const submit = actionButton('確認並產生報價連結', 'mt-3 w-full bg-orange-600 text-white disabled:bg-slate-400', async () => {
+  const buttonLabel = regenerate ? '重新產生報價連結' : '確認並產生報價連結';
+  const submit = actionButton(buttonLabel, 'mt-3 w-full bg-orange-600 text-white disabled:bg-slate-400', async () => {
     const margin = Number(clean(input.value));
     if (!Number.isFinite(margin) || margin < 0 || !Number.isInteger(margin)) { showToast('請輸入 0 以上整數'); input.focus(); return; }
     submit.disabled = true; submit.textContent = '處理中…';
     try {
       const data = await internalFetch('repairSetMargin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rid, margin }) });
       const quoteUrl = clean(data.quoteUrl);
+      if (data.partial) {
+        quoteSlot.replaceChildren();
+        showToast(clean(data.message) || '報價已儲存，請重新產生報價連結');
+        await loadRepairs();
+        return;
+      }
       if (!quoteUrl) throw new Error('報價已更新，但未取得報價連結，請聯絡管理員');
-      const link = make('div', 'mt-3 rounded-xl bg-white p-3');
+      const link = make('div', 'rounded-xl bg-white p-3');
       link.append(make('p', 'break-all text-xs text-slate-600', quoteUrl));
       const copy = actionButton('複製報價連結', 'mt-2 w-full border border-orange-300 text-orange-700', async () => {
         try { await navigator.clipboard.writeText(quoteUrl); showToast('已複製報價連結'); }
         catch { showToast('無法自動複製，請長按連結複製'); }
       });
-      link.append(copy); box.append(link);
+      link.append(copy);
+      quoteSlot.replaceChildren(link);
+      if (!regenerate) renderPaymentAction(quoteSlot, { ...repair, status: '已報價', margin });
       showToast(`已更新：${clean(data.status || '已報價')}`);
     } catch (error) { showToast(error.message); }
-    finally { submit.disabled = false; submit.textContent = '確認並產生報價連結'; }
+    finally { submit.disabled = false; submit.textContent = buttonLabel; }
   });
-  box.append(label, input, total, submit); card.append(box);
+  box.append(label, input, total, submit, quoteSlot); card.append(box);
 }
 
 function renderPaymentAction(card, repair) {
   const rid = repairRid(repair);
   const box = make('div', 'mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4');
   const label = make('label', 'touch flex cursor-pointer items-center justify-center rounded-xl border border-emerald-300 bg-white px-3 text-sm font-bold text-emerald-700', '選擇收款證明');
-  const input = make('input', 'sr-only'); input.type = 'file'; input.accept = 'image/*'; input.required = true;
+  const input = make('input', 'sr-only'); input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf'; input.required = true;
   label.append(input);
   const fileName = make('p', 'mt-2 text-xs text-slate-500', '尚未選擇檔案');
   input.addEventListener('change', () => { fileName.textContent = input.files?.[0]?.name || '尚未選擇檔案'; });
   const submit = actionButton('回報已收款', 'mt-3 w-full bg-emerald-600 text-white disabled:bg-slate-400', async () => {
     if (!input.files?.[0]) { showToast('請先選擇收款證明'); return; }
+    if (input.files[0].size > 5 * 1024 * 1024) { showToast('收款證明不得超過 5MiB'); return; }
     const body = new FormData(); body.append('rid', rid); body.append('proof', input.files[0]);
     submit.disabled = true; submit.textContent = '上傳中…';
     try { await internalFetch('repairReportPayment', { method: 'POST', body }); showToast('收款回報成功'); await loadRepairs(); }
@@ -308,10 +365,10 @@ function renderRepair(repair) {
   appendInfo(info, '地址', fieldValue(repair, ['address', '房屋地址']));
   appendInfo(info, '房號', fieldValue(repair, ['room', '房號']));
   appendInfo(info, '說明', fieldValue(repair, ['description', '問題描述']));
-  appendInfo(info, '建立時間', fieldValue(repair, ['createdAt', 'repairTime', '報修時間']));
+  appendInfo(info, '建立時間', fieldValue(repair, ['reportedAt', 'createdAt', 'repairTime', '報修時間']));
   card.append(info);
   if (status === '已報成本') renderMarginAction(card, repair);
-  if (status === '已報價') renderPaymentAction(card, repair);
+  if (status === '已報價') { renderMarginAction(card, repair, true); renderPaymentAction(card, repair); }
   if (!CLOSED_STATUSES.has(status)) renderCancelAction(card, repair);
   return card;
 }
@@ -336,16 +393,20 @@ async function loadRepairs() {
 byId('nextButton').addEventListener('click', () => { if (validateStep(currentStep)) showStep(currentStep + 1); });
 byId('backButton').addEventListener('click', () => showStep(currentStep - 1));
 byId('refreshButton').addEventListener('click', loadRepairs);
+byId('address').addEventListener('input', () => {
+  window.clearTimeout(caseSearchTimer);
+  caseSearchTimer = window.setTimeout(() => loadCaseOptions(clean(byId('address').value)), 250);
+});
 byId('photo').addEventListener('change', (event) => {
   const files = [...(event.target.files || [])];
-  byId('photoLabel').textContent = files.length ? `已選擇 ${files.length} 張照片` : '尚未選擇照片；非必填';
+  byId('photoLabel').textContent = files.length ? `已選擇 ${files.length} 張照片（單張最多 5MiB、合計最多 20MiB）` : '必填 1–4 張；單張最多 5MiB、合計最多 20MiB';
   const preview = byId('photoPreview'); preview.replaceChildren();
   files.forEach((file) => { const image = make('img', 'h-20 w-full rounded-lg object-cover'); image.alt = '問題照片預覽'; image.src = URL.createObjectURL(file); image.addEventListener('load', () => URL.revokeObjectURL(image.src), { once: true }); preview.append(image); });
 });
 
 byId('repairForm').addEventListener('submit', async (event) => {
   event.preventDefault();
-  if (!validateStep(3)) return;
+  if (!validateStep(3) || !validProblemPhotos([...byId('photo').files])) return;
   const form = event.currentTarget;
   const body = new FormData();
   for (const name of ['address', 'room', 'category', 'description', 'contactName', 'contactPhone', 'availableTime', 'urgency']) body.append(name, clean(form.elements[name].value));
@@ -354,7 +415,7 @@ byId('repairForm').addEventListener('submit', async (event) => {
   try {
     const data = await internalFetch('repairCreate', { method: 'POST', body });
     setMessage(byId('formMessage'), `送出成功！單號：${clean(data.ticketNo || data.rid)}，狀態：${clean(data.status)}`, 'success');
-    form.reset(); byId('photoPreview').replaceChildren(); byId('photoLabel').textContent = '尚未選擇照片；非必填'; showStep(1); byId('formMessage').classList.remove('hidden');
+    form.reset(); byId('photoPreview').replaceChildren(); byId('photoLabel').textContent = '必填 1–4 張；單張最多 5MiB、合計最多 20MiB'; showStep(1); byId('formMessage').classList.remove('hidden');
     await loadRepairs();
   } catch (error) { setMessage(byId('formMessage'), `送出失敗：${error.message}`); }
   finally { button.disabled = false; button.textContent = '送出報修'; }
@@ -365,6 +426,7 @@ if (!REPAIR_TOKEN) {
 } else {
   byId('app').classList.remove('hidden');
   showStep(1);
+  loadCaseOptions();
   loadRepairs();
 }
 </script>
