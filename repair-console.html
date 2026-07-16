@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
   <title>工務工作台｜窩的家</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -65,8 +66,22 @@
 <script>
 'use strict';
 const API_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
-const REPAIR_TOKEN = new URLSearchParams(window.location.search).get('token')?.trim() || '';
-const COST_STATUSES = new Set(['新進件']);
+function loadRepairToken() {
+  const currentUrl = new URL(window.location.href);
+  const fromUrl = currentUrl.searchParams.get('token')?.trim() || '';
+  let stored = '';
+  try {
+    if (fromUrl) sessionStorage.setItem('wuohomeRepairConsoleToken', fromUrl);
+    stored = sessionStorage.getItem('wuohomeRepairConsoleToken')?.trim() || '';
+  } catch { stored = ''; }
+  if (currentUrl.searchParams.has('token')) {
+    currentUrl.searchParams.delete('token');
+    history.replaceState(null, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
+  }
+  return fromUrl || stored;
+}
+const REPAIR_TOKEN = loadRepairToken();
+const COST_STATUSES = new Set(['新進件', '待估價']);
 const DISPATCH_STATUSES = new Set(['已報價', '已收款']);
 const ACCEPT_STATUSES = new Set(['已派工', '施工中', '完工待驗收']);
 const CLOSED_STATUSES = new Set(['已結案', '已取消']);
@@ -111,6 +126,9 @@ function isOverdue(repair) {
   if (repair.overdue === true || clean(repair.overdue).toLowerCase() === 'true') return true;
   const days = Number(field(repair, ['elapsedDays', 'daysOpen', '已申報天數'], 0));
   if (Number.isFinite(days) && days > 2) return true;
+  const reportedRaw = clean(field(repair, ['reportedAt', '報修時間'], '')).replace(/\//g, '-');
+  const reported = new Date(reportedRaw.includes('T') ? reportedRaw : reportedRaw.replace(' ', 'T'));
+  if (!Number.isNaN(reported.getTime()) && Date.now() - reported.getTime() > 2 * 24 * 60 * 60 * 1000) return true;
   const due = new Date(field(repair, ['dueAt', 'deadline'], ''));
   return !Number.isNaN(due.getTime()) && due.getTime() < Date.now();
 }
@@ -123,6 +141,27 @@ function infoRow(label, value) {
 
 function button(text, classes, handler) {
   const node = make('button', `rounded-xl px-3 text-sm font-bold ${classes}`, text); node.type = 'button'; node.addEventListener('click', handler); return node;
+}
+
+function safeAttachmentUrl(value) {
+  try {
+    const url = new URL(clean(value));
+    return url.origin === 'https://ap15.ragic.com' && url.pathname === '/sims/file.jsp' && url.searchParams.get('a') === 'wuohome' && url.searchParams.has('f') ? url.href : '';
+  } catch { return ''; }
+}
+
+function appendAttachments(parent, label, values, thumbnails = false) {
+  const urls = (Array.isArray(values) ? values : []).map(safeAttachmentUrl).filter(Boolean);
+  if (!urls.length) return;
+  const box = make('div', 'mt-3'); box.append(make('p', 'mb-2 text-xs font-bold text-slate-500', label));
+  const list = make('div', 'grid grid-cols-2 gap-2');
+  urls.forEach((url, index) => {
+    const link = make('a', 'block overflow-hidden rounded-lg border border-slate-200 bg-slate-50 p-2 text-center text-xs font-bold text-blue-700');
+    link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+    if (thumbnails) { const image = make('img', 'mb-1 h-24 w-full rounded object-cover'); image.src = url; image.alt = `${label} ${index + 1}`; link.append(image); }
+    link.append(document.createTextNode(`開啟附件 ${index + 1}`)); list.append(link);
+  });
+  box.append(list); parent.append(box);
 }
 
 function baseCard(repair) {
@@ -138,10 +177,12 @@ function baseCard(repair) {
   info.append(infoRow('地址', field(repair, ['address', '房屋地址'])));
   info.append(infoRow('房號', field(repair, ['room', '房號'])));
   info.append(infoRow('說明', field(repair, ['description', '問題描述'])));
-  info.append(infoRow('聯絡人', field(repair, ['contactName', 'name', '姓名'])));
+  info.append(infoRow('聯絡人', field(repair, ['reporter', 'contactName', 'name', '姓名'])));
   info.append(infoRow('電話', field(repair, ['contactPhone', 'phone', '聯絡電話'])));
   info.append(infoRow('可約時間', field(repair, ['availableTime', '可配合時段'])));
   card.append(info);
+  appendAttachments(card, '問題照片', repair.photoUrls, true);
+  appendAttachments(card, '收款證明', repair.paymentProofUrls, false);
   return card;
 }
 
@@ -217,20 +258,48 @@ function dispatchCard(repair) {
 
 function filePicker(text) {
   const label = make('label', 'flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700', text);
-  const input = make('input', 'sr-only'); input.type = 'file'; input.accept = 'image/*'; label.append(input);
+  const input = make('input', 'sr-only'); input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp,image/heic,image/heif'; label.append(input);
   const name = make('span', 'ml-2 truncate text-xs font-normal text-slate-500', '未選擇'); label.append(name);
   input.addEventListener('change', () => { name.textContent = input.files?.[0]?.name || '未選擇'; });
   return { label, input };
 }
 
+function validPickedImage(file, required = false) {
+  if (!file) return !required;
+  return ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(file.type) && file.size > 0 && file.size <= 5 * 1024 * 1024;
+}
+
 function acceptCard(repair) {
   const card = baseCard(repair);
-  const state = make('p', 'mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-800', `目前階段：${statusOf(repair)}${statusOf(repair) === '完工待驗收' ? '，請進行驗收' : '，可持續追蹤或直接驗收'}`);
+  const status = statusOf(repair);
+  const state = make('p', 'mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-800', `目前階段：${status}`);
+  card.append(state);
+
+  if (status === '已派工' || status === '施工中') {
+    const completeBox = make('div', 'mt-3 space-y-2 rounded-xl border border-blue-200 bg-blue-50 p-3');
+    completeBox.append(make('p', 'text-sm font-extrabold text-blue-800', '標記完工待驗收'));
+    const finishedPhoto = filePicker('完工照片（必填，最多 5MiB）');
+    const actualDescription = textArea('實際施作說明（可留空）');
+    const completeButton = button('標記完工待驗收', 'w-full bg-blue-600 text-white disabled:bg-slate-400', async () => {
+      const photo = finishedPhoto.input.files?.[0];
+      if (!validPickedImage(photo, true)) { showToast('請選擇一張 5MiB 內的合法完工照片'); return; }
+      const body = new FormData(); body.append('rid', ridOf(repair)); body.append('photo', photo); body.append('actualDescription', clean(actualDescription.value));
+      completeButton.disabled = true; completeButton.textContent = '處理中…';
+      try { await internalFetch('repairComplete', { method: 'POST', body }); showToast('已進入完工待驗收'); await loadAll(); }
+      catch (error) { showToast(error.message); }
+      finally { completeButton.disabled = false; completeButton.textContent = '標記完工待驗收'; }
+    });
+    completeBox.append(finishedPhoto.label, actualDescription, completeButton); card.append(completeBox); addCancel(card, repair); return card;
+  }
+
+  card.append(infoRow('實際施作', field(repair, ['actualDescription'], '未填寫')));
+  appendAttachments(card, '完工照片', repair.finishedPhotoUrls, true);
   const acceptBox = make('div', 'mt-3 rounded-xl border border-emerald-200 p-3');
   acceptBox.append(make('p', 'mb-2 text-sm font-extrabold text-emerald-800', '驗收通過'));
   const acceptPhoto = filePicker('附上驗收照片（可留空）');
   const acceptButton = button('通過並結案', 'mt-2 w-full bg-emerald-600 text-white disabled:bg-slate-400', async () => {
-    const body = new FormData(); body.append('rid', ridOf(repair)); if (acceptPhoto.input.files?.[0]) body.append('photo', acceptPhoto.input.files[0]);
+    const photo = acceptPhoto.input.files?.[0]; if (!validPickedImage(photo)) { showToast('驗收照片格式錯誤或超過 5MiB'); return; }
+    const body = new FormData(); body.append('rid', ridOf(repair)); if (photo) body.append('photo', photo);
     acceptButton.disabled = true; acceptButton.textContent = '處理中…';
     try { await internalFetch('repairAccept', { method: 'POST', body }); showToast('驗收完成，案件已結案'); await loadAll(); }
     catch (error) { showToast(error.message); }
@@ -242,13 +311,14 @@ function acceptCard(repair) {
   const reason = textArea('請填寫缺失（必填）'); const rejectPhoto = filePicker('附上缺失照片（可留空）');
   const rejectButton = button('退回施工中', 'mt-2 w-full border border-red-300 text-red-700 disabled:bg-slate-100', async () => {
     const value = clean(reason.value); if (!value) { reason.focus(); showToast('請填寫驗收缺失'); return; }
-    const body = new FormData(); body.append('rid', ridOf(repair)); body.append('reason', value); if (rejectPhoto.input.files?.[0]) body.append('photo', rejectPhoto.input.files[0]);
+    const photo = rejectPhoto.input.files?.[0]; if (!validPickedImage(photo)) { showToast('缺失照片格式錯誤或超過 5MiB'); return; }
+    const body = new FormData(); body.append('rid', ridOf(repair)); body.append('reason', value); if (photo) body.append('photo', photo);
     rejectButton.disabled = true; rejectButton.textContent = '退回中…';
     try { await internalFetch('repairReject', { method: 'POST', body }); showToast('已退回施工中'); await loadAll(); }
     catch (error) { showToast(error.message); }
     finally { rejectButton.disabled = false; rejectButton.textContent = '退回施工中'; }
   });
-  rejectBox.append(reason, rejectPhoto.label, rejectButton); card.append(state, acceptBox, rejectBox); addCancel(card, repair); return card;
+  rejectBox.append(reason, rejectPhoto.label, rejectButton); card.append(acceptBox, rejectBox); addCancel(card, repair); return card;
 }
 
 function emptyCard(text) { return make('div', 'rounded-xl border border-dashed border-slate-300 bg-white/70 p-6 text-center text-sm text-slate-500', text); }
@@ -279,11 +349,11 @@ function renderStats(stats = {}) {
   statusEntries.forEach(([name, value]) => { const count = typeof value === 'object' ? field(value, ['count', 'total'], 0) : value; const row = make('div', 'flex items-center justify-between border-b border-slate-100 py-2 text-sm'); row.append(make('span', 'text-slate-600', name), make('span', 'font-extrabold', `${Number(count) || 0} 筆`)); statusContainer.append(row); });
   if (!statusEntries.length) statusContainer.append(make('p', 'text-sm text-slate-500', '本月尚無資料'));
 
-  const staffData = field(stats, ['byStaff', 'staff', 'staffStats'], []);
+  const staffData = field(stats, ['byOwner', 'byStaff', 'staff', 'staffStats'], {});
   const staffEntries = objectEntries(staffData); const staffContainer = byId('staffStats'); staffContainer.replaceChildren();
   staffEntries.forEach(([name, value]) => {
     const count = typeof value === 'object' ? field(value, ['count', 'total'], 0) : value;
-    const profit = typeof value === 'object' ? field(value, ['profit', 'staffProfit', '業務利潤'], 0) : 0;
+    const profit = typeof value === 'object' ? field(value, ['margin', 'profit', 'staffProfit', '業務利潤'], 0) : 0;
     const row = make('div', 'flex items-center justify-between gap-3 border-b border-slate-100 py-2 text-sm');
     const detail = make('div', 'text-right'); detail.append(make('p', 'font-extrabold', `${Number(count) || 0} 筆`), make('p', 'text-xs text-slate-500', `業務利潤 NT$ ${money(profit)}`)); row.append(make('span', 'break-words text-slate-700', name), detail); staffContainer.append(row);
   });

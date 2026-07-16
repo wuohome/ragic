@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex,nofollow">
   <title>修繕報價單｜窩的家</title>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -50,7 +51,12 @@
 <script>
 'use strict';
 const API_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
-const quoteKey = new URLSearchParams(window.location.search).get('quote')?.trim() || '';
+const currentUrl = new URL(window.location.href);
+const quoteKey = currentUrl.searchParams.get('quote')?.trim() || '';
+if (currentUrl.searchParams.has('quote')) {
+  currentUrl.searchParams.delete('quote');
+  history.replaceState(null, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
+}
 const byId = (id) => document.getElementById(id);
 const clean = (value) => String(value ?? '').trim();
 
