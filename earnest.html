@@ -434,16 +434,18 @@
 
     let currentRecord = null;
     let recordId = null;
+    let earnestToken = null; // IDOR root-fix 2026-07-16：token 一律保留原值，即使 ragicCallback 後 recordId 被換成數字 _ragicId 也不受影響。submitData 一律隨表單送出，供 Worker 端在寫入前交叉驗證
     let signaturePad = null;
     let loadTimer = null;
 
     const $ = (id) => document.getElementById(id);
 
     // 解析 URL
-    // 優先序 token > code > rid > id（token = UUID, IDOR fix 2026-06-22）
-    // ?token=<uuid>  新式不可猜 token，Worker getEarnest?token= 精確比對欄位 1002558
-    // ?code=No.YYYYMMDD-NNN  舊式定金單編號（向後相容）
-    // ?rid=<數字>  舊式 record id（向後相容，deposit.html fallback 仍在用）
+    // 優先序 token > code > rid > id（token = UUID, IDOR root-fix 2026-07-16：code/rid 舊連結
+    // 現在一律需要搭配正確 token 才能載入，沒 token 的舊連結會直接 404，顯示人話提示重新取得連結）
+    // ?token=<uuid>  唯一可用的新式連結，Worker getEarnest?token= 精確比對欄位 1002558
+    // ?code=No.YYYYMMDD-NNN  舊式定金單編號（向後相容，2026-07-16 起必須搭配 &token= 才能用）
+    // ?rid=<數字>  舊式 record id（向後相容，同上）
     // ?id= 別名
     const href = window.location.href;
     const matchToken = href.match(/[?&]token=([^&#]+)/i);
@@ -462,6 +464,7 @@
         else recordId = urlParams.get('code') || urlParams.get('rid') || urlParams.get('id');
     }
     if (recordId) recordId = recordId.trim();
+    if (useToken) earnestToken = recordId; // 存下原始 token（recordId 之後可能被 ragicCallback 換成數字 _ragicId）
 
     // 防呆：Ragic A1 公式若在建單時尚未 recalc，F19（RAGIC_ID）可能是空或 "1"，
     // 導致生出 ?code=1 或 ?code= 的壞連結。這邊攔下，給租客明確提示去找業務。
@@ -521,6 +524,11 @@
       if (row["Record ID"] == targetId) return true;
       let recNo = row["1000796"] || row["定金單編號"];
       if (recNo && recNo == targetId) return true;
+      // token 比對（IDOR root-fix 2026-07-16 前欠缺此判斷：token 分支的 Worker 回傳外層 key
+      // 是數字 rid 不是 token 本身，若不比對 1002558，findExactRecord 永遠找不到匹配，
+      // 導致 ?token= 連結從 v21/v22（2026-06-22）上線以來實際上從未真正載入成功過）
+      let tok = row["1002558"] || row["定金 token"];
+      if (tok && typeof targetId === 'string' && String(tok).toLowerCase() === targetId.toLowerCase()) return true;
       return false;
     }
 
@@ -529,7 +537,7 @@
       currentRecord = findExactRecord(data, recordId);
       
       if (!currentRecord) {
-        $("loader-text").innerHTML = "找不到編號 <b>" + recordId + "</b> 的資料。<br><br>請聯繫為您服務的窩的家業務確認連結是否正確，或請業務重發連結。";
+        $("loader-text").innerHTML = "此連結已失效，請聯繫您的業務重新取得連結。";
         return;
       }
       
@@ -554,7 +562,14 @@
         clearTimeout(loadTimer);
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          $("loader-text").innerHTML = "載入失敗（" + (err.error || res.status) + "）<br>請聯繫窩的家業務重新傳送連結。";
+          console.error('getEarnest failed', res.status, err);
+          // IDOR root-fix 2026-07-16：舊式 code/rid 連結（沒有 token）現在一律回 404，
+          // 顯示人話而非裸錯誤代碼
+          if (res.status === 404) {
+            $("loader-text").innerHTML = "此連結已失效，請聯繫您的業務重新取得連結。";
+          } else {
+            $("loader-text").innerHTML = "載入失敗，請聯繫窩的家業務重新傳送連結。<br><span style='font-size:12px;color:#999'>(" + (err.error || res.status) + ")</span>";
+          }
           return;
         }
         const data = await res.json();
@@ -708,6 +723,7 @@
 
       const fd = new FormData();
       fd.append("rid", recordId);
+      if (earnestToken) fd.append("token", earnestToken); // IDOR root-fix 2026-07-16：Worker 寫入前會交叉驗證此 token 是否對得上 rid
       fd.append("1000792", $("input_name").value);
       fd.append("1000808", $("input_phone").value);
       fd.append("1000837", $("input_occ").value);
@@ -790,7 +806,12 @@
       $("loader").classList.add('hidden');
       $("step-2").classList.add('hidden');
       $("step-failed").classList.remove('hidden');
-      if ($("failed-detail")) $("failed-detail").innerText = "錯誤代碼：" + (code || "UNKNOWN");
+      // IDOR root-fix 2026-07-16：record_not_found / invalid_token 代表送出時 token 過期或對不上
+      // （極少發生，正常流程 token 全程隨表單送出），顯示人話而非裸錯誤代碼
+      const friendly = (code === 'record_not_found' || code === 'invalid_token')
+        ? '此連結已失效，請聯繫您的業務重新取得連結。'
+        : null;
+      if ($("failed-detail")) $("failed-detail").innerText = friendly ? (friendly + "（錯誤代碼：" + code + "）") : ("錯誤代碼：" + (code || "UNKNOWN"));
       window.scrollTo(0, 0);
     }
 
