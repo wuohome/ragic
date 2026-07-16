@@ -862,16 +862,28 @@
     const $ = (id) => document.getElementById(id);
 
     // 解析 URL
+    // 優先序 token > code > id（token = UUID，IDOR root-fix 2026-07-16：code/id 舊連結
+    // 現在一律需要搭配正確 token 才能使用，沒 token 的舊連結會直接 404，顯示人話提示重新取得連結）
+    // ?token=<uuid>  唯一可用的新式連結，Worker getPaymentReceipt?token= 精確比對欄位 1003029
+    // ?code=YYYYMM-NNN  舊式憑單編號（向後相容，2026-07-16 起必須搭配 &token= 才能用）
+    // ?id= 別名
     const href = window.location.href;
+    const matchToken = href.match(/[?&]token=([^&#]+)/i);
     const matchCode = href.match(/[?&]code=([^&#]+)/i);
     const matchId = href.match(/[?&]id=([^&#]+)/i);
-    if (matchCode) recordId = matchCode[1];
+    let useToken = false;
+    if (matchToken) { recordId = matchToken[1]; useToken = true; }
+    else if (matchCode) recordId = matchCode[1];
     else if (matchId) recordId = matchId[1];
     else {
       const urlParams = new URLSearchParams(window.location.search);
-      recordId = urlParams.get('code') || urlParams.get('id');
+      const t = urlParams.get('token');
+      if (t) { recordId = t; useToken = true; }
+      else recordId = urlParams.get('code') || urlParams.get('id');
     }
     if (recordId) recordId = recordId.trim();
+    let prToken = null;
+    if (useToken) prToken = recordId; // 存下原始 token（recordId 之後可能被 handleRecordData 換成數字 _ragicId）
 
     // 防呆：可疑 code 攔截
     function isSuspiciousCode(c) {
@@ -970,6 +982,11 @@
       if (row["Record ID"] == targetId) return true;
       let recNo = row[FIELDS.no] || row["憑單編號"];
       if (recNo && recNo == targetId) return true;
+      // token 比對（IDOR root-fix 2026-07-16：加入自 earnest 案吸取的教訓 — token 分支
+      // 的 Worker 回傳外層 key 是數字 rid 不是 token 本身，若不比對 1003029，
+      // findExactRecord 會找不到匹配，導致 ?token= 連結永遠顯示「找不到資料」）
+      let tok = row["1003029"] || row["收款憑單 token"];
+      if (tok && typeof targetId === 'string' && String(tok).toLowerCase() === targetId.toLowerCase()) return true;
       return false;
     }
 
@@ -1098,10 +1115,11 @@
           friendlyLabel: "定金單資料"
         };
       }
-      // 抓 source code 並非同步反查 _ragicId（兩模式皆做，input 才有資格出現）
+      // 抓 source code 純顯示/防呆用（實際查詢由 Worker 端從 token 驗證過的記錄重新反查，
+      // 不再信任任何前端算出的 code — IDOR root-fix 2026-07-16）
       sourceCode = (currentRecord[sourceConfig.codeChineseKey] ||
                     currentRecord[sourceConfig.codeFieldId] || "").toString().trim();
-      if (sourceCode) lookupSourceRagicId(sourceCode);
+      if (sourceCode && prToken) lookupSourceRagicId();
 
       renderData();
       $("loader").classList.add('hidden');
@@ -1109,24 +1127,24 @@
     }
 
     // 反查源頭表 _ragicId（依 sourceConfig：房東→屋主總表 / 租客→定金/斡旋）
-    async function lookupSourceRagicId(code) {
-      if (!sourceConfig) return;
+    // IDOR root-fix 2026-07-16：改送 token，不再送 where=<idField>,eq,<code>（那條路徑曾是
+    // 一個獨立於 getPaymentReceipt 之外、完全無驗證的資訊外洩管道——任何人都能對 operation/8
+    // 屋主總表或 payments/1 租客總表送任意 where 查詢，撈出他人姓名/電話等 PII）。Worker 端
+    // 自己從 token 驗證過的收款憑單記錄反查正確的 code，前端完全不需要也不被允許指定查詢條件。
+    async function lookupSourceRagicId() {
+      if (!sourceConfig || !prToken) return;
       try {
         const url = `${WORKER_BASE}/getPaymentSource` +
                     `?sheet=${encodeURIComponent(sourceConfig.sheetEnum)}` +
-                    `&where=${encodeURIComponent(sourceConfig.idField)},eq,${encodeURIComponent(code)}` +
+                    `&token=${encodeURIComponent(prToken)}` +
                     `&_=${Date.now()}`;
         const res = await fetch(url);
         if (!res.ok) { console.warn("sourceLookup HTTP error", res.status); return; }
         const data = await res.json();
         if (data && typeof data === 'object') {
-          for (const k in data) {
-            const row = data[k];
-            if (row && typeof row === 'object' &&
-                (row[sourceConfig.codeChineseKey] === code || row[sourceConfig.idField] === code)) {
-              sourceRagicId = row["_ragicId"];
-              break;
-            }
+          const vals = Object.values(data);
+          if (vals.length > 0 && vals[0] && typeof vals[0] === 'object') {
+            sourceRagicId = vals[0]["_ragicId"];
           }
         }
       } catch (e) { console.warn("sourceLookup fetch error", e); }
@@ -1136,9 +1154,24 @@
       $("loader-text").innerText = "開啟中...";
       const timer = setTimeout(() => { if (!currentRecord) $("loader-text").innerText = "讀取逾時，請重新載入"; }, 10000);
       try {
-        const res = await fetch(`${WORKER_BASE}/getPaymentReceipt?rid=${encodeURIComponent(recordId)}&_=${Date.now()}`);
+        // IDOR root-fix 2026-07-16：優先用 token；沒 token 的舊式 code/id 連結一律回 404
+        const prParam = useToken
+          ? `token=${encodeURIComponent(recordId)}`
+          : `rid=${encodeURIComponent(recordId)}`;
+        const res = await fetch(`${WORKER_BASE}/getPaymentReceipt?${prParam}&_=${Date.now()}`);
         clearTimeout(timer);
-        if (!res.ok) throw new Error("HTTP " + res.status);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          console.error('getPaymentReceipt failed', res.status, err);
+          // IDOR root-fix 2026-07-16：舊式 code/id 連結（沒有 token）現在一律回 404，
+          // 顯示人話而非裸錯誤代碼
+          if (res.status === 404) {
+            $("loader-text").innerHTML = "此連結已失效，請聯繫您的業務重新取得連結。";
+          } else {
+            $("loader-text").innerHTML = "載入失敗，請聯繫窩的家業務重新傳送連結。<br><span style='font-size:12px;color:#999'>(" + (err.error || res.status) + ")</span>";
+          }
+          return;
+        }
         const data = await res.json();
         handleRecordData(data);
       } catch (e) {
@@ -1444,11 +1477,14 @@
         const phoneInputWrap = $("phone_input_wrap");
         const phoneInputVisible = phoneInputWrap && !phoneInputWrap.classList.contains("hidden");
         const phoneVal = phoneInputVisible ? (phoneInputEl.value || "").trim() : "";
-        if (phoneVal && sourceRagicId && sourceConfig) {
+        if (phoneVal && sourceRagicId && sourceConfig && prToken) {
           // 4.5 電話回填 → submitPaymentSource via Worker proxy
+          // IDOR root-fix 2026-07-16：改送 token，不再送 _rid — Worker 端自行從 token 驗證過的
+          // 收款憑單記錄反查正確的來源表 _ragicId，前端算出的 sourceRagicId 只用來判斷「要不要
+          // 顯示電話輸入框」，不再被信任當作寫入目標（防止越權改寫他人電話號碼）
           const srcFd = new FormData();
           srcFd.append("_sheet", sourceConfig.sheetEnum);
-          srcFd.append("_rid", String(sourceRagicId));
+          srcFd.append("_token", prToken);
           srcFd.append(sourceConfig.phoneField, phoneVal);
           try {
             await fetch(`${WORKER_BASE}/submitPaymentSource`, { method: "POST", body: srcFd });
@@ -1464,6 +1500,7 @@
         const mainFd = new FormData($("ragicForm"));
         mainFd.append(getPdfFieldId(), pdfFile, fileName);  // iOS 相容: 直接 append 不用 DataTransfer
         mainFd.append("_rid", String(recordId));
+        if (prToken) mainFd.append("token", prToken);  // IDOR root-fix 2026-07-16：Worker 寫入前交叉驗證此 token 是否對得上 rid
         const postRes = await fetch(`${WORKER_BASE}/submitPaymentReceipt`, { method: "POST", body: mainFd });
         if (!postRes.ok) {
           const errText = await postRes.text().catch(() => "");
@@ -1476,7 +1513,9 @@
 
       } catch (e) {
         console.error("PDF 生成或上傳失敗", e);
-        showFailed("PDF_GEN_" + (e.name || "ERROR"));
+        // IDOR root-fix 2026-07-16：改傳完整 e.message（含 SUBMIT_HTTP_404 時的 record_not_found
+        // 內文），showFailed() 才能辨識出「連結失效」情境顯示人話，而非泛用 PDF_GEN_ 前綴蓋掉細節
+        showFailed(e.message || ("PDF_GEN_" + (e.name || "ERROR")));
         // fire-and-forget diagnostic report — never block UX
         try {
           fetch(WORKER_BASE + "/diagnostic", {
@@ -1503,8 +1542,13 @@
       attempt = attempt || 1;
       const MAX_ATTEMPTS = 3;
       try {
+        // IDOR root-fix 2026-07-16：優先用 token（沒 token 的舊連結根本不會走到這裡，
+        // 因為 executeLoad 已在載入階段擋掉）
+        const verifyParam = prToken
+          ? `token=${encodeURIComponent(prToken)}`
+          : `rid=${encodeURIComponent(recordId)}`;
         const res = await Promise.race([
-          fetch(`${WORKER_BASE}/verifyPaymentReceipt?rid=${encodeURIComponent(recordId)}&_=${Date.now()}`),
+          fetch(`${WORKER_BASE}/verifyPaymentReceipt?${verifyParam}&_=${Date.now()}`),
           new Promise((_, rej) => setTimeout(() => rej(new Error("TIMEOUT")), 8000))
         ]);
         if (!res.ok) throw new Error("HTTP_" + res.status);
@@ -1540,7 +1584,12 @@
       $("step-2").classList.add('hidden');
       $("step-success").classList.add('hidden');
       $("step-failed").classList.remove('hidden');
-      if ($("failed-detail")) $("failed-detail").innerText = "錯誤代碼：" + (code || "UNKNOWN");
+      // IDOR root-fix 2026-07-16：record_not_found / invalid_token 代表送出時 token 過期或對不上
+      // （極少發生，正常流程 token 全程隨表單送出），顯示人話而非裸錯誤代碼
+      const friendly = (typeof code === 'string' && (code.indexOf('record_not_found') !== -1 || code.indexOf('invalid_token') !== -1))
+        ? '此連結已失效，請聯繫您的業務重新取得連結。'
+        : null;
+      if ($("failed-detail")) $("failed-detail").innerText = friendly ? (friendly + "（錯誤代碼：" + code + "）") : ("錯誤代碼：" + (code || "UNKNOWN"));
       window.scrollTo(0, 0);
     }
 

@@ -1578,7 +1578,9 @@ async function submitForm() {
 
     // Worker 回傳 voucherCode（憑單編號），降級用 ragicId
     const code = json.voucherCode || String(json.ragicId);
-    showSuccess(code);
+    // IDOR root-fix 2026-07-16：Worker 同時回傳 token（收款憑單專屬 UUID），
+    // 分享連結一律用 token 版本，不再產生純 code 連結（那條路徑現在會被 Worker 擋 404）
+    showSuccess(code, json.token);
 
   } catch (err) {
     btn.disabled = false;
@@ -1787,12 +1789,19 @@ function buildRagicFormData() {
 /* ======================================================
    SUCCESS
    ====================================================== */
-function showSuccess(code) {
+function showSuccess(code, token) {
   document.getElementById('mainContent').style.display = 'none';
   document.getElementById('footerNav').classList.add('hidden');
   document.getElementById('totalBar').classList.add('hidden');
 
-  const receiptUrl = `https://wuohome.github.io/ragic/payment-receipt.html?code=${encodeURIComponent(code)}&openExternalBrowser=1`;
+  // IDOR root-fix 2026-07-16：一律用 token 連結（?token=<uuid>），不再用 ?code= 純憑單編號
+  // ——後者已被 Worker 端強制要求搭配 token 才能載入，沒 token 的舊式連結會直接 404。
+  // 若 Worker 因故沒回 token（理論上不會發生，防呆保留），退回舊式 code 連結並在 console 警告。
+  const linkParam = token
+    ? `token=${encodeURIComponent(token)}`
+    : `code=${encodeURIComponent(code)}`;
+  if (!token) console.warn('[showSuccess] Worker 未回傳 token，退回舊式 code 連結（此連結需業務手動補 token 才能使用）');
+  const receiptUrl = `https://wuohome.github.io/ragic/payment-receipt.html?${linkParam}&openExternalBrowser=1`;
   // 傳給客人的完整訊息（引導語 + URL）
   const shareMsg = `請點下方連結確認並簽收收款憑單：\n${receiptUrl}`;
 
