@@ -3,8 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pages = {
   request: path.join(root, 'repair-request.html'),
   console: path.join(root, 'repair-console.html'),
@@ -72,6 +73,11 @@ for (const name of internalNames) {
   check(/history\.replaceState/.test(text), `${label} 讀取 token 後清除 URL query`);
   check(!/\.innerHTML\s*=|insertAdjacentHTML|outerHTML\s*=/.test(text), `${label} 不用 HTML 字串注入動態資料`);
   check(/min-height\s*:\s*44px|min-h-11/.test(text), `${label} 觸控目標至少 44px`);
+  const ids = [...text.matchAll(/\bid=["']([^"']+)["']/g)].map((match) => match[1]);
+  const idSet = new Set(ids);
+  check(ids.length === idSet.size, `${label} 沒有重複 ID`);
+  const references = [...text.matchAll(/\b(?:for|aria-labelledby)=["']([^"']+)["']/g)].flatMap((match) => match[1].split(/\s+/));
+  check(references.every((id) => idSet.has(id)), `${label} label 與 aria-labelledby 都指向存在的 ID`);
 }
 
 check(html.request.includes('repairCreate'), '業務頁支援 repairCreate');
@@ -85,6 +91,8 @@ check(/name="photo"[^>]*required/i.test(html.request), '業務發單照片為必
 check(/最多\s*4|1[–-]4/.test(html.request) && html.request.includes('5MiB'), '業務頁顯示照片數量與容量限制');
 check(html.request.includes('重新產生報價連結'), '已報價案件可重新產生報價連結');
 check(html.request.includes('data.partial') && html.request.includes('quoteSlot.replaceChildren'), '報價部分成功可安全恢復且不累積失效連結');
+check(html.request.includes('這頁給業務同仁使用') && html.request.includes('房東或租客有東西要修，就從這裡發單給勁豪'), '業務頁首屏說清楚角色與使用時機');
+check(['替客戶發單', '詢價並報成本', '加價後傳報價給客戶', '收款後傳證明', '派工、驗收、結案'].every((text) => html.request.includes(text)), '業務頁首屏說清楚完整流程');
 for (const field of ['address', 'room', 'category', 'description', 'contactName', 'contactPhone', 'availableTime', 'urgency', 'photo']) {
   check(html.request.includes(`name="${field}"`), `業務頁含欄位 ${field}`);
 }
@@ -95,6 +103,9 @@ check(html.console.includes('reporter'), '工作台聯絡人讀取 Worker report
 check(html.console.includes('paymentProofUrls') && html.console.includes('finishedPhotoUrls'), '工作台顯示安全付款與完工附件');
 check(html.console.includes('actualDescription'), '工作台顯示實際施作說明');
 check(html.console.includes('byOwner') && html.console.includes('margin'), '工作台讀取統一 byOwner/margin 統計');
+check(html.console.includes('窩的家・陳勁豪專用') && html.console.includes('你只要處理下面三件事'), '勁豪頁首屏說清楚使用者與工作範圍');
+check(['先問價、報成本', '確認收款後派工', '看照片、做驗收'].every((text) => html.console.includes(text)), '勁豪頁首屏說清楚三項工作');
+check(html.console.indexOf('id="boardTitle"') < html.console.indexOf('id="statsTitle"'), '勁豪頁先顯示今日待辦，再顯示月統計');
 check(/rel\s*=\s*['"]noopener noreferrer['"]/.test(html.console) || /\.rel\s*=\s*['"]noopener noreferrer['"]/.test(html.console), '工作台附件連結使用 noopener noreferrer');
 for (const id of ['costTodo', 'dispatchTodo', 'acceptTodo', 'monthlyStats']) {
   check(html.console.includes(`id="${id}"`), `工作台含必要區塊 ${id}`);
