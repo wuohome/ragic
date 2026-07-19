@@ -361,6 +361,9 @@ function renderCaseBlock(c, bounds) {
   const metaLine = make('p', 'mt-0.5 text-xs text-slate-500', `監工 ${c.supervisor || '—'}・接案 ${c.assignee || '—'}`);
   label.append(metaLine);
   label.append(make('p', 'mt-0.5 text-xs text-slate-500', `${c.startAt || '—'} ~ ${c.endAt || '—'}・已繳 ${pct(c.paidRatio)}`));
+  const lastWorkItemLine = make('p', 'mt-0.5 truncate text-xs font-semibold text-slate-600', `最新工項：${clean(c.lastWorkItem) || '—'}`);
+  lastWorkItemLine.title = clean(c.lastWorkItem) || '—';
+  label.append(lastWorkItemLine);
   const badgeRow = make('div', 'mt-1 flex flex-wrap gap-1');
   caseBadges(c).forEach((b) => badgeRow.append(b));
   if (badgeRow.childElementCount) label.append(badgeRow);
@@ -433,6 +436,9 @@ function closedCard(c) {
   card.append(head);
   card.append(make('p', 'mt-2 text-xs text-slate-500', `監工 ${c.supervisor || '—'}・接案 ${c.assignee || '—'}`));
   card.append(make('p', 'mt-1 text-xs text-slate-500', `${c.startAt || '—'} ~ ${c.endAt || '—'}・已繳 ${pct(c.paidRatio)}`));
+  const closedWorkItem = make('p', 'mt-1 truncate text-xs font-semibold text-slate-600', `最新工項：${clean(c.lastWorkItem) || '—'}`);
+  closedWorkItem.title = clean(c.lastWorkItem) || '—';
+  card.append(closedWorkItem);
   return card;
 }
 
