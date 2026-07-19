@@ -353,8 +353,9 @@ function renderCaseBlock(c, bounds) {
   const overdue = isOverdue(c);
   const wrapper = make('div', `border-b border-slate-100 last:border-b-0 ${overdue ? 'bg-red-50/40' : ''}`);
 
-  const row = make('button', 'flex w-full items-stretch text-left');
-  row.type = 'button';
+  const row = make('div', 'flex w-full cursor-pointer items-stretch text-left');
+  row.setAttribute('role', 'button');
+  row.setAttribute('tabindex', '0');
   const label = make('div', `sticky left-0 z-10 w-[230px] flex-none border-r border-slate-100 bg-white p-3 ${overdue ? 'bg-red-50' : ''}`);
   label.append(make('p', 'text-sm font-extrabold text-slate-900', c.name));
   const metaLine = make('p', 'mt-0.5 text-xs text-slate-500', `監工 ${c.supervisor || '—'}・接案 ${c.assignee || '—'}`);
@@ -376,10 +377,9 @@ function renderCaseBlock(c, bounds) {
   row.append(track);
 
   const expanded = EXPANDED.has(c.rid);
-  row.addEventListener('click', () => {
-    if (expanded) EXPANDED.delete(c.rid); else EXPANDED.add(c.rid);
-    renderLists();
-  });
+  const toggle = () => { if (expanded) EXPANDED.delete(c.rid); else EXPANDED.add(c.rid); renderLists(); };
+  row.addEventListener('click', toggle);
+  row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
   wrapper.append(row);
 
   if (expanded) {
