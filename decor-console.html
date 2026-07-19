@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>設計部工作檯｜窩的家</title>
+  <script>
+  (function () {
+    var u = new URL(location.href);
+    if (!u.searchParams.has('v')) {
+      u.searchParams.set('v', new Date().toISOString().slice(0, 10).replace(/-/g, ''));
+      location.replace(u.toString());
+    }
+  })();
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif; }
+    button, select { min-height: 40px; }
+    .gantt-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .gantt-bar { position: absolute; top: 50%; transform: translateY(-50%); height: 14px; border-radius: 7px; }
+    .gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(244,63,94,.55); z-index: 5; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-800">
+  <div id="invalidLink" class="hidden min-h-screen items-center justify-center p-6">
+    <div class="w-full max-w-md rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm">
+      <div class="mb-3 text-4xl" aria-hidden="true">🔒</div>
+      <h1 class="text-xl font-bold text-slate-900">連結無效，請聯絡管理員</h1>
+      <p class="mt-2 text-sm text-slate-500">請使用管理員提供的設計部工作檯專屬連結。</p>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+        <div>
+          <p id="roleLabel" class="text-xs font-bold tracking-widest text-orange-600">窩的家・設計部工作檯</p>
+          <h1 class="text-xl font-extrabold text-slate-900">工程進度工作檯</h1>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="updatedAt" class="hidden text-xs text-slate-500 sm:inline"></span>
+          <button id="refreshButton" type="button" class="rounded-xl border border-slate-300 px-4 text-sm font-bold hover:bg-slate-50">重新整理</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-7xl space-y-6 px-4 py-5">
+      <div id="statsRow" class="hidden grid gap-3 sm:grid-cols-3"></div>
+
+      <div id="globalMessage" class="rounded-2xl border border-slate-200 bg-white p-5 text-center text-sm text-slate-500">載入中…</div>
+
+      <section aria-labelledby="ganttTitle">
+        <div class="mb-3">
+          <p class="text-xs font-bold tracking-widest text-orange-600">甘特圖 ＋ 案件總覽</p>
+          <h2 id="ganttTitle" class="text-2xl font-black text-slate-900">工程中案件</h2>
+          <p class="mt-1 text-sm text-slate-500">點案名可展開工項橫條與詳情；紅色代表合約已逾期。手機可左右滑動看時間軸。</p>
+        </div>
+        <div id="ganttWrap" class="rounded-2xl border border-slate-200 bg-white"></div>
+      </section>
+
+      <section aria-labelledby="closedTitle" class="border-t border-slate-200 pt-6">
+        <details id="closedDetails">
+          <summary class="cursor-pointer text-sm font-bold text-slate-500">
+            <span id="closedTitle">已結案／暫停中案件</span>
+          </summary>
+          <div id="closedList" class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+        </details>
+      </section>
+    </main>
+  </div>
+
+<script>
+'use strict';
+const API_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+const TOKEN = new URLSearchParams(location.search).get('token') || '';
+const STATUS_ACTIVE = '🛠️工程中';
+const STALE_DAYS = 7;
+const PX_PER_DAY = 6;
+
+const byId = (id) => document.getElementById(id);
+const clean = (v) => String(v ?? '').trim();
+const money = (v) => (v === null || v === undefined || v === '') ? '—' : `NT$ ${Number(v).toLocaleString('zh-TW')}`;
+const pct = (v) => (v === null || v === undefined || v === '') ? '—' : `${Math.round(Number(v) * 100)}%`;
+
+function make(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function parseDateOnly(s) {
+  const m = /^(\d{4})\/(\d{2})\/(\d{2})/.exec(clean(s));
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
+function todayDate() { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function daysBetween(a, b) { return Math.round((b - a) / 86400000); }
+function fmtShort(d) { return d ? `${d.getMonth() + 1}/${d.getDate()}` : '—'; }
+
+// 主約工期資料品質：任一空值 or 訖<起（填錯）
+function dateIssue(c) {
+  const s = parseDateOnly(c.startAt), e = parseDateOnly(c.endAt);
+  if (!s || !e) return 'missing';
+  if (e < s) return 'inverted';
+  return null;
+}
+function isOverdue(c) {
+  if (c.status !== STATUS_ACTIVE) return false;
+  if (dateIssue(c)) return false;
+  return parseDateOnly(c.endAt) < todayDate();
+}
+function isStale(c) {
+  if (c.status !== STATUS_ACTIVE) return false;
+  const ref = parseDateOnly(c.lastUpdateAt) || parseDateOnly(c.startAt);
+  if (!ref) return false;
+  return daysBetween(ref, todayDate()) >= STALE_DAYS;
+}
+function insufficientData(c) {
+  return c.status === STATUS_ACTIVE && !parseDateOnly(c.lastUpdateAt) && !parseDateOnly(c.startAt);
+}
+function nextScheduled(c) {
+  const today = todayDate();
+  const items = (c.progress || [])
+    .map((p) => ({ ...p, d: parseDateOnly(p.startAt) }))
+    .filter((p) => p.d && p.d > today)
+    .sort((a, b) => a.d - b.d);
+  return items[0] || null;
+}
+
+let ALL_CASES = [];
+let ROLE = ''; let ROLE_LABEL = '';
+const EXPANDED = new Set();
+
+async function apiGet(path) {
+  const sep = path.includes('?') ? '&' : '?';
+  const res = await fetch(`${API_BASE}/${path}${sep}token=${encodeURIComponent(TOKEN)}`);
+  let data = null;
+  try { data = await res.json(); } catch {}
+  if (!res.ok || !data || data.ok !== true) {
+    const err = new Error((data && data.error) || `HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
+function showLoading() {
+  const m = byId('globalMessage');
+  m.className = 'rounded-2xl border border-slate-200 bg-white p-5 text-center text-sm text-slate-500';
+  m.textContent = '載入中…';
+  m.classList.remove('hidden');
+}
+function showError(msg) {
+  const m = byId('globalMessage');
+  m.className = 'rounded-2xl border border-red-200 bg-red-50 p-5 text-center text-sm text-red-700';
+  m.textContent = `載入失敗：${msg}（請按右上角「重新整理」再試一次）`;
+  m.classList.remove('hidden');
+}
+function hideLoading() { byId('globalMessage').classList.add('hidden'); }
+
+function metric(label, value, accent) {
+  const card = make('div', 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm');
+  card.append(make('p', 'text-sm font-bold text-slate-500', label), make('p', `mt-2 text-3xl font-black ${accent}`, String(value)));
+  return card;
+}
+
+function renderStats(stats) {
+  const row = byId('statsRow');
+  if (!stats) { row.classList.add('hidden'); return; }
+  row.replaceChildren(
+    metric('工程中件數', stats.active ?? 0, 'text-orange-600'),
+    metric('逾期件數', stats.overdue ?? 0, 'text-red-600'),
+    metric('停更黃燈件數', stats.stale ?? 0, 'text-amber-600')
+  );
+  row.classList.remove('hidden');
+}
+
+function badge(text, cls) { return make('span', `inline-block rounded-full px-2 py-0.5 text-xs font-bold ${cls}`, text); }
+
+function caseBadges(c) {
+  const list = [];
+  const issue = dateIssue(c);
+  if (issue === 'missing') list.push(badge('⚠️工期未填', 'bg-slate-200 text-slate-700'));
+  if (issue === 'inverted') list.push(badge('⚠️工期日期有誤', 'bg-slate-200 text-slate-700'));
+  if (isOverdue(c)) list.push(badge('逾期', 'bg-red-100 text-red-700'));
+  if (isStale(c)) list.push(badge('催更', 'bg-amber-100 text-amber-800'));
+  if (insufficientData(c)) list.push(badge('⚠️資料不足', 'bg-slate-200 text-slate-600'));
+  return list;
+}
+
+// ---------- 甘特圖時間尺度 ----------
+function computeBounds(cases) {
+  let min = null, max = null;
+  const consider = (d) => { if (!d) return; if (!min || d < min) min = d; if (!max || d > max) max = d; };
+  cases.forEach((c) => {
+    if (!dateIssue(c)) { consider(parseDateOnly(c.startAt)); consider(parseDateOnly(c.endAt)); }
+    (c.progress || []).forEach((p) => {
+      const s = parseDateOnly(p.startAt), e = parseDateOnly(p.endAt);
+      if (s && e && e >= s) { consider(s); consider(e); }
+      else if (s && !e) consider(s);
+      else if (!s && e) consider(e);
+    });
+  });
+  consider(todayDate());
+  if (!min || !max) { min = todayDate(); max = new Date(min); max.setDate(max.getDate() + 30); }
+  min = new Date(min); min.setDate(min.getDate() - 3);
+  max = new Date(max); max.setDate(max.getDate() + 3);
+  return { min, max, widthPx: Math.max(daysBetween(min, max) * PX_PER_DAY, 300) };
+}
+function offsetPx(date, min) { return daysBetween(min, date) * PX_PER_DAY; }
+
+function ruler(bounds) {
+  const track = make('div', 'relative h-6');
+  track.style.width = `${bounds.widthPx}px`;
+  let cursor = new Date(bounds.min);
+  cursor.setDate(cursor.getDate() + ((7 - (daysBetween(bounds.min, cursor) % 7)) % 7));
+  while (cursor <= bounds.max) {
+    const tick = make('div', 'absolute top-0 h-full border-l border-slate-200 pl-1 text-[10px] text-slate-400', fmtShort(cursor));
+    tick.style.left = `${offsetPx(cursor, bounds.min)}px`;
+    track.append(tick);
+    cursor = new Date(cursor); cursor.setDate(cursor.getDate() + 7);
+  }
+  const todayTick = make('div', 'gantt-today');
+  todayTick.style.left = `${offsetPx(todayDate(), bounds.min)}px`;
+  todayTick.style.top = '0'; todayTick.style.height = '100%';
+  track.append(todayTick);
+  return track;
+}
+
+function ganttBar(startAt, endAt, bounds, colorCls, opts = {}) {
+  const s = parseDateOnly(startAt);
+  let e = parseDateOnly(endAt);
+  if (!s) return null; // 工項列起日空值 → 該列不畫條
+  if (!e) e = opts.openEnded ? todayDate() : s; // 訖日空值視為進行中，畫到今天
+  if (e < s) return null; // 訖日早於起日（填錯）→ 不畫條
+  const bar = make('div', `gantt-bar ${colorCls}`);
+  const left = offsetPx(s, bounds.min);
+  const width = Math.max(offsetPx(e, bounds.min) - left, 6);
+  bar.style.left = `${left}px`;
+  bar.style.width = `${width}px`;
+  return bar;
+}
+
+function trackWrap(bounds) {
+  const wrap = make('div', 'relative flex-none');
+  wrap.style.width = `${bounds.widthPx}px`;
+  const todayLine = make('div', 'gantt-today');
+  todayLine.style.left = `${offsetPx(todayDate(), bounds.min)}px`;
+  wrap.append(todayLine);
+  return wrap;
+}
+
+function paymentRow(p) {
+  const row = make('div', 'flex items-center justify-between border-b border-slate-100 py-1.5 text-sm');
+  row.append(
+    make('span', 'text-slate-600', clean(p.name) || '（未命名期別）'),
+    make('span', 'flex items-center gap-2 font-bold')
+  );
+  const right = row.lastChild;
+  right.append(
+    make('span', 'text-slate-500', pct(p.ratio)),
+    badge(p.paid ? '已收' : '未收', p.paid ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600')
+  );
+  return row;
+}
+
+function addonRow(a) {
+  const row = make('div', 'flex items-center justify-between border-b border-slate-100 py-1.5 text-sm');
+  row.append(
+    make('span', 'text-slate-600', `${clean(a.date) || '—'}・${clean(a.item) || '（未命名項目）'}`),
+    make('span', 'font-bold text-slate-800', money(a.amount))
+  );
+  return row;
+}
+
+function progressLine(p) {
+  const s = parseDateOnly(p.startAt), e = parseDateOnly(p.endAt);
+  let dateText;
+  if (!s) dateText = '（缺起日）';
+  else if (e && e < s) dateText = `${clean(p.startAt)} ~ ${clean(p.endAt)}（日期填反）`;
+  else dateText = `${clean(p.startAt)} ~ ${e ? clean(p.endAt) : '進行中'}`;
+  const row = make('div', 'flex items-start gap-2 border-b border-slate-100 py-1.5 text-sm');
+  row.append(make('span', 'shrink-0 text-xs font-bold text-slate-400', dateText), make('span', 'text-slate-700', clean(p.content) || '（未填工程內容）'));
+  return row;
+}
+
+function detailPanel(c) {
+  const box = make('div', 'space-y-4 rounded-xl bg-slate-50 p-4');
+
+  const stageBox = make('div', 'rounded-lg bg-white p-3 text-sm');
+  const next = nextScheduled(c);
+  stageBox.append(
+    make('p', '', ''),
+  );
+  stageBox.firstChild.innerHTML = `<span class="font-bold text-slate-500">目前工項：</span><span class="font-bold text-slate-900">${clean(c.lastWorkItem) || '—'}</span>`;
+  const nextP = make('p', 'mt-1');
+  nextP.innerHTML = next
+    ? `<span class="font-bold text-slate-500">下一排定工項：</span><span class="font-bold text-slate-900">${clean(next.content) || '（未填內容）'}</span><span class="ml-1 text-slate-500">（${fmtShort(next.d)}）</span>`
+    : `<span class="font-bold text-slate-500">下一排定工項：</span><span class="text-slate-500">尚未排定下一工項</span>`;
+  stageBox.append(nextP);
+  box.append(stageBox);
+
+  const progressBox = make('div', 'rounded-lg bg-white p-3');
+  progressBox.append(make('p', 'mb-1 text-xs font-bold text-slate-500', '進度時間軸'));
+  const rows = (c.progress || []).slice().sort((a, b) => {
+    const da = parseDateOnly(a.startAt), db = parseDateOnly(b.startAt);
+    if (!da && !db) return 0; if (!da) return 1; if (!db) return -1; return da - db;
+  });
+  if (!rows.length) progressBox.append(make('p', 'text-sm text-slate-400', '尚無進度紀錄'));
+  else rows.forEach((p) => progressBox.append(progressLine(p)));
+  box.append(progressBox);
+
+  const payBox = make('div', 'rounded-lg bg-white p-3');
+  payBox.append(make('p', 'mb-1 flex items-center justify-between text-xs font-bold text-slate-500', ''));
+  payBox.firstChild.innerHTML = `<span>各期款狀態</span><span>已繳款比例 ${pct(c.paidRatio)}</span>`;
+  if (!(c.payments || []).length) payBox.append(make('p', 'text-sm text-slate-400', '尚無款項紀錄'));
+  else c.payments.forEach((p) => payBox.append(paymentRow(p)));
+  box.append(payBox);
+
+  if ((c.addons || []).length) {
+    const addonBox = make('div', 'rounded-lg bg-white p-3');
+    addonBox.append(make('p', 'mb-1 text-xs font-bold text-slate-500', '追加款'));
+    c.addons.forEach((a) => addonBox.append(addonRow(a)));
+    box.append(addonBox);
+  }
+
+  const fileBox = make('div', 'rounded-lg bg-white p-3');
+  if (c.hasContract) {
+    const link = make('a', 'inline-block rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white', '開啟合約附件');
+    link.href = `${API_BASE}/decorFile/${encodeURIComponent(c.rid)}?token=${encodeURIComponent(TOKEN)}`;
+    link.target = '_blank'; link.rel = 'noopener noreferrer';
+    fileBox.append(link);
+  } else {
+    const btn = make('button', 'cursor-not-allowed rounded-xl bg-slate-200 px-4 py-2 text-sm font-bold text-slate-500', '未上傳合約');
+    btn.type = 'button'; btn.disabled = true;
+    fileBox.append(btn);
+  }
+  if (c.contractTotal !== null) fileBox.append(make('p', 'mt-2 text-xs text-slate-500', `合約總價款 ${money(c.contractTotal)}`));
+  const missingStartCount = (c.progress || []).filter((p) => !parseDateOnly(p.startAt)).length;
+  if (missingStartCount > 0) fileBox.append(make('p', 'mt-2 text-xs text-amber-700', `資料品質提示：${missingStartCount} 筆工項缺少起日，未顯示於甘特圖`));
+  box.append(fileBox);
+
+  return box;
+}
+
+function renderCaseBlock(c, bounds) {
+  const overdue = isOverdue(c);
+  const wrapper = make('div', `border-b border-slate-100 last:border-b-0 ${overdue ? 'bg-red-50/40' : ''}`);
+
+  const row = make('button', 'flex w-full items-stretch text-left');
+  row.type = 'button';
+  const label = make('div', `sticky left-0 z-10 w-[230px] flex-none border-r border-slate-100 bg-white p-3 ${overdue ? 'bg-red-50' : ''}`);
+  label.append(make('p', 'text-sm font-extrabold text-slate-900', c.name));
+  const metaLine = make('p', 'mt-0.5 text-xs text-slate-500', `監工 ${c.supervisor || '—'}・接案 ${c.assignee || '—'}`);
+  label.append(metaLine);
+  label.append(make('p', 'mt-0.5 text-xs text-slate-500', `${c.startAt || '—'} ~ ${c.endAt || '—'}・已繳 ${pct(c.paidRatio)}`));
+  const badgeRow = make('div', 'mt-1 flex flex-wrap gap-1');
+  caseBadges(c).forEach((b) => badgeRow.append(b));
+  if (badgeRow.childElementCount) label.append(badgeRow);
+  row.append(label);
+
+  const track = trackWrap(bounds);
+  const bar = ganttBar(c.startAt, c.endAt, bounds, overdue ? 'bg-red-500' : 'bg-blue-500');
+  if (bar) track.append(bar);
+  else {
+    const placeholder = make('div', 'gantt-bar bg-slate-200');
+    placeholder.style.left = '0px'; placeholder.style.width = '80px';
+    track.append(placeholder);
+  }
+  row.append(track);
+
+  const expanded = EXPANDED.has(c.rid);
+  row.addEventListener('click', () => {
+    if (expanded) EXPANDED.delete(c.rid); else EXPANDED.add(c.rid);
+    renderLists();
+  });
+  wrapper.append(row);
+
+  if (expanded) {
+    const sub = make('div', '');
+    (c.progress || []).forEach((p) => {
+      const subRow = make('div', 'flex items-stretch');
+      const subLabel = make('div', 'sticky left-0 z-10 w-[230px] flex-none border-r border-slate-100 bg-slate-50 p-2 pl-6 text-xs text-slate-600');
+      subLabel.textContent = clean(p.content) || '（未填工程內容）';
+      subRow.append(subLabel);
+      const subTrack = trackWrap(bounds);
+      const subBar = ganttBar(p.startAt, p.endAt, bounds, 'bg-slate-400', { openEnded: true });
+      if (subBar) subTrack.append(subBar);
+      subRow.append(subTrack);
+      sub.append(subRow);
+    });
+    const detailRow = make('div', 'p-3');
+    detailRow.append(detailPanel(c));
+    sub.append(detailRow);
+    wrapper.append(sub);
+  }
+
+  return wrapper;
+}
+
+function renderGantt(cases) {
+  const wrap = byId('ganttWrap');
+  wrap.replaceChildren();
+  if (!cases.length) {
+    wrap.append(make('div', 'p-8 text-center text-sm text-slate-500', '目前沒有工程中案件'));
+    return;
+  }
+  const bounds = computeBounds(cases);
+  const scroll = make('div', 'gantt-scroll');
+  const inner = make('div', 'inline-block min-w-full');
+
+  const rulerRow = make('div', 'flex items-stretch border-b border-slate-200 bg-slate-50');
+  rulerRow.append(make('div', 'sticky left-0 z-10 w-[230px] flex-none border-r border-slate-100 bg-slate-50 p-2 text-xs font-bold text-slate-500', '案件 / 時間軸'));
+  rulerRow.append(ruler(bounds));
+  inner.append(rulerRow);
+
+  cases.forEach((c) => inner.append(renderCaseBlock(c, bounds)));
+  scroll.append(inner);
+  wrap.append(scroll);
+}
+
+function closedCard(c) {
+  const card = make('div', 'rounded-xl border border-slate-200 bg-white p-4 text-sm');
+  const head = make('div', 'flex items-center justify-between');
+  head.append(make('p', 'font-extrabold text-slate-900', c.name), badge(c.status, 'bg-slate-100 text-slate-600'));
+  card.append(head);
+  card.append(make('p', 'mt-2 text-xs text-slate-500', `監工 ${c.supervisor || '—'}・接案 ${c.assignee || '—'}`));
+  card.append(make('p', 'mt-1 text-xs text-slate-500', `${c.startAt || '—'} ~ ${c.endAt || '—'}・已繳 ${pct(c.paidRatio)}`));
+  return card;
+}
+
+function renderLists() {
+  const active = ALL_CASES.filter((c) => c.status === STATUS_ACTIVE);
+  renderGantt(active);
+
+  const rest = ALL_CASES.filter((c) => c.status !== STATUS_ACTIVE);
+  byId('closedTitle').textContent = `已結案／暫停中案件（${rest.length}）`;
+  const closedList = byId('closedList');
+  closedList.replaceChildren();
+  if (!rest.length) closedList.append(make('p', 'text-sm text-slate-400', '目前沒有已結案或暫停中案件'));
+  else rest.forEach((c) => closedList.append(closedCard(c)));
+}
+
+function renderHeader() {
+  byId('roleLabel').textContent = `窩的家・設計部工作檯（${ROLE_LABEL || ROLE}）`;
+}
+
+async function loadAll() {
+  showLoading();
+  try {
+    const data = await apiGet('decorListAll');
+    ALL_CASES = Array.isArray(data.cases) ? data.cases : [];
+    ROLE = data.role || ''; ROLE_LABEL = data.label || '';
+    renderHeader();
+    renderStats(data.stats);
+    renderLists();
+    hideLoading();
+    byId('updatedAt').textContent = `更新：${new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`;
+  } catch (error) {
+    if (error.status === 404) { showInvalid(); return; }
+    showError(error.message);
+  }
+}
+
+function showInvalid() {
+  byId('invalidLink').classList.remove('hidden');
+  byId('invalidLink').classList.add('flex');
+  byId('app').classList.add('hidden');
+}
+
+byId('refreshButton').addEventListener('click', loadAll);
+if (!TOKEN) {
+  showInvalid();
+} else {
+  byId('app').classList.remove('hidden');
+  loadAll();
+}
+</script>
+</body>
+</html>
