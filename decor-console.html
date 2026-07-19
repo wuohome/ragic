@@ -367,7 +367,8 @@ function renderCaseBlock(c, bounds) {
   row.append(label);
 
   const track = trackWrap(bounds);
-  const bar = ganttBar(c.startAt, c.endAt, bounds, overdue ? 'bg-red-500' : 'bg-blue-500');
+  // 案級橫條：起訖任一空值或訖<起（填錯）→ 不入甘特圖（僅畫灰色佔位條，badge 已標警示）
+  const bar = dateIssue(c) ? null : ganttBar(c.startAt, c.endAt, bounds, overdue ? 'bg-red-500' : 'bg-blue-500');
   if (bar) track.append(bar);
   else {
     const placeholder = make('div', 'gantt-bar bg-slate-200');
