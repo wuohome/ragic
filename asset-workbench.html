@@ -205,6 +205,8 @@
   td.property.empty { color: var(--muted); }
   td.money { color: var(--ink); font-weight: 700; text-align: right; }
   th.money { text-align: right; }
+  td.row-actions { text-align: right; white-space: nowrap; }
+  th.row-actions { text-align: right; }
 
   .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: var(--radius-pill); font-size: 11.5px; font-weight: 700; white-space: nowrap; }
   .badge--navy { background: var(--navy-bg); color: var(--navy); }
@@ -296,6 +298,11 @@
   .wb-sub-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
   .wb-sub-row { background: var(--surface-alt); border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
   .wb-sub-row b { color: var(--ink); }
+  .wb-sub-row__main { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .wb-sub-row__text { flex: 1; min-width: 0; }
+  .wb-sub-row__actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .wb-sub-edit-form { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+  .wb-sub-edit-form[hidden] { display: none; }
   .wb-sub-empty { font-size: 12px; color: var(--muted); padding: 4px 2px 10px; }
   .wb-sub-add { background: var(--surface-alt); border-radius: 10px; padding: 12px 14px; margin-top: 6px; }
 
@@ -409,7 +416,7 @@
           <div class="table-card">
             <div class="table-scroll">
               <table>
-                <thead><tr><th>姓名</th><th>類型</th><th>目前狀態</th><th>關聯物件</th><th class="money">已匯款</th></tr></thead>
+                <thead><tr><th>姓名</th><th>類型</th><th>目前狀態</th><th>關聯物件</th><th class="money">已匯款</th><th class="row-actions">操作</th></tr></thead>
                 <tbody id="wbOverviewStudentsBody"></tbody>
               </table>
             </div>
@@ -467,7 +474,7 @@
         <div class="table-card">
           <div class="table-scroll">
             <table>
-              <thead><tr><th>標題</th><th>地址</th><th>591 狀態</th><th>操盤階段</th><th>關聯投資人數</th></tr></thead>
+              <thead><tr><th>標題</th><th>地址</th><th>591 狀態</th><th>操盤階段</th><th>關聯投資人數</th><th class="row-actions">操作</th></tr></thead>
               <tbody id="wbPropertiesBody"></tbody>
             </table>
           </div>
@@ -633,6 +640,193 @@
     if (!sub) return [];
     return Object.keys(sub).filter(function (k) { return /^\d+$/.test(k); }).map(function (k) { return sub[k]; });
   }
+  function fromRagicDate(v) { return v ? String(v).replace(/\//g, '-') : ''; }
+
+  // ---------- 子表列修改／刪除（2026-07-20，補完整 CRUD）----------
+  // 欄位定義與 Worker 端白名單（WB_INVESTOR_SUBTABLES／WB_PROPERTY_SUBTABLES）逐一對應，
+  // 供「編輯既有列」的 inline 表單使用；顯示文字沿用既有 renderXxxModal 的格式邏輯。
+  var SUB_FIELD_DEFS = {
+    // asset-activation/6（投資學員）子表
+    progress: [
+      { f: '1003003', label: '紀錄日期', type: 'date' },
+      { f: '1003011', label: '類型', type: 'select', opts: OPT_PROGRESS },
+      { f: '1003004', label: '紀錄內容', type: 'textarea' },
+      { f: '1003006', label: '備註', type: 'text' },
+      { f: '1003056', label: '關聯物件', type: 'property' },
+    ],
+    relation: [
+      { f: '1003041', label: '角色', type: 'select', opts: OPT_REL_ROLE },
+      { f: '1003042', label: '姓名', type: 'text' },
+      { f: '1003043', label: '與投資人關係', type: 'text' },
+      { f: '1003044', label: '收入狀況', type: 'text' },
+      { f: '1003045', label: '是否同意配合', type: 'select', opts: OPT_REL_AGREE },
+      { f: '1003046', label: '備註', type: 'text' },
+    ],
+    asset: [
+      { f: '1003048', label: '房產地址', type: 'text' },
+      { f: '1003049', label: '建物權狀', type: 'select', opts: OPT_ASSET_TITLE },
+      { f: '1003050', label: '貸款餘額', type: 'number' },
+      { f: '1003051', label: '使用狀態', type: 'select', opts: OPT_ASSET_USAGE },
+      { f: '1003052', label: '包租代管每月實收', type: 'number' },
+      { f: '1003053', label: '合約到期日', type: 'date' },
+      { f: '1003054', label: '自估市值與依據', type: 'text' },
+    ],
+    // asset-activation/4（物件）子表
+    finance: [
+      { f: '1003068', label: '科目', type: 'select', opts: OPT_FIN_CATEGORY },
+      { f: '1003069', label: '金額', type: 'number' },
+      { f: '1003070', label: '備註', type: 'text' },
+    ],
+    calc: [
+      { f: '1003072', label: '日期', type: 'date' },
+      { f: '1003073', label: '月租金假設', type: 'number' },
+      { f: '1003074', label: '年化 ROI%', type: 'number', step: '0.1' },
+      { f: '1003075', label: '備註', type: 'text' },
+    ],
+    risk: [
+      { f: '1003077', label: '風險項目', type: 'text' },
+      { f: '1003078', label: '說明', type: 'text' },
+      { f: '1003079', label: '等級', type: 'select', opts: OPT_RISK_LEVEL },
+    ],
+    inquiry: [
+      { f: '1003081', label: '日期', type: 'date' },
+      { f: '1003082', label: '詢問人', type: 'text' },
+      { f: '1003083', label: '問題', type: 'text' },
+      { f: '1003084', label: '回覆', type: 'text' },
+    ],
+    progresslog: [
+      { f: '1003086', label: '日期', type: 'date' },
+      { f: '1003088', label: '階段', type: 'select', opts: OPT_LOG_STAGE },
+      { f: '1003087', label: '事項', type: 'text' },
+    ],
+  };
+  // 列表顯示文字（與修改前既有格式一致，從原本內嵌在 renderInvestorModal/renderPropertyModal 抽出共用）
+  var SUB_ROW_FMT = {
+    progress: function (r) { return '<b>' + esc(r['1003003']) + '</b>・' + esc(r['1003011']) + '　' + esc(r['1003004']) + (r['1003056'] ? '（關聯物件：' + esc(propertyLabelById(r['1003056'])) + '）' : ''); },
+    relation: function (r) { return '<b>' + esc(r['1003041']) + '</b>　' + esc(r['1003042']) + '（' + esc(r['1003043']) + '）　收入：' + esc(r['1003044'] || '—') + '　' + esc(r['1003045'] || ''); },
+    asset: function (r) { return '<b>' + esc(r['1003048'] || '（未填地址）') + '</b>　權狀：' + esc(r['1003049'] || '—') + '　使用：' + esc(r['1003051'] || '—'); },
+    finance: function (r) { return esc(r['1003068']) + '　' + fmtMoney(r['1003069']) + (r['1003070'] ? '　' + esc(r['1003070']) : ''); },
+    calc: function (r) { return esc(r['1003072']) + '　月租金假設 ' + fmtMoney(r['1003073']) + '　ROI ' + esc(r['1003074']) + '%' + (r['1003075'] ? '　' + esc(r['1003075']) : ''); },
+    risk: function (r) { return esc(r['1003077']) + '（' + esc(r['1003079']) + '）　' + esc(r['1003078'] || ''); },
+    inquiry: function (r) { return esc(r['1003081']) + '・' + esc(r['1003082']) + '：' + esc(r['1003083']) + (r['1003084'] ? '（回覆：' + esc(r['1003084']) + '）' : ''); },
+    progresslog: function (r) { return esc(r['1003086']) + '・' + esc(r['1003088']) + '：' + esc(r['1003087']); },
+  };
+  var SUB_ENDPOINT = {
+    investor: { update: 'wbUpdateInvestorSub/', del: 'wbDeleteInvestorSub/', get: 'wbGetInvestor/' },
+    property: { update: 'wbUpdatePropertySub/', del: 'wbDeletePropertySub/', get: 'wbGetProperty/' },
+  };
+
+  function subFieldInputHtml(def, value) {
+    var val = value == null ? '' : value;
+    if (def.type === 'select') return '<select data-f="' + def.f + '">' + buildOptions(def.opts, val) + '</select>';
+    if (def.type === 'textarea') return '<textarea data-f="' + def.f + '">' + esc(val) + '</textarea>';
+    if (def.type === 'number') return '<input type="number"' + (def.step ? ' step="' + def.step + '"' : '') + ' data-f="' + def.f + '" value="' + esc(val) + '">';
+    if (def.type === 'date') return '<input type="date" data-f="' + def.f + '" value="' + esc(fromRagicDate(val)) + '">';
+    if (def.type === 'property') {
+      var opts = state.properties.filter(function (p) { return p['1001992'] || p['1001254']; }).map(function (p) { return p['1002005']; }).slice(0, 500);
+      return '<select data-f="' + def.f + '">' + buildOptions(opts, val) + '</select>';
+    }
+    return '<input type="text" data-f="' + def.f + '" value="' + esc(val) + '">';
+  }
+
+  // 渲染一個子表區塊：標題 + 既有列（每列含編輯／刪除，編輯展開 inline 表單）+ 呼叫端傳入的新增表單 html
+  function renderSubBlock(kind, subKey, title, rows, addFormHtml) {
+    var defs = SUB_FIELD_DEFS[subKey];
+    var html = '<div class="wb-section-title">' + esc(title) + '（' + rows.length + ' 筆）</div>';
+    if (!rows.length) {
+      html += '<div class="wb-sub-empty">尚無紀錄</div>';
+    } else {
+      html += '<div class="wb-sub-list">' + rows.map(function (r) {
+        var rowId = String(r._ragicId);
+        var uid = subKey + ':' + rowId;
+        return '<div class="wb-sub-row"><div class="wb-sub-row__main">' +
+          '<div class="wb-sub-row__text">' + SUB_ROW_FMT[subKey](r) + '</div>' +
+          '<div class="wb-sub-row__actions">' +
+          '<button class="wb-btn wb-btn--ghost wb-btn--sm" data-sub-edit-toggle="' + uid + '" type="button">編輯</button>' +
+          '<button class="wb-btn wb-btn--ghost wb-btn--sm" data-sub-del="' + uid + '" data-kind="' + kind + '" type="button">刪除</button>' +
+          '</div></div>' +
+          '<div class="wb-sub-edit-form" data-sub-edit-form="' + uid + '" hidden>' +
+          defs.map(function (def) { return '<div class="wb-field"><label>' + esc(def.label) + '</label>' + subFieldInputHtml(def, r[def.f]) + '</div>'; }).join('') +
+          '<button class="wb-btn wb-btn--sm" data-sub-save="' + uid + '" data-kind="' + kind + '" type="button">儲存修改</button> ' +
+          '<button class="wb-btn wb-btn--ghost wb-btn--sm" data-sub-cancel="' + uid + '" type="button">取消</button>' +
+          '</div></div>';
+      }).join('') + '</div>';
+    }
+    if (addFormHtml) html += addFormHtml;
+    return html;
+  }
+
+  // 幫子表列的編輯／刪除／取消按鈕綁事件；每次 renderInvestorModal/renderPropertyModal 重繪 modalBody 後呼叫一次
+  function bindSubRowControls(kind, rid) {
+    Array.prototype.forEach.call(modalBody.querySelectorAll('[data-sub-edit-toggle]'), function (btn) {
+      btn.addEventListener('click', function () {
+        var uid = btn.getAttribute('data-sub-edit-toggle');
+        var form = modalBody.querySelector('[data-sub-edit-form="' + uid + '"]');
+        if (form) form.hidden = !form.hidden;
+      });
+    });
+    Array.prototype.forEach.call(modalBody.querySelectorAll('[data-sub-cancel]'), function (btn) {
+      btn.addEventListener('click', function () {
+        var uid = btn.getAttribute('data-sub-cancel');
+        var form = modalBody.querySelector('[data-sub-edit-form="' + uid + '"]');
+        if (form) form.hidden = true;
+      });
+    });
+    Array.prototype.forEach.call(modalBody.querySelectorAll('[data-sub-save]'), function (btn) {
+      btn.addEventListener('click', function () {
+        var uid = btn.getAttribute('data-sub-save');
+        var sep = uid.indexOf(':');
+        var subKey = uid.slice(0, sep);
+        var rowId = uid.slice(sep + 1);
+        var form = modalBody.querySelector('[data-sub-edit-form="' + uid + '"]');
+        var fields = {};
+        Array.prototype.forEach.call(form.querySelectorAll('[data-f]'), function (input) {
+          var fid = input.getAttribute('data-f');
+          fields[fid] = input.type === 'date' ? toRagicDate(input.value) : input.value;
+        });
+        updateSubRow(kind, rid, subKey, rowId, fields);
+      });
+    });
+    Array.prototype.forEach.call(modalBody.querySelectorAll('[data-sub-del]'), function (btn) {
+      btn.addEventListener('click', function () {
+        var uid = btn.getAttribute('data-sub-del');
+        var sep = uid.indexOf(':');
+        var subKey = uid.slice(0, sep);
+        var rowId = uid.slice(sep + 1);
+        if (!window.confirm('確定要刪除這筆紀錄嗎？此操作無法復原。')) return;
+        deleteSubRow(kind, rid, subKey, rowId);
+      });
+    });
+  }
+
+  function updateSubRow(kind, rid, subKey, rowId, fields) {
+    var ep = SUB_ENDPOINT[kind];
+    apiPost(ep.update + rid, { sub: subKey, rowId: rowId, fields: fields }).then(function () {
+      toast('已更新這筆紀錄');
+      return refreshAfterWrite();
+    }).then(function () {
+      return apiGet(ep.get + rid);
+    }).then(function (r) {
+      if (kind === 'investor') renderInvestorModal(r.investor); else renderPropertyModal(r.property);
+    }).catch(function (e) {
+      if (e.status === 404) { reportInvalidToken(); return; }
+      toast('更新失敗：' + (e.data ? JSON.stringify(e.data) : e.message), 'error');
+    });
+  }
+  function deleteSubRow(kind, rid, subKey, rowId) {
+    var ep = SUB_ENDPOINT[kind];
+    apiPost(ep.del + rid, { sub: subKey, rowId: rowId }).then(function () {
+      toast('已刪除這筆紀錄');
+      return refreshAfterWrite();
+    }).then(function () {
+      return apiGet(ep.get + rid);
+    }).then(function (r) {
+      if (kind === 'investor') renderInvestorModal(r.investor); else renderPropertyModal(r.property);
+    }).catch(function (e) {
+      if (e.status === 404) { reportInvalidToken(); return; }
+      toast('刪除失敗：' + (e.data ? JSON.stringify(e.data) : e.message), 'error');
+    });
+  }
 
   // ---------- API ----------
   function apiGet(path) {
@@ -784,7 +978,7 @@
     return p['1001992'] || p['1001254'] || id;
   }
   function renderStudentsTable(tbody, list) {
-    if (list.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="empty-hint">沒有符合條件的學員</td></tr>'; return; }
+    if (list.length === 0) { tbody.innerHTML = '<tr><td colspan="6" class="empty-hint">沒有符合條件的學員</td></tr>'; return; }
     tbody.innerHTML = list.map(function (inv) {
       var propLabel = inv['1003090'] ? esc(propertyLabelById(inv['1003090'])) : '';
       return '<tr class="clickable" data-inv-rid="' + esc(inv._rid) + '">' +
@@ -792,10 +986,14 @@
         '<td>' + badge(inv['1002032'], { '合資': 'navy', '獨資': 'coral' }) + '</td>' +
         '<td>' + badge(inv['1003032'], STATUS_BADGE) + '</td>' +
         '<td class="property' + (propLabel ? '' : ' empty') + '">' + (propLabel || '未媒合') + '</td>' +
-        '<td class="money num">' + fmtMoney(inv['1002034']) + '</td></tr>';
+        '<td class="money num">' + fmtMoney(inv['1002034']) + '</td>' +
+        '<td class="row-actions"><button class="wb-btn wb-btn--sm" data-inv-edit="' + esc(inv._rid) + '" type="button">編輯</button></td></tr>';
     }).join('');
     Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-inv-rid]'), function (tr) {
       tr.addEventListener('click', function () { openInvestorModal(tr.getAttribute('data-inv-rid')); });
+    });
+    Array.prototype.forEach.call(tbody.querySelectorAll('[data-inv-edit]'), function (btn) {
+      btn.addEventListener('click', function (e) { e.stopPropagation(); openInvestorModal(btn.getAttribute('data-inv-edit')); });
     });
   }
   function renderStudentsPage() {
@@ -838,7 +1036,7 @@
       list = list.filter(function (p) { return p['1003058'] === state.propertyChip; });
     }
     var tbody = document.getElementById('wbPropertiesBody');
-    if (list.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="empty-hint">沒有符合條件的物件</td></tr>'; }
+    if (list.length === 0) { tbody.innerHTML = '<tr><td colspan="6" class="empty-hint">沒有符合條件的物件。可用上方搜尋框依標題／地址找到任一物件（含尚未進操盤的），設定操盤階段後就會出現在這裡。</td></tr>'; }
     else {
       tbody.innerHTML = list.map(function (p) {
         return '<tr class="clickable" data-prop-rid="' + esc(p._rid) + '">' +
@@ -846,10 +1044,14 @@
           '<td class="property">' + esc(p['1001254'] || '—') + '</td>' +
           '<td>' + badge(p['1001996'], { '刊登中': 'teal', '已成交': 'navy', '已下架': 'gray' }) + '</td>' +
           '<td>' + badge(p['1003058'], STAGE_BADGE) + '</td>' +
-          '<td class="progress num">' + investorIdSet(p).length + '</td></tr>';
+          '<td class="progress num">' + investorIdSet(p).length + '</td>' +
+          '<td class="row-actions"><button class="wb-btn wb-btn--sm" data-prop-edit="' + esc(p._rid) + '" type="button">編輯</button></td></tr>';
       }).join('');
       Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-prop-rid]'), function (tr) {
         tr.addEventListener('click', function () { openPropertyModal(tr.getAttribute('data-prop-rid')); });
+      });
+      Array.prototype.forEach.call(tbody.querySelectorAll('[data-prop-edit]'), function (btn) {
+        btn.addEventListener('click', function (e) { e.stopPropagation(); openPropertyModal(btn.getAttribute('data-prop-edit')); });
       });
     }
     document.getElementById('wbPropertiesSub').textContent = '物件庫共 ' + state.properties.length + ' 筆，其中 ' + state.properties.filter(function (p) { return !!p['1003058']; }).length + ' 筆已進操盤流程';
@@ -963,45 +1165,36 @@
 
     // 進度紀錄
     var progressRows = subArray(inv, '1003007');
-    html += '<div class="wb-section-title">進度紀錄（' + progressRows.length + ' 筆）</div>';
-    html += '<div class="wb-sub-list">' + (progressRows.length ? progressRows.map(function (r) {
-      return '<div class="wb-sub-row"><b>' + esc(r['1003003']) + '</b>・' + esc(r['1003011']) + '　' + esc(r['1003004']) + (r['1003056'] ? '（關聯物件：' + esc(propertyLabelById(r['1003056'])) + '）' : '') + '</div>';
-    }).join('') : '<div class="wb-sub-empty">尚無紀錄</div>') + '</div>';
-    html += '<div class="wb-sub-add"><div class="wb-field-row"><div class="wb-field"><label>紀錄日期</label><input type="date" id="wbProgDate" value="' + todayStr() + '"></div>' +
+    html += renderSubBlock('investor', 'progress', '進度紀錄', progressRows,
+      '<div class="wb-sub-add"><div class="wb-field-row"><div class="wb-field"><label>紀錄日期</label><input type="date" id="wbProgDate" value="' + todayStr() + '"></div>' +
       '<div class="wb-field"><label>類型</label><select id="wbProgType">' + buildOptions(OPT_PROGRESS, '') + '</select></div></div>' +
       '<div class="wb-field"><label>紀錄內容</label><textarea id="wbProgContent"></textarea></div>' +
       '<div class="wb-field-row"><div class="wb-field"><label>備註</label><input type="text" id="wbProgNote"></div>' +
       '<div class="wb-field"><label>關聯物件</label><select id="wbProgProperty">' + buildOptions(state.properties.filter(function (p) { return p['1001992'] || p['1001254']; }).map(function (p) { return p['1002005']; }).slice(0, 500), '') + '</select></div></div>' +
-      '<button class="wb-btn wb-btn--sm" id="wbProgAddBtn" type="button">新增進度紀錄</button></div>';
+      '<button class="wb-btn wb-btn--sm" id="wbProgAddBtn" type="button">新增進度紀錄</button></div>');
 
     // 關係人資訊
     var relRows = subArray(inv, '1003047');
-    html += '<div class="wb-section-title">關係人資訊（' + relRows.length + ' 筆）</div>';
-    html += '<div class="wb-sub-list">' + (relRows.length ? relRows.map(function (r) {
-      return '<div class="wb-sub-row"><b>' + esc(r['1003041']) + '</b>　' + esc(r['1003042']) + '（' + esc(r['1003043']) + '）　收入：' + esc(r['1003044'] || '—') + '　' + esc(r['1003045'] || '') + '</div>';
-    }).join('') : '<div class="wb-sub-empty">尚無紀錄</div>') + '</div>';
-    html += '<div class="wb-sub-add"><div class="wb-field-row"><div class="wb-field"><label>角色</label><select id="wbRelRole">' + buildOptions(OPT_REL_ROLE, '') + '</select></div>' +
+    html += renderSubBlock('investor', 'relation', '關係人資訊', relRows,
+      '<div class="wb-sub-add"><div class="wb-field-row"><div class="wb-field"><label>角色</label><select id="wbRelRole">' + buildOptions(OPT_REL_ROLE, '') + '</select></div>' +
       '<div class="wb-field"><label>姓名</label><input type="text" id="wbRelName"></div></div>' +
       '<div class="wb-field-row"><div class="wb-field"><label>與投資人關係</label><input type="text" id="wbRelRelation"></div>' +
       '<div class="wb-field"><label>收入狀況</label><input type="text" id="wbRelIncome"></div></div>' +
       '<div class="wb-field"><label>是否同意配合</label><select id="wbRelAgree">' + buildOptions(OPT_REL_AGREE, '') + '</select></div>' +
       '<div class="wb-field"><label>備註</label><input type="text" id="wbRelNote"></div>' +
-      '<button class="wb-btn wb-btn--sm" id="wbRelAddBtn" type="button">新增關係人</button></div>';
+      '<button class="wb-btn wb-btn--sm" id="wbRelAddBtn" type="button">新增關係人</button></div>');
 
     // 既有資產盤點
     var assetRows = subArray(inv, '1003055');
-    html += '<div class="wb-section-title">既有資產盤點（' + assetRows.length + ' 筆）</div>';
-    html += '<div class="wb-sub-list">' + (assetRows.length ? assetRows.map(function (r) {
-      return '<div class="wb-sub-row"><b>' + esc(r['1003048'] || '（未填地址）') + '</b>　權狀：' + esc(r['1003049'] || '—') + '　使用：' + esc(r['1003051'] || '—') + '</div>';
-    }).join('') : '<div class="wb-sub-empty">尚無紀錄</div>') + '</div>';
-    html += '<div class="wb-sub-add"><div class="wb-field"><label>房產地址</label><input type="text" id="wbAssetAddr"></div>' +
+    html += renderSubBlock('investor', 'asset', '既有資產盤點', assetRows,
+      '<div class="wb-sub-add"><div class="wb-field"><label>房產地址</label><input type="text" id="wbAssetAddr"></div>' +
       '<div class="wb-field-row"><div class="wb-field"><label>建物權狀</label><select id="wbAssetTitle">' + buildOptions(OPT_ASSET_TITLE, '') + '</select></div>' +
       '<div class="wb-field"><label>使用狀態</label><select id="wbAssetUsage">' + buildOptions(OPT_ASSET_USAGE, '') + '</select></div></div>' +
       '<div class="wb-field-row"><div class="wb-field"><label>貸款餘額</label><input type="number" id="wbAssetLoan"></div>' +
       '<div class="wb-field"><label>包租代管每月實收</label><input type="number" id="wbAssetRent"></div></div>' +
       '<div class="wb-field-row"><div class="wb-field"><label>合約到期日</label><input type="date" id="wbAssetExpiry"></div>' +
       '<div class="wb-field"><label>自估市值與依據</label><input type="text" id="wbAssetValue"></div></div>' +
-      '<button class="wb-btn wb-btn--sm" id="wbAssetAddBtn" type="button">新增資產盤點</button></div>';
+      '<button class="wb-btn wb-btn--sm" id="wbAssetAddBtn" type="button">新增資產盤點</button></div>');
 
     modalBody.innerHTML = html;
 
@@ -1052,6 +1245,7 @@
         '1003054': document.getElementById('wbAssetValue').value,
       });
     });
+    bindSubRowControls('investor', rid);
   }
 
   function stripEmpty(body) {
@@ -1128,17 +1322,15 @@
     html += '<button class="wb-btn" id="wbPropSaveBtn" type="button">儲存物件資料</button>';
 
     var subDefs = [
-      { key: '1003071', title: '財務結構明細', sub: 'finance', rowFmt: function (r) { return esc(r['1003068']) + '　' + fmtMoney(r['1003069']) + (r['1003070'] ? '　' + esc(r['1003070']) : ''); } },
-      { key: '1003076', title: '報酬試算', sub: 'calc', rowFmt: function (r) { return esc(r['1003072']) + '　月租金假設 ' + fmtMoney(r['1003073']) + '　ROI ' + esc(r['1003074']) + '%' + (r['1003075'] ? '　' + esc(r['1003075']) : ''); } },
-      { key: '1003080', title: '風險評估', sub: 'risk', rowFmt: function (r) { return esc(r['1003077']) + '（' + esc(r['1003079']) + '）　' + esc(r['1003078'] || ''); } },
-      { key: '1003085', title: '學員詢問紀錄', sub: 'inquiry', rowFmt: function (r) { return esc(r['1003081']) + '・' + esc(r['1003082']) + '：' + esc(r['1003083']) + (r['1003084'] ? '（回覆：' + esc(r['1003084']) + '）' : ''); } },
-      { key: '1003089', title: '操盤進度 Log', sub: 'progresslog', rowFmt: function (r) { return esc(r['1003086']) + '・' + esc(r['1003088']) + '：' + esc(r['1003087']); } },
+      { key: '1003071', title: '財務結構明細', sub: 'finance' },
+      { key: '1003076', title: '報酬試算', sub: 'calc' },
+      { key: '1003080', title: '風險評估', sub: 'risk' },
+      { key: '1003085', title: '學員詢問紀錄', sub: 'inquiry' },
+      { key: '1003089', title: '操盤進度 Log', sub: 'progresslog' },
     ];
     subDefs.forEach(function (def) {
       var rows = subArray(prop, def.key);
-      html += '<div class="wb-section-title">' + def.title + '（' + rows.length + ' 筆）</div>';
-      html += '<div class="wb-sub-list">' + (rows.length ? rows.map(function (r) { return '<div class="wb-sub-row">' + def.rowFmt(r) + '</div>'; }).join('') : '<div class="wb-sub-empty">尚無紀錄</div>') + '</div>';
-      html += buildSubAddForm(def.sub);
+      html += renderSubBlock('property', def.sub, def.title, rows, buildSubAddForm(def.sub));
     });
 
     modalBody.innerHTML = html;
@@ -1158,6 +1350,7 @@
       savePropertyMain(rid, body);
     });
     bindSubAddHandlers(rid);
+    bindSubRowControls('property', rid);
   }
 
   function buildSubAddForm(sub) {
