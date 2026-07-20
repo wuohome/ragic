@@ -807,7 +807,7 @@
     }).then(function () {
       return apiGet(ep.get + rid);
     }).then(function (r) {
-      if (kind === 'investor') renderInvestorModal(r.investor); else renderPropertyModal(r.property);
+      if (kind === 'investor') renderInvestorModal(r.investor, rid); else renderPropertyModal(r.property, rid);
     }).catch(function (e) {
       if (e.status === 404) { reportInvalidToken(); return; }
       toast('更新失敗：' + (e.data ? JSON.stringify(e.data) : e.message), 'error');
@@ -821,7 +821,7 @@
     }).then(function () {
       return apiGet(ep.get + rid);
     }).then(function (r) {
-      if (kind === 'investor') renderInvestorModal(r.investor); else renderPropertyModal(r.property);
+      if (kind === 'investor') renderInvestorModal(r.investor, rid); else renderPropertyModal(r.property, rid);
     }).catch(function (e) {
       if (e.status === 404) { reportInvalidToken(); return; }
       toast('刪除失敗：' + (e.data ? JSON.stringify(e.data) : e.message), 'error');
@@ -1137,15 +1137,18 @@
   function openInvestorModal(rid) {
     openModal('載入中…', '');
     apiGet('wbGetInvestor/' + rid).then(function (r) {
-      renderInvestorModal(r.investor);
+      renderInvestorModal(r.investor, rid);
     }).catch(function (e) {
       if (e.status === 404) { reportInvalidToken(); return; }
       toast('讀取學員資料失敗：' + e.message, 'error'); closeModal();
     });
   }
 
-  function renderInvestorModal(inv) {
-    var rid = inv._rid;
+  // rid 一律由呼叫端傳入（openInvestorModal 的參數，或既有 write handler 自己的 rid 閉包變數），
+  // 不可從 inv._rid 取——wbGetInvestor 回傳的 detail 物件只有 _ragicId 沒有 _rid（_rid 是
+  // recordsToArray() 專給列表視圖後補的欄位），2026-07-20 main 瀏覽器實測抓到這個既有 bug：
+  // 靠 inv._rid 會恆為 undefined，導致 modal 內所有寫入 fetch 都打向 `/undefined`。
+  function renderInvestorModal(inv, rid) {
     openModal(inv['1002031'] || '學員', (inv['1003067'] || '') + '・' + (inv['1002032'] || ''));
 
     var html = '';
@@ -1264,7 +1267,7 @@
       return refreshAfterWrite();
     }).then(function () {
       return apiGet('wbGetInvestor/' + rid);
-    }).then(function (r) { renderInvestorModal(r.investor); }).catch(function (e) {
+    }).then(function (r) { renderInvestorModal(r.investor, rid); }).catch(function (e) {
       if (e.status === 404) { reportInvalidToken(); return; }
       toast('儲存失敗：' + (e.data ? JSON.stringify(e.data) : e.message), 'error');
     });
@@ -1279,7 +1282,7 @@
       return refreshAfterWrite();
     }).then(function () {
       return apiGet('wbGetInvestor/' + rid);
-    }).then(function (r) { renderInvestorModal(r.investor); }).catch(function (e) {
+    }).then(function (r) { renderInvestorModal(r.investor, rid); }).catch(function (e) {
       if (e.status === 404) { reportInvalidToken(); return; }
       toast('新增失敗：' + (e.data ? JSON.stringify(e.data) : e.message), 'error');
     });
@@ -1289,15 +1292,15 @@
   function openPropertyModal(rid) {
     openModal('載入中…', '');
     apiGet('wbGetProperty/' + rid).then(function (r) {
-      renderPropertyModal(r.property);
+      renderPropertyModal(r.property, rid);
     }).catch(function (e) {
       if (e.status === 404) { reportInvalidToken(); return; }
       toast('讀取物件資料失敗：' + e.message, 'error'); closeModal();
     });
   }
 
-  function renderPropertyModal(prop) {
-    var rid = prop._rid;
+  // rid 一律由呼叫端傳入，理由同 renderInvestorModal 上方註解（prop._rid 同樣恆為 undefined）。
+  function renderPropertyModal(prop, rid) {
     openModal(prop['1001992'] || '（未命名物件）', (prop['1001254'] || '') + '・ID ' + (prop['1002005'] || ''));
 
     var invOptions = state.investors.map(function (i) { return i['1003067']; }).filter(Boolean);
@@ -1403,7 +1406,7 @@
           return refreshAfterWrite();
         }).then(function () {
           return apiGet('wbGetProperty/' + rid);
-        }).then(function (r) { renderPropertyModal(r.property); }).catch(function (e) {
+        }).then(function (r) { renderPropertyModal(r.property, rid); }).catch(function (e) {
           if (e.status === 404) { reportInvalidToken(); return; }
           toast('新增失敗：' + (e.data ? JSON.stringify(e.data) : e.message), 'error');
         });
@@ -1416,7 +1419,7 @@
       return refreshAfterWrite();
     }).then(function () {
       return apiGet('wbGetProperty/' + rid);
-    }).then(function (r) { renderPropertyModal(r.property); }).catch(function (e) {
+    }).then(function (r) { renderPropertyModal(r.property, rid); }).catch(function (e) {
       if (e.status === 404) { reportInvalidToken(); return; }
       toast('儲存失敗：' + (e.data ? JSON.stringify(e.data) : e.message), 'error');
     });
