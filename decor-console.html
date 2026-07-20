@@ -521,7 +521,19 @@ function detailPanel(c) {
   }
 
   const fileBox = make('div', 'rounded-lg bg-white p-3');
-  if (c.hasContract) {
+  // P2 補派：合約附件多檔瀏覽。單檔與無檔案行為維持 P1 現狀不變（按鈕灰化邏輯不變）；多檔
+  // 時改逐一列出，經 decorContractFile 代理（rid+idx+token）點開，不裸連 Ragic。
+  const contractCount = Number(c.contractFileCount) || (c.hasContract ? 1 : 0);
+  if (contractCount > 1) {
+    const list = make('div', 'flex flex-wrap gap-2');
+    for (let i = 0; i < contractCount; i++) {
+      const link = make('a', 'inline-block rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white', `合約附件 ${i + 1}`);
+      link.href = `${API_BASE}/decorContractFile?rid=${encodeURIComponent(c.rid)}&idx=${i}&token=${encodeURIComponent(TOKEN)}`;
+      link.target = '_blank'; link.rel = 'noopener noreferrer';
+      list.append(link);
+    }
+    fileBox.append(list);
+  } else if (contractCount === 1) {
     const link = make('a', 'inline-block rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white', '開啟合約附件');
     link.href = `${API_BASE}/decorFile/${encodeURIComponent(c.rid)}?token=${encodeURIComponent(TOKEN)}`;
     link.target = '_blank'; link.rel = 'noopener noreferrer';
