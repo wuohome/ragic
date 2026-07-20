@@ -133,9 +133,80 @@ function nextScheduled(c) {
   return items[0] || null;
 }
 
+// ---------- P2：工項分類（12 選項）＋關鍵字兩層掃描（規格書 § 工項順序與關鍵字對照 逐字實作）----------
+// 每項 layer1=工種詞（規格書明列「第一層只掃工種詞」的觸發字）、layer2=細項詞（第一層零命中才掃）。
+const DECOR_CATEGORIES = [
+  { name: '拆除工程', layer1: ['拆除'], layer2: ['打牆', '打除', '剔除', '清運', '廢棄物', '保護工程'] },
+  { name: '水電工程', layer1: ['水電'], layer2: ['配電', '配管', '管溝', '拉線', '給排水', '電線', '迴路', '弱電', '開關', '插座', '崁燈', '吸頂燈', '熱水器'] },
+  { name: '泥作工程', layer1: ['泥作'], layer2: ['防水', '貼磚', '貼覆', '磁磚', '壁磚', '地磚', '板岩磚', '拋光磚', '石英磚', '門檻', '打底', '墊高', '洩水', '砌磚', '粉光', '水泥', '填縫'] },
+  { name: '門窗工程', layer1: ['門窗'], layer2: ['鋁窗', '氣密窗', '氣密', '落地窗', '大門', '室內門', '鋁框拉門', '玻璃', '紗窗'] },
+  { name: '木作工程', layer1: ['木作', '木工'], layer2: ['天花', '隔間', '輕隔間', '封板', '電視牆', '木地板', '卡扣地板'] },
+  { name: '油漆工程', layer1: ['油漆'], layer2: ['批土', '補土', '打磨', '噴漆', '乳膠漆', '上漆'] },
+  { name: '系統櫃', layer1: ['系統櫃'], layer2: ['系統家具', '系統板材'] },
+  { name: '廚具工程', layer1: ['廚具'], layer2: ['流理台', '櫥櫃', '抽油煙機', '烘碗機', '瓦斯爐', '雙口爐', '水槽', '檯面'] },
+  { name: '衛浴設備', layer1: ['衛浴'], layer2: ['馬桶', '面盆', '淋浴', '浴缸', '浴櫃', '乾溼分離', '毛巾架', '化妝鏡'] },
+  { name: '空調工程', layer1: ['空調', '冷氣'], layer2: ['風管', '冷媒'] },
+  { name: '雜項工程', layer1: ['清潔'], layer2: ['雜項', '窗簾', '燈具安裝', '五金', '收尾', '初驗', '驗收', '交屋'] },
+];
+const DECOR_CANONICAL_ORDER = DECOR_CATEGORIES.map((c) => c.name); // 11 項，核定預設順序
+const GANTT_ROWS = DECOR_CANONICAL_ORDER.concat(['未分類']); // 圖一式左側固定 12 列
+const DECOR_CATEGORY_ORDER = DECOR_CANONICAL_ORDER.concat(['其他']); // 新增表單下拉，12 選項
+
+function scanLayer(content, layerKey) {
+  let best = null;
+  DECOR_CATEGORIES.forEach((cat) => {
+    cat[layerKey].forEach((kw) => {
+      const pos = content.lastIndexOf(kw);
+      if (pos >= 0 && (!best || pos > best.pos)) best = { name: cat.name, pos };
+    });
+  });
+  return best ? best.name : null;
+}
+// 既有紀錄無「工項分類」值時，依工程內容近似歸類；無命中歸「未分類」，不強猜。
+function classifyLegacy(content) {
+  const text = clean(content);
+  if (!text) return '未分類';
+  return scanLayer(text, 'layer1') || scanLayer(text, 'layer2') || '未分類';
+}
+// 決定一筆進度紀錄要落在圖一式／月曆的哪一列：有效的 11 項分類值直接採用；「其他」與空值／
+// 非白名單值一律走未分類桶（圖一式左側固定列只有 11+未分類，共 12 列，見規格書 §核心視圖）。
+function resolveCategory(p) {
+  const cat = clean(p.category);
+  if (cat && DECOR_CANONICAL_ORDER.includes(cat)) return cat;
+  if (cat === '其他') return '未分類';
+  return classifyLegacy(p.content);
+}
+// 下一階段推斷：取「目前工項」（=Ragic LAST(C16) 對應的最後一筆子表列，即 c.progress 陣列最後
+// 一項）的分類，在核定順序找下一項；找不到（未分類/其他/已是最後一項雜項工程）回 null 交由呼叫端
+// fallback 顯示「尚未排定下一工項」。
+function inferNextStage(c) {
+  const list = c.progress || [];
+  if (!list.length) return null;
+  const cur = resolveCategory(list[list.length - 1]);
+  const idx = DECOR_CANONICAL_ORDER.indexOf(cur);
+  if (idx < 0 || idx >= DECOR_CANONICAL_ORDER.length - 1) return null;
+  return DECOR_CANONICAL_ORDER[idx + 1];
+}
+
+const CATEGORY_COLORS = {
+  '拆除工程': 'bg-stone-500', '水電工程': 'bg-yellow-500', '泥作工程': 'bg-orange-500',
+  '門窗工程': 'bg-cyan-600', '木作工程': 'bg-amber-700', '油漆工程': 'bg-pink-500',
+  '系統櫃': 'bg-indigo-500', '廚具工程': 'bg-lime-600', '衛浴設備': 'bg-sky-500',
+  '空調工程': 'bg-teal-500', '雜項工程': 'bg-purple-500', '未分類': 'bg-slate-400',
+};
+const CATEGORY_BADGE = {
+  '拆除工程': 'bg-stone-100 text-stone-700', '水電工程': 'bg-yellow-100 text-yellow-800', '泥作工程': 'bg-orange-100 text-orange-700',
+  '門窗工程': 'bg-cyan-100 text-cyan-700', '木作工程': 'bg-amber-100 text-amber-800', '油漆工程': 'bg-pink-100 text-pink-700',
+  '系統櫃': 'bg-indigo-100 text-indigo-700', '廚具工程': 'bg-lime-100 text-lime-700', '衛浴設備': 'bg-sky-100 text-sky-700',
+  '空調工程': 'bg-teal-100 text-teal-700', '雜項工程': 'bg-purple-100 text-purple-700', '未分類': 'bg-slate-100 text-slate-500',
+};
+
 let ALL_CASES = [];
 let ROLE = ''; let ROLE_LABEL = '';
 const EXPANDED = new Set();
+const CASE_VIEW_MODE = new Map(); // rid -> 'gantt' | 'calendar'（案件詳情內圖一式／月曆切換，預設 gantt）
+const CASE_CAL_MONTH = new Map(); // rid -> { y, m }（月曆目前顯示的年月，預設本月）
+function sameDate(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
 
 async function apiGet(path) {
   const sep = path.includes('?') ? '&' : '?';
@@ -279,15 +350,122 @@ function addonRow(a) {
   return row;
 }
 
-function progressLine(p) {
+function progressLine(p, c) {
   const s = parseDateOnly(p.startAt), e = parseDateOnly(p.endAt);
   let dateText;
   if (!s) dateText = '（缺起日）';
   else if (e && e < s) dateText = `${clean(p.startAt)} ~ ${clean(p.endAt)}（日期填反）`;
   else dateText = `${clean(p.startAt)} ~ ${e ? clean(p.endAt) : '進行中'}`;
-  const row = make('div', 'flex items-start gap-2 border-b border-slate-100 py-1.5 text-sm');
-  row.append(make('span', 'shrink-0 text-xs font-bold text-slate-400', dateText), make('span', 'text-slate-700', clean(p.content) || '（未填工程內容）'));
+  const row = make('div', 'border-b border-slate-100 py-1.5 text-sm');
+  const top = make('div', 'flex flex-wrap items-start gap-2');
+  const catName = resolveCategory(p);
+  top.append(
+    make('span', 'shrink-0 text-xs font-bold text-slate-400', dateText),
+    badge(clean(p.category) || `${catName}（推測）`, CATEGORY_BADGE[catName] || 'bg-slate-100 text-slate-600'),
+    make('span', 'text-slate-700', clean(p.content) || '（未填工程內容）')
+  );
+  row.append(top);
+  // P2：進度照片縮圖，點開經 decorProgressPhoto 代理回看（禁裸連 Ragic 附件 URL）
+  const count = Number(p.photoCount) || 0;
+  if (count > 0) {
+    const thumbs = make('div', 'mt-1.5 flex flex-wrap gap-1.5');
+    for (let i = 0; i < count; i++) {
+      const url = `${API_BASE}/decorProgressPhoto?rid=${encodeURIComponent(c.rid)}&row=${encodeURIComponent(p.rowId)}&idx=${i}&token=${encodeURIComponent(TOKEN)}`;
+      const link = make('a');
+      link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+      const img = document.createElement('img');
+      img.src = url; img.loading = 'lazy'; img.alt = '進度照片';
+      img.className = 'h-14 w-14 rounded-lg border border-slate-200 object-cover bg-slate-100';
+      link.append(img);
+      thumbs.append(link);
+    }
+    row.append(thumbs);
+  }
   return row;
+}
+
+// P2：新增進度紀錄表單（三種角色 token 皆可寫）。手機直向優先，欄位單欄堆疊。
+function progressAddForm(c) {
+  const box = make('div', 'rounded-lg bg-white p-3');
+  box.append(make('p', 'mb-2 text-xs font-bold text-slate-500', '新增進度紀錄'));
+  const form = make('form', 'space-y-2');
+
+  const dateRow = make('div', 'grid grid-cols-2 gap-2');
+  const startWrap = make('label', 'block text-xs font-bold text-slate-500', '工程時間(起) *');
+  const startInput = make('input', 'mt-1 block w-full rounded-lg border border-slate-300 px-2 py-2 text-sm');
+  startInput.type = 'date'; startInput.required = true;
+  startWrap.append(startInput);
+  const endWrap = make('label', 'block text-xs font-bold text-slate-500', '工程時間(訖)');
+  const endInput = make('input', 'mt-1 block w-full rounded-lg border border-slate-300 px-2 py-2 text-sm');
+  endInput.type = 'date';
+  endWrap.append(endInput);
+  dateRow.append(startWrap, endWrap);
+  form.append(dateRow);
+
+  const catWrap = make('label', 'block text-xs font-bold text-slate-500', '工項分類 *');
+  const catSelect = make('select', 'mt-1 block w-full rounded-lg border border-slate-300 px-2 py-2 text-sm');
+  catSelect.required = true;
+  const placeholderOpt = make('option', '', '請選擇');
+  placeholderOpt.value = '';
+  catSelect.append(placeholderOpt);
+  DECOR_CATEGORY_ORDER.forEach((name) => {
+    const opt = make('option', '', name);
+    opt.value = name;
+    catSelect.append(opt);
+  });
+  catWrap.append(catSelect);
+  form.append(catWrap);
+
+  const contentWrap = make('label', 'block text-xs font-bold text-slate-500', '工程內容 *');
+  const contentInput = make('textarea', 'mt-1 block w-full rounded-lg border border-slate-300 px-2 py-2 text-sm');
+  contentInput.required = true; contentInput.rows = 2;
+  contentWrap.append(contentInput);
+  form.append(contentWrap);
+
+  const photoWrap = make('label', 'block text-xs font-bold text-slate-500', '進度照片（可多選）');
+  const photoInput = make('input', 'mt-1 block w-full text-xs');
+  photoInput.type = 'file'; photoInput.accept = 'image/*'; photoInput.multiple = true;
+  photoWrap.append(photoInput);
+  form.append(photoWrap);
+
+  const msg = make('p', 'hidden text-xs font-bold');
+  form.append(msg);
+
+  const submitBtn = make('button', 'w-full rounded-xl bg-orange-600 px-4 py-2 text-sm font-bold text-white hover:bg-orange-700 disabled:opacity-50', '送出進度紀錄');
+  submitBtn.type = 'submit';
+  form.append(submitBtn);
+
+  form.addEventListener('submit', async (evt) => {
+    evt.preventDefault();
+    msg.className = 'hidden text-xs font-bold';
+    if (!startInput.value || !catSelect.value || !contentInput.value.trim()) {
+      msg.textContent = '請填寫必填欄位（起日／工項分類／工程內容）';
+      msg.className = 'text-xs font-bold text-red-600';
+      return;
+    }
+    submitBtn.disabled = true; submitBtn.textContent = '送出中…';
+    try {
+      const fd = new FormData();
+      fd.append('startAt', startInput.value);
+      if (endInput.value) fd.append('endAt', endInput.value);
+      fd.append('content', contentInput.value.trim());
+      fd.append('category', catSelect.value);
+      Array.from(photoInput.files || []).forEach((f) => fd.append('photo', f));
+      const res = await fetch(`${API_BASE}/decorProgressAdd/${encodeURIComponent(c.rid)}?token=${encodeURIComponent(TOKEN)}`, { method: 'POST', body: fd });
+      let data = null; try { data = await res.json(); } catch {}
+      if (!res.ok || !data || data.ok !== true) throw new Error((data && data.error) || `HTTP ${res.status}`);
+      msg.textContent = '已新增，重新整理中…';
+      msg.className = 'text-xs font-bold text-emerald-600';
+      await loadAll();
+    } catch (err) {
+      msg.textContent = `送出失敗：${err.message}`;
+      msg.className = 'text-xs font-bold text-red-600';
+      submitBtn.disabled = false; submitBtn.textContent = '送出進度紀錄';
+    }
+  });
+
+  box.append(form);
+  return box;
 }
 
 function detailPanel(c) {
@@ -299,10 +477,20 @@ function detailPanel(c) {
     make('p', '', ''),
   );
   stageBox.firstChild.innerHTML = `<span class="font-bold text-slate-500">目前工項：</span><span class="font-bold text-slate-900">${clean(c.lastWorkItem) || '—'}</span>`;
-  const nextP = make('p', 'mt-1');
-  nextP.innerHTML = next
-    ? `<span class="font-bold text-slate-500">下一排定工項：</span><span class="font-bold text-slate-900">${clean(next.content) || '（未填內容）'}</span><span class="ml-1 text-slate-500">（${fmtShort(next.d)}）</span>`
-    : `<span class="font-bold text-slate-500">下一排定工項：</span><span class="text-slate-500">尚未排定下一工項</span>`;
+  // P2 精確版：真實排程優先（子表有未來排定工項）；無排定時以「目前工項分類＋核定順序」推斷，
+  // 明確標示為推斷、與真實排程區分（規格書 § 工項順序與關鍵字對照）。
+  const nextP = make('p', 'mt-1 flex flex-wrap items-center gap-1');
+  if (next) {
+    nextP.innerHTML = `<span class="font-bold text-slate-500">下一排定工項：</span><span class="font-bold text-slate-900">${clean(next.content) || '（未填內容）'}</span><span class="text-slate-500">（${fmtShort(next.d)}）</span>`;
+  } else {
+    const inferred = inferNextStage(c);
+    if (inferred) {
+      nextP.innerHTML = `<span class="font-bold text-slate-500">下一排定工項：</span><span class="font-bold text-slate-900">${inferred}</span>`;
+      nextP.append(badge('推斷（依慣例順序，非真實排程）', 'bg-amber-100 text-amber-800'));
+    } else {
+      nextP.innerHTML = `<span class="font-bold text-slate-500">下一排定工項：</span><span class="text-slate-500">尚未排定下一工項</span>`;
+    }
+  }
   stageBox.append(nextP);
   box.append(stageBox);
 
@@ -313,8 +501,10 @@ function detailPanel(c) {
     if (!da && !db) return 0; if (!da) return 1; if (!db) return -1; return da - db;
   });
   if (!rows.length) progressBox.append(make('p', 'text-sm text-slate-400', '尚無進度紀錄'));
-  else rows.forEach((p) => progressBox.append(progressLine(p)));
+  else rows.forEach((p) => progressBox.append(progressLine(p, c)));
   box.append(progressBox);
+
+  box.append(progressAddForm(c));
 
   const payBox = make('div', 'rounded-lg bg-white p-3');
   payBox.append(make('p', 'mb-1 flex items-center justify-between text-xs font-bold text-slate-500', ''));
@@ -387,25 +577,122 @@ function renderCaseBlock(c, bounds) {
   wrapper.append(row);
 
   if (expanded) {
-    const sub = make('div', '');
-    (c.progress || []).forEach((p) => {
-      const subRow = make('div', 'flex items-stretch');
-      const subLabel = make('div', 'sticky left-0 z-10 w-[230px] flex-none border-r border-slate-100 bg-slate-50 p-2 pl-6 text-xs text-slate-600');
-      subLabel.textContent = clean(p.content) || '（未填工程內容）';
-      subRow.append(subLabel);
-      const subTrack = trackWrap(bounds);
-      const subBar = ganttBar(p.startAt, p.endAt, bounds, 'bg-slate-400', { openEnded: true });
-      if (subBar) subTrack.append(subBar);
-      subRow.append(subTrack);
-      sub.append(subRow);
-    });
-    const detailRow = make('div', 'p-3');
+    const sub = make('div', 'p-3 space-y-3 bg-slate-50');
+    sub.append(make('p', 'text-xs font-bold tracking-widest text-orange-600', '工項分行視圖'));
+    sub.append(viewToggle(c));
+    const mode = CASE_VIEW_MODE.get(c.rid) || 'gantt';
+    sub.append(mode === 'calendar' ? renderCaseCalendar(c) : renderCaseItemGantt(c));
+    const detailRow = make('div', '');
     detailRow.append(detailPanel(c));
     sub.append(detailRow);
     wrapper.append(sub);
   }
 
   return wrapper;
+}
+
+// ---------- P2：圖一式甘特（展開單案）----------
+// 左側固定 12 列＝11 工項（核定預設順序）＋「未分類」；每列橫條＝該分類子表紀錄起訖。
+// 用該案自己的日期範圍（非總覽的全案共用尺度），子表紀錄較密集時橫條才不會擠成一團。
+function renderCaseItemGantt(c) {
+  const bounds = computeBounds([c]);
+  const scroll = make('div', 'gantt-scroll rounded-xl border border-slate-200 bg-white');
+  const inner = make('div', 'inline-block min-w-full');
+  const rulerRow = make('div', 'flex items-stretch border-b border-slate-200 bg-slate-50');
+  rulerRow.append(make('div', 'sticky left-0 z-10 w-[110px] flex-none border-r border-slate-100 bg-slate-50 p-2 text-xs font-bold text-slate-500', '工項'));
+  rulerRow.append(ruler(bounds));
+  inner.append(rulerRow);
+
+  const grouped = {};
+  GANTT_ROWS.forEach((name) => { grouped[name] = []; });
+  (c.progress || []).forEach((p) => { grouped[resolveCategory(p)].push(p); });
+
+  GANTT_ROWS.forEach((name) => {
+    const items = grouped[name];
+    const rowEl = make('div', 'flex items-stretch border-b border-slate-100 last:border-b-0');
+    const label = make('div', `sticky left-0 z-10 w-[110px] flex-none border-r border-slate-100 bg-white p-2 text-xs font-bold ${name === '未分類' ? 'text-slate-400' : 'text-slate-600'}`, name);
+    rowEl.append(label);
+    const track = trackWrap(bounds);
+    if (!items.length) {
+      track.style.minHeight = '30px';
+    } else {
+      items.forEach((p, i) => {
+        const bar = ganttBar(p.startAt, p.endAt, bounds, CATEGORY_COLORS[name] || 'bg-slate-400', { openEnded: true });
+        if (!bar) return;
+        if (items.length > 1) { bar.style.top = `${6 + i * 18}px`; bar.style.transform = 'none'; }
+        track.append(bar);
+      });
+      track.style.minHeight = `${Math.max(30, items.length * 18 + 8)}px`;
+    }
+    rowEl.append(track);
+    inner.append(rowEl);
+  });
+  scroll.append(inner);
+  return scroll;
+}
+
+// ---------- P2：月曆視圖（展開單案）----------
+function renderCaseCalendar(c) {
+  let state = CASE_CAL_MONTH.get(c.rid);
+  if (!state) { const d = new Date(); state = { y: d.getFullYear(), m: d.getMonth() }; CASE_CAL_MONTH.set(c.rid, state); }
+  const first = new Date(state.y, state.m, 1);
+  const startWeekday = first.getDay();
+  const daysInMonth = new Date(state.y, state.m + 1, 0).getDate();
+  const today = todayDate();
+
+  const wrap = make('div', 'rounded-xl border border-slate-200 bg-white p-3');
+  const nav = make('div', 'mb-2 flex items-center justify-between');
+  const prevBtn = make('button', 'rounded-lg border border-slate-300 px-3 py-1 text-xs font-bold hover:bg-slate-50', '‹ 上月');
+  prevBtn.type = 'button';
+  const label = make('span', 'text-sm font-bold text-slate-700', `${state.y} 年 ${state.m + 1} 月`);
+  const nextBtn = make('button', 'rounded-lg border border-slate-300 px-3 py-1 text-xs font-bold hover:bg-slate-50', '下月 ›');
+  nextBtn.type = 'button';
+  prevBtn.addEventListener('click', () => { const d = new Date(state.y, state.m - 1, 1); CASE_CAL_MONTH.set(c.rid, { y: d.getFullYear(), m: d.getMonth() }); renderLists(); });
+  nextBtn.addEventListener('click', () => { const d = new Date(state.y, state.m + 1, 1); CASE_CAL_MONTH.set(c.rid, { y: d.getFullYear(), m: d.getMonth() }); renderLists(); });
+  nav.append(prevBtn, label, nextBtn);
+  wrap.append(nav);
+
+  const weekHead = make('div', 'grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400');
+  ['日', '一', '二', '三', '四', '五', '六'].forEach((d) => weekHead.append(make('div', '', d)));
+  wrap.append(weekHead);
+
+  const grid = make('div', 'mt-1 grid grid-cols-7 gap-1');
+  for (let i = 0; i < startWeekday; i++) grid.append(make('div', 'min-h-[56px] rounded-lg'));
+  for (let day = 1; day <= daysInMonth; day++) {
+    const cellDate = new Date(state.y, state.m, day);
+    const isToday = sameDate(cellDate, today);
+    const cell = make('div', `min-h-[56px] rounded-lg border p-1 text-left ${isToday ? 'border-rose-300 bg-rose-50' : 'border-slate-100 bg-white'}`);
+    cell.append(make('p', 'text-[10px] font-bold text-slate-500', String(day)));
+    const dots = make('div', 'mt-1 flex flex-wrap gap-0.5');
+    (c.progress || []).forEach((p) => {
+      const s = parseDateOnly(p.startAt);
+      if (!s) return;
+      let e = parseDateOnly(p.endAt);
+      if (!e) e = today > s ? today : s; // 訖日空值視為進行中，畫到今天（同甘特規則）
+      if (e < s) return; // 日期填反不畫
+      if (cellDate >= s && cellDate <= e) {
+        const cat = resolveCategory(p);
+        dots.append(make('span', `inline-block h-2 w-2 rounded-full ${CATEGORY_COLORS[cat] || 'bg-slate-400'}`));
+      }
+    });
+    if (dots.childElementCount) cell.append(dots);
+    grid.append(cell);
+  }
+  wrap.append(grid);
+  return wrap;
+}
+
+function viewToggle(c) {
+  const mode = CASE_VIEW_MODE.get(c.rid) || 'gantt';
+  const row = make('div', 'flex gap-2');
+  const ganttBtn = make('button', `rounded-lg px-3 py-1 text-xs font-bold ${mode === 'gantt' ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-600'}`, '圖一式甘特');
+  ganttBtn.type = 'button';
+  const calBtn = make('button', `rounded-lg px-3 py-1 text-xs font-bold ${mode === 'calendar' ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-600'}`, '月曆');
+  calBtn.type = 'button';
+  ganttBtn.addEventListener('click', (e) => { e.stopPropagation(); CASE_VIEW_MODE.set(c.rid, 'gantt'); renderLists(); });
+  calBtn.addEventListener('click', (e) => { e.stopPropagation(); CASE_VIEW_MODE.set(c.rid, 'calendar'); renderLists(); });
+  row.append(ganttBtn, calBtn);
+  return row;
 }
 
 function renderGantt(cases) {
