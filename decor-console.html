@@ -24,20 +24,28 @@
       theme: {
         extend: {
           colors: {
-            ink: '#3F5262',
-            inkdeep: '#232B33',
-            inkmuted: '#5C6B77',
-            inkfaint: '#8B98A3',
-            paper: '#F8FAFC',
-            line: '#DCE3E8',
-            coral: '#DD6650',
-            coraldark: '#B03B26',
-            coraltint: '#FBEAE6',
-            flag: '#F2CF00',
-            flagdark: '#8A6E05',
+            // Monday 原味方案 A（2026-07-22 Joan 拍板）：白底＋淺灰側欄，狀態色改高飽和 Monday 系，
+            // 窩的家 CI 色（coral）退場只留 logo；ink 系改為 Monday 中性文字色階。
+            ink: '#323338',
+            inkmuted: '#676879',
+            inkfaint: '#9699A6',
+            paper: '#F6F7FB',
+            line: '#E6E9EF',
+            coral: '#DD6650', // CI 品牌識別色，僅用於 logo 方塊
+            accent: '#0073EA', // Monday accent 藍：側欄選中／連結／主按鈕／活躍 tab
+            accenttint: '#E6F1FE',
+            mred: '#E2445C', // 狀態：逾期（膠囊／強調色）
+            mreddark: '#B0193A', // 逾期文字（白底可讀對比）
+            mredtint: '#FDE8EC',
+            flag: '#FFCB00', // 狀態：停更黃燈（膠囊色）
+            flagdark: '#9C6D00',
             flagtint: '#FFF7CC',
-            sage: '#4C7A63',
+            mgreen: '#00C875', // 狀態：正常（膠囊色）
+            mgreenink: '#0B3D26', // 正常膠囊深字
+            sage: '#4C7A63', // 既有功能性成功色（付款已收／完成提示），非 CI 色不變
             sagetint: '#EAF3EE',
+            avatarblue: '#579BFC', // 監工頭像色（沿用 Monday 視覺基準稿）
+            avatarpurple: '#A25DDC',
           },
         },
       },
@@ -48,8 +56,8 @@
     button, select { min-height: 40px; }
     .gantt-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .gantt-bar { position: absolute; top: 50%; transform: translateY(-50%); height: 14px; border-radius: 7px; }
-    .gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(221,102,80,.6); z-index: 5; }
-    .gantt-today-label { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: 700; color: #B03B26; white-space: nowrap; }
+    .gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(0,115,234,.55); z-index: 5; }
+    .gantt-today-label { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: 700; color: #0059B3; white-space: nowrap; }
     .tnum { font-variant-numeric: tabular-nums; }
     #toast { transition: opacity 200ms ease-out; }
     #moreSheetPanel { transition: transform 200ms ease-out; }
@@ -61,33 +69,32 @@
 <body class="min-h-screen bg-paper text-ink">
   <div id="app" hidden>
     <div class="flex h-screen flex-col lg:flex-row">
-      <!-- 桌機側欄：深色（CI 深藍灰加深版），與冷白主工作區對比 -->
-      <aside class="hidden w-60 shrink-0 flex-col bg-inkdeep lg:flex">
-        <div class="flex items-center gap-2.5 border-b border-white/10 p-4">
+      <!-- 桌機側欄：Monday 原味淺灰，與冷白主工作區以邊框區隔（2026-07-22 Joan 拍板方案 A） -->
+      <aside class="hidden w-60 shrink-0 flex-col border-r border-line bg-paper lg:flex">
+        <div class="flex items-center gap-2.5 border-b border-line p-4">
           <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-coral text-sm font-black text-white" aria-hidden="true">窩</span>
           <div class="min-w-0">
-            <p class="truncate text-sm font-black text-white">窩的家工程平台</p>
-            <p id="sidebarSubtitle" class="truncate text-[11px] font-bold text-white/50">設計部</p>
+            <p class="truncate text-sm font-black text-ink">窩的家工程平台</p>
+            <p id="sidebarSubtitle" class="truncate text-[11px] font-bold text-inkmuted">設計部</p>
           </div>
         </div>
         <nav id="sidebarNav" class="flex-1 space-y-1 overflow-y-auto p-3" aria-label="主要模組"></nav>
-        <div id="sidebarPlanned" class="space-y-1 border-t border-white/10 p-3"></div>
+        <div id="sidebarPlanned" class="space-y-1 border-t border-line p-3"></div>
       </aside>
 
       <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header class="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-white px-4 py-3 lg:px-6">
           <div class="flex min-w-0 items-center gap-2.5 lg:hidden">
-            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ink text-xs font-black text-white" aria-hidden="true">窩</span>
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-coral text-xs font-black text-white" aria-hidden="true">窩</span>
             <span class="truncate text-sm font-black text-ink">窩的家工程平台</span>
           </div>
           <h1 id="pageTitle" class="hidden text-lg font-black text-ink lg:block">儀表板</h1>
           <div class="flex shrink-0 items-center gap-2">
-            <span id="roleBadge" class="hidden rounded-full bg-ink/10 px-2.5 py-1 text-xs font-bold text-ink sm:inline-block"></span>
+            <span id="roleBadge" class="hidden rounded-full bg-accenttint px-2.5 py-1 text-xs font-bold text-accent sm:inline-block"></span>
             <span id="updatedAt" class="tnum hidden text-xs text-inkmuted lg:inline"></span>
-            <button id="refreshButton" type="button" class="rounded-xl border border-line px-3 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink sm:px-4">重新整理</button>
+            <button id="refreshButton" type="button" class="rounded-xl border border-line px-3 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:px-4">重新整理</button>
           </div>
         </header>
-        <div class="h-[3px] w-full shrink-0 bg-gradient-to-r from-coral via-flag to-ink" aria-hidden="true"></div>
 
         <main id="mainRoot" class="flex-1 overflow-y-auto px-4 pb-24 pt-5 lg:px-6 lg:pb-6">
           <div id="filterBanner" hidden class="mb-4"></div>
@@ -100,23 +107,31 @@
             </div>
             <section id="actionSection" aria-labelledby="actionTitle">
               <div class="mb-3">
-                <p class="text-xs font-bold tracking-wide text-coraldark">今天該處理</p>
+                <p class="text-xs font-bold tracking-wide text-inkmuted">今天該處理</p>
                 <h2 id="actionTitle" class="text-xl font-black text-ink sm:text-2xl">需要處理</h2>
                 <p class="mt-1 text-sm text-inkmuted">逾期與停更案件依嚴重度排序，打開就知道今天該催誰。</p>
               </div>
               <div id="actionList" class="space-y-3"></div>
+            </section>
+            <section id="progressSection" aria-labelledby="progressTitle">
+              <div class="mb-3">
+                <p class="text-xs font-bold tracking-wide text-inkmuted">目前工程</p>
+                <h2 id="progressTitle" class="text-xl font-black text-ink sm:text-2xl">進行中</h2>
+                <p class="mt-1 text-sm text-inkmuted">沒有逾期或停更疑慮的案件，依合約結案日排序。</p>
+              </div>
+              <div id="progressGroup"></div>
             </section>
           </section>
 
           <!-- 模組：工程案件 -->
           <section id="view-cases" class="module-view space-y-4" hidden>
             <div>
-              <p class="text-xs font-bold tracking-wide text-coraldark">案件總覽</p>
+              <p class="text-xs font-bold tracking-wide text-inkmuted">案件總覽</p>
               <h2 class="text-xl font-black text-ink sm:text-2xl">工程案件</h2>
             </div>
             <div class="flex gap-2" role="tablist" aria-label="工程案件檢視">
-              <button id="casesTabActive" type="button" role="tab" class="rounded-xl px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink">進行中</button>
-              <button id="casesTabClosed" type="button" role="tab" class="rounded-xl px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink">已結案／暫停中</button>
+              <button id="casesTabActive" type="button" role="tab" class="rounded-xl px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">進行中</button>
+              <button id="casesTabClosed" type="button" role="tab" class="rounded-xl px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">已結案／暫停中</button>
             </div>
             <div id="casesActivePanel">
               <div id="normalList" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
@@ -131,11 +146,11 @@
             <div id="ganttOverview">
               <div class="mb-3 flex flex-wrap items-end justify-between gap-2">
                 <div>
-                  <p class="text-xs font-bold tracking-wide text-coraldark">甘特圖</p>
+                  <p class="text-xs font-bold tracking-wide text-inkmuted">甘特圖</p>
                   <h2 class="text-xl font-black text-ink sm:text-2xl">設計部總覽</h2>
                   <p class="mt-1 text-sm text-inkmuted">點案名開啟該案專屬甘特圖；紅色代表合約已逾期。手機可左右滑動看時間軸。</p>
                 </div>
-                <button id="ganttRangeToggle" type="button" class="shrink-0 rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink">看全程</button>
+                <button id="ganttRangeToggle" type="button" class="shrink-0 rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">看全程</button>
               </div>
               <div id="ganttWrap" class="rounded-2xl border border-line bg-white"></div>
             </div>
@@ -177,7 +192,7 @@
           <p id="caseDrawerName" class="truncate text-lg font-black text-ink"></p>
           <p id="caseDrawerMeta" class="tnum truncate text-xs text-inkmuted"></p>
         </div>
-        <button id="caseDrawerClose" type="button" class="shrink-0 rounded-xl border border-line px-3 py-2 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink">關閉</button>
+        <button id="caseDrawerClose" type="button" class="shrink-0 rounded-xl border border-line px-3 py-2 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">關閉</button>
       </div>
       <div id="caseDrawerBody" class="flex-1 overflow-y-auto p-4"></div>
     </div>
@@ -354,7 +369,7 @@ function setGlobalMessage(mode, text) {
   const m = byId('globalMessage');
   if (!mode) { m.hidden = true; m.replaceChildren(); return; }
   const isError = mode === 'error';
-  const box = make('div', `rounded-2xl border p-5 text-center text-sm ${isError ? 'border-coral bg-coraltint text-coraldark' : 'border-line bg-white text-inkmuted'}`, text);
+  const box = make('div', `rounded-2xl border p-5 text-center text-sm ${isError ? 'border-mred bg-mredtint text-mreddark' : 'border-line bg-white text-inkmuted'}`, text);
   m.replaceChildren(box);
   m.hidden = false;
 }
@@ -362,8 +377,18 @@ function setGlobalMessage(mode, text) {
 function badge(text, cls) { return make('span', `inline-block rounded-full px-2 py-0.5 text-xs font-bold ${cls}`, text); }
 
 function statusDot(kind) {
-  const cls = kind === 'overdue' ? 'bg-coral' : kind === 'stale' ? 'bg-flag' : kind === 'issue' ? 'bg-inkfaint' : 'bg-sage';
+  const cls = kind === 'overdue' ? 'bg-mred' : kind === 'stale' ? 'bg-flag' : kind === 'issue' ? 'bg-inkfaint' : 'bg-sage';
   return make('span', `mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-full ${cls}`);
+}
+
+// ---------- Monday 式狀態膠囊（滿底色；黃／綠膠囊配深色字保對比，判定邏輯沿用呼叫端 isOverdue/isStale）----------
+function statusPill(kind) {
+  const cfg = kind === 'overdue'
+    ? { cls: 'bg-mred text-white', label: '已逾期' }
+    : kind === 'stale'
+      ? { cls: 'bg-flag text-ink', label: '停更中' }
+      : { cls: 'bg-mgreen text-mgreenink', label: '正常' };
+  return make('span', `inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap ${cfg.cls}`, cfg.label);
 }
 
 function progressBar(ratio) {
@@ -375,7 +400,7 @@ function progressBar(ratio) {
   track.setAttribute('aria-valuenow', String(num));
   track.setAttribute('aria-valuemin', '0');
   track.setAttribute('aria-valuemax', '100');
-  const fill = make('div', 'h-full rounded-full bg-ink');
+  const fill = make('div', 'h-full rounded-full bg-accent');
   fill.style.width = `${num}%`;
   track.append(fill);
   wrap.append(track, make('p', 'tnum mt-1 text-[11px] font-bold text-inkmuted', `已繳款比例 ${pct(ratio)}`));
@@ -393,12 +418,12 @@ function emptyNote(text, tone) {
 function statChip(label, value, kind) {
   const active = kind === 'all' ? !FILTER_MODE : FILTER_MODE === kind;
   const theme = kind === 'overdue'
-    ? (active ? 'border-coral bg-coraltint' : 'border-line bg-white hover:bg-coraltint/40')
+    ? (active ? 'border-mred bg-mredtint' : 'border-line bg-white hover:bg-mredtint/40')
     : kind === 'stale'
       ? (active ? 'border-flag bg-flagtint' : 'border-line bg-white hover:bg-flagtint/40')
-      : (active ? 'border-ink bg-paper' : 'border-line bg-white hover:bg-paper');
-  const numColor = kind === 'overdue' ? 'text-coraldark' : kind === 'stale' ? 'text-flagdark' : 'text-ink';
-  const btn = make('button', `flex flex-col items-start rounded-2xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink sm:p-4 ${theme}`);
+      : (active ? 'border-accent bg-accenttint' : 'border-line bg-white hover:bg-paper');
+  const numColor = kind === 'overdue' ? 'text-mred' : kind === 'stale' ? 'text-flagdark' : 'text-ink';
+  const btn = make('button', `flex flex-col items-start rounded-2xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:p-4 ${theme}`);
   btn.type = 'button';
   btn.setAttribute('aria-pressed', active ? 'true' : 'false');
   btn.append(make('p', 'text-[11px] font-bold text-inkmuted sm:text-xs', label), make('p', `tnum mt-1 text-2xl font-black sm:text-3xl ${numColor}`, String(value)));
@@ -423,9 +448,10 @@ function renderFilterBanner() {
   const el = byId('filterBanner');
   if (!FILTER_MODE) { el.hidden = true; el.replaceChildren(); return; }
   const label = FILTER_MODE === 'overdue' ? '逾期案件' : '停更黃燈案件';
-  const inner = make('div', 'flex flex-wrap items-center justify-between gap-2 rounded-xl border border-ink bg-white px-4 py-2.5 text-sm');
+  const borderCls = FILTER_MODE === 'overdue' ? 'border-mred bg-mredtint' : 'border-flag bg-flagtint';
+  const inner = make('div', `flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-2.5 text-sm ${borderCls}`);
   inner.append(make('span', 'font-bold text-ink', `篩選中：只顯示${label}`));
-  const clearBtn = make('button', 'font-bold text-coraldark underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '清除篩選，顯示全部');
+  const clearBtn = make('button', 'font-bold text-accent underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', '清除篩選，顯示全部');
   clearBtn.type = 'button';
   clearBtn.addEventListener('click', () => { FILTER_MODE = null; renderLists(); });
   inner.append(clearBtn);
@@ -448,17 +474,19 @@ function actionSentence(c) {
 // 一方參照版：詳情不在卡片內展開，改點按鈕從右側滑出情境面板（見 openCaseDrawer）。
 function caseCard(c, kind) {
   // kind: 'overdue' | 'stale' | 'normal'
-  const accent = kind === 'overdue' ? 'border-l-4 border-l-coral' : kind === 'stale' ? 'border-l-4 border-l-flag' : 'border-l-4 border-l-transparent';
+  const accent = kind === 'overdue' ? 'border-l-4 border-l-mred' : kind === 'stale' ? 'border-l-4 border-l-flag' : 'border-l-4 border-l-transparent';
   const card = make('div', `rounded-2xl border border-line bg-white p-4 shadow-sm ${accent}`);
 
-  const head = make('div', 'flex items-start gap-2');
-  head.append(statusDot(kind));
+  const head = make('div', 'flex items-start justify-between gap-2');
+  const headLeft = make('div', 'flex min-w-0 flex-1 items-start gap-2');
+  headLeft.append(statusDot(kind));
   const nameCol = make('div', 'min-w-0 flex-1');
   nameCol.append(make('p', 'truncate text-lg font-extrabold text-ink', c.name));
   if (kind !== 'normal') {
-    nameCol.append(make('p', `mt-0.5 text-sm font-bold ${kind === 'overdue' ? 'text-coraldark' : 'text-flagdark'}`, actionSentence(c)));
+    nameCol.append(make('p', `mt-0.5 text-sm font-bold ${kind === 'overdue' ? 'text-mreddark' : 'text-flagdark'}`, actionSentence(c)));
   }
-  head.append(nameCol);
+  headLeft.append(nameCol);
+  head.append(headLeft, statusPill(kind));
   card.append(head);
 
   card.append(make('p', 'mt-2 truncate text-xs text-inkmuted', `監工 ${c.supervisor || '—'}・接案 ${c.assignee || '—'}`));
@@ -468,7 +496,7 @@ function caseCard(c, kind) {
   card.append(make('p', 'tnum mt-0.5 text-xs text-inkmuted', `工期 ${c.startAt || '—'} ~ ${c.endAt || '—'}`));
   card.append(progressBar(c.paidRatio));
 
-  const detailBtn = make('button', 'mt-3 w-full rounded-xl border border-line py-2 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '查看詳情・新增進度 →');
+  const detailBtn = make('button', 'mt-3 w-full rounded-xl border border-line py-2 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', '查看詳情・新增進度 →');
   detailBtn.type = 'button';
   detailBtn.addEventListener('click', () => openCaseDrawer(c, detailBtn));
   card.append(detailBtn);
@@ -476,14 +504,105 @@ function caseCard(c, kind) {
   return card;
 }
 
+// ---------- Monday 式群組表格（僅儀表板用）：桌機為表格、手機沿用 caseCard 卡片，同一份 cases 兩種呈現，
+// 純呈現重排，isOverdue/isStale/staleDaysCount 等判定函式逐字沿用不改 ----------
+const GROUP_COLS = 'minmax(200px,1.6fr) 92px minmax(96px,124px) 148px minmax(120px,158px) 84px';
+const AVATAR_HUES = ['bg-avatarblue', 'bg-avatarpurple'];
+function abbrevName(name) {
+  const s = clean(name);
+  if (!s) return '—';
+  return s.length > 2 ? s.slice(-2) : s;
+}
+function avatarHue(name) {
+  const s = clean(name);
+  if (!s) return 'bg-inkfaint';
+  let sum = 0;
+  for (let i = 0; i < s.length; i++) sum += s.charCodeAt(i);
+  return AVATAR_HUES[sum % AVATAR_HUES.length];
+}
+function supervisorCell(name) {
+  const s = clean(name);
+  const wrap = make('div', 'flex flex-col items-center gap-1');
+  wrap.append(
+    make('div', `flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-black text-white ${avatarHue(s)}`, abbrevName(s)),
+    make('p', 'max-w-[80px] truncate text-[11px] font-semibold text-inkmuted', s || '—')
+  );
+  return wrap;
+}
+function paidCell(ratio) {
+  const num = (ratio === null || ratio === undefined || ratio === '') ? 0 : Math.max(0, Math.min(100, Math.round(Number(ratio) * 100)));
+  const wrap = make('div', 'flex items-center gap-2');
+  const track = make('div', 'h-1.5 min-w-[48px] flex-1 overflow-hidden rounded-full bg-line');
+  const fill = make('div', 'h-full rounded-full bg-accent');
+  fill.style.width = `${num}%`;
+  track.append(fill);
+  wrap.append(track, make('span', 'tnum w-10 shrink-0 text-right text-xs font-bold text-ink', pct(ratio)));
+  return wrap;
+}
+function staleDaysCell(c) {
+  const d = staleDaysCount(c);
+  if (d === null) return make('span', 'tnum text-xs font-bold text-inkfaint', '—');
+  const cls = isOverdue(c) ? 'text-mred' : isStale(c) ? 'text-flagdark' : 'text-inkfaint';
+  return make('span', `tnum text-xs font-bold ${cls}`, `${d} 天`);
+}
+function groupNameCell(c) {
+  const wrap = make('div', 'min-w-0');
+  const p = make('p', 'truncate text-sm font-extrabold text-ink', c.name);
+  p.title = c.name;
+  wrap.append(p);
+  const sentence = actionSentence(c);
+  if (sentence) wrap.append(make('p', `mt-0.5 truncate text-xs font-bold ${isOverdue(c) ? 'text-mreddark' : 'text-flagdark'}`, sentence));
+  return wrap;
+}
+function groupHeaderRow() {
+  const head = make('div', 'grid items-center gap-3 border-b border-line bg-paper px-5 py-2 text-[11px] font-bold text-inkfaint');
+  head.style.gridTemplateColumns = GROUP_COLS;
+  ['案名', '狀態', '監工', '工期', '已繳款', '停更天數'].forEach((t, i) => head.append(make('div', i === 5 ? 'text-center' : '', t)));
+  return head;
+}
+function groupRow(c) {
+  const kind = isOverdue(c) ? 'overdue' : isStale(c) ? 'stale' : 'normal';
+  const row = make('div', 'grid cursor-pointer items-center gap-3 border-b border-line/70 px-5 py-3 last:border-b-0 odd:bg-white even:bg-paper hover:bg-accenttint/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent');
+  row.style.gridTemplateColumns = GROUP_COLS;
+  row.setAttribute('role', 'button');
+  row.tabIndex = 0;
+  row.setAttribute('aria-label', `查看「${c.name}」詳情`);
+  row.append(
+    groupNameCell(c),
+    statusPill(kind),
+    supervisorCell(c.supervisor),
+    make('p', 'tnum text-xs font-semibold text-inkmuted', `${c.startAt || '—'} ~ ${c.endAt || '—'}`),
+    paidCell(c.paidRatio),
+    staleDaysCell(c)
+  );
+  const open = () => openCaseDrawer(c, row);
+  row.addEventListener('click', open);
+  row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  return row;
+}
+// stripeKind 只決定群組左側色條（純呈現），cases 內容與排序完全沿用呼叫端已算好的陣列
+function dashboardGroup(cases, stripeKind, emptyText, emptyTone) {
+  if (!cases.length) return emptyNote(emptyText, emptyTone);
+  const stripe = stripeKind === 'urgent' ? 'border-l-mred' : 'border-l-accent';
+  const wrap = make('div', `overflow-hidden rounded-2xl border border-l-4 border-line bg-white shadow-sm ${stripe}`);
+  const desktopWrap = make('div', 'hidden overflow-x-auto lg:block');
+  desktopWrap.append(groupHeaderRow());
+  cases.forEach((c) => desktopWrap.append(groupRow(c)));
+  wrap.append(desktopWrap);
+  const mobileWrap = make('div', 'grid gap-3 p-3 lg:hidden');
+  cases.forEach((c) => mobileWrap.append(caseCard(c, isOverdue(c) ? 'overdue' : isStale(c) ? 'stale' : 'normal')));
+  wrap.append(mobileWrap);
+  return wrap;
+}
 function renderActionFeed(cases) {
   const wrap = byId('actionList');
   wrap.replaceChildren();
-  if (!cases.length) {
-    wrap.append(emptyNote('目前沒有需要特別催的案件，逾期與停更案件都清空了。', 'sage'));
-    return;
-  }
-  cases.forEach((c) => wrap.append(caseCard(c, isOverdue(c) ? 'overdue' : 'stale')));
+  wrap.append(dashboardGroup(cases, 'urgent', '目前沒有需要特別催的案件，逾期與停更案件都清空了。', 'sage'));
+}
+function renderProgressGroup(cases) {
+  const wrap = byId('progressGroup');
+  wrap.replaceChildren();
+  wrap.append(dashboardGroup(cases, 'progress', '目前沒有其他工程中案件。'));
 }
 function renderNormalList(cases) {
   const wrap = byId('normalList');
@@ -678,18 +797,18 @@ function progressAddForm(c) {
 
   const dateRow = make('div', 'grid grid-cols-2 gap-2');
   const startWrap = make('label', 'block text-xs font-bold text-inkmuted', '工程時間(起) *');
-  const startInput = make('input', 'mt-1 block w-full rounded-lg border border-line px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
+  const startInput = make('input', 'mt-1 block w-full rounded-lg border border-line px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent');
   startInput.type = 'date'; startInput.required = true;
   startWrap.append(startInput);
   const endWrap = make('label', 'block text-xs font-bold text-inkmuted', '工程時間(訖)');
-  const endInput = make('input', 'mt-1 block w-full rounded-lg border border-line px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
+  const endInput = make('input', 'mt-1 block w-full rounded-lg border border-line px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent');
   endInput.type = 'date';
   endWrap.append(endInput);
   dateRow.append(startWrap, endWrap);
   form.append(dateRow);
 
   const catWrap = make('label', 'block text-xs font-bold text-inkmuted', '工項分類 *');
-  const catSelect = make('select', 'mt-1 block w-full rounded-lg border border-line px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
+  const catSelect = make('select', 'mt-1 block w-full rounded-lg border border-line px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent');
   catSelect.required = true;
   const placeholderOpt = make('option', '', '請選擇');
   placeholderOpt.value = '';
@@ -703,7 +822,7 @@ function progressAddForm(c) {
   form.append(catWrap);
 
   const contentWrap = make('label', 'block text-xs font-bold text-inkmuted', '工程內容 *');
-  const contentInput = make('textarea', 'mt-1 block w-full rounded-lg border border-line px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
+  const contentInput = make('textarea', 'mt-1 block w-full rounded-lg border border-line px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent');
   contentInput.required = true; contentInput.rows = 2;
   contentWrap.append(contentInput);
   form.append(contentWrap);
@@ -717,7 +836,7 @@ function progressAddForm(c) {
   const msg = make('p', 'hidden text-xs font-bold');
   form.append(msg);
 
-  const submitBtn = make('button', 'w-full rounded-xl bg-ink px-4 py-2 text-sm font-bold text-white hover:bg-ink/90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2', '送出進度紀錄');
+  const submitBtn = make('button', 'w-full rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent/90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2', '送出進度紀錄');
   submitBtn.type = 'submit';
   form.append(submitBtn);
 
@@ -726,7 +845,7 @@ function progressAddForm(c) {
     msg.className = 'hidden text-xs font-bold';
     if (!startInput.value || !catSelect.value || !contentInput.value.trim()) {
       msg.textContent = '請填寫必填欄位（起日／工項分類／工程內容）';
-      msg.className = 'text-xs font-bold text-coraldark';
+      msg.className = 'text-xs font-bold text-mreddark';
       return;
     }
     submitBtn.disabled = true; submitBtn.textContent = '送出中…';
@@ -745,7 +864,7 @@ function progressAddForm(c) {
       await loadAll();
     } catch (err) {
       msg.textContent = `送出失敗：${err.message}`;
-      msg.className = 'text-xs font-bold text-coraldark';
+      msg.className = 'text-xs font-bold text-mreddark';
       submitBtn.disabled = false; submitBtn.textContent = '送出進度紀錄';
     }
   });
@@ -758,7 +877,7 @@ function detailPanel(c) {
   const box = make('div', 'mt-3 space-y-3 rounded-xl bg-paper p-3 sm:p-4');
 
   // 兩層甘特入口②：詳情抽屜直達該案專屬甘特頁（見 renderGanttDetail）。
-  const gotoGanttBtn = make('button', 'flex w-full items-center justify-center gap-1.5 rounded-xl border border-line bg-white py-2 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '看此案甘特圖 →');
+  const gotoGanttBtn = make('button', 'flex w-full items-center justify-center gap-1.5 rounded-xl border border-line bg-white py-2 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', '看此案甘特圖 →');
   gotoGanttBtn.type = 'button';
   gotoGanttBtn.addEventListener('click', () => {
     closeCaseDrawer();
@@ -818,14 +937,14 @@ function detailPanel(c) {
   if (contractCount > 1) {
     const list = make('div', 'flex flex-wrap gap-2');
     for (let i = 0; i < contractCount; i++) {
-      const link = make('a', 'inline-block rounded-xl bg-ink px-3 py-2 text-xs font-bold text-white hover:bg-ink/90', `合約附件 ${i + 1}`);
+      const link = make('a', 'inline-block rounded-xl bg-accent px-3 py-2 text-xs font-bold text-white hover:bg-accent/90', `合約附件 ${i + 1}`);
       link.href = `${API_BASE}/decorContractFile?rid=${encodeURIComponent(c.rid)}&idx=${i}&token=${encodeURIComponent(TOKEN)}`;
       link.target = '_blank'; link.rel = 'noopener noreferrer';
       list.append(link);
     }
     fileBox.append(list);
   } else if (contractCount === 1) {
-    const link = make('a', 'inline-block rounded-xl bg-ink px-4 py-2 text-sm font-bold text-white hover:bg-ink/90', '開啟合約附件');
+    const link = make('a', 'inline-block rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent/90', '開啟合約附件');
     link.href = `${API_BASE}/decorFile/${encodeURIComponent(c.rid)}?token=${encodeURIComponent(TOKEN)}`;
     link.target = '_blank'; link.rel = 'noopener noreferrer';
     fileBox.append(link);
@@ -885,13 +1004,13 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !byId('c
 function renderCaseBlock(c, bounds) {
   const overdue = isOverdue(c);
   const stale = isStale(c);
-  const wrapper = make('div', `border-b border-line last:border-b-0 ${overdue ? 'bg-coraltint/40' : ''}`);
+  const wrapper = make('div', `border-b border-line last:border-b-0 ${overdue ? 'bg-mredtint/40' : ''}`);
 
   const row = make('div', 'flex w-full cursor-pointer items-stretch text-left transition-colors hover:bg-paper/70');
   row.setAttribute('role', 'button');
   row.setAttribute('tabindex', '0');
   row.setAttribute('aria-label', `開啟「${c.name}」專屬甘特圖`);
-  const label = make('div', `sticky left-0 z-10 border-r border-line bg-white p-3 ${overdue ? 'bg-coraltint' : ''}`);
+  const label = make('div', `sticky left-0 z-10 border-r border-line bg-white p-3 ${overdue ? 'bg-mredtint' : ''}`);
   label.style.width = `${LABEL_COL_MAIN}px`;
   const nameRow = make('div', 'flex items-start gap-1.5');
   nameRow.append(statusDot(overdue ? 'overdue' : stale ? 'stale' : 'normal'));
@@ -903,17 +1022,17 @@ function renderCaseBlock(c, bounds) {
   lastWorkItemLine.title = clean(c.lastWorkItem) || '—';
   label.append(lastWorkItemLine);
   const badgeRow = make('div', 'mt-1 flex flex-wrap gap-1');
-  if (overdue) badgeRow.append(badge('逾期', 'bg-coraltint text-coraldark'));
+  if (overdue) badgeRow.append(badge('逾期', 'bg-mredtint text-mreddark'));
   if (stale) badgeRow.append(badge('催更', 'bg-flagtint text-flagdark'));
   if (badgeRow.childElementCount) label.append(badgeRow);
-  const detailBtn = make('button', 'mt-1.5 inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-[11px] font-bold text-ink hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '詳情 →');
+  const detailBtn = make('button', 'mt-1.5 inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-[11px] font-bold text-ink hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', '詳情 →');
   detailBtn.type = 'button';
   detailBtn.addEventListener('click', (e) => { e.stopPropagation(); openCaseDrawer(c, detailBtn); });
   label.append(detailBtn);
   row.append(label);
 
   const track = trackWrap(bounds);
-  const bar = ganttBar(c.startAt, c.endAt, bounds, overdue ? 'bg-coral' : 'bg-ink');
+  const bar = ganttBar(c.startAt, c.endAt, bounds, overdue ? 'bg-mred' : 'bg-ink');
   if (bar) track.append(bar);
   else {
     const note = make('div', 'absolute left-2 top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] font-bold text-inkfaint', '不在目前檢視範圍・點「看全程」查看');
@@ -1001,7 +1120,7 @@ function renderCaseCalendar(c) {
   for (let day = 1; day <= daysInMonth; day++) {
     const cellDate = new Date(state.y, state.m, day);
     const isToday = sameDate(cellDate, today);
-    const cell = make('div', `min-h-[56px] rounded-lg border p-1 text-left ${isToday ? 'border-coral bg-coraltint' : 'border-line bg-white'}`);
+    const cell = make('div', `min-h-[56px] rounded-lg border p-1 text-left ${isToday ? 'border-accent bg-accenttint' : 'border-line bg-white'}`);
     cell.append(make('p', 'tnum text-[10px] font-bold text-inkmuted', String(day)));
     const dots = make('div', 'mt-1 flex flex-wrap gap-0.5');
     (c.progress || []).forEach((p) => {
@@ -1025,9 +1144,9 @@ function renderCaseCalendar(c) {
 function viewToggle(c) {
   const mode = CASE_VIEW_MODE.get(c.rid) || 'gantt';
   const row = make('div', 'flex gap-2');
-  const ganttBtn = make('button', `rounded-lg px-3 py-1 text-xs font-bold ${mode === 'gantt' ? 'bg-ink text-white' : 'border border-line text-inkmuted'}`, '圖一式甘特');
+  const ganttBtn = make('button', `rounded-lg px-3 py-1 text-xs font-bold ${mode === 'gantt' ? 'bg-accent text-white' : 'border border-line text-inkmuted'}`, '圖一式甘特');
   ganttBtn.type = 'button';
-  const calBtn = make('button', `rounded-lg px-3 py-1 text-xs font-bold ${mode === 'calendar' ? 'bg-ink text-white' : 'border border-line text-inkmuted'}`, '月曆');
+  const calBtn = make('button', `rounded-lg px-3 py-1 text-xs font-bold ${mode === 'calendar' ? 'bg-accent text-white' : 'border border-line text-inkmuted'}`, '月曆');
   calBtn.type = 'button';
   ganttBtn.addEventListener('click', (e) => { e.stopPropagation(); CASE_VIEW_MODE.set(c.rid, 'gantt'); renderLists(); });
   calBtn.addEventListener('click', (e) => { e.stopPropagation(); CASE_VIEW_MODE.set(c.rid, 'calendar'); renderLists(); });
@@ -1046,11 +1165,11 @@ function ganttDetailHeader(c) {
   const wrap = make('div', 'mb-4 space-y-3');
 
   const topRow = make('div', 'flex flex-wrap items-center justify-between gap-2');
-  const backBtn = make('button', 'inline-flex items-center gap-1 rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '← 回到設計部總覽');
+  const backBtn = make('button', 'inline-flex items-center gap-1 rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', '← 回到設計部總覽');
   backBtn.type = 'button';
   backBtn.addEventListener('click', () => { location.hash = 'gantt'; });
   topRow.append(backBtn);
-  const openDrawerBtn = make('button', 'inline-flex items-center gap-1 rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '查看詳情・新增進度 →');
+  const openDrawerBtn = make('button', 'inline-flex items-center gap-1 rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', '查看詳情・新增進度 →');
   openDrawerBtn.type = 'button';
   openDrawerBtn.addEventListener('click', () => openCaseDrawer(c, openDrawerBtn));
   topRow.append(openDrawerBtn);
@@ -1061,7 +1180,7 @@ function ganttDetailHeader(c) {
   const nameCol = make('div', 'min-w-0 flex-1');
   nameCol.append(make('p', 'truncate text-xl font-black text-ink sm:text-2xl', c.name));
   if (overdue || stale) {
-    nameCol.append(make('p', `mt-0.5 text-sm font-bold ${overdue ? 'text-coraldark' : 'text-flagdark'}`, actionSentence(c)));
+    nameCol.append(make('p', `mt-0.5 text-sm font-bold ${overdue ? 'text-mreddark' : 'text-flagdark'}`, actionSentence(c)));
   }
   nameRow.append(nameCol);
   wrap.append(nameRow);
@@ -1079,7 +1198,7 @@ function ganttDetailHeader(c) {
 
 function ganttDetailNotFoundBox() {
   const wrap = make('div', 'space-y-3');
-  const backBtn = make('button', 'inline-flex items-center gap-1 rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '← 回到設計部總覽');
+  const backBtn = make('button', 'inline-flex items-center gap-1 rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', '← 回到設計部總覽');
   backBtn.type = 'button';
   backBtn.addEventListener('click', () => { location.hash = 'gantt'; });
   wrap.append(backBtn, emptyNote('找不到這個案件，或資料尚未載入完成，請稍候或按「重新整理」。'));
@@ -1213,7 +1332,7 @@ function closedCard(c) {
   const closedWorkItem = make('p', 'mt-1 truncate text-xs font-semibold text-inkmuted', `最新工項：${clean(c.lastWorkItem) || '—'}`);
   closedWorkItem.title = clean(c.lastWorkItem) || '—';
   card.append(closedWorkItem);
-  const detailBtn = make('button', 'mt-3 w-full rounded-xl border border-line py-2 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '查看詳情 →');
+  const detailBtn = make('button', 'mt-3 w-full rounded-xl border border-line py-2 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', '查看詳情 →');
   detailBtn.type = 'button';
   detailBtn.addEventListener('click', () => openCaseDrawer(c, detailBtn));
   card.append(detailBtn);
@@ -1226,6 +1345,7 @@ function renderLists() {
 
   if (!active.length) {
     byId('actionSection').hidden = true;
+    byId('progressSection').hidden = true;
     renderFilterBanner();
     renderNormalList([]);
     renderGantt([]);
@@ -1236,6 +1356,7 @@ function renderLists() {
     return;
   }
   byId('actionSection').hidden = false;
+  byId('progressSection').hidden = false;
 
   const dataIssueCases = active.filter((c) => dateIssue(c));
   const workable = active.filter((c) => !dateIssue(c));
@@ -1260,6 +1381,7 @@ function renderLists() {
 
   renderFilterBanner();
   renderActionFeed(urgent);
+  renderProgressGroup(normal);
   renderNormalList(normal);
   renderGantt(FILTER_MODE ? urgent : urgent.concat(normal));
   renderDataIssueList(dataIssueCases);
@@ -1343,16 +1465,16 @@ function updateBadges() {
   const b2 = byId('moreSheetPendingBadge'); if (b2) b2.textContent = String(PENDING_COUNT);
 }
 
-// 深色側欄（一方參照版）：選中項用珊瑚紅亮色高光，其餘半透明白字；焦點環改白色系（深底才看得見）。
+// 淺灰側欄（Monday 原味，2026-07-22 方案 A）：選中項用 accent 藍淺底高光，其餘中性灰字；焦點環改深色系（淺底才看得見）。
 function sidebarNavButton(item) {
   const active = currentView() === item.id;
-  const btn = make('button', `flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${active ? 'bg-coral text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'}`);
+  const btn = make('button', `flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${active ? 'bg-accenttint text-accent' : 'text-inkmuted hover:bg-ink/5 hover:text-ink'}`);
   btn.type = 'button';
   if (active) btn.setAttribute('aria-current', 'page');
   const ic = make('span', 'h-5 w-5 shrink-0'); ic.innerHTML = icon(item.icon);
   btn.append(ic, make('span', 'flex-1 text-left', item.label));
   if (item.badge) {
-    const b = make('span', `rounded-full px-2 py-0.5 text-xs font-black ${active ? 'bg-white/90 text-coraldark' : 'bg-flag text-ink'}`, String(PENDING_COUNT));
+    const b = make('span', 'rounded-full bg-flag px-2 py-0.5 text-xs font-black text-ink', String(PENDING_COUNT));
     b.id = 'sidebarPendingBadge';
     btn.append(b);
   }
@@ -1360,7 +1482,7 @@ function sidebarNavButton(item) {
   return btn;
 }
 function plannedButton(item) {
-  const btn = make('button', 'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-white/35 hover:bg-white/5 hover:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60');
+  const btn = make('button', 'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-inkfaint hover:bg-ink/5 hover:text-inkmuted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent');
   btn.type = 'button';
   const ic = make('span', 'h-5 w-5 shrink-0'); ic.innerHTML = icon(item.icon);
   btn.append(ic, make('span', 'flex-1 text-left', `${item.label}（規劃中）`));
@@ -1381,7 +1503,7 @@ function renderBottomTabs() {
   bar.replaceChildren();
   TAB_ITEMS.forEach((t) => {
     const active = t.id !== 'more' && currentView() === t.id;
-    const btn = make('button', `flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink ${active ? 'text-ink' : 'text-inkfaint'}`);
+    const btn = make('button', `flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent ${active ? 'text-ink' : 'text-inkfaint'}`);
     btn.type = 'button';
     if (active) btn.setAttribute('aria-current', 'page');
     const ic = make('span', 'relative h-5 w-5'); ic.innerHTML = icon(t.icon);
@@ -1437,8 +1559,8 @@ function applyCasesSubTabStyles() {
   const activeBtn = byId('casesTabActive');
   const closedBtn = byId('casesTabClosed');
   const onActive = CASES_SUBVIEW === 'active';
-  activeBtn.className = `rounded-xl px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${onActive ? 'bg-ink text-white' : 'border border-line text-inkmuted hover:bg-paper'}`;
-  closedBtn.className = `rounded-xl px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${!onActive ? 'bg-ink text-white' : 'border border-line text-inkmuted hover:bg-paper'}`;
+  activeBtn.className = `rounded-xl px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${onActive ? 'bg-accent text-white' : 'border border-line text-inkmuted hover:bg-paper'}`;
+  closedBtn.className = `rounded-xl px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${!onActive ? 'bg-accent text-white' : 'border border-line text-inkmuted hover:bg-paper'}`;
   activeBtn.setAttribute('aria-selected', onActive ? 'true' : 'false');
   closedBtn.setAttribute('aria-selected', !onActive ? 'true' : 'false');
   byId('casesActivePanel').hidden = !onActive;
