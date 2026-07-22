@@ -19,54 +19,112 @@
   })();
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ink: '#3F5262',
+            inkmuted: '#5C6B77',
+            inkfaint: '#8B98A3',
+            paper: '#F8FAFC',
+            line: '#DCE3E8',
+            coral: '#DD6650',
+            coraldark: '#B03B26',
+            coraltint: '#FBEAE6',
+            flag: '#F2CF00',
+            flagdark: '#8A6E05',
+            flagtint: '#FFF7CC',
+            sage: '#4C7A63',
+            sagetint: '#EAF3EE',
+          },
+        },
+      },
+    };
+  </script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif; }
     button, select { min-height: 40px; }
     .gantt-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .gantt-bar { position: absolute; top: 50%; transform: translateY(-50%); height: 14px; border-radius: 7px; }
-    .gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(244,63,94,.55); z-index: 5; }
+    .gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(221,102,80,.6); z-index: 5; }
+    .gantt-today-label { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: 700; color: #B03B26; white-space: nowrap; }
+    .tnum { font-variant-numeric: tabular-nums; }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
+    }
   </style>
 </head>
-<body class="min-h-screen bg-slate-100 text-slate-800">
-  <div id="invalidLink" class="hidden min-h-screen items-center justify-center p-6">
-    <div class="w-full max-w-md rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm">
-      <div class="mb-3 text-4xl" aria-hidden="true">🔒</div>
-      <h1 class="text-xl font-bold text-slate-900">連結無效，請聯絡管理員</h1>
-      <p class="mt-2 text-sm text-slate-500">請使用管理員提供的設計部工作檯專屬連結。</p>
-    </div>
-  </div>
-
-  <div id="app" class="hidden">
-    <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-      <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-        <div>
-          <p id="roleLabel" class="text-xs font-bold tracking-widest text-orange-600">窩的家・設計部工作檯</p>
-          <h1 class="text-xl font-extrabold text-slate-900">工程進度工作檯</h1>
+<body class="min-h-screen bg-paper text-ink">
+  <div id="app" hidden>
+    <header class="sticky top-0 z-30 border-b border-line bg-white">
+      <div class="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+        <div class="flex min-w-0 items-center gap-2.5">
+          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ink text-sm font-black text-white" aria-hidden="true">窩</span>
+          <div class="min-w-0">
+            <p id="roleLabel" class="truncate text-[11px] font-bold tracking-wide text-coraldark">設計部工作檯</p>
+            <h1 class="truncate text-lg font-black text-ink sm:text-xl">工程進度工作檯</h1>
+          </div>
         </div>
-        <div class="flex items-center gap-2">
-          <span id="updatedAt" class="hidden text-xs text-slate-500 sm:inline"></span>
-          <button id="refreshButton" type="button" class="rounded-xl border border-slate-300 px-4 text-sm font-bold hover:bg-slate-50">重新整理</button>
+        <div class="flex shrink-0 items-center gap-2">
+          <span id="updatedAt" class="tnum hidden text-xs text-inkmuted sm:inline"></span>
+          <button id="refreshButton" type="button" class="rounded-xl border border-line px-3 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink sm:px-4">重新整理</button>
         </div>
       </div>
+      <div class="h-[3px] w-full bg-gradient-to-r from-coral via-flag to-ink" aria-hidden="true"></div>
     </header>
 
-    <main class="mx-auto max-w-7xl space-y-6 px-4 py-5">
-      <div id="statsRow" class="hidden grid gap-3 sm:grid-cols-3"></div>
+    <main class="mx-auto max-w-6xl space-y-6 px-4 py-5">
+      <div id="filterBanner" hidden></div>
 
-      <div id="globalMessage" class="rounded-2xl border border-slate-200 bg-white p-5 text-center text-sm text-slate-500">載入中…</div>
+      <div id="statsRow" hidden>
+        <div id="statsGrid" class="grid grid-cols-3 gap-2 sm:gap-3"></div>
+      </div>
 
-      <section aria-labelledby="ganttTitle">
+      <div id="globalMessage" hidden></div>
+
+      <section id="actionSection" aria-labelledby="actionTitle">
         <div class="mb-3">
-          <p class="text-xs font-bold tracking-widest text-orange-600">甘特圖 ＋ 案件總覽</p>
-          <h2 id="ganttTitle" class="text-2xl font-black text-slate-900">工程中案件</h2>
-          <p class="mt-1 text-sm text-slate-500">點案名可展開工項橫條與詳情；紅色代表合約已逾期。手機可左右滑動看時間軸。</p>
+          <p class="text-xs font-bold tracking-wide text-coraldark">今天該處理</p>
+          <h2 id="actionTitle" class="text-xl font-black text-ink sm:text-2xl">需要處理</h2>
+          <p class="mt-1 text-sm text-inkmuted">逾期與停更案件依嚴重度排序，打開就知道今天該催誰。</p>
         </div>
-        <div id="ganttWrap" class="rounded-2xl border border-slate-200 bg-white"></div>
+        <div id="actionList" class="space-y-3"></div>
       </section>
 
-      <section aria-labelledby="closedTitle" class="border-t border-slate-200 pt-6">
+      <section id="normalSection" aria-labelledby="normalTitle">
+        <div class="mb-3">
+          <p class="text-xs font-bold tracking-wide text-inkmuted">其餘案件</p>
+          <h2 id="normalTitle" class="text-lg font-black text-ink">正常進行中</h2>
+        </div>
+        <div id="normalList" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+      </section>
+
+      <section id="ganttSection" aria-labelledby="ganttTitle" class="border-t border-line pt-6">
+        <div class="mb-3 flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <p class="text-xs font-bold tracking-wide text-coraldark">甘特圖 ＋ 案件總覽</p>
+            <h2 id="ganttTitle" class="text-xl font-black text-ink sm:text-2xl">工程中案件時間軸</h2>
+            <p class="mt-1 text-sm text-inkmuted">點案名可展開工項橫條與詳情；紅色代表合約已逾期。手機可左右滑動看時間軸。</p>
+          </div>
+          <button id="ganttRangeToggle" type="button" class="shrink-0 rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink">看全程</button>
+        </div>
+        <div id="ganttWrap" class="rounded-2xl border border-line bg-white"></div>
+      </section>
+
+      <section id="dataIssueSection" aria-labelledby="dataIssueTitle" class="border-t border-line pt-6">
+        <details id="dataIssueDetails">
+          <summary class="cursor-pointer text-sm font-bold text-inkmuted">
+            <span id="dataIssueTitle">資料待補</span>
+          </summary>
+          <p class="mt-2 text-xs text-inkmuted">工期未填或日期有誤的案子先收在這裡，不擋主要清單；補齊資料後會自動回到上面。</p>
+          <div id="dataIssueList" class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+        </details>
+      </section>
+
+      <section id="closedSection" aria-labelledby="closedTitle" class="border-t border-line pt-6">
         <details id="closedDetails">
-          <summary class="cursor-pointer text-sm font-bold text-slate-500">
+          <summary class="cursor-pointer text-sm font-bold text-inkmuted">
             <span id="closedTitle">已結案／暫停中案件</span>
           </summary>
           <div id="closedList" class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
@@ -75,13 +133,25 @@
     </main>
   </div>
 
+  <div id="invalidScreen" hidden>
+    <div class="flex min-h-screen items-center justify-center p-6">
+      <div class="w-full max-w-md rounded-2xl border border-line bg-white p-8 text-center shadow-sm">
+        <div class="mb-3 text-4xl" aria-hidden="true">🔒</div>
+        <h1 class="text-xl font-bold text-ink">連結無效</h1>
+        <p class="mt-2 text-sm text-inkmuted">請使用管理員提供的設計部工作檯專屬連結，或聯絡管理員確認連結是否仍然有效。</p>
+      </div>
+    </div>
+  </div>
+
 <script>
 'use strict';
 const API_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
 const TOKEN = new URLSearchParams(location.search).get('token') || '';
 const STATUS_ACTIVE = '🛠️工程中';
 const STALE_DAYS = 7;
-const PX_PER_DAY = 6;
+const PX_PER_DAY_FULL = 6; // 「看全程」模式固定密度，容許橫向捲動
+const LABEL_COL_MAIN = 230;
+const LABEL_COL_ITEM = 110;
 
 const byId = (id) => document.getElementById(id);
 const clean = (v) => String(v ?? '').trim();
@@ -103,7 +173,7 @@ function todayDate() { const d = new Date(); return new Date(d.getFullYear(), d.
 function daysBetween(a, b) { return Math.round((b - a) / 86400000); }
 function fmtShort(d) { return d ? `${d.getMonth() + 1}/${d.getDate()}` : '—'; }
 
-// 主約工期資料品質：任一空值 or 訖<起（填錯）
+// 主約工期資料品質：任一空值 or 訖<起（填錯）—— 判定邏輯照現版，不變
 function dateIssue(c) {
   const s = parseDateOnly(c.startAt), e = parseDateOnly(c.endAt);
   if (!s || !e) return 'missing';
@@ -115,11 +185,20 @@ function isOverdue(c) {
   if (dateIssue(c)) return false;
   return parseDateOnly(c.endAt) < todayDate();
 }
+function overdueDaysCount(c) {
+  if (!isOverdue(c)) return null;
+  return daysBetween(parseDateOnly(c.endAt), todayDate());
+}
+// 催更黃燈判定源與 7 天門檻照現版不變；此處額外算出天數供行動語句顯示用（純呈現）
+function staleDaysCount(c) {
+  const ref = parseDateOnly(c.lastUpdateAt) || parseDateOnly(c.startAt);
+  if (!ref) return null;
+  return daysBetween(ref, todayDate());
+}
 function isStale(c) {
   if (c.status !== STATUS_ACTIVE) return false;
-  const ref = parseDateOnly(c.lastUpdateAt) || parseDateOnly(c.startAt);
-  if (!ref) return false;
-  return daysBetween(ref, todayDate()) >= STALE_DAYS;
+  const d = staleDaysCount(c);
+  return d !== null && d >= STALE_DAYS;
 }
 function insufficientData(c) {
   return c.status === STATUS_ACTIVE && !parseDateOnly(c.lastUpdateAt) && !parseDateOnly(c.startAt);
@@ -133,8 +212,7 @@ function nextScheduled(c) {
   return items[0] || null;
 }
 
-// ---------- P2：工項分類（12 選項）＋關鍵字兩層掃描（規格書 § 工項順序與關鍵字對照 逐字實作）----------
-// 每項 layer1=工種詞（規格書明列「第一層只掃工種詞」的觸發字）、layer2=細項詞（第一層零命中才掃）。
+// ---------- P2：工項分類（12 選項）＋關鍵字兩層掃描（規格書 § 工項順序與關鍵字對照 逐字實作，邏輯不變）----------
 const DECOR_CATEGORIES = [
   { name: '拆除工程', layer1: ['拆除'], layer2: ['打牆', '打除', '剔除', '清運', '廢棄物', '保護工程'] },
   { name: '水電工程', layer1: ['水電'], layer2: ['配電', '配管', '管溝', '拉線', '給排水', '電線', '迴路', '弱電', '開關', '插座', '崁燈', '吸頂燈', '熱水器'] },
@@ -148,9 +226,9 @@ const DECOR_CATEGORIES = [
   { name: '空調工程', layer1: ['空調', '冷氣'], layer2: ['風管', '冷媒'] },
   { name: '雜項工程', layer1: ['清潔'], layer2: ['雜項', '窗簾', '燈具安裝', '五金', '收尾', '初驗', '驗收', '交屋'] },
 ];
-const DECOR_CANONICAL_ORDER = DECOR_CATEGORIES.map((c) => c.name); // 11 項，核定預設順序
-const GANTT_ROWS = DECOR_CANONICAL_ORDER.concat(['未分類']); // 圖一式左側固定 12 列
-const DECOR_CATEGORY_ORDER = DECOR_CANONICAL_ORDER.concat(['其他']); // 新增表單下拉，12 選項
+const DECOR_CANONICAL_ORDER = DECOR_CATEGORIES.map((c) => c.name);
+const GANTT_ROWS = DECOR_CANONICAL_ORDER.concat(['未分類']);
+const DECOR_CATEGORY_ORDER = DECOR_CANONICAL_ORDER.concat(['其他']);
 
 function scanLayer(content, layerKey) {
   let best = null;
@@ -162,23 +240,17 @@ function scanLayer(content, layerKey) {
   });
   return best ? best.name : null;
 }
-// 既有紀錄無「工項分類」值時，依工程內容近似歸類；無命中歸「未分類」，不強猜。
 function classifyLegacy(content) {
   const text = clean(content);
   if (!text) return '未分類';
   return scanLayer(text, 'layer1') || scanLayer(text, 'layer2') || '未分類';
 }
-// 決定一筆進度紀錄要落在圖一式／月曆的哪一列：有效的 11 項分類值直接採用；「其他」與空值／
-// 非白名單值一律走未分類桶（圖一式左側固定列只有 11+未分類，共 12 列，見規格書 §核心視圖）。
 function resolveCategory(p) {
   const cat = clean(p.category);
   if (cat && DECOR_CANONICAL_ORDER.includes(cat)) return cat;
   if (cat === '其他') return '未分類';
   return classifyLegacy(p.content);
 }
-// 下一階段推斷：取「目前工項」（=Ragic LAST(C16) 對應的最後一筆子表列，即 c.progress 陣列最後
-// 一項）的分類，在核定順序找下一項；找不到（未分類/其他/已是最後一項雜項工程）回 null 交由呼叫端
-// fallback 顯示「尚未排定下一工項」。
 function inferNextStage(c) {
   const list = c.progress || [];
   if (!list.length) return null;
@@ -203,9 +275,12 @@ const CATEGORY_BADGE = {
 
 let ALL_CASES = [];
 let ROLE = ''; let ROLE_LABEL = '';
-const EXPANDED = new Set();
-const CASE_VIEW_MODE = new Map(); // rid -> 'gantt' | 'calendar'（案件詳情內圖一式／月曆切換，預設 gantt）
-const CASE_CAL_MONTH = new Map(); // rid -> { y, m }（月曆目前顯示的年月，預設本月）
+let FILTER_MODE = null; // null | 'overdue' | 'stale'（僅 admin 有 UI 可觸發）
+let GANTT_VIEW_MODE = 'window'; // 'window'（預設，今天±聚焦）| 'full'（看全程）
+const EXPANDED_GANTT = new Set(); // 甘特列展開：圖一式工項橫條／月曆
+const EXPANDED_CARD = new Set(); // 行動清單／正常清單卡片展開：完整詳情
+const CASE_VIEW_MODE = new Map(); // rid -> 'gantt' | 'calendar'
+const CASE_CAL_MONTH = new Map(); // rid -> { y, m }
 function sameDate(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
 
 async function apiGet(path) {
@@ -221,52 +296,205 @@ async function apiGet(path) {
   return data;
 }
 
-function showLoading() {
+function setGlobalMessage(mode, text) {
   const m = byId('globalMessage');
-  m.className = 'rounded-2xl border border-slate-200 bg-white p-5 text-center text-sm text-slate-500';
-  m.textContent = '載入中…';
-  m.classList.remove('hidden');
-}
-function showError(msg) {
-  const m = byId('globalMessage');
-  m.className = 'rounded-2xl border border-red-200 bg-red-50 p-5 text-center text-sm text-red-700';
-  m.textContent = `載入失敗：${msg}（請按右上角「重新整理」再試一次）`;
-  m.classList.remove('hidden');
-}
-function hideLoading() { byId('globalMessage').classList.add('hidden'); }
-
-function metric(label, value, accent) {
-  const card = make('div', 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm');
-  card.append(make('p', 'text-sm font-bold text-slate-500', label), make('p', `mt-2 text-3xl font-black ${accent}`, String(value)));
-  return card;
-}
-
-function renderStats(stats) {
-  const row = byId('statsRow');
-  if (!stats) { row.classList.add('hidden'); return; }
-  row.replaceChildren(
-    metric('工程中件數', stats.active ?? 0, 'text-orange-600'),
-    metric('逾期件數', stats.overdue ?? 0, 'text-red-600'),
-    metric('停更黃燈件數', stats.stale ?? 0, 'text-amber-600')
-  );
-  row.classList.remove('hidden');
+  if (!mode) { m.hidden = true; m.replaceChildren(); return; }
+  const isError = mode === 'error';
+  const box = make('div', `rounded-2xl border p-5 text-center text-sm ${isError ? 'border-coral bg-coraltint text-coraldark' : 'border-line bg-white text-inkmuted'}`, text);
+  m.replaceChildren(box);
+  m.hidden = false;
 }
 
 function badge(text, cls) { return make('span', `inline-block rounded-full px-2 py-0.5 text-xs font-bold ${cls}`, text); }
 
-function caseBadges(c) {
-  const list = [];
+function statusDot(kind) {
+  const cls = kind === 'overdue' ? 'bg-coral' : kind === 'stale' ? 'bg-flag' : kind === 'issue' ? 'bg-inkfaint' : 'bg-sage';
+  return make('span', `mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-full ${cls}`);
+}
+
+function progressBar(ratio) {
+  const wrap = make('div', 'mt-2');
+  const track = make('div', 'h-1.5 w-full overflow-hidden rounded-full bg-line');
+  track.setAttribute('role', 'progressbar');
+  track.setAttribute('aria-label', '已繳款比例');
+  const num = (ratio === null || ratio === undefined || ratio === '') ? 0 : Math.max(0, Math.min(100, Math.round(Number(ratio) * 100)));
+  track.setAttribute('aria-valuenow', String(num));
+  track.setAttribute('aria-valuemin', '0');
+  track.setAttribute('aria-valuemax', '100');
+  const fill = make('div', 'h-full rounded-full bg-ink');
+  fill.style.width = `${num}%`;
+  track.append(fill);
+  wrap.append(track, make('p', 'tnum mt-1 text-[11px] font-bold text-inkmuted', `已繳款比例 ${pct(ratio)}`));
+  return wrap;
+}
+
+function emptyNote(text, tone) {
+  const cls = tone === 'sage'
+    ? 'rounded-2xl border border-sage/30 bg-sagetint p-5 text-center text-sm font-bold text-sage'
+    : 'rounded-2xl border border-line bg-white p-5 text-center text-sm text-inkmuted';
+  return make('div', cls, text);
+}
+
+// ---------- 統計小計卡（admin 專屬）＝可點篩選 ----------
+function statChip(label, value, kind) {
+  const active = kind === 'all' ? !FILTER_MODE : FILTER_MODE === kind;
+  const theme = kind === 'overdue'
+    ? (active ? 'border-coral bg-coraltint' : 'border-line bg-white hover:bg-coraltint/40')
+    : kind === 'stale'
+      ? (active ? 'border-flag bg-flagtint' : 'border-line bg-white hover:bg-flagtint/40')
+      : (active ? 'border-ink bg-paper' : 'border-line bg-white hover:bg-paper');
+  const numColor = kind === 'overdue' ? 'text-coraldark' : kind === 'stale' ? 'text-flagdark' : 'text-ink';
+  const btn = make('button', `flex flex-col items-start rounded-2xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink sm:p-4 ${theme}`);
+  btn.type = 'button';
+  btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  btn.append(make('p', 'text-[11px] font-bold text-inkmuted sm:text-xs', label), make('p', `tnum mt-1 text-2xl font-black sm:text-3xl ${numColor}`, String(value)));
+  btn.addEventListener('click', () => {
+    FILTER_MODE = (kind === 'all') ? null : (FILTER_MODE === kind ? null : kind);
+    renderLists();
+  });
+  return btn;
+}
+function renderStats(stats) {
+  const row = byId('statsRow');
+  const grid = byId('statsGrid');
+  if (!stats) { row.hidden = true; grid.replaceChildren(); return; }
+  grid.replaceChildren(
+    statChip('工程中件數', stats.active ?? 0, 'all'),
+    statChip('逾期件數', stats.overdue ?? 0, 'overdue'),
+    statChip('停更黃燈件數', stats.stale ?? 0, 'stale')
+  );
+  row.hidden = false;
+}
+function renderFilterBanner() {
+  const el = byId('filterBanner');
+  if (!FILTER_MODE) { el.hidden = true; el.replaceChildren(); return; }
+  const label = FILTER_MODE === 'overdue' ? '逾期案件' : '停更黃燈案件';
+  const inner = make('div', 'flex flex-wrap items-center justify-between gap-2 rounded-xl border border-ink bg-white px-4 py-2.5 text-sm');
+  inner.append(make('span', 'font-bold text-ink', `篩選中：只顯示${label}`));
+  const clearBtn = make('button', 'font-bold text-coraldark underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '清除篩選，顯示全部');
+  clearBtn.type = 'button';
+  clearBtn.addEventListener('click', () => { FILTER_MODE = null; renderLists(); });
+  inner.append(clearBtn);
+  el.replaceChildren(inner);
+  el.hidden = false;
+}
+
+// ---------- 行動語句 ----------
+function actionSentence(c) {
+  const parts = [];
+  if (isOverdue(c)) parts.push(`合約逾期 ${overdueDaysCount(c)} 天`);
+  if (isStale(c)) {
+    const who = clean(c.assignee) || clean(c.supervisor) || '負責人';
+    parts.push(`停更 ${staleDaysCount(c)} 天・該催${who}`);
+  }
+  return parts.join('・');
+}
+
+// ---------- 案件卡片（行動清單／正常清單共用）----------
+function toggleCardExpand(rid) {
+  if (EXPANDED_CARD.has(rid)) EXPANDED_CARD.delete(rid); else EXPANDED_CARD.add(rid);
+  renderLists();
+}
+function caseCard(c, kind) {
+  // kind: 'overdue' | 'stale' | 'normal'
+  const accent = kind === 'overdue' ? 'border-l-4 border-l-coral' : kind === 'stale' ? 'border-l-4 border-l-flag' : 'border-l-4 border-l-transparent';
+  const card = make('div', `rounded-2xl border border-line bg-white p-4 shadow-sm ${accent}`);
+
+  const head = make('div', 'flex items-start gap-2');
+  head.append(statusDot(kind));
+  const nameCol = make('div', 'min-w-0 flex-1');
+  nameCol.append(make('p', 'truncate text-lg font-extrabold text-ink', c.name));
+  if (kind !== 'normal') {
+    nameCol.append(make('p', `mt-0.5 text-sm font-bold ${kind === 'overdue' ? 'text-coraldark' : 'text-flagdark'}`, actionSentence(c)));
+  }
+  head.append(nameCol);
+  card.append(head);
+
+  card.append(make('p', 'mt-2 truncate text-xs text-inkmuted', `監工 ${c.supervisor || '—'}・接案 ${c.assignee || '—'}`));
+  const workItem = make('p', 'mt-0.5 truncate text-xs font-semibold text-inkmuted', `最新工項：${clean(c.lastWorkItem) || '—'}`);
+  workItem.title = clean(c.lastWorkItem) || '—';
+  card.append(workItem);
+  card.append(make('p', 'tnum mt-0.5 text-xs text-inkmuted', `工期 ${c.startAt || '—'} ~ ${c.endAt || '—'}`));
+  card.append(progressBar(c.paidRatio));
+
+  const expanded = EXPANDED_CARD.has(c.rid);
+  const toggleBtn = make('button', 'mt-3 w-full rounded-xl border border-line py-2 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', expanded ? '收合詳情 ▲' : '查看詳情・新增進度 ▼');
+  toggleBtn.type = 'button';
+  toggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  toggleBtn.addEventListener('click', () => toggleCardExpand(c.rid));
+  card.append(toggleBtn);
+
+  if (expanded) card.append(detailPanel(c));
+  return card;
+}
+
+function renderActionFeed(cases) {
+  const wrap = byId('actionList');
+  wrap.replaceChildren();
+  if (!cases.length) {
+    wrap.append(emptyNote('目前沒有需要特別催的案件，逾期與停更案件都清空了。', 'sage'));
+    return;
+  }
+  cases.forEach((c) => wrap.append(caseCard(c, isOverdue(c) ? 'overdue' : 'stale')));
+}
+function renderNormalList(cases) {
+  const section = byId('normalSection');
+  const wrap = byId('normalList');
+  wrap.replaceChildren();
+  if (!cases.length) { section.hidden = true; return; }
+  section.hidden = false;
+  cases.forEach((c) => wrap.append(caseCard(c, 'normal')));
+}
+
+// ---------- 資料待補（工期未填／日期有誤）----------
+function dataIssueCard(c) {
   const issue = dateIssue(c);
-  if (issue === 'missing') list.push(badge('⚠️工期未填', 'bg-slate-200 text-slate-700'));
-  if (issue === 'inverted') list.push(badge('⚠️工期日期有誤', 'bg-slate-200 text-slate-700'));
-  if (isOverdue(c)) list.push(badge('逾期', 'bg-red-100 text-red-700'));
-  if (isStale(c)) list.push(badge('催更', 'bg-amber-100 text-amber-800'));
-  if (insufficientData(c)) list.push(badge('⚠️資料不足', 'bg-slate-200 text-slate-600'));
-  return list;
+  const missing = [];
+  if (!parseDateOnly(c.startAt)) missing.push('起日');
+  if (!parseDateOnly(c.endAt)) missing.push('訖日');
+  const card = make('div', 'rounded-xl border border-line bg-white p-3 text-sm');
+  const head = make('div', 'flex items-center justify-between gap-2');
+  head.append(make('p', 'truncate font-bold text-ink', c.name));
+  head.append(badge(issue === 'inverted' ? '⚠️工期日期有誤' : `⚠️工期未填（缺${missing.join('、') || '起訖'}）`, 'bg-line text-inkmuted whitespace-nowrap'));
+  card.append(head);
+  card.append(make('p', 'tnum mt-1 text-xs text-inkmuted', `監工 ${c.supervisor || '—'}・接案 ${c.assignee || '—'}・目前登記 ${clean(c.startAt) || '—'} ~ ${clean(c.endAt) || '—'}`));
+  if (insufficientData(c)) card.append(badge('⚠️資料不足（無法判斷停更天數）', 'mt-1 inline-block bg-line text-inkmuted'));
+  return card;
+}
+function renderDataIssueList(cases) {
+  const section = byId('dataIssueSection');
+  const title = byId('dataIssueTitle');
+  const list = byId('dataIssueList');
+  list.replaceChildren();
+  if (!cases.length) { section.hidden = true; return; }
+  section.hidden = false;
+  title.textContent = `資料待補（${cases.length}）`;
+  cases.forEach((c) => list.append(dataIssueCard(c)));
 }
 
 // ---------- 甘特圖時間尺度 ----------
-function computeBounds(cases) {
+function availableTrackWidth(labelColWidth) {
+  const main = document.querySelector('main');
+  const w = main ? main.clientWidth : 900; // clientWidth 含 main 自己的左右 padding（px-4＝32px）
+  return Math.max(w - labelColWidth - 40, 200);
+}
+function withResponsiveWidth(min, max, labelColWidth) {
+  const days = Math.max(daysBetween(min, max), 1);
+  const pxPerDay = Math.max(availableTrackWidth(labelColWidth) / days, 10);
+  return { min, max, pxPerDay, widthPx: Math.round(pxPerDay * days) };
+}
+function withFixedWidth(min, max) {
+  const days = Math.max(daysBetween(min, max), 1);
+  return { min, max, pxPerDay: PX_PER_DAY_FULL, widthPx: Math.max(days * PX_PER_DAY_FULL, 300) };
+}
+// 今天 −2 週 ~ +6 週，聚焦視窗（P2 起預設模式），今日線永遠在窗內
+function computeWindowBounds() {
+  const min = todayDate(); min.setDate(min.getDate() - 14);
+  const max = todayDate(); max.setDate(max.getDate() + 42);
+  return withResponsiveWidth(min, max, LABEL_COL_MAIN);
+}
+// 看全程／單案自適應：時間軸尺度取「合約起訖 ∪ 全工項起訖」的 min/max（規格書 §空狀態與邊界行為，邏輯不變）
+function computeExtentBounds(cases, labelColWidth, fixed) {
   let min = null, max = null;
   const consider = (d) => { if (!d) return; if (!min || d < min) min = d; if (!max || d > max) max = d; };
   cases.forEach((c) => {
@@ -282,39 +510,50 @@ function computeBounds(cases) {
   if (!min || !max) { min = todayDate(); max = new Date(min); max.setDate(max.getDate() + 30); }
   min = new Date(min); min.setDate(min.getDate() - 3);
   max = new Date(max); max.setDate(max.getDate() + 3);
-  return { min, max, widthPx: Math.max(daysBetween(min, max) * PX_PER_DAY, 300) };
+  return fixed ? withFixedWidth(min, max) : withResponsiveWidth(min, max, labelColWidth);
 }
-function offsetPx(date, min) { return daysBetween(min, date) * PX_PER_DAY; }
+function computeBoundsFull(cases) { return computeExtentBounds(cases, LABEL_COL_MAIN, true); }
+function computeItemBounds(c) { return computeExtentBounds([c], LABEL_COL_ITEM, false); }
+function offsetPx(date, bounds) { return daysBetween(bounds.min, date) * bounds.pxPerDay; }
 
-function ruler(bounds) {
+function ruler(bounds, labelColWidth) {
   const track = make('div', 'relative h-6');
   track.style.width = `${bounds.widthPx}px`;
   let cursor = new Date(bounds.min);
   cursor.setDate(cursor.getDate() + ((7 - (daysBetween(bounds.min, cursor) % 7)) % 7));
   while (cursor <= bounds.max) {
-    const tick = make('div', 'absolute top-0 h-full border-l border-slate-200 pl-1 text-[10px] text-slate-400', fmtShort(cursor));
-    tick.style.left = `${offsetPx(cursor, bounds.min)}px`;
+    const tick = make('div', 'absolute top-0 h-full border-l border-line pl-1 text-[10px] text-inkfaint', fmtShort(cursor));
+    tick.style.left = `${offsetPx(cursor, bounds)}px`;
     track.append(tick);
     cursor = new Date(cursor); cursor.setDate(cursor.getDate() + 7);
   }
   const todayTick = make('div', 'gantt-today');
-  todayTick.style.left = `${offsetPx(todayDate(), bounds.min)}px`;
-  todayTick.style.top = '0'; todayTick.style.height = '100%';
+  todayTick.style.left = `${offsetPx(todayDate(), bounds)}px`;
+  todayTick.append(make('span', 'gantt-today-label', '今日'));
   track.append(todayTick);
   return track;
 }
 
+// 甘特橫條：起日空值不畫、訖日空值視為進行中畫到今天、訖<起不畫（規格書邊界行為，邏輯不變）；
+// 聚焦視窗下若日期落在視窗外，做視覺裁切並標小箭頭，不讓極端案把時間軸拉爆。
 function ganttBar(startAt, endAt, bounds, colorCls, opts = {}) {
-  const s = parseDateOnly(startAt);
-  let e = parseDateOnly(endAt);
-  if (!s) return null; // 工項列起日空值 → 該列不畫條
-  if (!e) e = opts.openEnded ? todayDate() : s; // 訖日空值視為進行中，畫到今天
-  if (e < s) return null; // 訖日早於起日（填錯）→ 不畫條
+  const s0 = parseDateOnly(startAt);
+  let e0 = parseDateOnly(endAt);
+  if (!s0) return null;
+  if (!e0) e0 = opts.openEnded ? todayDate() : s0;
+  if (e0 < s0) return null;
+  const clippedLeft = s0 < bounds.min;
+  const clippedRight = e0 > bounds.max;
+  const s = clippedLeft ? bounds.min : s0;
+  const e = clippedRight ? bounds.max : e0;
+  if (e < bounds.min || s > bounds.max) return null;
   const bar = make('div', `gantt-bar ${colorCls}`);
-  const left = offsetPx(s, bounds.min);
-  const width = Math.max(offsetPx(e, bounds.min) - left, 6);
+  const left = offsetPx(s, bounds);
+  const width = Math.max(offsetPx(e, bounds) - left, 6);
   bar.style.left = `${left}px`;
   bar.style.width = `${width}px`;
+  if (clippedLeft) bar.append(make('span', 'absolute -left-1 top-1/2 -translate-y-1/2 text-[9px] font-bold leading-none text-white', '‹'));
+  if (clippedRight) bar.append(make('span', 'absolute -right-1 top-1/2 -translate-y-1/2 text-[9px] font-bold leading-none text-white', '›'));
   return bar;
 }
 
@@ -322,50 +561,47 @@ function trackWrap(bounds) {
   const wrap = make('div', 'relative flex-none');
   wrap.style.width = `${bounds.widthPx}px`;
   const todayLine = make('div', 'gantt-today');
-  todayLine.style.left = `${offsetPx(todayDate(), bounds.min)}px`;
+  todayLine.style.left = `${offsetPx(todayDate(), bounds)}px`;
   wrap.append(todayLine);
   return wrap;
 }
 
 function paymentRow(p) {
-  const row = make('div', 'flex items-center justify-between border-b border-slate-100 py-1.5 text-sm');
+  const row = make('div', 'flex items-center justify-between border-b border-line/60 py-1.5 text-sm');
   row.append(
-    make('span', 'text-slate-600', clean(p.name) || '（未命名期別）'),
+    make('span', 'text-inkmuted', clean(p.name) || '（未命名期別）'),
     make('span', 'flex items-center gap-2 font-bold')
   );
   const right = row.lastChild;
   right.append(
-    make('span', 'text-slate-500', pct(p.ratio)),
-    badge(p.paid ? '已收' : '未收', p.paid ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600')
+    make('span', 'tnum text-inkmuted', pct(p.ratio)),
+    badge(p.paid ? '已收' : '未收', p.paid ? 'bg-sagetint text-sage' : 'bg-line text-inkmuted')
   );
   return row;
 }
-
 function addonRow(a) {
-  const row = make('div', 'flex items-center justify-between border-b border-slate-100 py-1.5 text-sm');
+  const row = make('div', 'flex items-center justify-between border-b border-line/60 py-1.5 text-sm');
   row.append(
-    make('span', 'text-slate-600', `${clean(a.date) || '—'}・${clean(a.item) || '（未命名項目）'}`),
-    make('span', 'font-bold text-slate-800', money(a.amount))
+    make('span', 'tnum text-inkmuted', `${clean(a.date) || '—'}・${clean(a.item) || '（未命名項目）'}`),
+    make('span', 'tnum font-bold text-ink', money(a.amount))
   );
   return row;
 }
-
 function progressLine(p, c) {
   const s = parseDateOnly(p.startAt), e = parseDateOnly(p.endAt);
   let dateText;
   if (!s) dateText = '（缺起日）';
   else if (e && e < s) dateText = `${clean(p.startAt)} ~ ${clean(p.endAt)}（日期填反）`;
   else dateText = `${clean(p.startAt)} ~ ${e ? clean(p.endAt) : '進行中'}`;
-  const row = make('div', 'border-b border-slate-100 py-1.5 text-sm');
+  const row = make('div', 'border-b border-line/60 py-1.5 text-sm');
   const top = make('div', 'flex flex-wrap items-start gap-2');
   const catName = resolveCategory(p);
   top.append(
-    make('span', 'shrink-0 text-xs font-bold text-slate-400', dateText),
-    badge(clean(p.category) || `${catName}（推測）`, CATEGORY_BADGE[catName] || 'bg-slate-100 text-slate-600'),
-    make('span', 'text-slate-700', clean(p.content) || '（未填工程內容）')
+    make('span', 'tnum shrink-0 text-xs font-bold text-inkfaint', dateText),
+    badge(clean(p.category) || `${catName}（推測）`, CATEGORY_BADGE[catName] || 'bg-line text-inkmuted'),
+    make('span', 'text-ink', clean(p.content) || '（未填工程內容）')
   );
   row.append(top);
-  // P2：進度照片縮圖，點開經 decorProgressPhoto 代理回看（禁裸連 Ragic 附件 URL）
   const count = Number(p.photoCount) || 0;
   if (count > 0) {
     const thumbs = make('div', 'mt-1.5 flex flex-wrap gap-1.5');
@@ -375,7 +611,7 @@ function progressLine(p, c) {
       link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
       const img = document.createElement('img');
       img.src = url; img.loading = 'lazy'; img.alt = '進度照片';
-      img.className = 'h-14 w-14 rounded-lg border border-slate-200 object-cover bg-slate-100';
+      img.className = 'h-14 w-14 rounded-lg border border-line object-cover bg-paper';
       link.append(img);
       thumbs.append(link);
     }
@@ -384,26 +620,26 @@ function progressLine(p, c) {
   return row;
 }
 
-// P2：新增進度紀錄表單（三種角色 token 皆可寫）。手機直向優先，欄位單欄堆疊。
+// P2：新增進度紀錄表單（三種角色 token 皆可寫）。手機直向優先，欄位單欄堆疊。行為與原版一致。
 function progressAddForm(c) {
   const box = make('div', 'rounded-lg bg-white p-3');
-  box.append(make('p', 'mb-2 text-xs font-bold text-slate-500', '新增進度紀錄'));
+  box.append(make('p', 'mb-2 text-xs font-bold text-inkmuted', '新增進度紀錄'));
   const form = make('form', 'space-y-2');
 
   const dateRow = make('div', 'grid grid-cols-2 gap-2');
-  const startWrap = make('label', 'block text-xs font-bold text-slate-500', '工程時間(起) *');
-  const startInput = make('input', 'mt-1 block w-full rounded-lg border border-slate-300 px-2 py-2 text-sm');
+  const startWrap = make('label', 'block text-xs font-bold text-inkmuted', '工程時間(起) *');
+  const startInput = make('input', 'mt-1 block w-full rounded-lg border border-line px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
   startInput.type = 'date'; startInput.required = true;
   startWrap.append(startInput);
-  const endWrap = make('label', 'block text-xs font-bold text-slate-500', '工程時間(訖)');
-  const endInput = make('input', 'mt-1 block w-full rounded-lg border border-slate-300 px-2 py-2 text-sm');
+  const endWrap = make('label', 'block text-xs font-bold text-inkmuted', '工程時間(訖)');
+  const endInput = make('input', 'mt-1 block w-full rounded-lg border border-line px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
   endInput.type = 'date';
   endWrap.append(endInput);
   dateRow.append(startWrap, endWrap);
   form.append(dateRow);
 
-  const catWrap = make('label', 'block text-xs font-bold text-slate-500', '工項分類 *');
-  const catSelect = make('select', 'mt-1 block w-full rounded-lg border border-slate-300 px-2 py-2 text-sm');
+  const catWrap = make('label', 'block text-xs font-bold text-inkmuted', '工項分類 *');
+  const catSelect = make('select', 'mt-1 block w-full rounded-lg border border-line px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
   catSelect.required = true;
   const placeholderOpt = make('option', '', '請選擇');
   placeholderOpt.value = '';
@@ -416,13 +652,13 @@ function progressAddForm(c) {
   catWrap.append(catSelect);
   form.append(catWrap);
 
-  const contentWrap = make('label', 'block text-xs font-bold text-slate-500', '工程內容 *');
-  const contentInput = make('textarea', 'mt-1 block w-full rounded-lg border border-slate-300 px-2 py-2 text-sm');
+  const contentWrap = make('label', 'block text-xs font-bold text-inkmuted', '工程內容 *');
+  const contentInput = make('textarea', 'mt-1 block w-full rounded-lg border border-line px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
   contentInput.required = true; contentInput.rows = 2;
   contentWrap.append(contentInput);
   form.append(contentWrap);
 
-  const photoWrap = make('label', 'block text-xs font-bold text-slate-500', '進度照片（可多選）');
+  const photoWrap = make('label', 'block text-xs font-bold text-inkmuted', '進度照片（可多選）');
   const photoInput = make('input', 'mt-1 block w-full text-xs');
   photoInput.type = 'file'; photoInput.accept = 'image/*'; photoInput.multiple = true;
   photoWrap.append(photoInput);
@@ -431,7 +667,7 @@ function progressAddForm(c) {
   const msg = make('p', 'hidden text-xs font-bold');
   form.append(msg);
 
-  const submitBtn = make('button', 'w-full rounded-xl bg-orange-600 px-4 py-2 text-sm font-bold text-white hover:bg-orange-700 disabled:opacity-50', '送出進度紀錄');
+  const submitBtn = make('button', 'w-full rounded-xl bg-ink px-4 py-2 text-sm font-bold text-white hover:bg-ink/90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2', '送出進度紀錄');
   submitBtn.type = 'submit';
   form.append(submitBtn);
 
@@ -440,7 +676,7 @@ function progressAddForm(c) {
     msg.className = 'hidden text-xs font-bold';
     if (!startInput.value || !catSelect.value || !contentInput.value.trim()) {
       msg.textContent = '請填寫必填欄位（起日／工項分類／工程內容）';
-      msg.className = 'text-xs font-bold text-red-600';
+      msg.className = 'text-xs font-bold text-coraldark';
       return;
     }
     submitBtn.disabled = true; submitBtn.textContent = '送出中…';
@@ -455,11 +691,11 @@ function progressAddForm(c) {
       let data = null; try { data = await res.json(); } catch {}
       if (!res.ok || !data || data.ok !== true) throw new Error((data && data.error) || `HTTP ${res.status}`);
       msg.textContent = '已新增，重新整理中…';
-      msg.className = 'text-xs font-bold text-emerald-600';
+      msg.className = 'text-xs font-bold text-sage';
       await loadAll();
     } catch (err) {
       msg.textContent = `送出失敗：${err.message}`;
-      msg.className = 'text-xs font-bold text-red-600';
+      msg.className = 'text-xs font-bold text-coraldark';
       submitBtn.disabled = false; submitBtn.textContent = '送出進度紀錄';
     }
   });
@@ -469,83 +705,79 @@ function progressAddForm(c) {
 }
 
 function detailPanel(c) {
-  const box = make('div', 'space-y-4 rounded-xl bg-slate-50 p-4');
+  const box = make('div', 'mt-3 space-y-3 rounded-xl bg-paper p-3 sm:p-4');
 
   const stageBox = make('div', 'rounded-lg bg-white p-3 text-sm');
   const next = nextScheduled(c);
-  stageBox.append(
-    make('p', '', ''),
-  );
-  stageBox.firstChild.innerHTML = `<span class="font-bold text-slate-500">目前工項：</span><span class="font-bold text-slate-900">${clean(c.lastWorkItem) || '—'}</span>`;
-  // P2 精確版：真實排程優先（子表有未來排定工項）；無排定時以「目前工項分類＋核定順序」推斷，
-  // 明確標示為推斷、與真實排程區分（規格書 § 工項順序與關鍵字對照）。
+  const curP = make('p', '');
+  curP.innerHTML = `<span class="font-bold text-inkmuted">目前工項：</span><span class="font-bold text-ink">${clean(c.lastWorkItem) || '—'}</span>`;
+  stageBox.append(curP);
   const nextP = make('p', 'mt-1 flex flex-wrap items-center gap-1');
   if (next) {
-    nextP.innerHTML = `<span class="font-bold text-slate-500">下一排定工項：</span><span class="font-bold text-slate-900">${clean(next.content) || '（未填內容）'}</span><span class="text-slate-500">（${fmtShort(next.d)}）</span>`;
+    nextP.innerHTML = `<span class="font-bold text-inkmuted">下一排定工項：</span><span class="font-bold text-ink">${clean(next.content) || '（未填內容）'}</span><span class="tnum text-inkmuted">（${fmtShort(next.d)}）</span>`;
   } else {
     const inferred = inferNextStage(c);
     if (inferred) {
-      nextP.innerHTML = `<span class="font-bold text-slate-500">下一排定工項：</span><span class="font-bold text-slate-900">${inferred}</span>`;
-      nextP.append(badge('推斷（依慣例順序，非真實排程）', 'bg-amber-100 text-amber-800'));
+      nextP.innerHTML = `<span class="font-bold text-inkmuted">下一排定工項：</span><span class="font-bold text-ink">${inferred}</span>`;
+      nextP.append(badge('推斷（依慣例順序，非真實排程）', 'bg-flagtint text-flagdark'));
     } else {
-      nextP.innerHTML = `<span class="font-bold text-slate-500">下一排定工項：</span><span class="text-slate-500">尚未排定下一工項</span>`;
+      nextP.innerHTML = `<span class="font-bold text-inkmuted">下一排定工項：</span><span class="text-inkmuted">尚未排定下一工項</span>`;
     }
   }
   stageBox.append(nextP);
   box.append(stageBox);
 
   const progressBox = make('div', 'rounded-lg bg-white p-3');
-  progressBox.append(make('p', 'mb-1 text-xs font-bold text-slate-500', '進度時間軸'));
+  progressBox.append(make('p', 'mb-1 text-xs font-bold text-inkmuted', '進度時間軸'));
   const rows = (c.progress || []).slice().sort((a, b) => {
     const da = parseDateOnly(a.startAt), db = parseDateOnly(b.startAt);
     if (!da && !db) return 0; if (!da) return 1; if (!db) return -1; return da - db;
   });
-  if (!rows.length) progressBox.append(make('p', 'text-sm text-slate-400', '尚無進度紀錄'));
+  if (!rows.length) progressBox.append(make('p', 'text-sm text-inkfaint', '尚無進度紀錄'));
   else rows.forEach((p) => progressBox.append(progressLine(p, c)));
   box.append(progressBox);
 
   box.append(progressAddForm(c));
 
   const payBox = make('div', 'rounded-lg bg-white p-3');
-  payBox.append(make('p', 'mb-1 flex items-center justify-between text-xs font-bold text-slate-500', ''));
-  payBox.firstChild.innerHTML = `<span>各期款狀態</span><span>已繳款比例 ${pct(c.paidRatio)}</span>`;
-  if (!(c.payments || []).length) payBox.append(make('p', 'text-sm text-slate-400', '尚無款項紀錄'));
+  const payHead = make('p', 'mb-1 flex items-center justify-between text-xs font-bold text-inkmuted');
+  payHead.innerHTML = `<span>各期款狀態</span><span class="tnum">已繳款比例 ${pct(c.paidRatio)}</span>`;
+  payBox.append(payHead);
+  if (!(c.payments || []).length) payBox.append(make('p', 'text-sm text-inkfaint', '尚無款項紀錄'));
   else c.payments.forEach((p) => payBox.append(paymentRow(p)));
   box.append(payBox);
 
   if ((c.addons || []).length) {
     const addonBox = make('div', 'rounded-lg bg-white p-3');
-    addonBox.append(make('p', 'mb-1 text-xs font-bold text-slate-500', '追加款'));
+    addonBox.append(make('p', 'mb-1 text-xs font-bold text-inkmuted', '追加款'));
     c.addons.forEach((a) => addonBox.append(addonRow(a)));
     box.append(addonBox);
   }
 
   const fileBox = make('div', 'rounded-lg bg-white p-3');
-  // P2 補派：合約附件多檔瀏覽。單檔與無檔案行為維持 P1 現狀不變（按鈕灰化邏輯不變）；多檔
-  // 時改逐一列出，經 decorContractFile 代理（rid+idx+token）點開，不裸連 Ragic。
   const contractCount = Number(c.contractFileCount) || (c.hasContract ? 1 : 0);
   if (contractCount > 1) {
     const list = make('div', 'flex flex-wrap gap-2');
     for (let i = 0; i < contractCount; i++) {
-      const link = make('a', 'inline-block rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white', `合約附件 ${i + 1}`);
+      const link = make('a', 'inline-block rounded-xl bg-ink px-3 py-2 text-xs font-bold text-white hover:bg-ink/90', `合約附件 ${i + 1}`);
       link.href = `${API_BASE}/decorContractFile?rid=${encodeURIComponent(c.rid)}&idx=${i}&token=${encodeURIComponent(TOKEN)}`;
       link.target = '_blank'; link.rel = 'noopener noreferrer';
       list.append(link);
     }
     fileBox.append(list);
   } else if (contractCount === 1) {
-    const link = make('a', 'inline-block rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white', '開啟合約附件');
+    const link = make('a', 'inline-block rounded-xl bg-ink px-4 py-2 text-sm font-bold text-white hover:bg-ink/90', '開啟合約附件');
     link.href = `${API_BASE}/decorFile/${encodeURIComponent(c.rid)}?token=${encodeURIComponent(TOKEN)}`;
     link.target = '_blank'; link.rel = 'noopener noreferrer';
     fileBox.append(link);
   } else {
-    const btn = make('button', 'cursor-not-allowed rounded-xl bg-slate-200 px-4 py-2 text-sm font-bold text-slate-500', '未上傳合約');
+    const btn = make('button', 'cursor-not-allowed rounded-xl bg-line px-4 py-2 text-sm font-bold text-inkmuted', '未上傳合約');
     btn.type = 'button'; btn.disabled = true;
     fileBox.append(btn);
   }
-  if (c.contractTotal !== null) fileBox.append(make('p', 'mt-2 text-xs text-slate-500', `合約總價款 ${money(c.contractTotal)}`));
+  if (c.contractTotal !== null) fileBox.append(make('p', 'tnum mt-2 text-xs text-inkmuted', `合約總價款 ${money(c.contractTotal)}`));
   const missingStartCount = (c.progress || []).filter((p) => !parseDateOnly(p.startAt)).length;
-  if (missingStartCount > 0) fileBox.append(make('p', 'mt-2 text-xs text-amber-700', `資料品質提示：${missingStartCount} 筆工項缺少起日，未顯示於甘特圖`));
+  if (missingStartCount > 0) fileBox.append(make('p', 'mt-2 text-xs text-flagdark', `資料品質提示：${missingStartCount} 筆工項缺少起日，未顯示於甘特圖`));
   box.append(fileBox);
 
   return box;
@@ -553,50 +785,50 @@ function detailPanel(c) {
 
 function renderCaseBlock(c, bounds) {
   const overdue = isOverdue(c);
-  const wrapper = make('div', `border-b border-slate-100 last:border-b-0 ${overdue ? 'bg-red-50/40' : ''}`);
+  const stale = isStale(c);
+  const wrapper = make('div', `border-b border-line last:border-b-0 ${overdue ? 'bg-coraltint/40' : ''}`);
 
   const row = make('div', 'flex w-full cursor-pointer items-stretch text-left');
   row.setAttribute('role', 'button');
   row.setAttribute('tabindex', '0');
-  const label = make('div', `sticky left-0 z-10 w-[230px] flex-none border-r border-slate-100 bg-white p-3 ${overdue ? 'bg-red-50' : ''}`);
-  label.append(make('p', 'text-sm font-extrabold text-slate-900', c.name));
-  const metaLine = make('p', 'mt-0.5 text-xs text-slate-500', `監工 ${c.supervisor || '—'}・接案 ${c.assignee || '—'}`);
-  label.append(metaLine);
-  label.append(make('p', 'mt-0.5 text-xs text-slate-500', `${c.startAt || '—'} ~ ${c.endAt || '—'}・已繳 ${pct(c.paidRatio)}`));
-  const lastWorkItemLine = make('p', 'mt-0.5 truncate text-xs font-semibold text-slate-600', `最新工項：${clean(c.lastWorkItem) || '—'}`);
+  const label = make('div', `sticky left-0 z-10 w-[${LABEL_COL_MAIN}px] flex-none border-r border-line bg-white p-3 ${overdue ? 'bg-coraltint' : ''}`);
+  label.style.width = `${LABEL_COL_MAIN}px`;
+  const nameRow = make('div', 'flex items-start gap-1.5');
+  nameRow.append(statusDot(overdue ? 'overdue' : stale ? 'stale' : 'normal'));
+  nameRow.append(make('p', 'truncate text-sm font-extrabold text-ink', c.name));
+  label.append(nameRow);
+  label.append(make('p', 'mt-0.5 truncate text-xs text-inkmuted', `監工 ${c.supervisor || '—'}・接案 ${c.assignee || '—'}`));
+  label.append(make('p', 'tnum mt-0.5 text-xs text-inkmuted', `${c.startAt || '—'} ~ ${c.endAt || '—'}・已繳 ${pct(c.paidRatio)}`));
+  const lastWorkItemLine = make('p', 'mt-0.5 truncate text-xs font-semibold text-inkmuted', `最新工項：${clean(c.lastWorkItem) || '—'}`);
   lastWorkItemLine.title = clean(c.lastWorkItem) || '—';
   label.append(lastWorkItemLine);
   const badgeRow = make('div', 'mt-1 flex flex-wrap gap-1');
-  caseBadges(c).forEach((b) => badgeRow.append(b));
+  if (overdue) badgeRow.append(badge('逾期', 'bg-coraltint text-coraldark'));
+  if (stale) badgeRow.append(badge('催更', 'bg-flagtint text-flagdark'));
   if (badgeRow.childElementCount) label.append(badgeRow);
   row.append(label);
 
   const track = trackWrap(bounds);
-  // 案級橫條：起訖任一空值或訖<起（填錯）→ 不入甘特圖（僅畫灰色佔位條，badge 已標警示）
-  const bar = dateIssue(c) ? null : ganttBar(c.startAt, c.endAt, bounds, overdue ? 'bg-red-500' : 'bg-blue-500');
+  const bar = ganttBar(c.startAt, c.endAt, bounds, overdue ? 'bg-coral' : 'bg-ink');
   if (bar) track.append(bar);
   else {
-    const placeholder = make('div', 'gantt-bar bg-slate-200');
-    placeholder.style.left = '0px'; placeholder.style.width = '80px';
-    track.append(placeholder);
+    const note = make('div', 'absolute left-2 top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] font-bold text-inkfaint', '不在目前檢視範圍・點「看全程」查看');
+    track.append(note);
   }
   row.append(track);
 
-  const expanded = EXPANDED.has(c.rid);
-  const toggle = () => { if (expanded) EXPANDED.delete(c.rid); else EXPANDED.add(c.rid); renderLists(); };
+  const expanded = EXPANDED_GANTT.has(c.rid);
+  const toggle = () => { if (expanded) EXPANDED_GANTT.delete(c.rid); else EXPANDED_GANTT.add(c.rid); renderLists(); };
   row.addEventListener('click', toggle);
   row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
   wrapper.append(row);
 
   if (expanded) {
-    const sub = make('div', 'p-3 space-y-3 bg-slate-50');
-    sub.append(make('p', 'text-xs font-bold tracking-widest text-orange-600', '工項分行視圖'));
+    const sub = make('div', 'space-y-3 bg-paper p-3');
+    sub.append(make('p', 'text-xs font-bold tracking-wide text-coraldark', '工項分行視圖'));
     sub.append(viewToggle(c));
     const mode = CASE_VIEW_MODE.get(c.rid) || 'gantt';
     sub.append(mode === 'calendar' ? renderCaseCalendar(c) : renderCaseItemGantt(c));
-    const detailRow = make('div', '');
-    detailRow.append(detailPanel(c));
-    sub.append(detailRow);
     wrapper.append(sub);
   }
 
@@ -604,15 +836,15 @@ function renderCaseBlock(c, bounds) {
 }
 
 // ---------- P2：圖一式甘特（展開單案）----------
-// 左側固定 12 列＝11 工項（核定預設順序）＋「未分類」；每列橫條＝該分類子表紀錄起訖。
-// 用該案自己的日期範圍（非總覽的全案共用尺度），子表紀錄較密集時橫條才不會擠成一團。
 function renderCaseItemGantt(c) {
-  const bounds = computeBounds([c]);
-  const scroll = make('div', 'gantt-scroll rounded-xl border border-slate-200 bg-white');
+  const bounds = computeItemBounds(c);
+  const scroll = make('div', 'gantt-scroll rounded-xl border border-line bg-white');
   const inner = make('div', 'inline-block min-w-full');
-  const rulerRow = make('div', 'flex items-stretch border-b border-slate-200 bg-slate-50');
-  rulerRow.append(make('div', 'sticky left-0 z-10 w-[110px] flex-none border-r border-slate-100 bg-slate-50 p-2 text-xs font-bold text-slate-500', '工項'));
-  rulerRow.append(ruler(bounds));
+  const rulerRow = make('div', 'flex items-stretch border-b border-line bg-paper');
+  const rulerLabel = make('div', 'sticky left-0 z-10 flex-none border-r border-line bg-paper p-2 text-xs font-bold text-inkmuted', '工項');
+  rulerLabel.style.width = `${LABEL_COL_ITEM}px`;
+  rulerRow.append(rulerLabel);
+  rulerRow.append(ruler(bounds, LABEL_COL_ITEM));
   inner.append(rulerRow);
 
   const grouped = {};
@@ -621,8 +853,9 @@ function renderCaseItemGantt(c) {
 
   GANTT_ROWS.forEach((name) => {
     const items = grouped[name];
-    const rowEl = make('div', 'flex items-stretch border-b border-slate-100 last:border-b-0');
-    const label = make('div', `sticky left-0 z-10 w-[110px] flex-none border-r border-slate-100 bg-white p-2 text-xs font-bold ${name === '未分類' ? 'text-slate-400' : 'text-slate-600'}`, name);
+    const rowEl = make('div', 'flex items-stretch border-b border-line/60 last:border-b-0');
+    const label = make('div', `sticky left-0 z-10 flex-none border-r border-line bg-white p-2 text-xs font-bold ${name === '未分類' ? 'text-inkfaint' : 'text-inkmuted'}`, name);
+    label.style.width = `${LABEL_COL_ITEM}px`;
     rowEl.append(label);
     const track = trackWrap(bounds);
     if (!items.length) {
@@ -652,19 +885,19 @@ function renderCaseCalendar(c) {
   const daysInMonth = new Date(state.y, state.m + 1, 0).getDate();
   const today = todayDate();
 
-  const wrap = make('div', 'rounded-xl border border-slate-200 bg-white p-3');
+  const wrap = make('div', 'rounded-xl border border-line bg-white p-3');
   const nav = make('div', 'mb-2 flex items-center justify-between');
-  const prevBtn = make('button', 'rounded-lg border border-slate-300 px-3 py-1 text-xs font-bold hover:bg-slate-50', '‹ 上月');
+  const prevBtn = make('button', 'rounded-lg border border-line px-3 py-1 text-xs font-bold text-ink hover:bg-paper', '‹ 上月');
   prevBtn.type = 'button';
-  const label = make('span', 'text-sm font-bold text-slate-700', `${state.y} 年 ${state.m + 1} 月`);
-  const nextBtn = make('button', 'rounded-lg border border-slate-300 px-3 py-1 text-xs font-bold hover:bg-slate-50', '下月 ›');
+  const label = make('span', 'tnum text-sm font-bold text-ink', `${state.y} 年 ${state.m + 1} 月`);
+  const nextBtn = make('button', 'rounded-lg border border-line px-3 py-1 text-xs font-bold text-ink hover:bg-paper', '下月 ›');
   nextBtn.type = 'button';
   prevBtn.addEventListener('click', () => { const d = new Date(state.y, state.m - 1, 1); CASE_CAL_MONTH.set(c.rid, { y: d.getFullYear(), m: d.getMonth() }); renderLists(); });
   nextBtn.addEventListener('click', () => { const d = new Date(state.y, state.m + 1, 1); CASE_CAL_MONTH.set(c.rid, { y: d.getFullYear(), m: d.getMonth() }); renderLists(); });
   nav.append(prevBtn, label, nextBtn);
   wrap.append(nav);
 
-  const weekHead = make('div', 'grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400');
+  const weekHead = make('div', 'grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-inkfaint');
   ['日', '一', '二', '三', '四', '五', '六'].forEach((d) => weekHead.append(make('div', '', d)));
   wrap.append(weekHead);
 
@@ -673,15 +906,15 @@ function renderCaseCalendar(c) {
   for (let day = 1; day <= daysInMonth; day++) {
     const cellDate = new Date(state.y, state.m, day);
     const isToday = sameDate(cellDate, today);
-    const cell = make('div', `min-h-[56px] rounded-lg border p-1 text-left ${isToday ? 'border-rose-300 bg-rose-50' : 'border-slate-100 bg-white'}`);
-    cell.append(make('p', 'text-[10px] font-bold text-slate-500', String(day)));
+    const cell = make('div', `min-h-[56px] rounded-lg border p-1 text-left ${isToday ? 'border-coral bg-coraltint' : 'border-line bg-white'}`);
+    cell.append(make('p', 'tnum text-[10px] font-bold text-inkmuted', String(day)));
     const dots = make('div', 'mt-1 flex flex-wrap gap-0.5');
     (c.progress || []).forEach((p) => {
       const s = parseDateOnly(p.startAt);
       if (!s) return;
       let e = parseDateOnly(p.endAt);
-      if (!e) e = today > s ? today : s; // 訖日空值視為進行中，畫到今天（同甘特規則）
-      if (e < s) return; // 日期填反不畫
+      if (!e) e = today > s ? today : s;
+      if (e < s) return;
       if (cellDate >= s && cellDate <= e) {
         const cat = resolveCategory(p);
         dots.append(make('span', `inline-block h-2 w-2 rounded-full ${CATEGORY_COLORS[cat] || 'bg-slate-400'}`));
@@ -697,9 +930,9 @@ function renderCaseCalendar(c) {
 function viewToggle(c) {
   const mode = CASE_VIEW_MODE.get(c.rid) || 'gantt';
   const row = make('div', 'flex gap-2');
-  const ganttBtn = make('button', `rounded-lg px-3 py-1 text-xs font-bold ${mode === 'gantt' ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-600'}`, '圖一式甘特');
+  const ganttBtn = make('button', `rounded-lg px-3 py-1 text-xs font-bold ${mode === 'gantt' ? 'bg-ink text-white' : 'border border-line text-inkmuted'}`, '圖一式甘特');
   ganttBtn.type = 'button';
-  const calBtn = make('button', `rounded-lg px-3 py-1 text-xs font-bold ${mode === 'calendar' ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-600'}`, '月曆');
+  const calBtn = make('button', `rounded-lg px-3 py-1 text-xs font-bold ${mode === 'calendar' ? 'bg-ink text-white' : 'border border-line text-inkmuted'}`, '月曆');
   calBtn.type = 'button';
   ganttBtn.addEventListener('click', (e) => { e.stopPropagation(); CASE_VIEW_MODE.set(c.rid, 'gantt'); renderLists(); });
   calBtn.addEventListener('click', (e) => { e.stopPropagation(); CASE_VIEW_MODE.set(c.rid, 'calendar'); renderLists(); });
@@ -710,17 +943,20 @@ function viewToggle(c) {
 function renderGantt(cases) {
   const wrap = byId('ganttWrap');
   wrap.replaceChildren();
+  byId('ganttRangeToggle').textContent = GANTT_VIEW_MODE === 'full' ? '回到本週視窗' : '看全程';
   if (!cases.length) {
-    wrap.append(make('div', 'p-8 text-center text-sm text-slate-500', '目前沒有工程中案件'));
+    wrap.append(make('div', 'p-8 text-center text-sm text-inkmuted', '目前沒有工程中案件'));
     return;
   }
-  const bounds = computeBounds(cases);
+  const bounds = GANTT_VIEW_MODE === 'full' ? computeBoundsFull(cases) : computeWindowBounds();
   const scroll = make('div', 'gantt-scroll');
   const inner = make('div', 'inline-block min-w-full');
 
-  const rulerRow = make('div', 'flex items-stretch border-b border-slate-200 bg-slate-50');
-  rulerRow.append(make('div', 'sticky left-0 z-10 w-[230px] flex-none border-r border-slate-100 bg-slate-50 p-2 text-xs font-bold text-slate-500', '案件 / 時間軸'));
-  rulerRow.append(ruler(bounds));
+  const rulerRow = make('div', 'flex items-stretch border-b border-line bg-paper');
+  const rulerLabel = make('div', 'sticky left-0 z-10 flex-none border-r border-line bg-paper p-2 text-xs font-bold text-inkmuted', '案件 / 時間軸');
+  rulerLabel.style.width = `${LABEL_COL_MAIN}px`;
+  rulerRow.append(rulerLabel);
+  rulerRow.append(ruler(bounds, LABEL_COL_MAIN));
   inner.append(rulerRow);
 
   cases.forEach((c) => inner.append(renderCaseBlock(c, bounds)));
@@ -729,36 +965,75 @@ function renderGantt(cases) {
 }
 
 function closedCard(c) {
-  const card = make('div', 'rounded-xl border border-slate-200 bg-white p-4 text-sm');
-  const head = make('div', 'flex items-center justify-between');
-  head.append(make('p', 'font-extrabold text-slate-900', c.name), badge(c.status, 'bg-slate-100 text-slate-600'));
+  const card = make('div', 'rounded-xl border border-line bg-white p-4 text-sm');
+  const head = make('div', 'flex items-center justify-between gap-2');
+  head.append(make('p', 'truncate font-extrabold text-ink', c.name), badge(c.status, 'bg-line text-inkmuted whitespace-nowrap'));
   card.append(head);
-  card.append(make('p', 'mt-2 text-xs text-slate-500', `監工 ${c.supervisor || '—'}・接案 ${c.assignee || '—'}`));
-  card.append(make('p', 'mt-1 text-xs text-slate-500', `${c.startAt || '—'} ~ ${c.endAt || '—'}・已繳 ${pct(c.paidRatio)}`));
-  const closedWorkItem = make('p', 'mt-1 truncate text-xs font-semibold text-slate-600', `最新工項：${clean(c.lastWorkItem) || '—'}`);
+  card.append(make('p', 'mt-2 text-xs text-inkmuted', `監工 ${c.supervisor || '—'}・接案 ${c.assignee || '—'}`));
+  card.append(make('p', 'tnum mt-1 text-xs text-inkmuted', `${c.startAt || '—'} ~ ${c.endAt || '—'}・已繳 ${pct(c.paidRatio)}`));
+  const closedWorkItem = make('p', 'mt-1 truncate text-xs font-semibold text-inkmuted', `最新工項：${clean(c.lastWorkItem) || '—'}`);
   closedWorkItem.title = clean(c.lastWorkItem) || '—';
   card.append(closedWorkItem);
   return card;
 }
 
+// ---------- 主渲染流程 ----------
 function renderLists() {
   const active = ALL_CASES.filter((c) => c.status === STATUS_ACTIVE);
-  renderGantt(active);
 
+  if (!active.length) {
+    byId('actionSection').hidden = true;
+    byId('normalSection').hidden = true;
+    renderFilterBanner();
+    renderGantt([]);
+    renderDataIssueList([]);
+    renderClosed();
+    return;
+  }
+  byId('actionSection').hidden = false;
+
+  const dataIssueCases = active.filter((c) => dateIssue(c));
+  const workable = active.filter((c) => !dateIssue(c));
+  let urgent = workable.filter((c) => isOverdue(c) || isStale(c));
+  let normal = workable.filter((c) => !isOverdue(c) && !isStale(c));
+
+  if (FILTER_MODE === 'overdue') { urgent = urgent.filter((c) => isOverdue(c)); normal = []; }
+  else if (FILTER_MODE === 'stale') { urgent = urgent.filter((c) => isStale(c) && !isOverdue(c)); normal = []; }
+
+  urgent.sort((a, b) => {
+    const aOverdue = isOverdue(a), bOverdue = isOverdue(b);
+    if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
+    if (aOverdue) return (overdueDaysCount(b) || 0) - (overdueDaysCount(a) || 0);
+    return (staleDaysCount(b) || 0) - (staleDaysCount(a) || 0);
+  });
+  normal.sort((a, b) => {
+    const da = parseDateOnly(a.endAt), db = parseDateOnly(b.endAt);
+    if (!da && !db) return 0; if (!da) return 1; if (!db) return -1; return da - db;
+  });
+
+  renderFilterBanner();
+  renderActionFeed(urgent);
+  renderNormalList(normal);
+  renderGantt(FILTER_MODE ? urgent : urgent.concat(normal));
+  renderDataIssueList(dataIssueCases);
+  renderClosed();
+}
+
+function renderClosed() {
   const rest = ALL_CASES.filter((c) => c.status !== STATUS_ACTIVE);
   byId('closedTitle').textContent = `已結案／暫停中案件（${rest.length}）`;
   const closedList = byId('closedList');
   closedList.replaceChildren();
-  if (!rest.length) closedList.append(make('p', 'text-sm text-slate-400', '目前沒有已結案或暫停中案件'));
+  if (!rest.length) closedList.append(make('p', 'text-sm text-inkfaint', '目前沒有已結案或暫停中案件'));
   else rest.forEach((c) => closedList.append(closedCard(c)));
 }
 
 function renderHeader() {
-  byId('roleLabel').textContent = `窩的家・設計部工作檯（${ROLE_LABEL || ROLE}）`;
+  byId('roleLabel').textContent = ROLE_LABEL || ROLE || '設計部工作檯';
 }
 
 async function loadAll() {
-  showLoading();
+  setGlobalMessage('loading', '載入中…');
   try {
     const data = await apiGet('decorListAll');
     ALL_CASES = Array.isArray(data.cases) ? data.cases : [];
@@ -766,25 +1041,34 @@ async function loadAll() {
     renderHeader();
     renderStats(data.stats);
     renderLists();
-    hideLoading();
+    setGlobalMessage(null);
     byId('updatedAt').textContent = `更新：${new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`;
   } catch (error) {
     if (error.status === 404) { showInvalid(); return; }
-    showError(error.message);
+    setGlobalMessage('error', `載入失敗：${error.message}（請按右上角「重新整理」再試一次）`);
   }
 }
 
 function showInvalid() {
-  byId('invalidLink').classList.remove('hidden');
-  byId('invalidLink').classList.add('flex');
-  byId('app').classList.add('hidden');
+  byId('invalidScreen').hidden = false;
+  byId('app').hidden = true;
 }
 
 byId('refreshButton').addEventListener('click', loadAll);
+byId('ganttRangeToggle').addEventListener('click', () => {
+  GANTT_VIEW_MODE = GANTT_VIEW_MODE === 'full' ? 'window' : 'full';
+  renderLists();
+});
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (!byId('app').hidden) renderLists(); }, 150);
+});
+
 if (!TOKEN) {
   showInvalid();
 } else {
-  byId('app').classList.remove('hidden');
+  byId('app').hidden = false;
   loadAll();
 }
 </script>
