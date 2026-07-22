@@ -962,6 +962,17 @@ function renderGantt(cases) {
   cases.forEach((c) => inner.append(renderCaseBlock(c, bounds)));
   scroll.append(inner);
   wrap.append(scroll);
+
+  // bugfix 2026-07-22：聚焦視窗模式下把橫向捲動初始位置移到「今日線約在可視寬度 1/3 處」，
+  // 避免手機小螢幕（固定 230px 案名欄吃掉大半視寬）今日線初始貼右邊緣幾乎看不到。
+  // 桌機視窗夠寬時 maxScroll<=0，不動作，對桌機無害；「看全程」模式不受影響。
+  if (GANTT_VIEW_MODE === 'window') {
+    const todayX = LABEL_COL_MAIN + offsetPx(todayDate(), bounds);
+    const maxScroll = scroll.scrollWidth - scroll.clientWidth;
+    if (maxScroll > 0) {
+      scroll.scrollLeft = Math.max(0, Math.min(maxScroll, todayX - scroll.clientWidth / 3));
+    }
+  }
 }
 
 function closedCard(c) {
@@ -998,7 +1009,9 @@ function renderLists() {
   let normal = workable.filter((c) => !isOverdue(c) && !isStale(c));
 
   if (FILTER_MODE === 'overdue') { urgent = urgent.filter((c) => isOverdue(c)); normal = []; }
-  else if (FILTER_MODE === 'stale') { urgent = urgent.filter((c) => isStale(c) && !isOverdue(c)); normal = []; }
+  // bugfix 2026-07-22：黃燈篩選口徑比照「逾期」寫法——直接從 active 全集合用 isStale() 撈，
+  // 不再局限於 workable（漏掉同時逾期／資料待補 bucket 的黃燈案）。isStale()/isOverdue() 判定函式本身不變。
+  else if (FILTER_MODE === 'stale') { urgent = active.filter((c) => isStale(c)); normal = []; }
 
   urgent.sort((a, b) => {
     const aOverdue = isOverdue(a), bOverdue = isOverdue(b);
