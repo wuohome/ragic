@@ -965,15 +965,20 @@ function renderGantt(cases) {
 
   // bugfix 2026-07-22：聚焦視窗模式下把橫向捲動初始位置移到「今日線約在可視寬度 1/3 處」，
   // 避免手機小螢幕（固定 230px 案名欄吃掉大半視寬）今日線初始貼右邊緣幾乎看不到。
+  // 案名欄是 sticky+z-10、永遠釘在可視區左側 230px，track 實際「看得到」的寬度只有
+  // clientWidth-LABEL_COL_MAIN；今日線落點要以這段可視 track 寬度的 1/3 為準，
+  // 不能直接用整個 clientWidth 的 1/3（那樣算出的捲動量會讓今日線剛好落在 sticky 欄底下、
+  // z-index 蓋住等於白算，已實測抓到這個坑）。
   // 桌機視窗夠寬時 maxScroll<=0，不動作，對桌機無害；「看全程」模式不受影響。
   // 用雙 rAF 延後讀版面尺寸：Tailwind CDN 是 runtime JIT，新插入的 class（inline-block/min-w-full 等）
   // 要等它的 MutationObserver 注入樣式後 clientWidth/scrollWidth 才準確，插入當下同步讀值會量錯（已實測）。
   if (GANTT_VIEW_MODE === 'window') {
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      const todayX = LABEL_COL_MAIN + offsetPx(todayDate(), bounds);
       const maxScroll = scroll.scrollWidth - scroll.clientWidth;
       if (maxScroll > 0) {
-        scroll.scrollLeft = Math.max(0, Math.min(maxScroll, todayX - scroll.clientWidth / 3));
+        const visibleTrackWidth = Math.max(scroll.clientWidth - LABEL_COL_MAIN, 0);
+        const target = offsetPx(todayDate(), bounds) - visibleTrackWidth / 3;
+        scroll.scrollLeft = Math.max(0, Math.min(maxScroll, target));
       }
     }));
   }
