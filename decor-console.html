@@ -25,6 +25,7 @@
         extend: {
           colors: {
             ink: '#3F5262',
+            inkdeep: '#232B33',
             inkmuted: '#5C6B77',
             inkfaint: '#8B98A3',
             paper: '#F8FAFC',
@@ -60,17 +61,17 @@
 <body class="min-h-screen bg-paper text-ink">
   <div id="app" hidden>
     <div class="flex h-screen flex-col lg:flex-row">
-      <!-- 桌機側欄 -->
-      <aside class="hidden w-60 shrink-0 flex-col border-r border-line bg-white lg:flex">
-        <div class="flex items-center gap-2.5 border-b border-line p-4">
-          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ink text-sm font-black text-white" aria-hidden="true">窩</span>
+      <!-- 桌機側欄：深色（CI 深藍灰加深版），與冷白主工作區對比 -->
+      <aside class="hidden w-60 shrink-0 flex-col bg-inkdeep lg:flex">
+        <div class="flex items-center gap-2.5 border-b border-white/10 p-4">
+          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-coral text-sm font-black text-white" aria-hidden="true">窩</span>
           <div class="min-w-0">
-            <p class="truncate text-sm font-black text-ink">窩的家工程平台</p>
-            <p id="sidebarSubtitle" class="truncate text-[11px] font-bold text-inkmuted">設計部</p>
+            <p class="truncate text-sm font-black text-white">窩的家工程平台</p>
+            <p id="sidebarSubtitle" class="truncate text-[11px] font-bold text-white/50">設計部</p>
           </div>
         </div>
         <nav id="sidebarNav" class="flex-1 space-y-1 overflow-y-auto p-3" aria-label="主要模組"></nav>
-        <div id="sidebarPlanned" class="space-y-1 border-t border-line p-3"></div>
+        <div id="sidebarPlanned" class="space-y-1 border-t border-white/10 p-3"></div>
       </aside>
 
       <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -161,6 +162,21 @@
     <div id="moreSheetPanel" class="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-line bg-white p-4">
       <div class="mx-auto mb-3 h-1 w-10 rounded-full bg-line" aria-hidden="true"></div>
       <div id="moreSheetList" class="space-y-1"></div>
+    </div>
+  </div>
+
+  <!-- 案件詳情情境面板：桌機右側抽屜／手機全屏覆蓋 -->
+  <div id="caseDrawer" hidden class="fixed inset-0 z-50">
+    <div id="caseDrawerBackdrop" class="absolute inset-0 bg-ink/40 opacity-0 transition-opacity duration-300"></div>
+    <div id="caseDrawerPanel" class="absolute inset-y-0 right-0 flex w-full translate-x-full flex-col bg-white shadow-2xl transition-transform duration-300 ease-out lg:w-[480px] lg:max-w-[92vw]">
+      <div class="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+        <div class="min-w-0">
+          <p id="caseDrawerName" class="truncate text-lg font-black text-ink"></p>
+          <p id="caseDrawerMeta" class="tnum truncate text-xs text-inkmuted"></p>
+        </div>
+        <button id="caseDrawerClose" type="button" class="shrink-0 rounded-xl border border-line px-3 py-2 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink">關閉</button>
+      </div>
+      <div id="caseDrawerBody" class="flex-1 overflow-y-auto p-4"></div>
     </div>
   </div>
 
@@ -310,8 +326,9 @@ let FILTER_MODE = null; // null | 'overdue' | 'stale'（僅 admin 有 UI 可觸�
 let GANTT_VIEW_MODE = 'window'; // 'window'（預設，今天±聚焦）| 'full'（看全程）
 let PENDING_COUNT = 0; // 資料待補件數，供側欄／更多抽屜 badge 用
 let CASES_SUBVIEW = 'active'; // 工程案件模組內部分頁：'active' | 'closed'
+let DRAWER_RID = null; // 目前開啟情境面板的案件 rid（null＝關閉）
+let DRAWER_LAST_FOCUS = null; // 開啟抽屜前的觸發元素，關閉時歸還焦點
 const EXPANDED_GANTT = new Set(); // 甘特列展開：圖一式工項橫條／月曆
-const EXPANDED_CARD = new Set(); // 行動清單／正常清單卡片展開：完整詳情
 const CASE_VIEW_MODE = new Map(); // rid -> 'gantt' | 'calendar'
 const CASE_CAL_MONTH = new Map(); // rid -> { y, m }
 let LAST_GANTT_SCROLL_EL = null; // 平台外殼：模組切換時可能在甘特隱藏狀態下渲染，量到的尺寸是 0，
@@ -426,10 +443,7 @@ function actionSentence(c) {
 }
 
 // ---------- 案件卡片（行動清單／正常清單共用）----------
-function toggleCardExpand(rid) {
-  if (EXPANDED_CARD.has(rid)) EXPANDED_CARD.delete(rid); else EXPANDED_CARD.add(rid);
-  renderLists();
-}
+// 一方參照版：詳情不在卡片內展開，改點按鈕從右側滑出情境面板（見 openCaseDrawer）。
 function caseCard(c, kind) {
   // kind: 'overdue' | 'stale' | 'normal'
   const accent = kind === 'overdue' ? 'border-l-4 border-l-coral' : kind === 'stale' ? 'border-l-4 border-l-flag' : 'border-l-4 border-l-transparent';
@@ -452,14 +466,11 @@ function caseCard(c, kind) {
   card.append(make('p', 'tnum mt-0.5 text-xs text-inkmuted', `工期 ${c.startAt || '—'} ~ ${c.endAt || '—'}`));
   card.append(progressBar(c.paidRatio));
 
-  const expanded = EXPANDED_CARD.has(c.rid);
-  const toggleBtn = make('button', 'mt-3 w-full rounded-xl border border-line py-2 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', expanded ? '收合詳情 ▲' : '查看詳情・新增進度 ▼');
-  toggleBtn.type = 'button';
-  toggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-  toggleBtn.addEventListener('click', () => toggleCardExpand(c.rid));
-  card.append(toggleBtn);
+  const detailBtn = make('button', 'mt-3 w-full rounded-xl border border-line py-2 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '查看詳情・新增進度 →');
+  detailBtn.type = 'button';
+  detailBtn.addEventListener('click', () => openCaseDrawer(c, detailBtn));
+  card.append(detailBtn);
 
-  if (expanded) card.append(detailPanel(c));
   return card;
 }
 
@@ -820,6 +831,46 @@ function detailPanel(c) {
   return box;
 }
 
+// ---------- 案件詳情情境面板（一方參照版：右側抽屜／手機全屏，取代卡片內展開）----------
+function renderDrawerContent(c) {
+  byId('caseDrawerName').textContent = c.name;
+  byId('caseDrawerMeta').textContent = `監工 ${c.supervisor || '—'}・接案 ${c.assignee || '—'}`;
+  const body = byId('caseDrawerBody');
+  body.replaceChildren();
+  body.append(detailPanel(c));
+}
+function openCaseDrawer(c, triggerEl) {
+  DRAWER_RID = c.rid;
+  DRAWER_LAST_FOCUS = triggerEl || document.activeElement;
+  renderDrawerContent(c);
+  byId('caseDrawer').hidden = false;
+  document.body.style.overflow = 'hidden';
+  requestAnimationFrame(() => {
+    byId('caseDrawerPanel').classList.remove('translate-x-full');
+    byId('caseDrawerBackdrop').classList.remove('opacity-0');
+  });
+  byId('caseDrawerClose').focus();
+}
+function closeCaseDrawer() {
+  if (byId('caseDrawer').hidden) return;
+  byId('caseDrawerPanel').classList.add('translate-x-full');
+  byId('caseDrawerBackdrop').classList.add('opacity-0');
+  document.body.style.overflow = '';
+  setTimeout(() => { byId('caseDrawer').hidden = true; }, 300);
+  DRAWER_RID = null;
+  if (DRAWER_LAST_FOCUS && typeof DRAWER_LAST_FOCUS.focus === 'function') DRAWER_LAST_FOCUS.focus();
+}
+// renderLists() 每次重繪（篩選／新增進度／展開等）都會呼叫，讓已開啟的抽屜內容跟著最新資料更新，不強制關閉。
+function refreshDrawerIfOpen() {
+  if (!DRAWER_RID) return;
+  const c = ALL_CASES.find((x) => x.rid === DRAWER_RID);
+  if (!c) { closeCaseDrawer(); return; }
+  renderDrawerContent(c);
+}
+byId('caseDrawerClose').addEventListener('click', closeCaseDrawer);
+byId('caseDrawerBackdrop').addEventListener('click', closeCaseDrawer);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !byId('caseDrawer').hidden) closeCaseDrawer(); });
+
 function renderCaseBlock(c, bounds) {
   const overdue = isOverdue(c);
   const stale = isStale(c);
@@ -843,6 +894,10 @@ function renderCaseBlock(c, bounds) {
   if (overdue) badgeRow.append(badge('逾期', 'bg-coraltint text-coraldark'));
   if (stale) badgeRow.append(badge('催更', 'bg-flagtint text-flagdark'));
   if (badgeRow.childElementCount) label.append(badgeRow);
+  const detailBtn = make('button', 'mt-1.5 inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-[11px] font-bold text-ink hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '詳情 →');
+  detailBtn.type = 'button';
+  detailBtn.addEventListener('click', (e) => { e.stopPropagation(); openCaseDrawer(c, detailBtn); });
+  label.append(detailBtn);
   row.append(label);
 
   const track = trackWrap(bounds);
@@ -1042,6 +1097,10 @@ function closedCard(c) {
   const closedWorkItem = make('p', 'mt-1 truncate text-xs font-semibold text-inkmuted', `最新工項：${clean(c.lastWorkItem) || '—'}`);
   closedWorkItem.title = clean(c.lastWorkItem) || '—';
   card.append(closedWorkItem);
+  const detailBtn = make('button', 'mt-3 w-full rounded-xl border border-line py-2 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '查看詳情 →');
+  detailBtn.type = 'button';
+  detailBtn.addEventListener('click', () => openCaseDrawer(c, detailBtn));
+  card.append(detailBtn);
   return card;
 }
 
@@ -1056,6 +1115,7 @@ function renderLists() {
     renderGantt([]);
     renderDataIssueList([]);
     renderClosed();
+    refreshDrawerIfOpen();
     return;
   }
   byId('actionSection').hidden = false;
@@ -1087,6 +1147,7 @@ function renderLists() {
   renderGantt(FILTER_MODE ? urgent : urgent.concat(normal));
   renderDataIssueList(dataIssueCases);
   renderClosed();
+  refreshDrawerIfOpen();
 }
 
 function renderClosed() {
@@ -1163,15 +1224,16 @@ function updateBadges() {
   const b2 = byId('moreSheetPendingBadge'); if (b2) b2.textContent = String(PENDING_COUNT);
 }
 
+// 深色側欄（一方參照版）：選中項用珊瑚紅亮色高光，其餘半透明白字；焦點環改白色系（深底才看得見）。
 function sidebarNavButton(item) {
   const active = currentView() === item.id;
-  const btn = make('button', `flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${active ? 'bg-ink text-white' : 'text-ink hover:bg-paper'}`);
+  const btn = make('button', `flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${active ? 'bg-coral text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'}`);
   btn.type = 'button';
   if (active) btn.setAttribute('aria-current', 'page');
   const ic = make('span', 'h-5 w-5 shrink-0'); ic.innerHTML = icon(item.icon);
   btn.append(ic, make('span', 'flex-1 text-left', item.label));
   if (item.badge) {
-    const b = make('span', `rounded-full px-2 py-0.5 text-xs font-black ${active ? 'bg-white/20 text-white' : 'bg-flagtint text-flagdark'}`, String(PENDING_COUNT));
+    const b = make('span', `rounded-full px-2 py-0.5 text-xs font-black ${active ? 'bg-white/90 text-coraldark' : 'bg-flag text-ink'}`, String(PENDING_COUNT));
     b.id = 'sidebarPendingBadge';
     btn.append(b);
   }
@@ -1179,7 +1241,7 @@ function sidebarNavButton(item) {
   return btn;
 }
 function plannedButton(item) {
-  const btn = make('button', 'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-inkfaint hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
+  const btn = make('button', 'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-white/35 hover:bg-white/5 hover:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60');
   btn.type = 'button';
   const ic = make('span', 'h-5 w-5 shrink-0'); ic.innerHTML = icon(item.icon);
   btn.append(ic, make('span', 'flex-1 text-left', `${item.label}（規劃中）`));
