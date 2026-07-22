@@ -8,7 +8,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>設計部工作檯｜窩的家</title>
+  <title>窩的家工程平台｜設計部</title>
   <script>
   (function () {
     var u = new URL(location.href);
@@ -50,6 +50,8 @@
     .gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(221,102,80,.6); z-index: 5; }
     .gantt-today-label { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: 700; color: #B03B26; white-space: nowrap; }
     .tnum { font-variant-numeric: tabular-nums; }
+    #toast { transition: opacity 200ms ease-out; }
+    #moreSheetPanel { transition: transform 200ms ease-out; }
     @media (prefers-reduced-motion: reduce) {
       * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
     }
@@ -57,80 +59,109 @@
 </head>
 <body class="min-h-screen bg-paper text-ink">
   <div id="app" hidden>
-    <header class="sticky top-0 z-30 border-b border-line bg-white">
-      <div class="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-        <div class="flex min-w-0 items-center gap-2.5">
+    <div class="flex h-screen flex-col lg:flex-row">
+      <!-- 桌機側欄 -->
+      <aside class="hidden w-60 shrink-0 flex-col border-r border-line bg-white lg:flex">
+        <div class="flex items-center gap-2.5 border-b border-line p-4">
           <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ink text-sm font-black text-white" aria-hidden="true">窩</span>
           <div class="min-w-0">
-            <p id="roleLabel" class="truncate text-[11px] font-bold tracking-wide text-coraldark">設計部工作檯</p>
-            <h1 class="truncate text-lg font-black text-ink sm:text-xl">工程進度工作檯</h1>
+            <p class="truncate text-sm font-black text-ink">窩的家工程平台</p>
+            <p id="sidebarSubtitle" class="truncate text-[11px] font-bold text-inkmuted">設計部</p>
           </div>
         </div>
-        <div class="flex shrink-0 items-center gap-2">
-          <span id="updatedAt" class="tnum hidden text-xs text-inkmuted sm:inline"></span>
-          <button id="refreshButton" type="button" class="rounded-xl border border-line px-3 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink sm:px-4">重新整理</button>
-        </div>
-      </div>
-      <div class="h-[3px] w-full bg-gradient-to-r from-coral via-flag to-ink" aria-hidden="true"></div>
-    </header>
+        <nav id="sidebarNav" class="flex-1 space-y-1 overflow-y-auto p-3" aria-label="主要模組"></nav>
+        <div id="sidebarPlanned" class="space-y-1 border-t border-line p-3"></div>
+      </aside>
 
-    <main class="mx-auto max-w-6xl space-y-6 px-4 py-5">
-      <div id="filterBanner" hidden></div>
-
-      <div id="statsRow" hidden>
-        <div id="statsGrid" class="grid grid-cols-3 gap-2 sm:gap-3"></div>
-      </div>
-
-      <div id="globalMessage" hidden></div>
-
-      <section id="actionSection" aria-labelledby="actionTitle">
-        <div class="mb-3">
-          <p class="text-xs font-bold tracking-wide text-coraldark">今天該處理</p>
-          <h2 id="actionTitle" class="text-xl font-black text-ink sm:text-2xl">需要處理</h2>
-          <p class="mt-1 text-sm text-inkmuted">逾期與停更案件依嚴重度排序，打開就知道今天該催誰。</p>
-        </div>
-        <div id="actionList" class="space-y-3"></div>
-      </section>
-
-      <section id="normalSection" aria-labelledby="normalTitle">
-        <div class="mb-3">
-          <p class="text-xs font-bold tracking-wide text-inkmuted">其餘案件</p>
-          <h2 id="normalTitle" class="text-lg font-black text-ink">正常進行中</h2>
-        </div>
-        <div id="normalList" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
-      </section>
-
-      <section id="ganttSection" aria-labelledby="ganttTitle" class="border-t border-line pt-6">
-        <div class="mb-3 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <p class="text-xs font-bold tracking-wide text-coraldark">甘特圖 ＋ 案件總覽</p>
-            <h2 id="ganttTitle" class="text-xl font-black text-ink sm:text-2xl">工程中案件時間軸</h2>
-            <p class="mt-1 text-sm text-inkmuted">點案名可展開工項橫條與詳情；紅色代表合約已逾期。手機可左右滑動看時間軸。</p>
+      <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header class="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-white px-4 py-3 lg:px-6">
+          <div class="flex min-w-0 items-center gap-2.5 lg:hidden">
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ink text-xs font-black text-white" aria-hidden="true">窩</span>
+            <span class="truncate text-sm font-black text-ink">窩的家工程平台</span>
           </div>
-          <button id="ganttRangeToggle" type="button" class="shrink-0 rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink">看全程</button>
-        </div>
-        <div id="ganttWrap" class="rounded-2xl border border-line bg-white"></div>
-      </section>
+          <h1 id="pageTitle" class="hidden text-lg font-black text-ink lg:block">儀表板</h1>
+          <div class="flex shrink-0 items-center gap-2">
+            <span id="roleBadge" class="hidden rounded-full bg-ink/10 px-2.5 py-1 text-xs font-bold text-ink sm:inline-block"></span>
+            <span id="updatedAt" class="tnum hidden text-xs text-inkmuted lg:inline"></span>
+            <button id="refreshButton" type="button" class="rounded-xl border border-line px-3 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink sm:px-4">重新整理</button>
+          </div>
+        </header>
+        <div class="h-[3px] w-full shrink-0 bg-gradient-to-r from-coral via-flag to-ink" aria-hidden="true"></div>
 
-      <section id="dataIssueSection" aria-labelledby="dataIssueTitle" class="border-t border-line pt-6">
-        <details id="dataIssueDetails">
-          <summary class="cursor-pointer text-sm font-bold text-inkmuted">
-            <span id="dataIssueTitle">資料待補</span>
-          </summary>
-          <p class="mt-2 text-xs text-inkmuted">工期未填或日期有誤的案子先收在這裡，不擋主要清單；補齊資料後會自動回到上面。</p>
-          <div id="dataIssueList" class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
-        </details>
-      </section>
+        <main id="mainRoot" class="flex-1 overflow-y-auto px-4 pb-24 pt-5 lg:px-6 lg:pb-6">
+          <div id="filterBanner" hidden class="mb-4"></div>
+          <div id="globalMessage" hidden class="mb-4"></div>
 
-      <section id="closedSection" aria-labelledby="closedTitle" class="border-t border-line pt-6">
-        <details id="closedDetails">
-          <summary class="cursor-pointer text-sm font-bold text-inkmuted">
-            <span id="closedTitle">已結案／暫停中案件</span>
-          </summary>
-          <div id="closedList" class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
-        </details>
-      </section>
-    </main>
+          <!-- 模組：儀表板 -->
+          <section id="view-dashboard" class="module-view space-y-6">
+            <div id="statsRow" hidden>
+              <div id="statsGrid" class="grid grid-cols-3 gap-2 sm:gap-3"></div>
+            </div>
+            <section id="actionSection" aria-labelledby="actionTitle">
+              <div class="mb-3">
+                <p class="text-xs font-bold tracking-wide text-coraldark">今天該處理</p>
+                <h2 id="actionTitle" class="text-xl font-black text-ink sm:text-2xl">需要處理</h2>
+                <p class="mt-1 text-sm text-inkmuted">逾期與停更案件依嚴重度排序，打開就知道今天該催誰。</p>
+              </div>
+              <div id="actionList" class="space-y-3"></div>
+            </section>
+          </section>
+
+          <!-- 模組：工程案件 -->
+          <section id="view-cases" class="module-view space-y-4" hidden>
+            <div>
+              <p class="text-xs font-bold tracking-wide text-coraldark">案件總覽</p>
+              <h2 class="text-xl font-black text-ink sm:text-2xl">工程案件</h2>
+            </div>
+            <div class="flex gap-2" role="tablist" aria-label="工程案件檢視">
+              <button id="casesTabActive" type="button" role="tab" class="rounded-xl px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink">進行中</button>
+              <button id="casesTabClosed" type="button" role="tab" class="rounded-xl px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink">已結案／暫停中</button>
+            </div>
+            <div id="casesActivePanel">
+              <div id="normalList" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+            </div>
+            <div id="casesClosedPanel" hidden>
+              <div id="closedList" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+            </div>
+          </section>
+
+          <!-- 模組：甘特圖 -->
+          <section id="view-gantt" class="module-view" hidden>
+            <div class="mb-3 flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <p class="text-xs font-bold tracking-wide text-coraldark">甘特圖 ＋ 案件總覽</p>
+                <h2 class="text-xl font-black text-ink sm:text-2xl">工程中案件時間軸</h2>
+                <p class="mt-1 text-sm text-inkmuted">點案名可展開工項橫條與詳情；紅色代表合約已逾期。手機可左右滑動看時間軸。</p>
+              </div>
+              <button id="ganttRangeToggle" type="button" class="shrink-0 rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink">看全程</button>
+            </div>
+            <div id="ganttWrap" class="rounded-2xl border border-line bg-white"></div>
+          </section>
+
+          <!-- 模組：資料待補 -->
+          <section id="view-pending" class="module-view space-y-3" hidden>
+            <div>
+              <p class="text-xs font-bold tracking-wide text-inkmuted">工期未填或日期有誤</p>
+              <h2 id="dataIssueTitle" class="text-xl font-black text-ink sm:text-2xl">資料待補</h2>
+              <p class="mt-1 text-sm text-inkmuted">補齊資料後會自動回到「工程案件」或「甘特圖」主流程。</p>
+            </div>
+            <div id="dataIssueList" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+          </section>
+        </main>
+
+        <!-- 手機底部 tab bar -->
+        <nav id="bottomTabBar" class="fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-white lg:hidden" aria-label="主要模組"></nav>
+      </div>
+    </div>
+  </div>
+
+  <!-- 手機「更多」抽屜 -->
+  <div id="moreSheet" hidden class="fixed inset-0 z-50 lg:hidden">
+    <div id="moreSheetBackdrop" class="absolute inset-0 bg-ink/40"></div>
+    <div id="moreSheetPanel" class="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-line bg-white p-4">
+      <div class="mx-auto mb-3 h-1 w-10 rounded-full bg-line" aria-hidden="true"></div>
+      <div id="moreSheetList" class="space-y-1"></div>
+    </div>
   </div>
 
   <div id="invalidScreen" hidden>
@@ -277,10 +308,14 @@ let ALL_CASES = [];
 let ROLE = ''; let ROLE_LABEL = '';
 let FILTER_MODE = null; // null | 'overdue' | 'stale'（僅 admin 有 UI 可觸發）
 let GANTT_VIEW_MODE = 'window'; // 'window'（預設，今天±聚焦）| 'full'（看全程）
+let PENDING_COUNT = 0; // 資料待補件數，供側欄／更多抽屜 badge 用
+let CASES_SUBVIEW = 'active'; // 工程案件模組內部分頁：'active' | 'closed'
 const EXPANDED_GANTT = new Set(); // 甘特列展開：圖一式工項橫條／月曆
 const EXPANDED_CARD = new Set(); // 行動清單／正常清單卡片展開：完整詳情
 const CASE_VIEW_MODE = new Map(); // rid -> 'gantt' | 'calendar'
 const CASE_CAL_MONTH = new Map(); // rid -> { y, m }
+let LAST_GANTT_SCROLL_EL = null; // 平台外殼：模組切換時可能在甘特隱藏狀態下渲染，量到的尺寸是 0，
+let LAST_GANTT_BOUNDS = null;    // 需要在使用者實際切到甘特頁籤時重新觸發一次今日線捲動定位
 function sameDate(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
 
 async function apiGet(path) {
@@ -438,11 +473,9 @@ function renderActionFeed(cases) {
   cases.forEach((c) => wrap.append(caseCard(c, isOverdue(c) ? 'overdue' : 'stale')));
 }
 function renderNormalList(cases) {
-  const section = byId('normalSection');
   const wrap = byId('normalList');
   wrap.replaceChildren();
-  if (!cases.length) { section.hidden = true; return; }
-  section.hidden = false;
+  if (!cases.length) { wrap.append(emptyNote('目前沒有其他工程中案件。')); return; }
   cases.forEach((c) => wrap.append(caseCard(c, 'normal')));
 }
 
@@ -462,20 +495,24 @@ function dataIssueCard(c) {
   return card;
 }
 function renderDataIssueList(cases) {
-  const section = byId('dataIssueSection');
   const title = byId('dataIssueTitle');
   const list = byId('dataIssueList');
   list.replaceChildren();
-  if (!cases.length) { section.hidden = true; return; }
-  section.hidden = false;
-  title.textContent = `資料待補（${cases.length}）`;
-  cases.forEach((c) => list.append(dataIssueCard(c)));
+  PENDING_COUNT = cases.length;
+  if (!cases.length) {
+    title.textContent = '資料待補';
+    list.append(emptyNote('目前沒有工期未填或日期有誤的案件。', 'sage'));
+  } else {
+    title.textContent = `資料待補（${cases.length}）`;
+    cases.forEach((c) => list.append(dataIssueCard(c)));
+  }
+  updateBadges();
 }
 
 // ---------- 甘特圖時間尺度 ----------
 function availableTrackWidth(labelColWidth) {
   const main = document.querySelector('main');
-  const w = main ? main.clientWidth : 900; // clientWidth 含 main 自己的左右 padding（px-4＝32px）
+  const w = main ? main.clientWidth : 900; // clientWidth 含 main 自己的左右 padding
   return Math.max(w - labelColWidth - 40, 200);
 }
 function withResponsiveWidth(min, max, labelColWidth) {
@@ -791,7 +828,7 @@ function renderCaseBlock(c, bounds) {
   const row = make('div', 'flex w-full cursor-pointer items-stretch text-left');
   row.setAttribute('role', 'button');
   row.setAttribute('tabindex', '0');
-  const label = make('div', `sticky left-0 z-10 w-[${LABEL_COL_MAIN}px] flex-none border-r border-line bg-white p-3 ${overdue ? 'bg-coraltint' : ''}`);
+  const label = make('div', `sticky left-0 z-10 border-r border-line bg-white p-3 ${overdue ? 'bg-coraltint' : ''}`);
   label.style.width = `${LABEL_COL_MAIN}px`;
   const nameRow = make('div', 'flex items-start gap-1.5');
   nameRow.append(statusDot(overdue ? 'overdue' : stale ? 'stale' : 'normal'));
@@ -940,12 +977,29 @@ function viewToggle(c) {
   return row;
 }
 
+// 平台外殼：模組切換時甘特頁籤可能是 hidden 狀態，此時 clientWidth/scrollWidth 量到的是 0，
+// 今日線捲動定位要延到使用者實際切到甘特頁籤（applyRoute 偵測到 view==='gantt'）時才重新觸發。
+function scheduleGanttTodayScroll() {
+  if (!LAST_GANTT_SCROLL_EL || !LAST_GANTT_BOUNDS) return;
+  if (GANTT_VIEW_MODE !== 'window') return;
+  const scroll = LAST_GANTT_SCROLL_EL, bounds = LAST_GANTT_BOUNDS;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const maxScroll = scroll.scrollWidth - scroll.clientWidth;
+    if (maxScroll > 0) {
+      const visibleTrackWidth = Math.max(scroll.clientWidth - LABEL_COL_MAIN, 0);
+      const target = offsetPx(todayDate(), bounds) - visibleTrackWidth / 3;
+      scroll.scrollLeft = Math.max(0, Math.min(maxScroll, target));
+    }
+  }));
+}
+
 function renderGantt(cases) {
   const wrap = byId('ganttWrap');
   wrap.replaceChildren();
   byId('ganttRangeToggle').textContent = GANTT_VIEW_MODE === 'full' ? '回到本週視窗' : '看全程';
   if (!cases.length) {
     wrap.append(make('div', 'p-8 text-center text-sm text-inkmuted', '目前沒有工程中案件'));
+    LAST_GANTT_SCROLL_EL = null; LAST_GANTT_BOUNDS = null;
     return;
   }
   const bounds = GANTT_VIEW_MODE === 'full' ? computeBoundsFull(cases) : computeWindowBounds();
@@ -972,16 +1026,10 @@ function renderGantt(cases) {
   // 桌機視窗夠寬時 maxScroll<=0，不動作，對桌機無害；「看全程」模式不受影響。
   // 用雙 rAF 延後讀版面尺寸：Tailwind CDN 是 runtime JIT，新插入的 class（inline-block/min-w-full 等）
   // 要等它的 MutationObserver 注入樣式後 clientWidth/scrollWidth 才準確，插入當下同步讀值會量錯（已實測）。
-  if (GANTT_VIEW_MODE === 'window') {
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      const maxScroll = scroll.scrollWidth - scroll.clientWidth;
-      if (maxScroll > 0) {
-        const visibleTrackWidth = Math.max(scroll.clientWidth - LABEL_COL_MAIN, 0);
-        const target = offsetPx(todayDate(), bounds) - visibleTrackWidth / 3;
-        scroll.scrollLeft = Math.max(0, Math.min(maxScroll, target));
-      }
-    }));
-  }
+  // 平台外殼版：若渲染當下甘特頁籤是 hidden（使用者停在別的模組），量到的尺寸會是 0，
+  // 此處先存 bounds/scroll 供 applyRoute() 在使用者切到甘特頁籤時重新觸發一次。
+  LAST_GANTT_SCROLL_EL = scroll; LAST_GANTT_BOUNDS = bounds;
+  scheduleGanttTodayScroll();
 }
 
 function closedCard(c) {
@@ -1003,8 +1051,8 @@ function renderLists() {
 
   if (!active.length) {
     byId('actionSection').hidden = true;
-    byId('normalSection').hidden = true;
     renderFilterBanner();
+    renderNormalList([]);
     renderGantt([]);
     renderDataIssueList([]);
     renderClosed();
@@ -1043,16 +1091,192 @@ function renderLists() {
 
 function renderClosed() {
   const rest = ALL_CASES.filter((c) => c.status !== STATUS_ACTIVE);
-  byId('closedTitle').textContent = `已結案／暫停中案件（${rest.length}）`;
   const closedList = byId('closedList');
   closedList.replaceChildren();
-  if (!rest.length) closedList.append(make('p', 'text-sm text-inkfaint', '目前沒有已結案或暫停中案件'));
+  if (!rest.length) closedList.append(emptyNote('目前沒有已結案或暫停中案件。'));
   else rest.forEach((c) => closedList.append(closedCard(c)));
+  renderCasesSubTabLabels(rest.length);
 }
 
 function renderHeader() {
-  byId('roleLabel').textContent = ROLE_LABEL || ROLE || '設計部工作檯';
+  const label = ROLE_LABEL || ROLE || '使用者';
+  byId('roleBadge').textContent = label;
+  byId('sidebarSubtitle').textContent = `設計部・${label}`;
 }
+
+// ================= 平台外殼：導覽、路由、抽屜、Toast =================
+
+function icon(name) {
+  const paths = {
+    dashboard: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    cases: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>',
+    gantt: '<rect x="3" y="5" width="12" height="3" rx="1.5"/><rect x="3" y="10.5" width="17" height="3" rx="1.5"/><rect x="3" y="16" width="8" height="3" rx="1.5"/>',
+    pending: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3" fill="none" stroke-linecap="round"/>',
+    more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
+    repair: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2z" fill="none" stroke-linejoin="round"/>',
+    quote: '<path d="M6 3h9l3 3v15H6z" fill="none"/><path d="M9 9h6M9 13h6M9 17h3" stroke-linecap="round"/>',
+  };
+  return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">${paths[name] || ''}</svg>`;
+}
+
+const VALID_VIEWS = ['dashboard', 'cases', 'gantt', 'pending'];
+const VIEW_TITLES = { dashboard: '儀表板', cases: '工程案件', gantt: '甘特圖', pending: '資料待補' };
+const NAV_ITEMS = [
+  { id: 'dashboard', label: '儀表板', icon: 'dashboard' },
+  { id: 'cases', label: '工程案件', icon: 'cases' },
+  { id: 'gantt', label: '甘特圖', icon: 'gantt' },
+  { id: 'pending', label: '資料待補', icon: 'pending', badge: true },
+];
+const TAB_ITEMS = [
+  { id: 'dashboard', label: '儀表板', icon: 'dashboard' },
+  { id: 'cases', label: '案件', icon: 'cases' },
+  { id: 'gantt', label: '甘特', icon: 'gantt' },
+  { id: 'more', label: '更多', icon: 'more' },
+];
+const PLANNED_ITEMS = [
+  { id: 'repair', label: '日常修繕', icon: 'repair', note: '日常修繕模組規劃中，尚未整合進本平台。' },
+  { id: 'quote', label: '報價', icon: 'quote', note: '報價模組規劃中，尚未加入本平台。' },
+];
+
+function currentView() {
+  const h = (location.hash || '').replace('#', '');
+  return VALID_VIEWS.includes(h) ? h : 'dashboard';
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  let t = byId('toast');
+  if (!t) {
+    t = make('div', 'fixed inset-x-0 bottom-24 z-[60] mx-auto w-fit max-w-[90vw] rounded-full bg-ink px-4 py-2 text-center text-sm font-bold text-white shadow-lg lg:bottom-6');
+    t.id = 'toast';
+    t.style.opacity = '0';
+    document.body.append(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.style.opacity = '0'; }, 2400);
+}
+
+function updateBadges() {
+  const b1 = byId('sidebarPendingBadge'); if (b1) b1.textContent = String(PENDING_COUNT);
+  const b2 = byId('moreSheetPendingBadge'); if (b2) b2.textContent = String(PENDING_COUNT);
+}
+
+function sidebarNavButton(item) {
+  const active = currentView() === item.id;
+  const btn = make('button', `flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${active ? 'bg-ink text-white' : 'text-ink hover:bg-paper'}`);
+  btn.type = 'button';
+  if (active) btn.setAttribute('aria-current', 'page');
+  const ic = make('span', 'h-5 w-5 shrink-0'); ic.innerHTML = icon(item.icon);
+  btn.append(ic, make('span', 'flex-1 text-left', item.label));
+  if (item.badge) {
+    const b = make('span', `rounded-full px-2 py-0.5 text-xs font-black ${active ? 'bg-white/20 text-white' : 'bg-flagtint text-flagdark'}`, String(PENDING_COUNT));
+    b.id = 'sidebarPendingBadge';
+    btn.append(b);
+  }
+  btn.addEventListener('click', () => { location.hash = item.id; });
+  return btn;
+}
+function plannedButton(item) {
+  const btn = make('button', 'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-inkfaint hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
+  btn.type = 'button';
+  const ic = make('span', 'h-5 w-5 shrink-0'); ic.innerHTML = icon(item.icon);
+  btn.append(ic, make('span', 'flex-1 text-left', `${item.label}（規劃中）`));
+  btn.addEventListener('click', () => showToast(item.note));
+  return btn;
+}
+function renderSidebarNav() {
+  const nav = byId('sidebarNav');
+  nav.replaceChildren();
+  NAV_ITEMS.forEach((item) => nav.append(sidebarNavButton(item)));
+  const planned = byId('sidebarPlanned');
+  planned.replaceChildren();
+  PLANNED_ITEMS.forEach((item) => planned.append(plannedButton(item)));
+}
+
+function renderBottomTabs() {
+  const bar = byId('bottomTabBar');
+  bar.replaceChildren();
+  TAB_ITEMS.forEach((t) => {
+    const active = t.id !== 'more' && currentView() === t.id;
+    const btn = make('button', `flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink ${active ? 'text-ink' : 'text-inkfaint'}`);
+    btn.type = 'button';
+    if (active) btn.setAttribute('aria-current', 'page');
+    const ic = make('span', 'relative h-5 w-5'); ic.innerHTML = icon(t.icon);
+    if (t.id === 'more' && PENDING_COUNT > 0) {
+      const dot = make('span', 'absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-flag');
+      ic.append(dot);
+    }
+    btn.append(ic, make('span', '', t.label));
+    btn.addEventListener('click', () => { if (t.id === 'more') openMoreSheet(); else location.hash = t.id; });
+    bar.append(btn);
+  });
+}
+
+function openMoreSheet() {
+  const list = byId('moreSheetList');
+  list.replaceChildren();
+  const pendingBtn = make('button', 'flex w-full items-center justify-between rounded-xl px-3 py-3 text-sm font-bold text-ink hover:bg-paper');
+  pendingBtn.type = 'button';
+  const left = make('span', 'flex items-center gap-2.5');
+  const ic = make('span', 'h-5 w-5'); ic.innerHTML = icon('pending');
+  left.append(ic, make('span', '', '資料待補'));
+  pendingBtn.append(left);
+  const b2 = make('span', 'rounded-full bg-flagtint px-2 py-0.5 text-xs font-black text-flagdark', String(PENDING_COUNT));
+  b2.id = 'moreSheetPendingBadge';
+  pendingBtn.append(b2);
+  pendingBtn.addEventListener('click', () => { closeMoreSheet(); location.hash = 'pending'; });
+  list.append(pendingBtn);
+  PLANNED_ITEMS.forEach((item) => {
+    const btn = make('button', 'flex w-full items-center gap-2.5 rounded-xl px-3 py-3 text-sm font-bold text-inkfaint hover:bg-paper');
+    btn.type = 'button';
+    const ic2 = make('span', 'h-5 w-5'); ic2.innerHTML = icon(item.icon);
+    btn.append(ic2, make('span', '', `${item.label}（規劃中）`));
+    btn.addEventListener('click', () => showToast(item.note));
+    list.append(btn);
+  });
+  byId('moreSheet').hidden = false;
+}
+function closeMoreSheet() { byId('moreSheet').hidden = true; }
+byId('moreSheetBackdrop').addEventListener('click', closeMoreSheet);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !byId('moreSheet').hidden) closeMoreSheet(); });
+
+// ---------- 工程案件模組：進行中／已結案暫停中 分頁 ----------
+let CASES_CLOSED_COUNT = 0;
+function renderCasesSubTabLabels(closedCount) {
+  CASES_CLOSED_COUNT = closedCount;
+  const activeBtn = byId('casesTabActive');
+  const closedBtn = byId('casesTabClosed');
+  closedBtn.textContent = `已結案／暫停中（${closedCount}）`;
+  activeBtn.textContent = '進行中';
+  applyCasesSubTabStyles();
+}
+function applyCasesSubTabStyles() {
+  const activeBtn = byId('casesTabActive');
+  const closedBtn = byId('casesTabClosed');
+  const onActive = CASES_SUBVIEW === 'active';
+  activeBtn.className = `rounded-xl px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${onActive ? 'bg-ink text-white' : 'border border-line text-inkmuted hover:bg-paper'}`;
+  closedBtn.className = `rounded-xl px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${!onActive ? 'bg-ink text-white' : 'border border-line text-inkmuted hover:bg-paper'}`;
+  activeBtn.setAttribute('aria-selected', onActive ? 'true' : 'false');
+  closedBtn.setAttribute('aria-selected', !onActive ? 'true' : 'false');
+  byId('casesActivePanel').hidden = !onActive;
+  byId('casesClosedPanel').hidden = onActive;
+}
+byId('casesTabActive').addEventListener('click', () => { CASES_SUBVIEW = 'active'; applyCasesSubTabStyles(); });
+byId('casesTabClosed').addEventListener('click', () => { CASES_SUBVIEW = 'closed'; applyCasesSubTabStyles(); });
+
+// ---------- 路由 ----------
+function applyRoute() {
+  const view = currentView();
+  VALID_VIEWS.forEach((v) => { byId('view-' + v).hidden = (v !== view); });
+  byId('pageTitle').textContent = VIEW_TITLES[view];
+  renderSidebarNav();
+  renderBottomTabs();
+  closeMoreSheet();
+  if (view === 'gantt') scheduleGanttTodayScroll();
+}
+window.addEventListener('hashchange', applyRoute);
 
 async function loadAll() {
   setGlobalMessage('loading', '載入中…');
@@ -1091,6 +1315,11 @@ if (!TOKEN) {
   showInvalid();
 } else {
   byId('app').hidden = false;
+  if (!VALID_VIEWS.includes((location.hash || '').replace('#', ''))) {
+    history.replaceState(null, '', location.pathname + location.search + '#dashboard');
+  }
+  applyCasesSubTabStyles();
+  applyRoute();
   loadAll();
 }
 </script>
