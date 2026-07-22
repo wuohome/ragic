@@ -542,7 +542,7 @@ function paidCell(ratio) {
 function staleDaysCell(c) {
   const d = staleDaysCount(c);
   if (d === null) return make('span', 'tnum text-xs font-bold text-inkfaint', '—');
-  const cls = isOverdue(c) ? 'text-mred' : isStale(c) ? 'text-flagdark' : 'text-inkfaint';
+  const cls = isOverdue(c) ? 'text-mreddark' : isStale(c) ? 'text-flagdark' : 'text-inkfaint';
   return make('span', `tnum text-xs font-bold ${cls}`, `${d} 天`);
 }
 function groupNameCell(c) {
