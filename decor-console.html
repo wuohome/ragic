@@ -384,7 +384,7 @@ function actionSentence(c) {
   const parts = [];
   if (isOverdue(c)) parts.push(`合約逾期 ${overdueDaysCount(c)} 天`);
   if (isStale(c)) {
-    const who = clean(c.assignee) || clean(c.supervisor) || '負責人';
+    const who = clean(c.supervisor) || clean(c.assignee) || '負責人';
     parts.push(`停更 ${staleDaysCount(c)} 天・該催${who}`);
   }
   return parts.join('・');
