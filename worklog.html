@@ -14,20 +14,23 @@
     theme: {
       extend: {
         colors: {
-          ink: '#3F5262',
-          inkdeep: '#232B33',
-          inkmuted: '#5C6B77',
-          inkfaint: '#8B98A3',
-          paper: '#F8FAFC',
-          line: '#DCE3E8',
-          coral: '#DD6650',
-          coraldark: '#B03B26',
-          coraltint: '#FBEAE6',
-          flag: '#F2CF00',
-          flagdark: '#8A6E05',
-          flagtint: '#FFF7CC',
-          sage: '#4C7A63',
-          sagetint: '#EAF3EE',
+          /* 2026-07-22 依 Joan 指示改走 from.html（租客需求調查表）同一套「好填寫」語彙：
+             單一高對比主色（teal）、不強求窩的家 CI 多色配色，變數名稱不變只換色值，
+             現有 class 用法（bg-coral 等）不用逐一改。 */
+          ink: '#1F3A44',
+          inkdeep: '#12262E',
+          inkmuted: '#4B6570',
+          inkfaint: '#7C9298',
+          paper: '#F0F8FA',
+          line: '#C3D6DB',
+          coral: '#007894',
+          coraldark: '#00657D',
+          coraltint: '#EAF7F9',
+          flag: '#E2A400',
+          flagdark: '#8A6205',
+          flagtint: '#FFF3D6',
+          sage: '#1F8A63',
+          sagetint: '#E3F6ED',
         },
       },
     },
@@ -35,7 +38,21 @@
 </script>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif; }
-  select, textarea, input { min-height: 40px; }
+  /* 依 from.html（租客需求調查表）「好填寫」語彙：大字、粗框、明顯焦點狀態，不用細緻小巧的 CI 風格輸入框 */
+  select, textarea, input {
+    min-height: 52px;
+    font-size: 17px !important;
+    padding: 12px 14px !important;
+    border-width: 2px !important;
+    border-radius: 12px !important;
+    background-color: #FFFFFF !important;
+    border-color: #B9CBD1 !important;
+  }
+  select:focus, textarea:focus, input:focus {
+    border-color: #007894 !important;
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(0, 120, 148, 0.18);
+  }
   .tnum { font-variant-numeric: tabular-nums; }
   .tap44 { min-height: 44px; }
   #toast { transition: opacity 200ms ease-out; }
@@ -78,7 +95,7 @@
     </header>
     <div class="h-[3px] w-full shrink-0 bg-gradient-to-r from-coral via-flag to-ink" aria-hidden="true"></div>
 
-    <main id="mainRoot" class="flex-1 overflow-y-auto px-4 pb-24 pt-5 lg:px-6 lg:pb-6">
+    <main id="mainRoot" class="flex-1 overflow-y-auto px-4 pb-40 pt-5 lg:px-6 lg:pb-6">
       <section id="view-worklog" class="mx-auto max-w-2xl"></section>
       <section id="view-overview" class="mx-auto max-w-2xl" hidden></section>
       <section id="view-confirm" class="mx-auto max-w-2xl" hidden></section>
@@ -124,14 +141,14 @@ const MOCK_CASES = [
 // 主管總覽的示範同仁，角色化命名（同仁 A/B/C），不綁定真實人名
 const MOCK_TEAM = [
   { id: 'A', label: '同仁 A', entries: {
-    '08:00-09:00': { category: '場勘', otherCategoryText: '', caseName: '王公館・台中市南屯區文心路三段', repairReason: '', plannedSchedule: '原訂 8 點到王公館場勘', note: '確認客變位置，拍照存證' },
+    '0900之前': { category: '場勘', otherCategoryText: '', caseName: '王公館・台中市南屯區文心路三段', repairReason: '', plannedSchedule: '原訂 8 點到王公館場勘', note: '確認客變位置，拍照存證' },
     '09:00-10:00': { category: '廠商聯繫', otherCategoryText: '', caseName: '王公館・台中市南屯區文心路三段', repairReason: '磁磚色差需重新確認', plannedSchedule: '', note: '聯繫泥作師傅確認磁磚批號' },
     '10:00-11:00': { category: '驗收', otherCategoryText: '', caseName: '陳宅・彰化縣員林市中山路', repairReason: '衛浴防水複驗', plannedSchedule: '原訂 10 點驗收', note: '複驗通過，補拍照片' },
     '13:00-14:00': { category: '內部會議', otherCategoryText: '', caseName: '', repairReason: '', plannedSchedule: '', note: '工班排程週會' },
     '14:00-15:00': { category: '文書作業', otherCategoryText: '', caseName: '', repairReason: '', plannedSchedule: '', note: '補登本週工項紀錄' },
   } },
   { id: 'B', label: '同仁 B', entries: {
-    '08:00-09:00': { category: '場勘', otherCategoryText: '', caseName: '康橋苑 12F・台中市北屯區崇德路', repairReason: '', plannedSchedule: '', note: '新案場勘' },
+    '0900之前': { category: '場勘', otherCategoryText: '', caseName: '康橋苑 12F・台中市北屯區崇德路', repairReason: '', plannedSchedule: '', note: '新案場勘' },
     '09:00-10:00': { category: OTHER_CATEGORY, otherCategoryText: '搬運材料', caseName: '康橋苑 12F・台中市北屯區崇德路', repairReason: '', plannedSchedule: '', note: '' },
   } },
   { id: 'C', label: '同仁 C', entries: {} },
@@ -419,37 +436,35 @@ function renderHourRow(slot, idx, day) {
     wrap.append(quickRow);
   }
 
-  const gridWrap = make('div', 'accordion grid');
-  gridWrap.style.gridTemplateRows = expanded ? '1fr' : '0fr';
+  const gridWrap = make('div', expanded ? '' : 'hidden');
   gridWrap.id = panelId;
-  const inner = make('div', 'accordion-inner');
+  const inner = make('div', '');
   const form = make('div', 'space-y-3 border-t border-line px-3 pb-3 pt-3');
 
-  // 項目
-  const catLabelEl = fieldLabel('項目');
-  const select = make('select', 'mt-1 block w-full rounded-lg border border-line px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
-  const placeholder = make('option', '', '請選擇項目');
-  placeholder.value = '';
-  placeholder.disabled = true;
-  if (!entry.category) placeholder.selected = true;
-  select.append(placeholder);
+  // 項目（按鈕化選擇，不用細小的下拉選單——比照 from.html 的選項按鈕做法，手機好點）
+  form.append(fieldLabel('項目'));
+  const catGrid = make('div', 'mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3');
   (entry.category ? CATEGORIES : orderedCategoriesForNewRow()).forEach((name) => {
-    const opt = make('option', '', name);
-    opt.value = name;
-    if (entry.category === name) opt.selected = true;
-    select.append(opt);
+    const isActive = entry.category === name;
+    const optBtn = make(
+      'button',
+      `tap44 rounded-xl border-2 px-2 py-3 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${isActive ? 'border-coral bg-coral text-white' : 'border-line bg-white text-ink hover:border-coral'}`,
+      name,
+    );
+    optBtn.type = 'button';
+    optBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    optBtn.addEventListener('click', () => {
+      const d = getDayState(todayStr());
+      const en = ensureEntry(d, label);
+      en.category = name;
+      if (en.category !== OTHER_CATEGORY) en.otherCategoryText = '';
+      setDayState(todayStr(), d);
+      pushRecentCat(en.category);
+      renderWorklogView();
+    });
+    catGrid.append(optBtn);
   });
-  select.addEventListener('change', () => {
-    const d = getDayState(todayStr());
-    const en = ensureEntry(d, label);
-    en.category = select.value;
-    if (en.category !== OTHER_CATEGORY) en.otherCategoryText = '';
-    setDayState(todayStr(), d);
-    pushRecentCat(en.category);
-    renderWorklogView();
-  });
-  catLabelEl.append(select);
-  form.append(catLabelEl);
+  form.append(catGrid);
 
   // 其他（請註明）
   const otherWrap = make('div', 'accordion grid');
@@ -563,7 +578,7 @@ function renderHourRow(slot, idx, day) {
 function renderSubmitBar(day) {
   const total = hourSlots().length;
   const filled = hourSlots().filter((s) => isFilled(getEntry(day, s.label))).length;
-  const bar = make('div', 'sticky bottom-16 z-20 -mx-4 border-t border-line bg-white/95 px-4 py-3 shadow-[0_-4px_12px_rgba(63,82,98,0.08)] lg:sticky lg:bottom-0 lg:mx-0 lg:rounded-2xl lg:border lg:shadow-sm');
+  const bar = make('div', 'sticky bottom-20 z-20 -mx-4 border-t border-line bg-white px-4 py-3 shadow-[0_-4px_12px_rgba(63,82,98,0.16)] lg:sticky lg:bottom-0 lg:mx-0 lg:rounded-2xl lg:border lg:shadow-sm');
   const row = make('div', 'flex items-center justify-between gap-3');
   const left = make('div', 'min-w-0');
   left.append(make('p', 'tnum text-xs font-bold text-inkmuted', `已填 ${filled} ／ ${total} 小時`));
@@ -662,7 +677,7 @@ function renderWorklogView() {
   hourSlots().forEach((slot, idx) => list.append(renderHourRow(slot, idx, day)));
   root.append(list);
 
-  root.append(make('div', 'h-3'));
+  root.append(make('div', 'h-6'));
   root.append(renderSubmitBar(day));
 }
 
