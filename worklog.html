@@ -781,7 +781,8 @@ function renderWorklogView() {
   const day = getDayState(todayStr());
 
   const head = make('div', 'mb-5');
-  head.append(make('p', 'text-xs font-bold tracking-wide text-coraldark', '工務部・每小時工作紀錄'));
+  // 2026-07-23：同側欄字樣一樣原本寫死「工務部」，改用同一個 sidebarDeptLabel() 動態顯示。
+  head.append(make('p', 'text-xs font-bold tracking-wide text-coraldark', `${sidebarDeptLabel()}・每小時工作紀錄`));
   head.append(make('h2', 'text-xl font-black text-ink sm:text-2xl', '今天，你在忙什麼？'));
   head.append(make('p', 'mt-1 text-sm text-inkmuted', `${todayDisplay()}・早上 10 點前先排今天的行程，下班前回來補實際紀錄就好，不用整天一直開表單。`));
   root.append(head);
