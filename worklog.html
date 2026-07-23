@@ -116,13 +116,21 @@ const WORKLOG_HOURS = [
   '0900之前', '09:00-10:00', '10:00-11:00', '11:00-12:00', '13:00-14:00',
   '14:00-15:00', '15:00-16:00', '16:00-17:00', '17:00-18:00', '18:00-19:00', '19:00之後',
 ];
-// 項目 9 個真實選項（main 派工已核實）。⚠️ 與規格書「當天請假/休假」邊界案例期待的「請假」
-// 選項不一致——目前 Ragic 實際下拉沒有請假這個值，暫不自行加入（怕與其他系統白名單對不上），
-// 已在交付回報中列為需 Joan 決定的落差。
-const CATEGORIES = ['場勘', '租客聯繫', '屋主聯繫', '報價', '廠商聯繫', '驗收', '內部會議', '文書作業', '其他'];
+// 項目選單依角色分流（2026-07-22 規格書 P2 補充落地，2026-07-23 實作）。工務 9 個既有選項
+// 與租賃 13 個選項（取自既有 [[每日行程點名]] property-data-kept/9 fid 1000610，運作 4 個月
+// 無問題的封閉選項）已一併加進 Ragic「項目」欄位(maintenance-management/9 fid 1003097)下拉，
+// 兩份清單必須與 Worker `WORKLOG_CATEGORY_SET`（src/index.js）保持同步。
+const CATEGORIES_WORK = ['場勘', '租客聯繫', '屋主聯繫', '報價', '廠商聯繫', '驗收', '內部會議', '文書作業', '其他'];
+const CATEGORIES_RENTAL = ['開發', '委託', '帶看', '簽約', '修繕', '續約', '議價', '請假', '休假', '上課', '活動', '上廣告', '退租點交'];
+// 「已選定類別」渲染（entry.category 已有值時）用這份固定聯集順序，讓已選中的按鈕在任何角色
+// 底下都找得到、位置穩定不隨分組跳動；「新列尚未選類別」時改用下面 orderedCategoriesForNewRow()
+// 依角色分組排序。
+const CATEGORIES = [...CATEGORIES_WORK, ...CATEGORIES_RENTAL];
 const OTHER_CATEGORY = '其他';
 // 判斷依據：驗收／廠商聯繫這兩類最常伴隨修繕原因；規格書未逐字列出名單，此為介面設計判斷，非資料庫定案。
-const REPAIR_RELATED = new Set(['驗收', '廠商聯繫']);
+// 2026-07-23 補：租賃分類新增「修繕」語意上就是報修相關，一併加入，否則恩廷選「修繕」會完全
+// 打不開報修原因欄位（此欄無其他手動展開方式）——這是本次新增類別直接造成的功能缺口，非額外擴張範圍。
+const REPAIR_RELATED = new Set(['驗收', '廠商聯繫', '修繕']);
 // ================= API 串接（有 token 才走真實 API，沒有 token 保留原本本機模擬方便開發除錯） =================
 const WORKER_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
 function getUrlToken() {
@@ -274,9 +282,17 @@ function pushRecentCat(name) {
   const list = [name, ...loadRecentCats().filter((x) => x !== name)].slice(0, 8);
   localStorage.setItem(RECENT_CAT_KEY, JSON.stringify(list));
 }
+// 依角色 categoryGroup 決定「預設子集在前」的完整順序（顯示順序調整，不是砍選項——
+// 兩組都在完整清單內，只是誰排前面）。IDENTITY 在本機模擬模式（無 token）下是 null，
+// 走跟舊版一致的預設順序（工務優先），不影響既有開發/除錯流程。
+function categoryGroupOrder() {
+  const group = IDENTITY && IDENTITY.categoryGroup;
+  return group === '租賃' ? [...CATEGORIES_RENTAL, ...CATEGORIES_WORK] : [...CATEGORIES_WORK, ...CATEGORIES_RENTAL];
+}
 function orderedCategoriesForNewRow() {
-  const recent = loadRecentCats().filter((c) => CATEGORIES.includes(c));
-  const rest = CATEGORIES.filter((c) => !recent.includes(c));
+  const base = categoryGroupOrder();
+  const recent = loadRecentCats().filter((c) => base.includes(c));
+  const rest = base.filter((c) => !recent.includes(c));
   return [...recent, ...rest];
 }
 
