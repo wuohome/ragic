@@ -449,6 +449,27 @@ function toggleExpand(label) {
 
 function fieldLabel(text) { return make('label', 'block text-xs font-bold text-inkmuted', text); }
 
+// 展開/收合視覺提示（2026-07-22 Joan 實測回饋：原本只有一個小小的淡灰 chevron「⌄」，
+// 看不出整列可以點開。改成粗線 SVG chevron＋動詞文字的 pill，沿用 from.html 粗框高對比語彙。
+// 2026-07-23 復原：這版修正曾在稍早的本機分支做過，但後續 Worker API 串接／blur 修復兩支
+// commit push 上去後在 origin 上遺失了（本機沒 rebase 到最新就沒重新套用），造成正式站又退回
+// 純字元 chevron。這次改動一律直接對照當下最新的 origin/main 內容修，避免再蓋掉別人接的東西。
+const CHEVRON_DOWN_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+const CHEVRON_UP_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>';
+function expandHintPill(expanded, filled) {
+  let cls;
+  let text;
+  if (expanded) { cls = 'border-line bg-paper text-ink'; text = '收合'; }
+  else if (filled) { cls = 'border-line bg-white text-ink'; text = '查看'; }
+  else { cls = 'border-coral bg-white text-coraldark'; text = '填寫'; }
+  const pill = make('span', `flex shrink-0 items-center gap-1 rounded-full border-2 px-2.5 py-1 text-xs font-black ${cls}`);
+  pill.append(make('span', '', text));
+  const ic = make('span', 'flex h-4 w-4 shrink-0 items-center justify-center');
+  ic.innerHTML = expanded ? CHEVRON_UP_SVG : CHEVRON_DOWN_SVG;
+  pill.append(ic);
+  return pill;
+}
+
 function renderHourRow(slot, idx, day) {
   const label = slot.label;
   const entry = ensureEntry(day, label);
@@ -460,7 +481,7 @@ function renderHourRow(slot, idx, day) {
   const wrap = make('div', `rounded-xl border bg-white ${isCurrent ? 'border-coral' : 'border-line'}`);
   wrap.id = `row-${encodeURIComponent(label)}`;
 
-  const headerBtn = make('button', 'tap44 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
+  const headerBtn = make('button', `tap44 flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-paper active:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${expanded ? 'rounded-t-xl' : 'rounded-xl'}`);
   headerBtn.type = 'button';
   headerBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
   headerBtn.setAttribute('aria-controls', panelId);
@@ -479,10 +500,10 @@ function renderHourRow(slot, idx, day) {
     previewCol.append(line);
     if (entry.repairReason) previewCol.append(make('p', 'mt-0.5 truncate text-xs text-inkmuted', `報修原因：${entry.repairReason}`));
   } else {
-    previewCol.append(make('p', 'text-sm text-inkfaint', '尚未填寫'));
+    previewCol.append(make('p', 'text-sm text-inkmuted', '尚未填寫'));
   }
   headerBtn.append(previewCol);
-  headerBtn.append(make('span', `shrink-0 text-inkfaint transition-transform ${expanded ? 'rotate-180' : ''}`, '⌄'));
+  headerBtn.append(expandHintPill(expanded, filled));
   headerBtn.addEventListener('click', () => toggleExpand(label));
   wrap.append(headerBtn);
 
@@ -647,7 +668,14 @@ function renderHourRow(slot, idx, day) {
 function renderSubmitBar(day) {
   const total = hourSlots().length;
   const filled = hourSlots().filter((s) => isFilled(getEntry(day, s.label))).length;
-  const bar = make('div', 'sticky bottom-20 z-20 -mx-4 border-t border-line bg-white px-4 py-3 shadow-[0_-4px_12px_rgba(63,82,98,0.16)] lg:sticky lg:bottom-0 lg:mx-0 lg:rounded-2xl lg:border lg:shadow-sm');
+  // Bug fix 2026-07-23（Playwright 375×812 實測＋elementFromPoint 驗證）：原本 sticky 版本只要
+  // 使用者還在往下捲清單，就一定會蓋到底下捲過的內容——不只展開卡片內的表單欄位／按鈕（項目選擇、
+  // 案名輸入、紀錄內容），連「全部收合、只是某些小時格還沒填」狀態下的快速操作按鈕（複製上一小時／
+  // 標記為無特別事項）在特定捲動位置也會被蓋住點不到。sticky 元素只要還在文件中段浮動就沒有安全的
+  // 中間解，因此改採 spec 提供的第三個方向：拿掉全域浮動，一律走一般文件流放在小時列表最下方，
+  // 使用者捲到底才看到，但保證 100% 不會蓋到任何欄位或按鈕（elementFromPoint 掃描全收合／展開
+  // 首列／展開中間列／展開末列共 4 種情境驗證過，均無遮擋）。
+  const bar = make('div', '-mx-4 mt-2 border-t border-line bg-white px-4 py-3 shadow-[0_-4px_12px_rgba(63,82,98,0.16)] lg:mx-0 lg:rounded-2xl lg:border lg:shadow-sm');
   const row = make('div', 'flex items-center justify-between gap-3');
   const left = make('div', 'min-w-0');
   left.append(make('p', 'tnum text-xs font-bold text-inkmuted', `已填 ${filled} ／ ${total} 小時`));
@@ -834,7 +862,7 @@ function memberCard(member) {
   const statusCls = status === 'coral' ? 'bg-coraltint text-coraldark' : status === 'flag' ? 'bg-flagtint text-flagdark' : 'bg-sagetint text-sage';
 
   const card = make('div', 'rounded-2xl border border-line bg-white');
-  const headerBtn = make('button', 'tap44 flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
+  const headerBtn = make('button', `tap44 flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-paper active:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${expanded ? 'rounded-t-2xl' : 'rounded-2xl'}`);
   headerBtn.type = 'button';
   headerBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
   const left = make('div', 'flex items-center gap-2.5');
@@ -842,7 +870,10 @@ function memberCard(member) {
   headerBtn.append(left);
   const right = make('div', 'flex items-center gap-2');
   right.append(make('span', `rounded-full px-2.5 py-1 text-xs font-bold ${statusCls}`, statusText));
-  right.append(make('span', `text-inkfaint transition-transform ${expanded ? 'rotate-180' : ''}`, '⌄'));
+  // 同工作日誌時段列：淡灰字元 chevron 換成粗線 SVG＋圓框，讓「可以點開」更明顯
+  const chevWrap = make('span', 'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-line bg-white text-ink');
+  chevWrap.innerHTML = expanded ? CHEVRON_UP_SVG : CHEVRON_DOWN_SVG;
+  right.append(chevWrap);
   headerBtn.append(right);
   // 純展開/收合，不重打 API（真正的資料刷新只在導覽進頁時發生，見 renderOverviewView）
   headerBtn.addEventListener('click', () => { EXPANDED_MEMBER = expanded ? null : member.id; renderOverviewBody(byId('view-overview')); });
