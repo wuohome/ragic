@@ -130,6 +130,62 @@ function getUrlToken() {
 }
 const API_TOKEN = getUrlToken();
 const API_MODE = Boolean(API_TOKEN);
+// 2026-07-23：真實身分（{role,name}）一律由 worklogListMine 回應的 viewer 欄位取得，不由前端
+// 自行宣告——token 對應誰、是不是主管，只有 Worker 說了算（比照既有 P5/Group T 手法）。
+let IDENTITY = null;
+
+// 把 API 回傳的單筆紀錄（category/note 為 flat 字串）還原成前端表單用的 entry 形狀。
+// 「其他」類別的自訂文字在送出時被前端塞進 note 開頭的【】，讀回來要拆解還原，
+// 否則主管總覽／今天的紀錄會把自訂文字誤當成一般紀錄內容顯示。
+function parseApiEntry(rec) {
+  let category = rec.category || '';
+  let otherCategoryText = '';
+  let note = rec.note || '';
+  if (category === OTHER_CATEGORY) {
+    const m = /^【([^】]*)】([\s\S]*)$/.exec(note);
+    if (m) { otherCategoryText = m[1]; note = m[2]; }
+  }
+  return {
+    category, otherCategoryText, note,
+    caseName: rec.caseName || '',
+    repairReason: rec.repairReason || '',
+    plannedSchedule: rec.plannedSchedule || '',
+  };
+}
+
+async function loadMineFromApi() {
+  try {
+    const res = await fetch(`${WORKER_BASE}/worklogListMine?token=${encodeURIComponent(API_TOKEN)}`);
+    let json = null;
+    try { json = await res.json(); } catch { json = null; }
+    if (!res.ok || !json || json.ok !== true) return { ok: false, status: res.status };
+    return { ok: true, json };
+  } catch {
+    return { ok: false, status: 0 }; // 0＝連線層失敗（非 HTTP 狀態碼），跟 404/403 分開顯示訊息
+  }
+}
+
+// 用 worklogListMine 回傳的今日紀錄覆寫本機當日狀態，讓「今天的紀錄」在任何裝置/清過快取
+// 後打開都以 Ragic 為準，不會停留在舊的本機快取。
+function applyMineData(json) {
+  const day = { entries: {}, submitted: false, submittedAt: null };
+  (json.entries || []).forEach((rec) => {
+    if (!WORKLOG_HOURS.includes(rec.hour)) return; // 防禦：未知小時格值不採信
+    day.entries[rec.hour] = parseApiEntry(rec);
+  });
+  day.submitted = Object.keys(day.entries).length > 0;
+  setDayState(todayStr(), day);
+}
+
+function renderFatalError(msg) {
+  VALID_VIEWS.forEach((v) => { const el = byId('view-' + v); if (el) el.hidden = (v !== 'worklog'); });
+  byId('view-worklog').replaceChildren(emptyNote(msg));
+  byId('sidebarNav').replaceChildren();
+  byId('sidebarPlanned').replaceChildren();
+  byId('bottomTabBar').replaceChildren();
+  byId('pageTitle').textContent = '無法載入';
+}
+
 const MOCK_CASES = [
   '王公館・台中市南屯區文心路三段',
   '陳宅・彰化縣員林市中山路',
@@ -225,7 +281,12 @@ function orderedCategoriesForNewRow() {
 }
 
 let ROLE = localStorage.getItem(ROLE_KEY) || 'staff';
-function roleLabel(r) { return r === 'manager' ? '小吳哥（主管）' : '工務同仁（你）'; }
+// API_MODE 下優先顯示 token 對應的真實姓名（IDENTITY，由 worklogListMine 取得）；
+// 無 token 的本機模擬模式維持原本的示範文字。
+function roleLabel(r) {
+  if (IDENTITY && IDENTITY.name) return r === 'manager' ? `${IDENTITY.name}（主管）` : IDENTITY.name;
+  return r === 'manager' ? '小吳哥（主管）' : '工務同仁（你）';
+}
 function setRole(r) { ROLE = r; localStorage.setItem(ROLE_KEY, r); }
 
 let EXPANDED = new Set();
@@ -256,8 +317,11 @@ function emptyNote(text, tone) {
 // ================= 填寫頁：工作日誌 =================
 function submittedBanner(day) {
   const el = make('div', 'mb-4 rounded-xl border border-sage/30 bg-sagetint px-4 py-2.5 text-sm font-bold text-sage');
-  const t = new Date(day.submittedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
-  el.textContent = `本日紀錄已於 ${t} 送出，今天內都還能修改，改完記得再送出一次。`;
+  // submittedAt 可能是 null（API_MODE 下從 worklogListMine 載入既有紀錄，Ragic 沒存「送出時間」
+  // 這個概念，只有本機這次 session 自己送出才會有精確時間），沒有就不編造假時間。
+  el.textContent = day.submittedAt
+    ? `本日紀錄已於 ${new Date(day.submittedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })} 送出，今天內都還能修改，改完記得再送出一次。`
+    : '今天已經有紀錄了，今天內都還能修改，改完記得再送出一次。';
   return el;
 }
 
@@ -713,8 +777,10 @@ function renderConfirmView() {
   card.append(iconWrap);
   card.append(make('h2', 'text-xl font-black text-ink', '已送出今日工作日誌'));
   card.append(make('p', 'tnum mt-1 text-sm text-inkmuted', `共送出 ${filledSlots.length} 筆・${skippedCount} 個小時未填寫`));
-  const t = new Date(day.submittedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
-  card.append(make('p', 'mt-1 text-xs text-inkfaint', `送出時間 ${t}・小吳哥可在「主管總覽」看到這筆紀錄`));
+  const timeText = day.submittedAt
+    ? `送出時間 ${new Date(day.submittedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}・`
+    : '';
+  card.append(make('p', 'mt-1 text-xs text-inkfaint', `${timeText}小吳哥可在「主管總覽」看到這筆紀錄`));
 
   const list = make('div', 'mt-5 space-y-1.5 text-left');
   filledSlots.forEach((s) => list.append(confirmRow(s, getEntry(day, s.label))));
@@ -773,7 +839,8 @@ function memberCard(member) {
   right.append(make('span', `rounded-full px-2.5 py-1 text-xs font-bold ${statusCls}`, statusText));
   right.append(make('span', `text-inkfaint transition-transform ${expanded ? 'rotate-180' : ''}`, '⌄'));
   headerBtn.append(right);
-  headerBtn.addEventListener('click', () => { EXPANDED_MEMBER = expanded ? null : member.id; renderOverviewView(); });
+  // 純展開/收合，不重打 API（真正的資料刷新只在導覽進頁時發生，見 renderOverviewView）
+  headerBtn.addEventListener('click', () => { EXPANDED_MEMBER = expanded ? null : member.id; renderOverviewBody(byId('view-overview')); });
   card.append(headerBtn);
 
   if (expanded) {
@@ -785,19 +852,14 @@ function memberCard(member) {
   return card;
 }
 
-function renderOverviewView() {
-  const root = byId('view-overview');
-  root.replaceChildren();
-  if (ROLE !== 'manager') {
-    root.append(emptyNote('此頁僅主管角色可查看，請用右上角「身分」切換為小吳哥（主管）預覽。'));
-    return;
-  }
+function overviewHeadNode() {
   const head = make('div', 'mb-5');
   head.append(make('p', 'text-xs font-bold tracking-wide text-coraldark', '主管視角・唯讀'));
   head.append(make('h2', 'text-xl font-black text-ink sm:text-2xl', '本日工作日誌總覽'));
   head.append(make('p', 'mt-1 text-sm text-inkmuted', `${todayDisplay()}・依人員檢視，跟催進度不用再靠口頭回報。`));
-  root.append(head);
-
+  return head;
+}
+function overviewDayNavNode() {
   const dayNav = make('div', 'mb-4 flex items-center gap-2');
   const prevBtn = make('button', 'tap44 rounded-lg border border-line px-3 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '‹ 前一天');
   prevBtn.type = 'button';
@@ -806,11 +868,84 @@ function renderOverviewView() {
   nextBtn.type = 'button';
   nextBtn.addEventListener('click', () => showToast('原型僅示範今日資料，正式版可切換日期查詢'));
   dayNav.append(prevBtn, make('span', 'tnum rounded-lg bg-paper px-3 py-2 text-xs font-bold text-ink', todayDisplay()), nextBtn);
-  root.append(dayNav);
+  return dayNav;
+}
 
+// worklogListAll 回傳的是攤平列表（每列一筆紀錄，含 reporter），這裡依 reporter 姓名分組成
+// memberCard() 原本預期的 { id, label, entries:{hour:entry} } 形狀；不是固定名冊，人員憑當天
+// 實際有寫入紀錄的姓名自然出現，沒人填就不會有卡片（下方 members.length===0 另外處理空狀態）。
+function groupByReporter(entries) {
+  const map = new Map();
+  entries.forEach((rec) => {
+    if (!map.has(rec.reporter)) map.set(rec.reporter, { id: rec.reporter, label: rec.reporter, entries: {} });
+    map.get(rec.reporter).entries[rec.hour] = parseApiEntry(rec);
+  });
+  return [...map.values()];
+}
+
+async function loadAllFromApi() {
+  try {
+    const res = await fetch(`${WORKER_BASE}/worklogListAll?token=${encodeURIComponent(API_TOKEN)}`);
+    let json = null;
+    try { json = await res.json(); } catch { json = null; }
+    if (!res.ok || !json || json.ok !== true) return { ok: false, status: res.status };
+    return { ok: true, json };
+  } catch {
+    return { ok: false, status: 0 };
+  }
+}
+
+// status: 'idle' | 'loading' | 'ok' | 'error'。快取起來是因為 memberCard 展開/收合也會呼叫
+// renderOverviewBody，若每次展開都重打 API 會一直閃「載入中」，體驗很差；只有「導覽進入本頁」
+// 才觸發真正的 refreshOverviewFromApi()。
+let overviewState = { status: 'idle', members: [], errorMsg: null };
+let overviewReqId = 0;
+
+function renderOverviewBody(root) {
+  root.replaceChildren(overviewHeadNode(), overviewDayNavNode());
+  if (!API_MODE) {
+    const list = make('div', 'space-y-3');
+    MOCK_TEAM.forEach((member) => list.append(memberCard(member)));
+    root.append(list);
+    return;
+  }
+  if (overviewState.status === 'loading') { root.append(emptyNote('載入中…')); return; }
+  if (overviewState.status === 'error') { root.append(emptyNote(overviewState.errorMsg)); return; }
+  if (overviewState.members.length === 0) { root.append(emptyNote('今日尚無紀錄。', 'sage')); return; }
   const list = make('div', 'space-y-3');
-  MOCK_TEAM.forEach((member) => list.append(memberCard(member)));
+  overviewState.members.forEach((member) => list.append(memberCard(member)));
   root.append(list);
+}
+
+async function refreshOverviewFromApi() {
+  const myReqId = ++overviewReqId;
+  overviewState = { status: 'loading', members: [], errorMsg: null };
+  renderOverviewBody(byId('view-overview'));
+  const result = await loadAllFromApi();
+  if (myReqId !== overviewReqId) return; // 使用者已經切走頁面，這次結果作廢，不要覆寫新畫面
+  if (!result.ok) {
+    // worklogListAll：token 完全無效／缺失一律 404；token 有效但非主管角色回 403——兩者訊息
+    // 分開講清楚，其餘（500／逾時／斷線）給通用訊息，畫面一律停在可讀狀態，不留白畫面或卡死。
+    const msg = result.status === 403
+      ? '此連結沒有主管檢視權限，如有需要請聯繫管理者確認。'
+      : result.status === 404
+        ? '連結已失效，請聯繫窩的家管理者重新取得連結。'
+        : '暫時無法連線到系統，請重新整理頁面再試一次。';
+    overviewState = { status: 'error', members: [], errorMsg: msg };
+  } else {
+    overviewState = { status: 'ok', members: groupByReporter(result.json.entries || []), errorMsg: null };
+  }
+  renderOverviewBody(byId('view-overview'));
+}
+
+function renderOverviewView() {
+  const root = byId('view-overview');
+  if (ROLE !== 'manager') {
+    root.replaceChildren(emptyNote('此頁僅主管角色可查看，請用右上角「身分」切換為小吳哥（主管）預覽。'));
+    return;
+  }
+  renderOverviewBody(root);
+  if (API_MODE && overviewState.status !== 'loading') refreshOverviewFromApi();
 }
 
 // ================= 平台外殼：側欄／底部 tab／路由 =================
@@ -918,14 +1053,19 @@ function applyRoute() {
 }
 window.addEventListener('hashchange', applyRoute);
 
-byId('roleToggleBtn').addEventListener('click', () => {
-  setRole(ROLE === 'manager' ? 'staff' : 'manager');
-  updateChromeLabels();
-  showToast(`已切換為：${roleLabel(ROLE)}（原型示範用，正式版由連結 token 決定）`);
-  applyRoute();
-});
+// API_MODE 下身分由 token 決定（IDENTITY，見 init() 內 loadMineFromApi），不開放使用者自行切換
+// 身分，否則會出現「畫面顯示主管選單但打 API 被 403」這種假象；本機模擬模式（無 token）才保留
+// 這顆切換鈕方便開發除錯。
+if (!API_MODE) {
+  byId('roleToggleBtn').addEventListener('click', () => {
+    setRole(ROLE === 'manager' ? 'staff' : 'manager');
+    updateChromeLabels();
+    showToast(`已切換為：${roleLabel(ROLE)}（原型示範用，正式版由連結 token 決定）`);
+    applyRoute();
+  });
+}
 byId('resetButton').addEventListener('click', () => {
-  if (!confirm('清空今天在本機儲存的示範資料，重新開始？')) return;
+  if (!confirm('清空本機暫存的資料快取，重新整理頁面？（不影響 Ragic 裡已經送出的紀錄）')) return;
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(RECENT_CAT_KEY);
   location.hash = 'worklog';
@@ -933,12 +1073,32 @@ byId('resetButton').addEventListener('click', () => {
 });
 
 // ================= 初始化 =================
-(function init() {
+(async function init() {
   const dl = byId('worklogCaseList');
   MOCK_CASES.forEach((c) => { const opt = document.createElement('option'); opt.value = c; dl.append(opt); });
 
   const initHash = (location.hash || '').replace('#', '');
   if (!VALID_VIEWS.includes(initHash)) history.replaceState(null, '', location.pathname + '#worklog');
+
+  const modeLabel = byId('modeLabel');
+  if (modeLabel) modeLabel.textContent = API_MODE ? '已連線 API' : '原型・本機模擬（無 token）';
+
+  if (API_MODE) {
+    byId('roleToggleBtn').style.display = 'none';
+    byId('view-worklog').replaceChildren(emptyNote('載入中…'));
+    const mine = await loadMineFromApi();
+    if (!mine.ok) {
+      // token 完全失效／缺失一律 404；其餘（斷線、500）給通用訊息。整頁停在可讀的錯誤狀態，
+      // 不留白畫面、不繼續往下渲染可能半殘的表單（驗收契約 #6：錯誤一律清楚可讀，不卡死）。
+      renderFatalError(mine.status === 404
+        ? '此連結已失效或不存在，請聯繫窩的家管理者重新取得連結。'
+        : '暫時無法連線到系統，請確認網路後重新整理頁面再試一次。');
+      return;
+    }
+    IDENTITY = mine.json.viewer;
+    ROLE = IDENTITY.role;
+    applyMineData(mine.json);
+  }
 
   const cur = currentHourLabel();
   const day = getDayState(todayStr());
@@ -947,9 +1107,6 @@ byId('resetButton').addEventListener('click', () => {
     const firstUnfilled = hourSlots().find((s) => !isFilled(getEntry(day, s.label)));
     if (firstUnfilled) EXPANDED.add(firstUnfilled.label);
   }
-
-  const modeLabel = byId('modeLabel');
-  if (modeLabel) modeLabel.textContent = API_MODE ? '已連線 API' : '原型・本機模擬（無 token）';
 
   updateChromeLabels();
   applyRoute();
