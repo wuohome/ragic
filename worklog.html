@@ -543,9 +543,13 @@ function renderHourRow(slot, idx, day) {
   const form = make('div', 'space-y-3 border-t border-line px-3 pb-3 pt-3');
 
   // 項目（按鈕化選擇，不用細小的下拉選單——比照 from.html 的選項按鈕做法，手機好點）
+  // 2026-07-23 修正：已填類別的列原本固定用 CATEGORIES（工務優先的聯集順序），代表恩廷只要
+  // 今天已經填過的小時（實測 11/11 全填），打開查看永遠看到工務分類排最前面，分流形同沒作用。
+  // 改用 categoryGroupOrder()（依角色分組、但不含「最近使用」重排），維持「同一列展開後不會
+  // 因為點擊重排跳動」的原始設計目的，同時讓已填列也照角色分組排序。
   form.append(fieldLabel('項目'));
   const catGrid = make('div', 'mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3');
-  (entry.category ? CATEGORIES : orderedCategoriesForNewRow()).forEach((name) => {
+  (entry.category ? categoryGroupOrder() : orderedCategoriesForNewRow()).forEach((name) => {
     const isActive = entry.category === name;
     const optBtn = make(
       'button',
@@ -1083,8 +1087,15 @@ function renderBottomTabs() {
   });
 }
 
+// 2026-07-23：側欄部門字樣原本寫死「工務部」，擴及租賃部（恩廷）後會顯示錯誤部門，
+// 改依 IDENTITY.categoryGroup 動態顯示；本機模擬模式（無 token）維持舊版「工務部」字樣。
+function sidebarDeptLabel() {
+  const group = IDENTITY && IDENTITY.categoryGroup;
+  if (group) return `${group}部`;
+  return API_MODE ? '窩的家' : '工務部';
+}
 function updateChromeLabels() {
-  byId('sidebarSubtitle').textContent = `工務部・${roleLabel(ROLE)}`;
+  byId('sidebarSubtitle').textContent = `${sidebarDeptLabel()}・${roleLabel(ROLE)}`;
   byId('roleToggleBtn').textContent = `身分：${roleLabel(ROLE)} ⇄`;
 }
 
