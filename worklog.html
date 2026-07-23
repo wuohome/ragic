@@ -540,7 +540,12 @@ function renderHourRow(slot, idx, day) {
   otherInput.placeholder = '例如：搬運材料、等待廠商';
   otherInput.value = entry.otherCategoryText || '';
   otherInput.addEventListener('input', () => { const d = getDayState(todayStr()); ensureEntry(d, label).otherCategoryText = otherInput.value; setDayState(todayStr(), d); });
-  otherInput.addEventListener('blur', () => renderWorklogView());
+  // 2026-07-23 移除 blur→renderWorklogView()：blur 觸發整段重繪，若使用者緊接著把焦點移到同一
+  // 列的下一個文字欄位，「移到下一欄」這個動作本身就是造成這裡 blur 的原因，兩者發生在同一個
+  // synchronous 事件循環內——重繪會把「即將接住焦點」的下一個欄位整個換成新節點，導致那一欄的
+  // 輸入被吃掉（headless 瀏覽器逐欄快速填寫可 100% 重現；真人手動操作下也有機率發生，只是不明顯）。
+  // input 事件已即時同步存進 state，不需要靠 blur 重繪；收合列時 toggleExpand() 本來就會重繪一次
+  // 更新預覽文字，時機已經足夠。
   otherLabelEl.append(otherInput);
   otherInner.append(otherLabelEl);
   otherWrap.append(otherInner);
@@ -554,7 +559,7 @@ function renderHourRow(slot, idx, day) {
   caseInput.setAttribute('list', 'worklogCaseList');
   caseInput.value = entry.caseName || '';
   caseInput.addEventListener('input', () => { const d = getDayState(todayStr()); ensureEntry(d, label).caseName = caseInput.value; setDayState(todayStr(), d); });
-  caseInput.addEventListener('blur', () => renderWorklogView());
+  // 理由同上（otherInput 那段）：不靠 blur 重繪，避免緊接著切下一欄位時把該欄位吃掉。
   caseLabelEl.append(caseInput);
   form.append(caseLabelEl);
 
@@ -568,7 +573,7 @@ function renderHourRow(slot, idx, day) {
   repairInput.placeholder = '例如：浴室天花板漏水複驗';
   repairInput.value = entry.repairReason || '';
   repairInput.addEventListener('input', () => { const d = getDayState(todayStr()); ensureEntry(d, label).repairReason = repairInput.value; setDayState(todayStr(), d); });
-  repairInput.addEventListener('blur', () => renderWorklogView());
+  // 理由同上（otherInput 那段）：不靠 blur 重繪，避免緊接著切下一欄位時把該欄位吃掉。
   repairLabelEl.append(repairInput);
   repairInner.append(repairLabelEl);
   repairWrap.append(repairInner);
@@ -581,7 +586,7 @@ function renderHourRow(slot, idx, day) {
   planInput.placeholder = '例如：原本排定 10 點去王公館驗收';
   planInput.value = entry.plannedSchedule || '';
   planInput.addEventListener('input', () => { const d = getDayState(todayStr()); ensureEntry(d, label).plannedSchedule = planInput.value; setDayState(todayStr(), d); });
-  planInput.addEventListener('blur', () => renderWorklogView());
+  // 理由同上（otherInput 那段）：不靠 blur 重繪，避免緊接著切下一欄位時把該欄位吃掉。
   planLabelEl.append(planInput);
   form.append(planLabelEl);
 
