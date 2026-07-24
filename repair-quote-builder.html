@@ -1,0 +1,2175 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>修繕報價單產生器</title>
+<script>
+(function () {
+  var u = new URL(location.href);
+  if (!u.searchParams.has('v')) {
+    u.searchParams.set('v', new Date().toISOString().slice(0, 10).replace(/-/g, ''));
+    location.replace(u.toString());
+  }
+})();
+</script>
+<style>
+/* ============================================================
+   Tokens
+   ============================================================ */
+:root{
+  --bg:#eef1f8;
+  --surface:#ffffff;
+  --surface-2:#f6f8fc;
+  --border:#dde2ef;
+  --border-strong:#c7cee3;
+  --ink:#1b2233;
+  --ink-soft:#586176;
+  --ink-faint:#8890a3;
+  --accent:#3e5fe0;
+  --accent-strong:#2c47b8;
+  --accent-soft:#e8ecfd;
+  --accent-contrast:#ffffff;
+  --danger:#c8323d;
+  --danger-soft:#fbe7e8;
+  --success:#1f8f5f;
+  --success-soft:#e4f6ee;
+  --radius-sm:8px;
+  --radius-md:12px;
+  --radius-lg:16px;
+  --shadow-1:0 1px 2px rgba(20,25,45,.07);
+  --shadow-2:0 10px 28px -10px rgba(30,45,110,.28);
+  --font-ui:"Noto Sans TC","Microsoft JhengHei",system-ui,-apple-system,sans-serif;
+  --font-serif:"Noto Serif TC",serif;
+  --topbar-h:60px;
+  color-scheme:light;
+}
+[data-theme="dark"]{
+  --bg:#10131c;
+  --surface:#181c2a;
+  --surface-2:#1f2434;
+  --border:#2b3146;
+  --border-strong:#3a4160;
+  --ink:#eef0f8;
+  --ink-soft:#aab0c6;
+  --ink-faint:#767d95;
+  --accent:#7c92f7;
+  --accent-strong:#a4b4fb;
+  --accent-soft:#242c50;
+  --accent-contrast:#10142a;
+  --danger:#f4707a;
+  --danger-soft:#3a1f24;
+  --success:#57cf9c;
+  --success-soft:#173428;
+  --shadow-1:0 1px 2px rgba(0,0,0,.35);
+  --shadow-2:0 12px 32px -10px rgba(0,0,0,.6);
+  color-scheme:dark;
+}
+
+/* ============================================================
+   Reset
+   ============================================================ */
+*,*::before,*::after{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  font-family:var(--font-ui);
+  background:var(--bg);
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+h1,h2,h3,p,figure{margin:0;}
+button{font-family:inherit;color:inherit;}
+input,select,textarea{font-family:inherit;color:inherit;}
+img{max-width:100%;display:block;}
+ul{margin:0;padding:0;list-style:none;}
+a{color:inherit;}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.001ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.001ms !important;
+    scroll-behavior:auto !important;
+  }
+}
+
+.skip-link{
+  position:absolute;
+  left:8px; top:-48px;
+  background:var(--accent-strong);
+  color:#fff;
+  padding:10px 16px;
+  border-radius:var(--radius-sm);
+  z-index:200;
+  transition:top .15s ease-out;
+}
+.skip-link:focus{top:8px;}
+
+:focus{outline:none;}
+:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+  border-radius:4px;
+}
+
+/* ============================================================
+   Topbar
+   ============================================================ */
+.topbar{
+  position:sticky; top:0; z-index:40;
+  height:var(--topbar-h);
+  display:flex; align-items:center; gap:14px;
+  padding:0 18px;
+  background:linear-gradient(120deg,var(--accent-strong),var(--accent) 65%,#5f7bef);
+  color:#fff;
+  box-shadow:var(--shadow-2);
+}
+[data-theme="dark"] .topbar{
+  background:linear-gradient(120deg,#1c2140,#2a3268 65%,#38408a);
+}
+.topbar h1{
+  font-size:16px;
+  font-weight:700;
+  letter-spacing:.01em;
+  white-space:nowrap;
+}
+.topbar .subtitle{
+  display:none;
+  font-size:12px;
+  opacity:.85;
+  font-weight:400;
+}
+@media (min-width:760px){
+  .topbar .subtitle{display:inline;}
+}
+.topbar-actions{
+  margin-left:auto;
+  display:flex; align-items:center; gap:6px;
+  flex-wrap:nowrap;
+}
+.tbtn{
+  display:inline-flex; align-items:center; gap:6px;
+  height:38px; padding:0 12px;
+  background:rgba(255,255,255,.14);
+  border:1px solid rgba(255,255,255,.28);
+  color:#fff;
+  border-radius:var(--radius-sm);
+  font-size:12.5px; font-weight:600;
+  cursor:pointer;
+  transition:background .12s ease-out, transform .08s ease-out;
+  white-space:nowrap;
+}
+.tbtn:hover{background:rgba(255,255,255,.24);}
+.tbtn:active{transform:scale(.97);}
+.tbtn svg{width:16px;height:16px;flex:none;}
+.tbtn .label{display:none;}
+@media (min-width:920px){
+  .tbtn .label{display:inline;}
+}
+.tbtn.icon-only{width:38px;padding:0;justify-content:center;}
+
+/* ============================================================
+   Workspace layout
+   ============================================================ */
+.workspace{
+  display:flex;
+  align-items:flex-start;
+  gap:20px;
+  padding:20px;
+  max-width:1720px;
+  margin:0 auto;
+}
+.form-pane{
+  flex:1 1 560px;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+.preview-pane{
+  position:sticky;
+  top:calc(var(--topbar-h) + 20px);
+  flex:1 1 640px;
+  min-width:0;
+  align-self:flex-start;
+}
+@media (max-width:1180px){
+  .workspace{flex-direction:column;}
+  .preview-pane{position:static; width:100%;}
+  .form-pane{width:100%;}
+}
+
+/* ============================================================
+   Card
+   ============================================================ */
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-md);
+  box-shadow:var(--shadow-1);
+  overflow:hidden;
+}
+.card-head{
+  display:flex; align-items:center; gap:10px;
+  padding:14px 18px;
+  border-bottom:1px solid var(--border);
+}
+.card-badge{
+  flex:none;
+  width:30px; height:30px;
+  border-radius:9px;
+  background:var(--accent-soft);
+  color:var(--accent-strong);
+  display:flex; align-items:center; justify-content:center;
+}
+[data-theme="dark"] .card-badge{color:var(--accent-strong);}
+.card-badge svg{width:16px;height:16px;}
+.card-head h2{font-size:14.5px; font-weight:700;}
+.card-head .hint{
+  margin-left:auto;
+  font-size:11.5px;
+  color:var(--ink-faint);
+}
+.card-body{padding:16px 18px 18px;}
+.card-body.tight{padding:10px 12px 14px;}
+
+/* ============================================================
+   Form controls
+   ============================================================ */
+.field{display:flex; flex-direction:column; gap:5px;}
+.field + .field{margin-top:12px;}
+.field label{
+  font-size:12.5px; font-weight:600;
+  color:var(--ink-soft);
+  display:flex; align-items:center; gap:4px;
+}
+.field label .req{color:var(--danger); font-weight:700;}
+.field .note{font-size:11px; color:var(--ink-faint);}
+.grid-2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+.grid-3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;}
+@media (max-width:520px){
+  .grid-2,.grid-3{grid-template-columns:1fr;}
+}
+
+input[type="text"],input[type="tel"],input[type="number"],input[type="date"],textarea,select{
+  width:100%;
+  border:1px solid var(--border-strong);
+  background:var(--surface-2);
+  color:var(--ink);
+  border-radius:var(--radius-sm);
+  padding:9px 11px;
+  font-size:13.5px;
+  line-height:1.4;
+  transition:border-color .12s ease-out, background .12s ease-out;
+}
+textarea{resize:vertical; min-height:84px;}
+input::placeholder,textarea::placeholder{color:var(--ink-faint);}
+input:hover,textarea:hover,select:hover{border-color:var(--accent);}
+input:focus-visible,textarea:focus-visible,select:focus-visible{
+  border-color:var(--accent);
+  background:var(--surface);
+  outline:2px solid var(--accent);
+  outline-offset:1px;
+}
+input:disabled,textarea:disabled,select:disabled{
+  opacity:.55; cursor:not-allowed;
+}
+.input-row{display:flex; gap:8px; align-items:center;}
+.input-row input{flex:1;}
+
+details.adv{
+  border:1px dashed var(--border-strong);
+  border-radius:var(--radius-sm);
+  padding:2px 12px;
+  margin-top:6px;
+  background:var(--surface-2);
+}
+details.adv summary{
+  cursor:pointer;
+  list-style:none;
+  padding:10px 0;
+  font-size:12.5px; font-weight:600;
+  color:var(--accent-strong);
+  display:flex; align-items:center; gap:6px;
+}
+details.adv summary::-webkit-details-marker{display:none;}
+details.adv summary .chev{transition:transform .15s ease-out;}
+details.adv[open] summary .chev{transform:rotate(90deg);}
+details.adv .adv-body{padding-bottom:14px; display:flex; flex-direction:column; gap:12px;}
+
+/* checkbox row */
+.check-row{
+  display:flex; align-items:flex-start; gap:9px;
+  font-size:13px; color:var(--ink);
+  cursor:pointer;
+  padding:2px 0;
+}
+.check-row input[type="checkbox"]{
+  margin-top:2px;
+  width:17px; height:17px;
+  accent-color:var(--accent);
+  flex:none;
+  cursor:pointer;
+}
+.check-row .desc{color:var(--ink-faint); font-size:11.5px; display:block; margin-top:1px;}
+
+/* segmented choice (radio group styled as chips) */
+fieldset{border:none; margin:0; padding:0;}
+fieldset legend{
+  font-size:12.5px; font-weight:600; color:var(--ink-soft);
+  padding:0 0 6px;
+}
+.choice-group{display:flex; flex-wrap:wrap; gap:8px; position:relative;}
+.choice-group input[type="radio"]{
+  position:absolute;
+  opacity:0;
+  width:1px; height:1px;
+}
+.choice-group label{
+  padding:8px 13px;
+  border:1px solid var(--border-strong);
+  border-radius:999px;
+  font-size:12.5px; font-weight:600;
+  color:var(--ink-soft);
+  cursor:pointer;
+  background:var(--surface-2);
+  transition:all .12s ease-out;
+}
+.choice-group input[type="radio"]:checked + label{
+  background:var(--accent);
+  border-color:var(--accent);
+  color:#fff;
+}
+.choice-group input[type="radio"]:focus-visible + label{
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+}
+.tax-extra,.discount-extra{display:none; margin-top:10px;}
+[data-tax-mode="custom"] .tax-extra{display:block;}
+[data-discount-type="amount"] .discount-extra[data-for="amount"]{display:block;}
+[data-discount-type="percent"] .discount-extra[data-for="percent"]{display:block;}
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  height:38px; padding:0 14px;
+  border-radius:var(--radius-sm);
+  border:1px solid var(--border-strong);
+  background:var(--surface-2);
+  color:var(--ink);
+  font-size:13px; font-weight:600;
+  cursor:pointer;
+  transition:background .12s ease-out, border-color .12s ease-out, transform .08s ease-out;
+}
+.btn svg{width:15px;height:15px;flex:none;}
+.btn:hover{border-color:var(--accent); color:var(--accent-strong);}
+[data-theme="dark"] .btn:hover{color:var(--accent-strong);}
+.btn:active{transform:scale(.97);}
+.btn:disabled{opacity:.45; cursor:not-allowed; transform:none;}
+.btn.primary{
+  background:var(--accent);
+  border-color:var(--accent);
+  color:#fff;
+}
+.btn.primary:hover{background:var(--accent-strong); border-color:var(--accent-strong); color:#fff;}
+.btn.ghost{background:transparent; border-color:transparent;}
+.btn.ghost:hover{background:var(--accent-soft);}
+.btn.danger{color:var(--danger); border-color:var(--danger-soft);}
+.btn.danger:hover{background:var(--danger-soft); border-color:var(--danger);}
+.btn.sm{height:32px; padding:0 10px; font-size:12px;}
+.btn.icon{width:32px; height:32px; padding:0;}
+.btn-row{display:flex; gap:8px; flex-wrap:wrap;}
+
+/* ============================================================
+   Items
+   ============================================================ */
+.items-toolbar{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:12px 18px 4px;
+}
+.items-toolbar .spacer{flex:1;}
+.items-list{
+  display:flex; flex-direction:column; gap:10px;
+  padding:10px 18px 4px;
+}
+.item-row{
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  background:var(--surface-2);
+  padding:12px;
+}
+.item-row-grid{
+  display:grid;
+  grid-template-columns:96px 1.4fr 1.4fr 70px 88px 110px 110px auto;
+  gap:8px;
+  align-items:end;
+}
+.item-row-grid .field{margin:0;}
+.item-row-grid label{font-size:10.5px;}
+@media (max-width:1180px){
+  .item-row-grid{grid-template-columns:1fr 1fr;}
+}
+.item-actions{
+  display:flex; gap:4px;
+  align-items:center;
+  justify-content:flex-end;
+}
+.item-subtotal{
+  font-size:12.5px; font-weight:700;
+  color:var(--accent-strong);
+  white-space:nowrap;
+}
+.item-index{
+  font-size:11px; color:var(--ink-faint); font-weight:700;
+  margin-bottom:6px;
+}
+.items-empty{
+  text-align:center;
+  color:var(--ink-faint);
+  font-size:12.5px;
+  padding:22px 10px;
+  border:1px dashed var(--border-strong);
+  border-radius:var(--radius-sm);
+}
+.blank-row-control{
+  display:flex; align-items:center; gap:8px;
+  padding:4px 18px 16px;
+  font-size:12px; color:var(--ink-soft);
+}
+.blank-row-control input{width:64px;}
+
+/* terms list */
+.terms-list{display:flex; flex-direction:column; gap:6px; margin:10px 0;}
+.terms-item{
+  display:flex; align-items:center; gap:8px;
+  background:var(--surface-2);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:6px 8px;
+}
+.terms-item input[type="text"]{border:none; background:transparent; padding:4px 2px;}
+.terms-item input[type="text"]:focus-visible{outline:none; background:var(--surface);}
+.add-term-row{display:flex; gap:8px; margin-top:8px;}
+.add-term-row input{flex:1;}
+
+/* summary panel */
+.money-grid{display:flex; flex-direction:column; gap:8px;}
+.money-row{display:flex; justify-content:space-between; align-items:center; font-size:13px;}
+.money-row .label{color:var(--ink-soft);}
+.money-row .val{font-weight:700; font-variant-numeric:tabular-nums;}
+.money-row.total{
+  border-top:1px solid var(--border-strong);
+  margin-top:4px; padding-top:10px;
+  font-size:16.5px;
+}
+.money-row.total .val{color:var(--accent-strong); font-size:19px;}
+
+/* ============================================================
+   Dialogs
+   ============================================================ */
+dialog{
+  border:none; padding:0;
+  border-radius:var(--radius-lg);
+  background:var(--surface);
+  color:var(--ink);
+  box-shadow:var(--shadow-2);
+  width:min(560px,92vw);
+  max-height:min(640px,86vh);
+}
+dialog::backdrop{background:rgba(15,18,30,.5);}
+[data-theme="dark"] dialog::backdrop{background:rgba(0,0,0,.65);}
+.dialog-head{
+  display:flex; align-items:center; gap:10px;
+  padding:16px 18px;
+  border-bottom:1px solid var(--border);
+}
+.dialog-head h2{font-size:15px; font-weight:700;}
+.dialog-head .btn{margin-left:auto;}
+.dialog-body{padding:16px 18px; overflow:auto; max-height:calc(min(640px,86vh) - 60px);}
+.dialog-section + .dialog-section{margin-top:18px; padding-top:16px; border-top:1px solid var(--border);}
+.dialog-section h3{font-size:12.5px; font-weight:700; color:var(--ink-soft); margin-bottom:10px;}
+
+.draft-item{
+  display:flex; align-items:center; gap:8px;
+  padding:9px 10px;
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  background:var(--surface-2);
+}
+.draft-item + .draft-item{margin-top:8px;}
+.draft-item .meta{flex:1; min-width:0;}
+.draft-item .name{font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.draft-item .time{font-size:11px; color:var(--ink-faint);}
+.draft-item .name-edit{width:100%; padding:4px 6px; font-size:13px;}
+.drafts-empty{color:var(--ink-faint); font-size:12.5px; text-align:center; padding:16px;}
+
+.common-item{
+  display:flex; align-items:center; gap:10px;
+  padding:10px;
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  background:var(--surface-2);
+}
+.common-item + .common-item{margin-top:8px;}
+.common-item .tag{
+  flex:none;
+  font-size:10.5px; font-weight:700;
+  color:var(--accent-strong);
+  background:var(--accent-soft);
+  padding:3px 8px;
+  border-radius:999px;
+  white-space:nowrap;
+}
+.common-item .info{flex:1; min-width:0;}
+.common-item .info .nm{font-size:13px; font-weight:600;}
+.common-item .info .un{font-size:11px; color:var(--ink-faint);}
+
+/* ============================================================
+   Toast
+   ============================================================ */
+.toast-region{
+  position:fixed; top:14px; right:14px; z-index:300;
+  display:flex; flex-direction:column; gap:8px;
+  pointer-events:none;
+}
+.toast{
+  pointer-events:auto;
+  background:var(--ink);
+  color:var(--bg);
+  padding:11px 16px;
+  border-radius:var(--radius-sm);
+  font-size:12.5px; font-weight:600;
+  box-shadow:var(--shadow-2);
+  opacity:0;
+  transform:translateY(-6px);
+  transition:opacity .18s ease-out, transform .18s ease-out;
+  max-width:320px;
+}
+.toast.show{opacity:1; transform:translateY(0);}
+.toast.error{background:var(--danger);}
+.toast.success{background:var(--success);}
+
+/* ============================================================
+   Preview / A4 sheet
+   ============================================================ */
+.preview-viewport{
+  border-radius:var(--radius-md);
+  background:var(--surface-2);
+  border:1px solid var(--border);
+  padding:20px 12px;
+  overflow:hidden;
+}
+.preview-toolbar{
+  display:flex; align-items:center; gap:8px;
+  padding:2px 6px 14px;
+  font-size:12px; color:var(--ink-faint);
+}
+.sheet-scaler{
+  transform-origin:top center;
+  margin:0 auto;
+  width:794px;
+}
+.a4-sheet{
+  width:794px;
+  min-height:1123px;
+  background:#ffffff;
+  color:#181818;
+  padding:40px 44px 34px;
+  box-shadow:var(--shadow-2);
+  font-family:var(--font-ui);
+  font-size:12px;
+  line-height:1.5;
+}
+
+.doc-header{
+  display:flex; justify-content:space-between; align-items:flex-start;
+  gap:16px;
+  padding-bottom:14px;
+  border-bottom:2.5px solid #2c47b8;
+}
+.doc-header .seller-block{display:flex; gap:10px; align-items:flex-start;}
+.doc-header .seller-logo{width:46px; height:46px; object-fit:contain; border-radius:6px;}
+.doc-header .seller-name{font-size:16px; font-weight:700; color:#181818;}
+.doc-header .seller-meta{font-size:10px; color:#5a5a5a; margin-top:3px; line-height:1.6;}
+.doc-header .doc-title-block{text-align:right;}
+.doc-title{
+  font-family:var(--font-serif);
+  font-size:25px; font-weight:700;
+  color:#2c47b8;
+  letter-spacing:.02em;
+}
+.doc-meta{font-size:10px; color:#4a4a4a; margin-top:6px; line-height:1.7;}
+.doc-meta .row{display:flex; justify-content:flex-end; gap:6px;}
+.doc-meta .k{color:#8a8a8a;}
+
+.doc-parties{
+  display:grid; grid-template-columns:1fr 1fr; gap:18px;
+  padding:14px 0;
+  border-bottom:1px solid #e3e3e3;
+}
+.doc-parties h3{font-size:10.5px; font-weight:700; color:#2c47b8; margin-bottom:5px;}
+.doc-parties .line{font-size:11px; color:#232323; margin-bottom:2px;}
+.doc-parties .line .k{color:#8a8a8a; display:inline-block; min-width:52px;}
+.doc-parties .empty{color:#b5b5b5; font-style:normal;}
+
+.doc-section-title{
+  display:flex; align-items:center; gap:6px;
+  font-size:11.5px; font-weight:700; color:#181818;
+  margin:14px 0 6px;
+}
+.doc-section-title .sq{width:7px; height:7px; background:#2c47b8; border-radius:2px; flex:none;}
+
+table.items-table{width:100%; border-collapse:collapse;}
+table.items-table thead th{
+  background:#eef1f8;
+  color:#31374a;
+  font-size:9.5px; font-weight:700;
+  text-align:left;
+  padding:6px 6px;
+  border-bottom:1px solid #c7cee3;
+  border-top:1px solid #c7cee3;
+}
+table.items-table thead th.num{text-align:right;}
+table.items-table tbody td{
+  font-size:10.5px;
+  padding:6px 6px;
+  border-bottom:1px solid #ececec;
+  vertical-align:top;
+  color:#232323;
+}
+table.items-table tbody td.num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;}
+table.items-table tbody tr.blank td{color:transparent; padding:9px 6px;}
+.it-name{font-weight:700;}
+.it-desc{color:#8a8a8a; font-size:9.5px; margin-top:1px;}
+.it-cat{
+  display:inline-block;
+  font-size:9px; color:#2c47b8;
+  background:#eef1f8;
+  padding:1px 6px;
+  border-radius:999px;
+}
+
+.doc-summary{
+  display:flex; justify-content:flex-end;
+  margin-top:8px;
+}
+.doc-summary .box{width:250px;}
+.doc-summary .row{display:flex; justify-content:space-between; font-size:11px; padding:3px 0; color:#3a3a3a;}
+.doc-summary .row .k{color:#8a8a8a;}
+.doc-summary .row.total{
+  border-top:1.5px solid #2c47b8;
+  margin-top:4px; padding-top:7px;
+  font-size:13.5px; font-weight:700; color:#181818;
+}
+.doc-summary .row.total .v{color:#2c47b8;}
+
+.doc-lower{display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:14px;}
+.doc-terms ol{margin:0; padding-left:16px;}
+.doc-terms li{font-size:9.5px; color:#3a3a3a; margin-bottom:3px; line-height:1.55;}
+.doc-notes{font-size:9.5px; color:#3a3a3a; white-space:pre-wrap; line-height:1.6;}
+
+.doc-bank{
+  margin-top:12px; padding-top:10px; border-top:1px solid #e3e3e3;
+  font-size:10px; color:#3a3a3a;
+}
+.doc-bank .k{color:#8a8a8a; display:inline-block; min-width:56px;}
+
+.doc-signature{
+  display:grid; grid-template-columns:1fr 1fr; gap:24px;
+  margin-top:24px;
+}
+.sig-box .sig-label{font-size:10px; color:#8a8a8a; margin-bottom:26px;}
+.sig-box .sig-line{border-top:1px solid #999; padding-top:5px; font-size:9.5px; color:#8a8a8a; display:flex; justify-content:space-between;}
+
+.doc-footer-note{
+  margin-top:20px; text-align:center; font-size:8.5px; color:#c3c3c3;
+}
+
+/* ============================================================
+   Print
+   ============================================================ */
+@media print{
+  @page{ size:A4; margin:0; }
+  html,body{background:#fff !important;}
+  body *{visibility:hidden;}
+  .a4-sheet,.a4-sheet *{visibility:visible;}
+  .a4-sheet{
+    position:absolute; left:0; top:0;
+    margin:0; box-shadow:none;
+    width:210mm; min-height:297mm;
+    padding:14mm 15mm 12mm;
+  }
+  .sheet-scaler{transform:none !important; width:auto !important; height:auto !important;}
+}
+
+/* ============================================================
+   Misc
+   ============================================================ */
+.visually-hidden{
+  position:absolute; width:1px; height:1px;
+  padding:0; margin:-1px; overflow:hidden;
+  clip:rect(0,0,0,0); white-space:nowrap; border:0;
+}
+footer.app-footer{
+  text-align:center;
+  font-size:11px;
+  color:var(--ink-faint);
+  padding:6px 0 26px;
+}
+</style>
+</head>
+<body>
+<a href="#mainForm" class="skip-link">跳到主要內容</a>
+
+<header class="topbar">
+  <h1>修繕報價單產生器<span class="subtitle"> ｜ 窩的家工務報價工具</span></h1>
+  <div class="topbar-actions">
+    <button type="button" class="tbtn" id="btnDrafts" title="草稿管理">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14"/><path d="M6.5 2.5v3M13.5 2.5v3"/></svg>
+      <span class="label">草稿管理</span>
+    </button>
+    <button type="button" class="tbtn" id="btnExport" title="匯出 JSON">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3v9M6.5 8.5 10 12l3.5-3.5"/><path d="M4 14.5v1a1.5 1.5 0 0 0 1.5 1.5h9a1.5 1.5 0 0 0 1.5-1.5v-1"/></svg>
+      <span class="label">匯出</span>
+    </button>
+    <button type="button" class="tbtn" id="btnImport" title="匯入 JSON">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 12V3M6.5 6.5 10 3l3.5 3.5"/><path d="M4 14.5v1a1.5 1.5 0 0 0 1.5 1.5h9a1.5 1.5 0 0 0 1.5-1.5v-1"/></svg>
+      <span class="label">匯入</span>
+    </button>
+    <button type="button" class="tbtn primary-tbtn" id="btnPrint" title="列印 / 下載 PDF">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="2.5" width="10" height="5" rx="1"/><rect x="3" y="7.5" width="14" height="7" rx="1.5"/><rect x="6" y="11.5" width="8" height="5.5" rx="1"/></svg>
+      <span class="label">列印／下載</span>
+    </button>
+    <button type="button" class="tbtn icon-only" id="btnTheme" title="切換深淺色（僅操作介面，預覽永遠白底黑字）">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" id="themeIcon"><circle cx="10" cy="10" r="4"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.5 4.5l1.4 1.4M14.1 14.1l1.4 1.4M4.5 15.5l1.4-1.4M14.1 5.9l1.4-1.4"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="workspace">
+  <!-- ============================================================
+       FORM PANE
+       ============================================================ -->
+  <section class="form-pane" id="mainForm" aria-label="報價單表單">
+
+    <!-- 基本資訊 -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-badge">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 2 3 5.5v5c0 4 3 6.7 7 8.5 4-1.8 7-4.5 7-8.5v-5L10 2Z"/></svg>
+        </div>
+        <h2>基本資訊</h2>
+      </div>
+      <div class="card-body">
+        <div class="field">
+          <label for="fQuoteNo">報價單號</label>
+          <div class="input-row">
+            <input type="text" id="fQuoteNo" autocomplete="off">
+            <button type="button" class="btn sm" id="btnRegenNo" title="重新產生單號">重新產生</button>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="fQuoteDate">報價日期</label>
+            <input type="date" id="fQuoteDate">
+          </div>
+          <div class="field">
+            <label for="fValidDays">有效期限（天）</label>
+            <input type="number" id="fValidDays" min="0" step="1">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 我方資訊 -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-badge">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="6" width="14" height="11" rx="1.5"/><path d="M7 6V4.5A1.5 1.5 0 0 1 8.5 3h3A1.5 1.5 0 0 1 13 4.5V6"/></svg>
+        </div>
+        <h2>我方資訊</h2>
+        <span class="hint">會自動記憶，下次開啟自動帶入</span>
+      </div>
+      <div class="card-body">
+        <div class="grid-2">
+          <div class="field">
+            <label for="fSellerName">公司／工班名稱</label>
+            <input type="text" id="fSellerName" placeholder="例：窩的家修繕工程隊" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="fSellerContact">聯絡人</label>
+            <input type="text" id="fSellerContact" autocomplete="off">
+          </div>
+        </div>
+        <div class="field">
+          <label for="fSellerPhone">聯絡電話</label>
+          <input type="tel" id="fSellerPhone" autocomplete="off">
+        </div>
+        <details class="adv">
+          <summary><svg class="chev" width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M7 4l6 6-6 6"/></svg>進階資訊（統編／地址／LOGO，選填）</summary>
+          <div class="adv-body">
+            <div class="grid-2">
+              <div class="field">
+                <label for="fSellerTaxId">統一編號</label>
+                <input type="text" id="fSellerTaxId" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="fSellerExtra">其他聯絡方式</label>
+                <input type="text" id="fSellerExtra" placeholder="LINE ID／Email 等" autocomplete="off">
+              </div>
+            </div>
+            <div class="field">
+              <label for="fSellerAddress">地址</label>
+              <input type="text" id="fSellerAddress" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="fSellerLogo">公司 LOGO</label>
+              <input type="file" id="fSellerLogo" accept="image/*">
+              <span class="note" id="logoStatus">尚未上傳</span>
+              <div class="btn-row" style="margin-top:4px;">
+                <button type="button" class="btn sm ghost" id="btnClearLogo">移除 LOGO</button>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- 客戶與物件資訊 -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-badge">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="7" r="3.2"/><path d="M3.5 17c1-3.6 4-5.5 6.5-5.5s5.5 1.9 6.5 5.5"/></svg>
+        </div>
+        <h2>客戶與物件資訊</h2>
+      </div>
+      <div class="card-body">
+        <div class="field">
+          <label for="fCustName">客戶名稱 <span class="req">＊</span></label>
+          <input type="text" id="fCustName" placeholder="王先生／王小姐" autocomplete="off">
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="fCustPhone">客戶電話</label>
+            <input type="tel" id="fCustPhone" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="fCustAddress">客戶聯絡地址</label>
+            <input type="text" id="fCustAddress" autocomplete="off">
+          </div>
+        </div>
+        <div class="field">
+          <label for="fSiteAddress">修繕地址／物件</label>
+          <input type="text" id="fSiteAddress" placeholder="施工現場地址或物件名稱" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="fSiteNote">物件備註</label>
+          <input type="text" id="fSiteNote" placeholder="樓層／門牌／管委會聯絡方式等" autocomplete="off">
+        </div>
+      </div>
+    </div>
+
+    <!-- 修繕項目 -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-badge">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 17 13 8l3-1-1 3-9 9-3-1z"/><path d="M11.5 5.5l3 3"/></svg>
+        </div>
+        <h2>修繕項目</h2>
+        <span class="hint" id="itemsCountHint">共 0 項</span>
+      </div>
+      <div class="items-toolbar">
+        <button type="button" class="btn sm primary" id="btnAddItem">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 4v12M4 10h12"/></svg>
+          新增項目
+        </button>
+        <button type="button" class="btn sm" id="btnCommonItems">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h8"/></svg>
+          常用修繕項目
+        </button>
+        <span class="spacer"></span>
+      </div>
+      <div class="items-list" id="itemsList"></div>
+      <div class="blank-row-control">
+        <label for="fBlankRows">列印用空白列數（微調分頁）</label>
+        <input type="number" id="fBlankRows" min="0" max="20" step="1">
+      </div>
+    </div>
+
+    <!-- 金額與稅 -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-badge">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="7.2"/><path d="M10 6.2v7.6M12.3 8c0-1-1-1.6-2.3-1.6-1.5 0-2.4.8-2.4 1.8 0 2.6 4.7 1.3 4.7 3.9 0 1-1 1.8-2.4 1.8-1.3 0-2.3-.6-2.3-1.6"/></svg>
+        </div>
+        <h2>金額與稅</h2>
+      </div>
+      <div class="card-body">
+        <fieldset>
+          <legend>折扣方式</legend>
+          <div class="choice-group" id="discountTypeGroup">
+            <input type="radio" name="discountType" id="dtNone" value="none">
+            <label for="dtNone">無折扣</label>
+            <input type="radio" name="discountType" id="dtAmount" value="amount">
+            <label for="dtAmount">固定金額折抵</label>
+            <input type="radio" name="discountType" id="dtPercent" value="percent">
+            <label for="dtPercent">折數</label>
+          </div>
+          <div class="discount-extra" data-for="amount">
+            <div class="field">
+              <label for="fDiscountAmount">折抵金額（NT$）</label>
+              <input type="number" id="fDiscountAmount" min="0" step="1">
+            </div>
+          </div>
+          <div class="discount-extra" data-for="percent">
+            <div class="field">
+              <label for="fDiscountPercent">折數（例如輸入 9 代表 9 折）</label>
+              <input type="number" id="fDiscountPercent" min="0" max="10" step="0.1">
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset style="margin-top:16px;">
+          <legend>稅制</legend>
+          <div class="choice-group" id="taxModeGroup">
+            <input type="radio" name="taxMode" id="txIncluded" value="included">
+            <label for="txIncluded">內含 5%</label>
+            <input type="radio" name="taxMode" id="txExcluded" value="excluded">
+            <label for="txExcluded">外加 5%</label>
+            <input type="radio" name="taxMode" id="txExempt" value="exempt">
+            <label for="txExempt">免稅</label>
+            <input type="radio" name="taxMode" id="txCustom" value="custom">
+            <label for="txCustom">自訂稅率</label>
+          </div>
+          <div class="tax-extra">
+            <div class="field">
+              <label for="fTaxCustomRate">自訂稅率（%，外加計算）</label>
+              <input type="number" id="fTaxCustomRate" min="0" max="100" step="0.1">
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="money-grid" style="margin-top:18px;">
+          <div class="money-row"><span class="label">項目小計</span><span class="val" id="sumSubtotal">NT$ 0</span></div>
+          <div class="money-row"><span class="label">折扣</span><span class="val" id="sumDiscount">－ NT$ 0</span></div>
+          <div class="money-row"><span class="label">稅額</span><span class="val" id="sumTax">NT$ 0</span></div>
+          <div class="money-row total"><span class="label">總計</span><span class="val" id="sumTotal">NT$ 0</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 條款與備註 -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-badge">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="2.5" width="12" height="15" rx="1.5"/><path d="M7 6.5h6M7 9.5h6M7 12.5h4"/></svg>
+        </div>
+        <h2>條款與備註</h2>
+      </div>
+      <div class="card-body">
+        <label class="check-row">
+          <input type="checkbox" id="fTermsEnabled">
+          <span>於報價單顯示「合約條款」
+            <span class="desc">可增刪條款內容，或一鍵載入常用條款</span>
+          </span>
+        </label>
+        <div class="terms-list" id="termsList"></div>
+        <div class="add-term-row">
+          <input type="text" id="fNewTerm" placeholder="新增一條條款…">
+          <button type="button" class="btn sm" id="btnAddTerm">新增</button>
+        </div>
+        <div class="btn-row" style="margin-top:8px;">
+          <button type="button" class="btn sm" id="btnLoadPresetTerms">載入常用條款</button>
+        </div>
+
+        <div class="field" style="margin-top:18px;">
+          <label for="fNotes">備註</label>
+          <textarea id="fNotes" rows="6"></textarea>
+        </div>
+
+        <label class="check-row" style="margin-top:10px;">
+          <input type="checkbox" id="fSignatureEnabled">
+          <span>於報價單顯示簽章欄位
+            <span class="desc">客戶簽認欄＋報價人欄</span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 匯款資訊 -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-badge">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="6" width="15" height="10" rx="1.5"/><path d="M2.5 9.5h15"/></svg>
+        </div>
+        <h2>匯款資訊</h2>
+        <span class="hint">選填</span>
+      </div>
+      <div class="card-body">
+        <label class="check-row">
+          <input type="checkbox" id="fBankEnabled">
+          <span>於報價單顯示匯款資訊</span>
+        </label>
+        <div class="grid-2" style="margin-top:12px;">
+          <div class="field">
+            <label for="fBankName">銀行</label>
+            <input type="text" id="fBankName" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="fBankBranch">分行</label>
+            <input type="text" id="fBankBranch" autocomplete="off">
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="fBankAccount">帳號</label>
+            <input type="text" id="fBankAccount" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="fBankHolder">戶名</label>
+            <input type="text" id="fBankHolder" autocomplete="off">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="app-footer">所有資料僅儲存於本機瀏覽器，不會上傳到任何伺服器。</footer>
+  </section>
+
+  <!-- ============================================================
+       PREVIEW PANE
+       ============================================================ -->
+  <aside class="preview-pane" aria-label="A4 報價單預覽">
+    <div class="preview-viewport" id="previewViewport">
+      <div class="preview-toolbar">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="2.5" width="12" height="15" rx="1"/></svg>
+        A4 即時預覽（列印永遠白底黑字，操作介面深淺色不影響輸出）
+      </div>
+      <div class="sheet-scaler" id="sheetScaler">
+        <div class="a4-sheet" id="a4Sheet"></div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- ============================================================
+     Draft management dialog
+     ============================================================ -->
+<dialog id="draftDialog" aria-labelledby="draftDialogTitle">
+  <div class="dialog-head">
+    <h2 id="draftDialogTitle">草稿管理</h2>
+    <button type="button" class="btn icon ghost" id="btnCloseDraftDialog" aria-label="關閉">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 5l10 10M15 5 5 15"/></svg>
+    </button>
+  </div>
+  <div class="dialog-body">
+    <div class="dialog-section">
+      <h3>另存為新草稿</h3>
+      <div class="input-row">
+        <input type="text" id="fDraftName" placeholder="草稿名稱，例如：王先生 客廳漏水">
+        <button type="button" class="btn sm primary" id="btnSaveDraft">儲存</button>
+      </div>
+    </div>
+    <div class="dialog-section">
+      <h3>已儲存草稿</h3>
+      <div id="draftsListWrap"></div>
+    </div>
+  </div>
+</dialog>
+
+<!-- ============================================================
+     Common items dialog
+     ============================================================ -->
+<dialog id="commonItemsDialog" aria-labelledby="commonItemsTitle">
+  <div class="dialog-head">
+    <h2 id="commonItemsTitle">常用修繕項目</h2>
+    <button type="button" class="btn icon ghost" id="btnCloseCommonDialog" aria-label="關閉">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 5l10 10M15 5 5 15"/></svg>
+    </button>
+  </div>
+  <div class="dialog-body" id="commonItemsList"></div>
+</dialog>
+
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+<div class="toast-region" id="toastRegion" aria-live="polite"></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ============================================================
+   Constants
+   ============================================================ */
+var LS_KEYS = { last:'rpqg_last_v1', drafts:'rpqg_drafts_v1', seller:'rpqg_seller_v1' };
+var A4_NATURAL_WIDTH = 794;
+
+var CATEGORY_OPTIONS = ['水電','泥作','木作','油漆','防水','門窗五金','清潔','其他'];
+var UNIT_OPTIONS = ['式','坪','才','組','次','趟','片','台','時','支','面'];
+
+var COMMON_ITEMS = [
+  { category:'門窗五金', name:'拉門滾輪組更換（拉門卡住不順、跑道異音）', unit:'組', desc:'' },
+  { category:'門窗五金', name:'拉門玻璃更換（含回收舊玻璃）', unit:'片', desc:'' },
+  { category:'門窗五金', name:'紗窗更換（一般牛津網，含框）', unit:'片', desc:'' },
+  { category:'水電', name:'水龍頭／閥芯壓蓋更換', unit:'組', desc:'' },
+  { category:'水電', name:'洗手台面盆組更換（含長腳與面盆龍頭）', unit:'組', desc:'' },
+  { category:'水電', name:'蓮蓬頭／沐浴龍頭更換', unit:'組', desc:'' },
+  { category:'油漆', name:'全室牆面粉刷（含天花板、壁癌處理）', unit:'式', desc:'' },
+  { category:'防水', name:'窗邊防水工程（內壁與外牆）', unit:'式', desc:'保固一年' },
+  { category:'水電', name:'浴室三合一暖風機更換', unit:'台', desc:'' },
+  { category:'清潔', name:'全室細清', unit:'時', desc:'以 350 元/小時計算' },
+  { category:'清潔', name:'廢棄物清運', unit:'趟', desc:'' },
+  { category:'泥作', name:'壁癌處理工程', unit:'式', desc:'' }
+];
+
+var DEFAULT_TERMS = [
+  '本報價單經雙方簽認後生效，如有變更需雙方書面同意。',
+  '施工期間如遇不可抗力因素（天災、法定停工等），工期得順延，不視為違約。',
+  '驗收合格後方視為完工，尾款於驗收合格後 7 日內支付完畢。',
+  '本報價單未載明之項目、材料等級或施作工法，以現場實際施作為準。'
+];
+
+var DEFAULT_NOTES =
+'1. 本報價單有效期限為報價日起 7 日，逾期請重新確認報價。\n' +
+'2. 本報價為現場初估，實際丈量施作範圍如有增減，將另行確認金額。\n' +
+'3. 報價項目以外之追加工程，另行報價後始施作。\n' +
+'4. 保固範圍為施工項目本身，保固期限為完工日起 1 年，人為損壞或不可抗力因素不在保固範圍內。\n' +
+'5. 付款方式：簽約時支付訂金，完工驗收後支付尾款，詳細比例雙方另行約定。';
+
+var ICON_COPY = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="7" y="7" width="9.5" height="9.5" rx="1.5"/><path d="M13 7V4.5A1.5 1.5 0 0 0 11.5 3h-6A1.5 1.5 0 0 0 4 4.5v6A1.5 1.5 0 0 0 5.5 12H7"/></svg>';
+var ICON_TRASH = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6h12M8 6V4.5A1 1 0 0 1 9 3.5h2a1 1 0 0 1 1 1V6M6 6l.7 9.4a1.5 1.5 0 0 0 1.5 1.4h3.6a1.5 1.5 0 0 0 1.5-1.4L14 6"/></svg>';
+var ICON_UP = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12l5-5 5 5"/></svg>';
+var ICON_DOWN = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 8l5 5 5-5"/></svg>';
+var ICON_PLUS = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 4v12M4 10h12"/></svg>';
+var ICON_CHECK = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 10.5l4 4 8-9"/></svg>';
+
+/* ============================================================
+   State
+   ============================================================ */
+var state = null;
+var saveTimer = null;
+var sellerSaveTimer = null;
+
+function uid(){
+  if(window.crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
+}
+
+function p2(n){ return String(n).padStart(2,'0'); }
+
+function genQuoteNo(d){
+  d = d || new Date();
+  return '' + d.getFullYear() + p2(d.getMonth()+1) + p2(d.getDate()) + '-' + p2(d.getHours()) + p2(d.getMinutes()) + p2(d.getSeconds());
+}
+
+function toDateInputValue(d){
+  d = d || new Date();
+  return d.getFullYear() + '-' + p2(d.getMonth()+1) + '-' + p2(d.getDate());
+}
+
+function createEmptyItem(){
+  return { id: uid(), category:'', name:'', desc:'', qty:1, unit:'式', price:0 };
+}
+
+function createDefaultSeller(){
+  return { name:'', contact:'', phone:'', taxId:'', address:'', extra:'', logoDataUrl:'' };
+}
+
+function createDefaultState(){
+  var now = new Date();
+  return {
+    quoteNo: genQuoteNo(now),
+    quoteDate: toDateInputValue(now),
+    validDays: 7,
+    seller: createDefaultSeller(),
+    customer: { name:'', phone:'', address:'' },
+    site: { address:'', note:'' },
+    items: [ createEmptyItem() ],
+    extraBlankRows: 0,
+    discount: { type:'none', amount:0, percent:9 },
+    tax: { mode:'excluded', customRate:5 },
+    termsEnabled: true,
+    terms: DEFAULT_TERMS.slice(),
+    notes: DEFAULT_NOTES,
+    signatureEnabled: true,
+    bank: { enabled:false, bankName:'', branch:'', account:'', holder:'' }
+  };
+}
+
+/* Deep-ish merge of parsed JSON onto a fresh default, tolerant of missing/broken fields. */
+function normalizeState(partial){
+  var base = createDefaultState();
+  if(!partial || typeof partial !== 'object') return base;
+
+  if(typeof partial.quoteNo === 'string' && partial.quoteNo) base.quoteNo = partial.quoteNo;
+  if(typeof partial.quoteDate === 'string' && partial.quoteDate) base.quoteDate = partial.quoteDate;
+  if(!isNaN(Number(partial.validDays))) base.validDays = Number(partial.validDays);
+
+  if(partial.seller && typeof partial.seller === 'object'){
+    base.seller = Object.assign({}, base.seller, partial.seller);
+  }
+  if(partial.customer && typeof partial.customer === 'object'){
+    base.customer = Object.assign({}, base.customer, partial.customer);
+  }
+  if(partial.site && typeof partial.site === 'object'){
+    base.site = Object.assign({}, base.site, partial.site);
+  }
+
+  if(Array.isArray(partial.items) && partial.items.length){
+    base.items = partial.items.map(function(it){
+      var e = createEmptyItem();
+      if(it && typeof it === 'object'){
+        e.id = it.id || e.id;
+        e.category = typeof it.category === 'string' ? it.category : '';
+        e.name = typeof it.name === 'string' ? it.name : '';
+        e.desc = typeof it.desc === 'string' ? it.desc : '';
+        e.qty = isNaN(Number(it.qty)) ? 0 : Number(it.qty);
+        e.unit = typeof it.unit === 'string' && it.unit ? it.unit : '式';
+        e.price = isNaN(Number(it.price)) ? 0 : Number(it.price);
+      }
+      return e;
+    });
+  }
+
+  if(!isNaN(Number(partial.extraBlankRows))) base.extraBlankRows = Math.max(0, Number(partial.extraBlankRows));
+
+  if(partial.discount && typeof partial.discount === 'object'){
+    base.discount = Object.assign({}, base.discount, partial.discount);
+  }
+  if(partial.tax && typeof partial.tax === 'object'){
+    base.tax = Object.assign({}, base.tax, partial.tax);
+  }
+
+  if(typeof partial.termsEnabled === 'boolean') base.termsEnabled = partial.termsEnabled;
+  if(Array.isArray(partial.terms)) base.terms = partial.terms.filter(function(t){return typeof t === 'string';});
+  if(typeof partial.notes === 'string') base.notes = partial.notes;
+  if(typeof partial.signatureEnabled === 'boolean') base.signatureEnabled = partial.signatureEnabled;
+
+  if(partial.bank && typeof partial.bank === 'object'){
+    base.bank = Object.assign({}, base.bank, partial.bank);
+  }
+
+  return base;
+}
+
+/* ============================================================
+   Pure calculation helpers (kept dependency-free & testable)
+   ============================================================ */
+function computeItemSubtotal(item){
+  var qty = Number(item.qty) || 0;
+  var price = Number(item.price) || 0;
+  return qty * price;
+}
+
+function computeItemsSubtotal(items){
+  return (items || []).reduce(function(sum, it){ return sum + computeItemSubtotal(it); }, 0);
+}
+
+function computeDiscount(subtotal, discount){
+  discount = discount || { type:'none' };
+  if(discount.type === 'amount'){
+    var amt = Math.max(0, Number(discount.amount) || 0);
+    var discounted = Math.max(0, subtotal - amt);
+    return { discountedSubtotal: discounted, discountAmount: subtotal - discounted };
+  }
+  if(discount.type === 'percent'){
+    var factor = Math.min(10, Math.max(0, Number(discount.percent)));
+    if(isNaN(factor)) factor = 10;
+    factor = factor / 10;
+    var discounted2 = subtotal * factor;
+    return { discountedSubtotal: discounted2, discountAmount: subtotal - discounted2 };
+  }
+  return { discountedSubtotal: subtotal, discountAmount: 0 };
+}
+
+function computeTax(baseAmount, tax){
+  var mode = (tax && tax.mode) || 'excluded';
+  if(mode === 'included'){
+    var pretax = baseAmount / 1.05;
+    return { taxAmount: baseAmount - pretax, total: baseAmount, pretax: pretax };
+  }
+  if(mode === 'exempt'){
+    return { taxAmount: 0, total: baseAmount, pretax: baseAmount };
+  }
+  if(mode === 'custom'){
+    var rate = Math.max(0, Number(tax && tax.customRate)) / 100;
+    if(isNaN(rate)) rate = 0;
+    var taxAmt = baseAmount * rate;
+    return { taxAmount: taxAmt, total: baseAmount + taxAmt, pretax: baseAmount };
+  }
+  /* excluded (default) */
+  var taxAmt2 = baseAmount * 0.05;
+  return { taxAmount: taxAmt2, total: baseAmount + taxAmt2, pretax: baseAmount };
+}
+
+function computeTotals(state){
+  var subtotal = computeItemsSubtotal(state.items);
+  var d = computeDiscount(subtotal, state.discount);
+  var t = computeTax(d.discountedSubtotal, state.tax);
+  return {
+    subtotal: subtotal,
+    discountAmount: d.discountAmount,
+    discountedSubtotal: d.discountedSubtotal,
+    taxAmount: t.taxAmount,
+    total: t.total
+  };
+}
+
+/* expose for headless verification (node --check / manual test harness) */
+if(typeof module !== 'undefined' && module.exports){
+  module.exports = { computeItemSubtotal:computeItemSubtotal, computeItemsSubtotal:computeItemsSubtotal, computeDiscount:computeDiscount, computeTax:computeTax, computeTotals:computeTotals };
+}
+
+/* ============================================================
+   Formatting helpers
+   ============================================================ */
+function fmtInt(n){
+  n = Number(n);
+  if(isNaN(n)) n = 0;
+  var sign = n < 0 ? '-' : '';
+  n = Math.round(Math.abs(n));
+  return sign + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+function fmtMoney(n){ return 'NT$ ' + fmtInt(n); }
+
+function esc(s){
+  return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function(c){
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+function nl2br(s){ return esc(s).replace(/\n/g, '<br>'); }
+
+function addDays(dateStr, days){
+  var d = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+  if(isNaN(d.getTime())) d = new Date();
+  d.setDate(d.getDate() + (Number(days) || 0));
+  return d.getFullYear() + '/' + p2(d.getMonth()+1) + '/' + p2(d.getDate());
+}
+function fmtDateSlash(dateStr){
+  var d = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+  if(isNaN(d.getTime())) return '';
+  return d.getFullYear() + '/' + p2(d.getMonth()+1) + '/' + p2(d.getDate());
+}
+
+/* ============================================================
+   DOM refs
+   ============================================================ */
+function $(id){ return document.getElementById(id); }
+
+var els = {};
+
+/* ============================================================
+   Toast
+   ============================================================ */
+function toast(msg, type){
+  var region = $('toastRegion');
+  var el = document.createElement('div');
+  el.className = 'toast' + (type ? ' ' + type : '');
+  el.textContent = msg;
+  region.appendChild(el);
+  requestAnimationFrame(function(){ el.classList.add('show'); });
+  setTimeout(function(){
+    el.classList.remove('show');
+    setTimeout(function(){ el.remove(); }, 220);
+  }, 2600);
+}
+
+/* ============================================================
+   Persistence
+   ============================================================ */
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(function(){
+    try{ localStorage.setItem(LS_KEYS.last, JSON.stringify(state)); }catch(e){}
+  }, 350);
+}
+function scheduleSaveSeller(){
+  clearTimeout(sellerSaveTimer);
+  sellerSaveTimer = setTimeout(function(){
+    try{ localStorage.setItem(LS_KEYS.seller, JSON.stringify(state.seller)); }catch(e){}
+  }, 350);
+}
+
+function getDrafts(){
+  try{
+    var raw = localStorage.getItem(LS_KEYS.drafts);
+    var parsed = raw ? JSON.parse(raw) : {};
+    return (parsed && typeof parsed === 'object') ? parsed : {};
+  }catch(e){ return {}; }
+}
+function setDrafts(drafts){
+  try{ localStorage.setItem(LS_KEYS.drafts, JSON.stringify(drafts)); }catch(e){}
+}
+
+/* ============================================================
+   Render: items form
+   ============================================================ */
+function renderItemsForm(){
+  var list = $('itemsList');
+  list.innerHTML = '';
+  if(state.items.length === 0){
+    var empty = document.createElement('div');
+    empty.className = 'items-empty';
+    empty.textContent = '尚未新增任何項目，點上方「新增項目」或「常用修繕項目」開始。';
+    list.appendChild(empty);
+  }
+  state.items.forEach(function(item, idx){
+    list.appendChild(buildItemRowEl(item, idx));
+  });
+  $('itemsCountHint').textContent = '共 ' + state.items.length + ' 項';
+}
+
+function buildItemRowEl(item, idx){
+  var row = document.createElement('div');
+  row.className = 'item-row';
+  row.dataset.id = item.id;
+
+  var idxEl = document.createElement('div');
+  idxEl.className = 'item-index';
+  idxEl.textContent = '項次 ' + (idx + 1);
+  row.appendChild(idxEl);
+
+  var grid = document.createElement('div');
+  grid.className = 'item-row-grid';
+  grid.innerHTML =
+    field('類別', inputWithList('cat-'+item.id, item.category, 'catlist', 'field-category')) +
+    field('項目名稱', '<input type="text" class="field-name" value="'+esc(item.name)+'" placeholder="問題描述／施作項目">') +
+    field('說明（選填）', '<input type="text" class="field-desc" value="'+esc(item.desc)+'" placeholder="品項型號／廠商／備註">') +
+    field('數量', '<input type="number" class="field-qty" value="'+esc(item.qty)+'" min="0" step="any">') +
+    field('單位', inputWithList('unit-'+item.id, item.unit, 'unitlist', 'field-unit')) +
+    field('單價', '<input type="number" class="field-price" value="'+esc(item.price)+'" min="0" step="any">') +
+    field('小計', '<div class="item-subtotal" data-role="subtotal">'+fmtMoney(computeItemSubtotal(item))+'</div>') +
+    '<div class="item-actions">' +
+      '<button type="button" class="btn icon ghost" data-act="dup" title="複製整列">'+ICON_COPY+'</button>' +
+      '<button type="button" class="btn icon ghost" data-act="up" title="上移">'+ICON_UP+'</button>' +
+      '<button type="button" class="btn icon ghost" data-act="down" title="下移">'+ICON_DOWN+'</button>' +
+      '<button type="button" class="btn icon ghost danger" data-act="del" title="刪除">'+ICON_TRASH+'</button>' +
+    '</div>';
+  row.appendChild(grid);
+  return row;
+}
+function field(label, controlHtml){
+  return '<div class="field"><label>'+esc(label)+'</label>'+controlHtml+'</div>';
+}
+function inputWithList(id, value, listId, cls){
+  return '<input type="text" class="'+cls+'" list="'+listId+'" value="'+esc(value)+'">';
+}
+
+/* Event delegation for item rows: input for live edits, click for row actions. */
+function bindItemsListEvents(){
+  var list = $('itemsList');
+  list.addEventListener('input', function(e){
+    var row = e.target.closest('.item-row');
+    if(!row) return;
+    var item = state.items.find(function(it){ return it.id === row.dataset.id; });
+    if(!item) return;
+    if(e.target.classList.contains('field-category')) item.category = e.target.value;
+    else if(e.target.classList.contains('field-name')) item.name = e.target.value;
+    else if(e.target.classList.contains('field-desc')) item.desc = e.target.value;
+    else if(e.target.classList.contains('field-unit')) item.unit = e.target.value;
+    else if(e.target.classList.contains('field-qty')) item.qty = e.target.value === '' ? 0 : Number(e.target.value);
+    else if(e.target.classList.contains('field-price')) item.price = e.target.value === '' ? 0 : Number(e.target.value);
+    else return;
+    var subEl = row.querySelector('[data-role="subtotal"]');
+    if(subEl) subEl.textContent = fmtMoney(computeItemSubtotal(item));
+    renderPreview();
+    renderSummary();
+    scheduleSave();
+  });
+
+  list.addEventListener('click', function(e){
+    var btn = e.target.closest('button[data-act]');
+    if(!btn) return;
+    var row = btn.closest('.item-row');
+    var idx = state.items.findIndex(function(it){ return it.id === row.dataset.id; });
+    if(idx === -1) return;
+    var act = btn.dataset.act;
+    if(act === 'del'){
+      state.items.splice(idx, 1);
+      renderItemsForm();
+    } else if(act === 'dup'){
+      var clone = Object.assign({}, state.items[idx], { id: uid() });
+      state.items.splice(idx + 1, 0, clone);
+      renderItemsForm();
+    } else if(act === 'up' && idx > 0){
+      var tmp = state.items[idx-1]; state.items[idx-1] = state.items[idx]; state.items[idx] = tmp;
+      renderItemsForm();
+    } else if(act === 'down' && idx < state.items.length - 1){
+      var tmp2 = state.items[idx+1]; state.items[idx+1] = state.items[idx]; state.items[idx] = tmp2;
+      renderItemsForm();
+    } else {
+      return;
+    }
+    renderPreview();
+    renderSummary();
+    scheduleSave();
+  });
+}
+
+/* ============================================================
+   Render: terms list
+   ============================================================ */
+function renderTermsForm(){
+  var wrap = $('termsList');
+  wrap.innerHTML = '';
+  state.terms.forEach(function(text, idx){
+    var row = document.createElement('div');
+    row.className = 'terms-item';
+    row.dataset.idx = idx;
+    row.innerHTML =
+      '<input type="text" value="'+esc(text)+'" data-role="term-text">' +
+      '<button type="button" class="btn icon ghost danger" data-act="del-term" title="刪除此條">'+ICON_TRASH+'</button>';
+    wrap.appendChild(row);
+  });
+}
+function bindTermsEvents(){
+  var wrap = $('termsList');
+  wrap.addEventListener('input', function(e){
+    if(!e.target.matches('[data-role="term-text"]')) return;
+    var row = e.target.closest('.terms-item');
+    var idx = Number(row.dataset.idx);
+    state.terms[idx] = e.target.value;
+    renderPreview();
+    scheduleSave();
+  });
+  wrap.addEventListener('click', function(e){
+    var btn = e.target.closest('button[data-act="del-term"]');
+    if(!btn) return;
+    var row = btn.closest('.terms-item');
+    var idx = Number(row.dataset.idx);
+    state.terms.splice(idx, 1);
+    renderTermsForm();
+    renderPreview();
+    scheduleSave();
+  });
+}
+
+/* ============================================================
+   Render: form (non-repeating fields): set values from state
+   ============================================================ */
+function renderForm(){
+  $('fQuoteNo').value = state.quoteNo;
+  $('fQuoteDate').value = state.quoteDate;
+  $('fValidDays').value = state.validDays;
+
+  $('fSellerName').value = state.seller.name;
+  $('fSellerContact').value = state.seller.contact;
+  $('fSellerPhone').value = state.seller.phone;
+  $('fSellerTaxId').value = state.seller.taxId;
+  $('fSellerExtra').value = state.seller.extra;
+  $('fSellerAddress').value = state.seller.address;
+  $('logoStatus').textContent = state.seller.logoDataUrl ? '已上傳 LOGO' : '尚未上傳';
+
+  $('fCustName').value = state.customer.name;
+  $('fCustPhone').value = state.customer.phone;
+  $('fCustAddress').value = state.customer.address;
+  $('fSiteAddress').value = state.site.address;
+  $('fSiteNote').value = state.site.note;
+
+  $('fBlankRows').value = state.extraBlankRows;
+
+  var dType = state.discount.type || 'none';
+  var dRadio = document.querySelector('#discountTypeGroup input[value="'+dType+'"]');
+  if(dRadio) dRadio.checked = true;
+  document.getElementById('discountTypeGroup').closest('fieldset').dataset.discountType = dType;
+  $('fDiscountAmount').value = state.discount.amount;
+  $('fDiscountPercent').value = state.discount.percent;
+
+  var tMode = state.tax.mode || 'excluded';
+  var tRadio = document.querySelector('#taxModeGroup input[value="'+tMode+'"]');
+  if(tRadio) tRadio.checked = true;
+  document.getElementById('taxModeGroup').closest('fieldset').dataset.taxMode = tMode;
+  $('fTaxCustomRate').value = state.tax.customRate;
+
+  $('fTermsEnabled').checked = !!state.termsEnabled;
+  $('fNotes').value = state.notes;
+  $('fSignatureEnabled').checked = !!state.signatureEnabled;
+
+  $('fBankEnabled').checked = !!state.bank.enabled;
+  $('fBankName').value = state.bank.bankName;
+  $('fBankBranch').value = state.bank.branch;
+  $('fBankAccount').value = state.bank.account;
+  $('fBankHolder').value = state.bank.holder;
+
+  renderItemsForm();
+  renderTermsForm();
+}
+
+/* ============================================================
+   Render: money summary (form side)
+   ============================================================ */
+function renderSummary(){
+  var t = computeTotals(state);
+  $('sumSubtotal').textContent = fmtMoney(t.subtotal);
+  $('sumDiscount').textContent = t.discountAmount > 0 ? ('－ ' + fmtMoney(t.discountAmount)) : fmtMoney(0);
+  $('sumTax').textContent = fmtMoney(t.taxAmount);
+  $('sumTotal').textContent = fmtMoney(t.total);
+}
+
+/* ============================================================
+   Render: A4 preview
+   ============================================================ */
+function renderPreview(){
+  var t = computeTotals(state);
+  var sheet = $('a4Sheet');
+
+  var logoHtml = state.seller.logoDataUrl ? '<img class="seller-logo" src="'+state.seller.logoDataUrl+'" alt="">' : '';
+  var sellerMetaParts = [];
+  if(state.seller.contact) sellerMetaParts.push('聯絡人：' + esc(state.seller.contact));
+  if(state.seller.phone) sellerMetaParts.push('電話：' + esc(state.seller.phone));
+  if(state.seller.taxId) sellerMetaParts.push('統編：' + esc(state.seller.taxId));
+  if(state.seller.address) sellerMetaParts.push(esc(state.seller.address));
+  if(state.seller.extra) sellerMetaParts.push(esc(state.seller.extra));
+
+  var header =
+    '<div class="doc-header">' +
+      '<div class="seller-block">' + logoHtml +
+        '<div>' +
+          '<div class="seller-name">' + (state.seller.name ? esc(state.seller.name) : '<span class="empty" style="color:#b5b5b5;">（尚未填寫我方名稱）</span>') + '</div>' +
+          '<div class="seller-meta">' + (sellerMetaParts.join('　') || '&nbsp;') + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="doc-title-block">' +
+        '<div class="doc-title">修繕工程報價單</div>' +
+        '<div class="doc-meta">' +
+          '<div class="row"><span class="k">報價單號</span><span>' + esc(state.quoteNo || '-') + '</span></div>' +
+          '<div class="row"><span class="k">報價日期</span><span>' + esc(fmtDateSlash(state.quoteDate)) + '</span></div>' +
+          '<div class="row"><span class="k">有效期限至</span><span>' + esc(addDays(state.quoteDate, state.validDays)) + '</span></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  var custLines = [];
+  custLines.push(state.customer.name ? esc(state.customer.name) : '<span class="empty">（尚未填寫客戶名稱）</span>');
+  if(state.customer.phone) custLines.push('<span class="k">電話</span>' + esc(state.customer.phone));
+  if(state.customer.address) custLines.push('<span class="k">地址</span>' + esc(state.customer.address));
+
+  var siteLines = [];
+  siteLines.push(state.site.address ? esc(state.site.address) : '<span class="empty">（尚未填寫修繕地址）</span>');
+  if(state.site.note) siteLines.push('<span class="k">備註</span>' + esc(state.site.note));
+
+  var parties =
+    '<div class="doc-parties">' +
+      '<div><h3>客戶資訊</h3>' + custLines.map(function(l){return '<div class="line">'+l+'</div>';}).join('') + '</div>' +
+      '<div><h3>修繕地址／物件</h3>' + siteLines.map(function(l){return '<div class="line">'+l+'</div>';}).join('') + '</div>' +
+    '</div>';
+
+  var rows = state.items.map(function(item, idx){
+    var sub = computeItemSubtotal(item);
+    return '<tr>' +
+      '<td class="num">' + (idx+1) + '</td>' +
+      '<td>' + (item.category ? '<span class="it-cat">'+esc(item.category)+'</span>' : '') + '</td>' +
+      '<td><div class="it-name">' + (esc(item.name) || '&nbsp;') + '</div>' + (item.desc ? '<div class="it-desc">'+esc(item.desc)+'</div>' : '') + '</td>' +
+      '<td class="num">' + esc(item.qty) + '</td>' +
+      '<td class="num">' + esc(item.unit) + '</td>' +
+      '<td class="num">' + fmtInt(item.price) + '</td>' +
+      '<td class="num">' + fmtInt(sub) + '</td>' +
+    '</tr>';
+  }).join('');
+
+  var blanks = '';
+  var blankCount = Math.max(0, Number(state.extraBlankRows) || 0);
+  for(var i=0;i<blankCount;i++){
+    blanks += '<tr class="blank"><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>';
+  }
+
+  var itemsTable =
+    '<div class="doc-section-title"><span class="sq"></span>修繕項目</div>' +
+    '<table class="items-table"><thead><tr>' +
+      '<th class="num" style="width:26px;">項次</th>' +
+      '<th style="width:60px;">類別</th>' +
+      '<th>項目說明</th>' +
+      '<th class="num" style="width:38px;">數量</th>' +
+      '<th class="num" style="width:34px;">單位</th>' +
+      '<th class="num" style="width:64px;">單價</th>' +
+      '<th class="num" style="width:70px;">小計</th>' +
+    '</tr></thead><tbody>' + (rows || '<tr><td colspan="7" style="text-align:center;color:#b5b5b5;">尚未新增項目</td></tr>') + blanks + '</tbody></table>';
+
+  var taxLabelMap = { included:'稅額（內含 5%）', excluded:'稅額（外加 5%）', exempt:'稅額（免稅）', custom:'稅額（自訂 ' + esc(state.tax.customRate) + '%）' };
+  var summary =
+    '<div class="doc-summary"><div class="box">' +
+      '<div class="row"><span class="k">項目小計</span><span>' + fmtMoney(t.subtotal) + '</span></div>' +
+      (t.discountAmount > 0 ? '<div class="row"><span class="k">折扣</span><span>－ ' + fmtMoney(t.discountAmount) + '</span></div>' : '') +
+      '<div class="row"><span class="k">' + (taxLabelMap[state.tax.mode] || '稅額') + '</span><span>' + fmtMoney(t.taxAmount) + '</span></div>' +
+      '<div class="row total"><span>總計</span><span class="v">' + fmtMoney(t.total) + '</span></div>' +
+    '</div></div>';
+
+  var termsHtml = '';
+  if(state.termsEnabled && state.terms.length){
+    termsHtml = '<div class="doc-terms"><div class="doc-section-title"><span class="sq"></span>合約條款</div><ol>' +
+      state.terms.map(function(t2){ return '<li>' + esc(t2) + '</li>'; }).join('') + '</ol></div>';
+  } else {
+    termsHtml = '<div></div>';
+  }
+
+  var notesHtml = '<div class="doc-notes"><div class="doc-section-title"><span class="sq"></span>備註</div>' + nl2br(state.notes) + '</div>';
+
+  var lower = '<div class="doc-lower">' + termsHtml + notesHtml + '</div>';
+
+  var bankHtml = '';
+  if(state.bank.enabled){
+    bankHtml = '<div class="doc-bank">' +
+      '<span class="k">銀行</span>' + esc(state.bank.bankName || '-') + '　　' +
+      '<span class="k">分行</span>' + esc(state.bank.branch || '-') + '　　' +
+      '<span class="k">帳號</span>' + esc(state.bank.account || '-') + '　　' +
+      '<span class="k">戶名</span>' + esc(state.bank.holder || '-') +
+    '</div>';
+  }
+
+  var sigHtml = '';
+  if(state.signatureEnabled){
+    sigHtml = '<div class="doc-signature">' +
+      '<div class="sig-box"><div class="sig-label">客戶簽認</div><div class="sig-line"><span>簽名</span><span>日期</span></div></div>' +
+      '<div class="sig-box"><div class="sig-label">報價人</div><div class="sig-line"><span>簽名</span><span>日期</span></div></div>' +
+    '</div>';
+  }
+
+  sheet.innerHTML = header + parties + itemsTable + summary + lower + bankHtml + sigHtml +
+    '<div class="doc-footer-note">本報價單由修繕報價單產生器製作</div>';
+
+  scheduleApplyScale();
+}
+
+/* ============================================================
+   Preview scale-to-fit
+   ============================================================ */
+function applyScale(){
+  var viewport = $('previewViewport');
+  var scaler = $('sheetScaler');
+  var sheet = $('a4Sheet');
+  var available = viewport.clientWidth - 24;
+  var scale = Math.min(1, available / A4_NATURAL_WIDTH);
+  if(!isFinite(scale) || scale <= 0) scale = 1;
+  scaler.style.transform = 'scale(' + scale + ')';
+  scaler.style.height = (sheet.offsetHeight * scale) + 'px';
+}
+var scaleRaf = null;
+function scheduleApplyScale(){
+  if(scaleRaf) cancelAnimationFrame(scaleRaf);
+  scaleRaf = requestAnimationFrame(applyScale);
+}
+
+/* ============================================================
+   Render all
+   ============================================================ */
+function renderAll(){
+  renderForm();
+  renderSummary();
+  renderPreview();
+}
+
+/* ============================================================
+   Bind static field events
+   ============================================================ */
+function bindStaticFields(){
+  function on(id, evt, fn){ $(id).addEventListener(evt, fn); }
+
+  on('fQuoteNo','input', function(e){ state.quoteNo = e.target.value; renderPreview(); scheduleSave(); });
+  $('btnRegenNo').addEventListener('click', function(){
+    state.quoteNo = genQuoteNo();
+    $('fQuoteNo').value = state.quoteNo;
+    renderPreview(); scheduleSave();
+    toast('已重新產生單號');
+  });
+  on('fQuoteDate','input', function(e){ state.quoteDate = e.target.value; renderPreview(); scheduleSave(); });
+  on('fValidDays','input', function(e){ state.validDays = e.target.value === '' ? 0 : Number(e.target.value); renderPreview(); scheduleSave(); });
+
+  var sellerFieldMap = { fSellerName:'name', fSellerContact:'contact', fSellerPhone:'phone', fSellerTaxId:'taxId', fSellerExtra:'extra', fSellerAddress:'address' };
+  Object.keys(sellerFieldMap).forEach(function(id){
+    on(id, 'input', function(e){
+      state.seller[sellerFieldMap[id]] = e.target.value;
+      renderPreview(); scheduleSave(); scheduleSaveSeller();
+    });
+  });
+
+  on('fSellerLogo','change', function(e){
+    var file = e.target.files && e.target.files[0];
+    if(!file) return;
+    var img = new Image();
+    var reader = new FileReader();
+    reader.onload = function(){
+      img.onload = function(){
+        var maxW = 240;
+        var scale = Math.min(1, maxW / img.width);
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        state.seller.logoDataUrl = canvas.toDataURL('image/png');
+        $('logoStatus').textContent = '已上傳 LOGO';
+        renderPreview(); scheduleSave(); scheduleSaveSeller();
+        toast('LOGO 已更新');
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  $('btnClearLogo').addEventListener('click', function(){
+    state.seller.logoDataUrl = '';
+    $('fSellerLogo').value = '';
+    $('logoStatus').textContent = '尚未上傳';
+    renderPreview(); scheduleSave(); scheduleSaveSeller();
+    toast('已移除 LOGO');
+  });
+
+  var custFieldMap = { fCustName:'name', fCustPhone:'phone', fCustAddress:'address' };
+  Object.keys(custFieldMap).forEach(function(id){
+    on(id, 'input', function(e){
+      state.customer[custFieldMap[id]] = e.target.value;
+      renderPreview(); scheduleSave();
+    });
+  });
+  on('fSiteAddress','input', function(e){ state.site.address = e.target.value; renderPreview(); scheduleSave(); });
+  on('fSiteNote','input', function(e){ state.site.note = e.target.value; renderPreview(); scheduleSave(); });
+
+  on('fBlankRows','input', function(e){
+    state.extraBlankRows = Math.max(0, Number(e.target.value) || 0);
+    renderPreview(); scheduleSave();
+  });
+
+  var discountFieldset = document.getElementById('discountTypeGroup').closest('fieldset');
+  document.querySelectorAll('#discountTypeGroup input[type="radio"]').forEach(function(r){
+    r.addEventListener('change', function(){
+      state.discount.type = r.value;
+      discountFieldset.dataset.discountType = r.value;
+      renderPreview(); renderSummary(); scheduleSave();
+    });
+  });
+  on('fDiscountAmount','input', function(e){ state.discount.amount = e.target.value === '' ? 0 : Number(e.target.value); renderPreview(); renderSummary(); scheduleSave(); });
+  on('fDiscountPercent','input', function(e){ state.discount.percent = e.target.value === '' ? 0 : Number(e.target.value); renderPreview(); renderSummary(); scheduleSave(); });
+
+  var taxFieldset = document.getElementById('taxModeGroup').closest('fieldset');
+  document.querySelectorAll('#taxModeGroup input[type="radio"]').forEach(function(r){
+    r.addEventListener('change', function(){
+      state.tax.mode = r.value;
+      taxFieldset.dataset.taxMode = r.value;
+      renderPreview(); renderSummary(); scheduleSave();
+    });
+  });
+  on('fTaxCustomRate','input', function(e){ state.tax.customRate = e.target.value === '' ? 0 : Number(e.target.value); renderPreview(); renderSummary(); scheduleSave(); });
+
+  on('fTermsEnabled','change', function(e){ state.termsEnabled = e.target.checked; renderPreview(); scheduleSave(); });
+  on('fNotes','input', function(e){ state.notes = e.target.value; renderPreview(); scheduleSave(); });
+  on('fSignatureEnabled','change', function(e){ state.signatureEnabled = e.target.checked; renderPreview(); scheduleSave(); });
+
+  on('fBankEnabled','change', function(e){ state.bank.enabled = e.target.checked; renderPreview(); scheduleSave(); });
+  var bankFieldMap = { fBankName:'bankName', fBankBranch:'branch', fBankAccount:'account', fBankHolder:'holder' };
+  Object.keys(bankFieldMap).forEach(function(id){
+    on(id, 'input', function(e){
+      state.bank[bankFieldMap[id]] = e.target.value;
+      renderPreview(); scheduleSave();
+    });
+  });
+
+  $('btnAddItem').addEventListener('click', function(){
+    state.items.push(createEmptyItem());
+    renderItemsForm(); renderPreview(); renderSummary(); scheduleSave();
+  });
+
+  $('btnAddTerm').addEventListener('click', function(){
+    var val = $('fNewTerm').value.trim();
+    if(!val) return;
+    state.terms.push(val);
+    $('fNewTerm').value = '';
+    renderTermsForm(); renderPreview(); scheduleSave();
+  });
+  $('fNewTerm').addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); $('btnAddTerm').click(); }
+  });
+  $('btnLoadPresetTerms').addEventListener('click', function(){
+    var existing = state.terms.slice();
+    DEFAULT_TERMS.forEach(function(t){
+      if(existing.indexOf(t) === -1) state.terms.push(t);
+    });
+    renderTermsForm(); renderPreview(); scheduleSave();
+    toast('已載入常用條款');
+  });
+}
+
+/* ============================================================
+   Theme toggle
+   ============================================================ */
+function applyTheme(theme){
+  document.body.dataset.theme = theme;
+  try{ localStorage.setItem('rpqg_theme', theme); }catch(e){}
+}
+function bindTheme(){
+  var saved = 'light';
+  try{ saved = localStorage.getItem('rpqg_theme') || 'light'; }catch(e){}
+  applyTheme(saved);
+  $('btnTheme').addEventListener('click', function(){
+    var next = document.body.dataset.theme === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+  });
+}
+
+/* ============================================================
+   Draft dialog
+   ============================================================ */
+function renderDraftsList(){
+  var drafts = getDrafts();
+  var ids = Object.keys(drafts).sort(function(a,b){ return (drafts[b].savedAt||0) - (drafts[a].savedAt||0); });
+  var wrap = $('draftsListWrap');
+  if(ids.length === 0){
+    wrap.innerHTML = '<div class="drafts-empty">尚無已儲存的草稿</div>';
+    return;
+  }
+  wrap.innerHTML = '';
+  ids.forEach(function(id){
+    var d = drafts[id];
+    var row = document.createElement('div');
+    row.className = 'draft-item';
+    row.dataset.id = id;
+    var when = d.savedAt ? new Date(d.savedAt).toLocaleString('zh-TW', { hour12:false }) : '';
+    row.innerHTML =
+      '<div class="meta"><div class="name">' + esc(d.name || '未命名草稿') + '</div><div class="time">' + esc(when) + '</div></div>' +
+      '<button type="button" class="btn sm" data-act="load">載入</button>' +
+      '<button type="button" class="btn sm ghost" data-act="rename">重新命名</button>' +
+      '<button type="button" class="btn sm danger" data-act="del">刪除</button>';
+    wrap.appendChild(row);
+  });
+}
+
+function bindDraftDialog(){
+  var dialog = $('draftDialog');
+  $('btnDrafts').addEventListener('click', function(){
+    $('fDraftName').value = (state.customer.name ? state.customer.name + ' ' : '') + fmtDateSlash(state.quoteDate);
+    renderDraftsList();
+    dialog.showModal();
+  });
+  $('btnCloseDraftDialog').addEventListener('click', function(){ dialog.close(); });
+  dialog.addEventListener('click', function(e){ if(e.target === dialog) dialog.close(); });
+
+  $('btnSaveDraft').addEventListener('click', function(){
+    var name = $('fDraftName').value.trim() || '未命名草稿';
+    var drafts = getDrafts();
+    var id = uid();
+    drafts[id] = { name: name, savedAt: Date.now(), data: JSON.parse(JSON.stringify(state)) };
+    setDrafts(drafts);
+    renderDraftsList();
+    toast('草稿已儲存：' + name, 'success');
+  });
+
+  $('draftsListWrap').addEventListener('click', function(e){
+    var btn = e.target.closest('button[data-act]');
+    if(!btn) return;
+    var row = btn.closest('.draft-item');
+    var id = row.dataset.id;
+    var drafts = getDrafts();
+    var act = btn.dataset.act;
+
+    if(act === 'load'){
+      if(!drafts[id]) return;
+      state = normalizeState(drafts[id].data);
+      renderAll();
+      scheduleSave();
+      dialog.close();
+      toast('已載入草稿：' + (drafts[id].name || ''), 'success');
+    } else if(act === 'del'){
+      if(btn.dataset.confirming === '1'){
+        delete drafts[id];
+        setDrafts(drafts);
+        renderDraftsList();
+        toast('草稿已刪除');
+      } else {
+        btn.dataset.confirming = '1';
+        var original = btn.textContent;
+        btn.textContent = '確定刪除？';
+        setTimeout(function(){
+          if(btn.isConnected){ btn.dataset.confirming = '0'; btn.textContent = original; }
+        }, 3000);
+      }
+    } else if(act === 'rename'){
+      var metaEl = row.querySelector('.meta');
+      var nameEl = row.querySelector('.name');
+      var current = drafts[id] ? drafts[id].name : '';
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'name-edit';
+      input.value = current;
+      nameEl.replaceWith(input);
+      input.focus();
+      input.select();
+      function commit(){
+        var newName = input.value.trim() || current;
+        if(drafts[id]){ drafts[id].name = newName; setDrafts(drafts); }
+        renderDraftsList();
+      }
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', function(ev){
+        if(ev.key === 'Enter'){ ev.preventDefault(); input.blur(); }
+        if(ev.key === 'Escape'){ ev.preventDefault(); renderDraftsList(); }
+      });
+    }
+  });
+}
+
+/* ============================================================
+   Common items dialog
+   ============================================================ */
+function renderCommonItemsDialog(){
+  var wrap = $('commonItemsList');
+  wrap.innerHTML = '';
+  COMMON_ITEMS.forEach(function(ci, idx){
+    var row = document.createElement('div');
+    row.className = 'common-item';
+    row.dataset.idx = idx;
+    row.innerHTML =
+      '<span class="tag">' + esc(ci.category) + '</span>' +
+      '<div class="info"><div class="nm">' + esc(ci.name) + '</div><div class="un">單位：' + esc(ci.unit) + (ci.desc ? '　說明：' + esc(ci.desc) : '') + '</div></div>' +
+      '<button type="button" class="btn sm primary" data-act="add">' + ICON_PLUS + ' 加入</button>';
+    wrap.appendChild(row);
+  });
+}
+function bindCommonItemsDialog(){
+  var dialog = $('commonItemsDialog');
+  $('btnCommonItems').addEventListener('click', function(){
+    renderCommonItemsDialog();
+    dialog.showModal();
+  });
+  $('btnCloseCommonDialog').addEventListener('click', function(){ dialog.close(); });
+  dialog.addEventListener('click', function(e){ if(e.target === dialog) dialog.close(); });
+
+  $('commonItemsList').addEventListener('click', function(e){
+    var btn = e.target.closest('button[data-act="add"]');
+    if(!btn) return;
+    var row = btn.closest('.common-item');
+    var idx = Number(row.dataset.idx);
+    var ci = COMMON_ITEMS[idx];
+    var newItem = createEmptyItem();
+    newItem.category = ci.category;
+    newItem.name = ci.name;
+    newItem.desc = ci.desc;
+    newItem.unit = ci.unit;
+    newItem.qty = 1;
+    newItem.price = 0;
+    state.items.push(newItem);
+    renderItemsForm(); renderPreview(); renderSummary(); scheduleSave();
+    btn.innerHTML = ICON_CHECK + ' 已加入';
+    btn.disabled = true;
+    setTimeout(function(){ btn.innerHTML = ICON_PLUS + ' 加入'; btn.disabled = false; }, 1200);
+  });
+}
+
+/* ============================================================
+   Export / Import JSON
+   ============================================================ */
+function exportJSON(){
+  var payload = { app:'repair-quote-generator', version:1, exportedAt:new Date().toISOString(), state:state };
+  var blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  var safeName = (state.customer.name || '報價單').replace(/[\\/:*?"<>|]/g, '_');
+  a.href = url;
+  a.download = '修繕報價單_' + safeName + '_' + (state.quoteNo || 'draft') + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  toast('JSON 已匯出', 'success');
+}
+
+function bindImportExport(){
+  $('btnExport').addEventListener('click', exportJSON);
+  $('btnImport').addEventListener('click', function(){ $('importFile').click(); });
+  $('importFile').addEventListener('change', function(e){
+    var file = e.target.files && e.target.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      try{
+        var parsed = JSON.parse(reader.result);
+        var data = (parsed && typeof parsed === 'object' && parsed.state) ? parsed.state : parsed;
+        if(!data || typeof data !== 'object' || !Array.isArray(data.items)) throw new Error('bad shape');
+        state = normalizeState(data);
+        renderAll();
+        scheduleSave();
+        toast('JSON 已匯入成功', 'success');
+      }catch(err){
+        toast('匯入失敗：檔案格式不正確', 'error');
+      }finally{
+        e.target.value = '';
+      }
+    };
+    reader.readAsText(file, 'utf-8');
+  });
+}
+
+/* ============================================================
+   Print
+   ============================================================ */
+function bindPrint(){
+  $('btnPrint').addEventListener('click', function(){ window.print(); });
+}
+
+/* ============================================================
+   Boot
+   ============================================================ */
+function buildDatalists(){
+  var catList = document.createElement('datalist');
+  catList.id = 'catlist';
+  catList.innerHTML = CATEGORY_OPTIONS.map(function(c){ return '<option value="'+esc(c)+'">'; }).join('');
+  document.body.appendChild(catList);
+
+  var unitList = document.createElement('datalist');
+  unitList.id = 'unitlist';
+  unitList.innerHTML = UNIT_OPTIONS.map(function(u){ return '<option value="'+esc(u)+'">'; }).join('');
+  document.body.appendChild(unitList);
+}
+
+function boot(){
+  buildDatalists();
+
+  var savedLast = null;
+  try{ savedLast = localStorage.getItem(LS_KEYS.last); }catch(e){}
+
+  if(savedLast){
+    try{ state = normalizeState(JSON.parse(savedLast)); }
+    catch(e){ state = createDefaultState(); }
+  } else {
+    state = createDefaultState();
+    try{
+      var savedSeller = localStorage.getItem(LS_KEYS.seller);
+      if(savedSeller){
+        var sellerData = JSON.parse(savedSeller);
+        if(sellerData && typeof sellerData === 'object') state.seller = Object.assign({}, state.seller, sellerData);
+      }
+    }catch(e){}
+  }
+
+  bindTheme();
+  renderAll();
+  bindStaticFields();
+  bindItemsListEvents();
+  bindTermsEvents();
+  bindDraftDialog();
+  bindCommonItemsDialog();
+  bindImportExport();
+  bindPrint();
+
+  if(window.ResizeObserver){
+    new ResizeObserver(function(){ scheduleApplyScale(); }).observe($('previewViewport'));
+  }
+  window.addEventListener('resize', function(){ scheduleApplyScale(); });
+  window.addEventListener('beforeprint', function(){ scheduleApplyScale(); });
+}
+
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}
+
+})();
+</script>
+</body>
+</html>
