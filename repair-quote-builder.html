@@ -712,6 +712,22 @@ table.items-table tbody tr.blank td{color:transparent; padding:9px 6px;}
 }
 
 /* ============================================================
+   View mode (?view=<token> — 唯讀 A4 分享頁)
+   ============================================================ */
+body.view-mode .form-pane{display:none;}
+body.view-mode .preview-pane{position:static; flex:1 1 auto; width:100%; max-width:900px; margin:0 auto;}
+body.view-mode #btnDrafts,
+body.view-mode #btnExport,
+body.view-mode #btnImport{display:none;}
+.view-error-box{
+  max-width:480px; margin:80px auto; text-align:center;
+  padding:32px 28px; background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-lg); box-shadow:var(--shadow-1);
+}
+.view-error-box h2{font-size:16px; margin-bottom:8px;}
+.view-error-box p{font-size:12.5px; color:var(--ink-faint);}
+
+/* ============================================================
    Misc
    ============================================================ */
 .visually-hidden{
@@ -1042,7 +1058,23 @@ footer.app-footer{
       </div>
     </div>
 
-    <footer class="app-footer">所有資料僅儲存於本機瀏覽器，不會上傳到任何伺服器。</footer>
+    <!-- 建立報價單（Ragic） -->
+    <div class="card" id="rqCreateCard">
+      <div class="card-head">
+        <div class="card-badge">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3v6M10 9l3.5 2M10 9l-3.5 2"/><circle cx="10" cy="10" r="7.2"/></svg>
+        </div>
+        <h2>建立報價單</h2>
+        <span class="hint">存進 Ragic，產生可分享連結</span>
+      </div>
+      <div class="card-body">
+        <button type="button" class="btn primary" id="btnRqCreate" style="width:100%;">建立報價單</button>
+        <div id="rqCreateError" style="display:none;margin-top:10px;font-size:12.5px;color:var(--danger);"></div>
+        <div id="rqCreateResult" style="display:none;margin-top:14px;"></div>
+      </div>
+    </div>
+
+    <footer class="app-footer">所有資料僅儲存於本機瀏覽器，不會上傳到任何伺服器；按下「建立報價單」後才會把資料送到 Ragic。</footer>
   </section>
 
   <!-- ============================================================
@@ -1111,6 +1143,9 @@ footer.app-footer{
    ============================================================ */
 var LS_KEYS = { last:'rpqg_last_v1', drafts:'rpqg_drafts_v1', seller:'rpqg_seller_v1' };
 var A4_NATURAL_WIDTH = 794;
+/* Worker base URL — 照既有 ragic 前端頁面慣例（見 repair-request.html），rqCreate/rqGet 兩個
+   action 由 wuohome-ragic-proxy 提供，讀寫 Ragic「修繕報價單」新表（maintenance-management/15）。*/
+var API_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
 
 var CATEGORY_OPTIONS = ['水電','泥作','木作','油漆','防水','門窗五金','清潔','其他'];
 var UNIT_OPTIONS = ['式','坪','才','組','次','趟','片','台','時','支','面'];
@@ -2112,6 +2147,147 @@ function bindPrint(){
 }
 
 /* ============================================================
+   建立報價單（Ragic rqCreate）
+   ============================================================ */
+function bindRqCreate(){
+  $('btnRqCreate').addEventListener('click', function(){
+    var btn = $('btnRqCreate');
+    var errEl = $('rqCreateError');
+    var resEl = $('rqCreateResult');
+    errEl.style.display = 'none';
+    resEl.style.display = 'none';
+
+    if(!state.customer.name || !state.customer.name.trim()){
+      errEl.textContent = '請先填寫客戶名稱。';
+      errEl.style.display = 'block';
+      toast('請先填寫客戶名稱', 'error');
+      return;
+    }
+    if(!state.items.length){
+      errEl.textContent = '請至少新增一項修繕項目。';
+      errEl.style.display = 'block';
+      toast('請至少新增一項修繕項目', 'error');
+      return;
+    }
+
+    /* 送出前跑一次既有的金額計算，確保存進 Ragic 的數字與畫面顯示一致（快照原則） */
+    var totals = computeTotals(state);
+
+    /* 分享頁不顯示上傳 LOGO（也避免 base64 把 snapshot 撐大），故從快照剔除 */
+    var snapshotState = JSON.parse(JSON.stringify(state));
+    if(snapshotState.seller) snapshotState.seller.logoDataUrl = '';
+
+    var discountValue = 0;
+    if(state.discount.type === 'amount') discountValue = state.discount.amount;
+    else if(state.discount.type === 'percent') discountValue = state.discount.percent;
+
+    var payload = {
+      customerName: state.customer.name,
+      customerPhone: state.customer.phone,
+      quoteDate: fmtDateSlash(state.quoteDate),
+      validUntilDate: addDays(state.quoteDate, state.validDays),
+      issuer: state.seller.contact,
+      siteAddress: state.site.address,
+      siteNote: state.site.note,
+      sellerName: state.seller.name,
+      sellerPhone: state.seller.phone,
+      discountType: state.discount.type,
+      discountValue: discountValue,
+      taxMode: state.tax.mode,
+      customTaxRate: state.tax.customRate,
+      subtotal: Math.round(totals.subtotal),
+      discountAmount: Math.round(totals.discountAmount),
+      taxAmount: Math.round(totals.taxAmount),
+      total: Math.round(totals.total),
+      notes: state.notes,
+      items: state.items.map(function(it){
+        return { category: it.category, name: it.name, desc: it.desc, qty: it.qty, unit: it.unit, price: it.price, subtotal: computeItemSubtotal(it) };
+      }),
+      snapshot: JSON.stringify(snapshotState)
+    };
+
+    btn.disabled = true;
+    var originalLabel = btn.textContent;
+    btn.textContent = '建立中…';
+
+    fetch(API_BASE + '/rqCreate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function(res){
+      return res.json().catch(function(){ return null; }).then(function(data){
+        if(!res.ok || !data || !data.ok) {
+          var msg = (data && data.error) ? data.error : ('建立失敗（' + res.status + '）');
+          throw new Error(msg);
+        }
+        return data;
+      });
+    }).then(function(data){
+      var link = location.origin + location.pathname + '?view=' + data.token;
+      resEl.innerHTML =
+        '<div style="padding:14px;background:var(--success-soft);border:1px solid var(--success);border-radius:var(--radius-sm);">' +
+          '<div style="font-weight:700;color:var(--success);margin-bottom:8px;">已建立報價單：' + esc(data.quoteNo) + '</div>' +
+          '<div class="input-row">' +
+            '<input type="text" readonly value="' + esc(link) + '" id="rqShareLinkInput">' +
+            '<button type="button" class="btn sm" id="btnCopyRqLink">複製連結</button>' +
+          '</div>' +
+        '</div>';
+      resEl.style.display = 'block';
+      $('btnCopyRqLink').addEventListener('click', function(){
+        var input = $('rqShareLinkInput');
+        input.select();
+        try{ navigator.clipboard.writeText(input.value); }
+        catch(e){ try{ document.execCommand('copy'); }catch(e2){} }
+        toast('連結已複製', 'success');
+      });
+      toast('報價單已建立：' + data.quoteNo, 'success');
+    }).catch(function(err){
+      errEl.textContent = '建立失敗：' + (err && err.message ? err.message : '未知錯誤，請稍後再試');
+      errEl.style.display = 'block';
+      toast('報價單建立失敗', 'error');
+    }).finally(function(){
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    });
+  });
+}
+
+/* ============================================================
+   檢視模式（?view=<token>，唯讀 A4 分享頁，讀 rqGet）
+   ============================================================ */
+function renderViewError(){
+  var workspace = document.querySelector('.workspace');
+  workspace.innerHTML =
+    '<div class="view-error-box">' +
+      '<h2>連結無效或已失效</h2>' +
+      '<p>請向開單人確認報價單連結是否正確，或請對方重新產生分享連結。</p>' +
+    '</div>';
+}
+
+function bootViewMode(token){
+  document.body.classList.add('view-mode');
+  bindTheme();
+  fetch(API_BASE + '/rqGet?token=' + encodeURIComponent(token))
+    .then(function(res){
+      if(!res.ok) throw new Error('not_found');
+      return res.json();
+    })
+    .then(function(data){
+      if(!data || !data.snapshot) throw new Error('not_found');
+      state = normalizeState(data.snapshot);
+      if(data.quoteNo) state.quoteNo = data.quoteNo;
+      renderPreview();
+      bindPrint();
+      if(window.ResizeObserver){
+        new ResizeObserver(function(){ scheduleApplyScale(); }).observe($('previewViewport'));
+      }
+      window.addEventListener('resize', function(){ scheduleApplyScale(); });
+      window.addEventListener('beforeprint', function(){ scheduleApplyScale(); });
+    })
+    .catch(function(){ renderViewError(); });
+}
+
+/* ============================================================
    Boot
    ============================================================ */
 function buildDatalists(){
@@ -2127,6 +2303,9 @@ function buildDatalists(){
 }
 
 function boot(){
+  var viewToken = new URL(location.href).searchParams.get('view');
+  if(viewToken){ bootViewMode(viewToken); return; }
+
   buildDatalists();
 
   var savedLast = null;
@@ -2155,6 +2334,7 @@ function boot(){
   bindCommonItemsDialog();
   bindImportExport();
   bindPrint();
+  bindRqCreate();
 
   if(window.ResizeObserver){
     new ResizeObserver(function(){ scheduleApplyScale(); }).observe($('previewViewport'));
