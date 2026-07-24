@@ -166,6 +166,18 @@
             </div>
             <div id="dataIssueList" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
           </section>
+
+          <!-- 模組：修繕報價單（獨立檔案掛載，見 窩的家工程平台_前端標準 §模組檔案策略，2026-07-24） -->
+          <section id="view-quote-builder" class="module-view space-y-3" hidden>
+            <div>
+              <p class="text-xs font-bold tracking-wide text-inkmuted">內部工具</p>
+              <h2 class="text-xl font-black text-ink sm:text-2xl">修繕報價單</h2>
+              <p class="mt-1 text-sm text-inkmuted">獨立模組檔案（repair-quote-builder.html），填寫項目後金額即時計算。</p>
+            </div>
+            <div class="overflow-hidden rounded-2xl border border-line bg-white">
+              <iframe src="repair-quote-builder.html" title="修繕報價單產生器" class="block h-[calc(100vh-260px)] min-h-[480px] w-full border-0 lg:h-[calc(100vh-180px)]"></iframe>
+            </div>
+          </section>
         </main>
 
         <!-- 手機底部 tab bar -->
@@ -1420,13 +1432,14 @@ function icon(name) {
   return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">${paths[name] || ''}</svg>`;
 }
 
-const VALID_VIEWS = ['dashboard', 'cases', 'gantt', 'pending'];
-const VIEW_TITLES = { dashboard: '儀表板', cases: '工程案件', gantt: '甘特圖', pending: '資料待補' };
+const VALID_VIEWS = ['dashboard', 'cases', 'gantt', 'pending', 'quote-builder'];
+const VIEW_TITLES = { dashboard: '儀表板', cases: '工程案件', gantt: '甘特圖', pending: '資料待補', 'quote-builder': '修繕報價單' };
 const NAV_ITEMS = [
   { id: 'dashboard', label: '儀表板', icon: 'dashboard' },
   { id: 'cases', label: '工程案件', icon: 'cases' },
   { id: 'gantt', label: '甘特圖', icon: 'gantt' },
   { id: 'pending', label: '資料待補', icon: 'pending', badge: true },
+  { id: 'quote-builder', label: '修繕報價單', icon: 'quote' },
 ];
 const TAB_ITEMS = [
   { id: 'dashboard', label: '儀表板', icon: 'dashboard' },
@@ -1531,6 +1544,13 @@ function openMoreSheet() {
   pendingBtn.append(b2);
   pendingBtn.addEventListener('click', () => { closeMoreSheet(); location.hash = 'pending'; });
   list.append(pendingBtn);
+  // 修繕報價單：底部 tab bar 4 格已滿，比照「資料待補」既有 pattern 收進「更多」抽屜（真連結，非規劃中占位）。
+  const quoteBuilderBtn = make('button', 'flex w-full items-center gap-2.5 rounded-xl px-3 py-3 text-sm font-bold text-ink hover:bg-paper');
+  quoteBuilderBtn.type = 'button';
+  const quoteIcon = make('span', 'h-5 w-5'); quoteIcon.innerHTML = icon('quote');
+  quoteBuilderBtn.append(quoteIcon, make('span', '', '修繕報價單'));
+  quoteBuilderBtn.addEventListener('click', () => { closeMoreSheet(); location.hash = 'quote-builder'; });
+  list.append(quoteBuilderBtn);
   PLANNED_ITEMS.forEach((item) => {
     const btn = make('button', 'flex w-full items-center gap-2.5 rounded-xl px-3 py-3 text-sm font-bold text-inkfaint hover:bg-paper');
     btn.type = 'button';
