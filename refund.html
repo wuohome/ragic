@@ -303,9 +303,11 @@
 
   const $ = (id) => document.getElementById(id);
 
-  // Parse ?code= from URL
+  // Parse ?token= from URL (2026-07-24 token-only IDOR fix — legacy ?code=/?id= were
+  // already dead links before this change: the link-generation formula and this page's
+  // old lookup used different Ragic fields and never matched, see Worker v38 banner)
   const urlParams = new URLSearchParams(window.location.search);
-  const codeParam = urlParams.get('code') || urlParams.get('id') || '';
+  const tokenParam = urlParams.get('token') || '';
 
   function formatCurrency(val) {
     if (!val) return '$ 0';
@@ -376,14 +378,14 @@
   }
 
   async function loadRecord() {
-    if (!codeParam) {
-      $('loader-text').innerHTML = '缺少退款單編號（?code=...）<br>請聯繫業務重新傳送連結。';
+    if (!tokenParam) {
+      $('loader-text').innerHTML = '缺少退款連結授權碼（?token=...）<br>請聯繫業務重新傳送連結。';
       return;
     }
     $('loader-text').innerText = '讀取退款資訊中...';
     try {
       const res = await fetch(
-        `${WORKER_BASE_URL}/getRefund?code=${encodeURIComponent(codeParam)}`
+        `${WORKER_BASE_URL}/getRefund?token=${encodeURIComponent(tokenParam)}`
       );
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -473,6 +475,7 @@
 
     const fd = new FormData();
     fd.append('rid', numericRid);
+    fd.append('token', tokenParam);
     fd.append(F.reason,      reason);
     fd.append(F.method,      method);
     fd.append(F.signature,   sigData);
@@ -529,7 +532,7 @@
     await new Promise(r => setTimeout(r, 3000));
     try {
       const res = await fetch(
-        `${WORKER_BASE_URL}/verifyRefund?code=${encodeURIComponent(codeParam)}`
+        `${WORKER_BASE_URL}/verifyRefund?token=${encodeURIComponent(tokenParam)}`
       );
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
