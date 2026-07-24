@@ -158,6 +158,7 @@ function parseApiEntry(rec) {
     caseName: rec.caseName || '',
     repairReason: rec.repairReason || '',
     plannedSchedule: rec.plannedSchedule || '',
+    synced: true, // 這筆是從 Ragic 讀回來的，定義上已經真的送出過
   };
 }
 
@@ -179,13 +180,24 @@ async function loadMineFromApi(dateParam) {
 // 用 worklogListMine 回傳的紀錄覆寫本機對應日期的狀態，讓「那一天的紀錄」在任何裝置/清過快取
 // 後打開都以 Ragic 為準，不會停留在舊的本機快取。dateStr 由呼叫端指定要覆寫哪一天（今天或明天），
 // 不再寫死 todayStr()，才能同時支援「今天／明天」兩格各自獨立同步。
+//
+// 2026-07-24 資料遺失事故修復：原本這裡是「Ragic 回什麼、本機就整包被換成什麼」，Ragic 回空
+// （使用者從未成功送出，或送出失敗但沒被發現）就會把畫面上已經打好但還沒送出的草稿一併清空、
+// 使用者完全無法察覺（陳勁豪／Joan 2026-07-24 首日使用即中招，內容從未寫入 Ragic 但畫面看起來
+// 像存過）。治本：Ragic 有的小時格＝已送出真相，採用並標記 synced:true；Ragic 沒有、但本機已經
+// 填寫的小時格＝尚未送出的草稿，保留不清除、標記 synced:false，交給 UI 用「尚未送出」徽章／頁面
+// 提示讓使用者自己看得到，而不是被默默吃掉。
 function applyMineData(json, dateStr) {
-  const day = { entries: {}, submitted: false, submittedAt: null };
+  const existing = getDayState(dateStr);
+  const day = { entries: {}, submitted: false, submittedAt: existing.submittedAt || null };
   (json.entries || []).forEach((rec) => {
     if (!WORKLOG_HOURS.includes(rec.hour)) return; // 防禦：未知小時格值不採信
     day.entries[rec.hour] = parseApiEntry(rec);
   });
-  day.submitted = Object.keys(day.entries).length > 0;
+  Object.entries(existing.entries || {}).forEach(([hour, entry]) => {
+    if (!day.entries[hour] && isFilled(entry)) day.entries[hour] = { ...entry, synced: false };
+  });
+  day.submitted = Object.values(day.entries).some((e) => e.synced);
   setDayState(dateStr, day);
 }
 
@@ -305,7 +317,7 @@ function setDayState(dateStr, dayState) {
   all[dateStr] = dayState;
   saveAllState(all);
 }
-function blankEntry() { return { category: '', otherCategoryText: '', caseName: '', repairReason: '', plannedSchedule: '', note: '' }; }
+function blankEntry() { return { category: '', otherCategoryText: '', caseName: '', repairReason: '', plannedSchedule: '', note: '', synced: false }; }
 function ensureEntry(day, label) {
   if (!day.entries[label]) day.entries[label] = blankEntry();
   return day.entries[label];
@@ -346,6 +358,12 @@ function setRole(r) { ROLE = r; localStorage.setItem(ROLE_KEY, r); }
 
 let EXPANDED = new Set();
 let EXPANDED_MEMBER = null;
+
+// 2026-07-24 資料遺失事故修復：送出失敗不能只靠 2.4 秒自動消失的 toast，容易被忽略、
+// 誤以為已經存檔。這裡用一個「不會自動消失」的錯誤狀態，畫在送出按鈕正上方，直到下一次
+// 送出（不論成敗）才清除，逼使用者一定看得到、也知道要按「重試送出」。依日期（今天／明天）
+// 分開記錄，切分頁不會互相蓋掉。
+let submitErrorByDate = {}; // { [dateStr]: { message } }
 
 // ================= Toast =================
 let toastTimer = null;
@@ -553,6 +571,11 @@ function renderHourRow(slot, idx, day) {
     const line = make('p', 'flex flex-wrap items-center gap-1.5');
     const catLabel = entry.category === OTHER_CATEGORY ? (entry.otherCategoryText || '其他') : entry.category;
     line.append(make('span', 'inline-block shrink-0 rounded-full bg-paper px-2 py-0.5 text-xs font-bold text-inkmuted', catLabel));
+    // 2026-07-24 資料遺失事故修復：草稿（本機填過但還沒送出）與已送出（Ragic 確認收到）
+    // 視覺上一律要能一眼分辨，不能讓兩者長得一樣——這是本次事故的根本教訓。
+    line.append(entry.synced
+      ? make('span', 'inline-block shrink-0 rounded-full bg-sagetint px-2 py-0.5 text-xs font-bold text-sage', '已送出')
+      : make('span', 'inline-block shrink-0 rounded-full bg-flagtint px-2 py-0.5 text-xs font-bold text-flagdark', '尚未送出'));
     if (entry.caseName) line.append(make('span', 'truncate text-sm font-bold text-ink', entry.caseName));
     previewCol.append(line);
     if (entry.repairReason) previewCol.append(make('p', 'mt-0.5 truncate text-xs text-inkmuted', `報修原因：${entry.repairReason}`));
@@ -736,11 +759,23 @@ function renderSubmitBar(day) {
   // 中間解，因此改採 spec 提供的第三個方向：拿掉全域浮動，一律走一般文件流放在小時列表最下方，
   // 使用者捲到底才看到，但保證 100% 不會蓋到任何欄位或按鈕（elementFromPoint 掃描全收合／展開
   // 首列／展開中間列／展開末列共 4 種情境驗證過，均無遮擋）。
+  const unsynced = hourSlots().filter((s) => { const e = getEntry(day, s.label); return isFilled(e) && !e.synced; }).length;
+  const hasError = !!submitErrorByDate[selectedDateStr()];
   const bar = make('div', '-mx-4 mt-2 border-t border-line bg-white px-4 py-3 shadow-[0_-4px_12px_rgba(63,82,98,0.16)] lg:mx-0 lg:rounded-2xl lg:border lg:shadow-sm');
+  // 2026-07-24 資料遺失事故修復：送出失敗不能只靠 toast，這裡放一個不會自動消失的紅色提示條，
+  // 貼在按鈕正上方，直到下一次送出（不論成敗）才清掉。
+  if (hasError) {
+    const errBox = make('div', 'mb-2 rounded-lg border-2 border-red-300 bg-red-50 px-3 py-2');
+    errBox.append(make('p', 'text-xs font-black text-red-700', '上次送出失敗，內容還在草稿裡，請確認後按「重試送出」'));
+    errBox.append(make('p', 'mt-0.5 text-xs text-red-600', submitErrorByDate[selectedDateStr()].message));
+    bar.append(errBox);
+  }
   const row = make('div', 'flex items-center justify-between gap-3');
   const left = make('div', 'min-w-0');
   left.append(make('p', 'tnum text-xs font-bold text-inkmuted', `已填 ${filled} ／ ${total} 小時`));
-  const btn = make('button', 'tap44 shrink-0 rounded-xl bg-coral px-5 text-sm font-black text-white transition-transform hover:bg-coraldark active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', day.submitted ? '重新送出' : (SELECTED_DATE === 'tomorrow' ? '送出明日紀錄' : '送出今日紀錄'));
+  if (unsynced > 0) left.append(make('p', 'tnum mt-0.5 text-xs font-bold text-flagdark', `⚠ 還有 ${unsynced} 格尚未送出`));
+  const btnLabel = hasError ? '重試送出' : (day.submitted ? '重新送出' : (SELECTED_DATE === 'tomorrow' ? '送出明日紀錄' : '送出今日紀錄'));
+  const btn = make('button', 'tap44 shrink-0 rounded-xl bg-coral px-5 text-sm font-black text-white transition-transform hover:bg-coraldark active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', btnLabel);
   btn.type = 'button';
   btn.addEventListener('click', () => handleSubmit(btn));
   row.append(left, btn);
@@ -754,7 +789,10 @@ async function handleSubmit(btn) {
   const dateStr = selectedDateStr();
   const isTomorrow = SELECTED_DATE === 'tomorrow';
   const day = getDayState(dateStr);
-  const restoreBtn = () => { btn.disabled = false; btn.textContent = day.submitted ? '重新送出' : (isTomorrow ? '送出明日紀錄' : '送出今日紀錄'); };
+  const restoreBtn = () => {
+    btn.disabled = false;
+    btn.textContent = submitErrorByDate[dateStr] ? '重試送出' : (day.submitted ? '重新送出' : (isTomorrow ? '送出明日紀錄' : '送出今日紀錄'));
+  };
 
   if (!API_MODE) {
     // 開發模擬模式（URL 沒有 ?token=）：沿用原本本機模擬送出，方便除錯 UI，不呼叫真實 API
@@ -791,6 +829,9 @@ async function handleSubmit(btn) {
     return;
   }
 
+  // 每次送出前先清掉上一次的錯誤狀態，這次結果會重新決定要不要顯示，避免殘留舊訊息誤導。
+  delete submitErrorByDate[dateStr];
+
   try {
     const res = await fetch(`${WORKER_BASE}/worklogCreate?token=${encodeURIComponent(API_TOKEN)}`, {
       method: 'POST',
@@ -798,12 +839,28 @@ async function handleSubmit(btn) {
       body: JSON.stringify({ entries, date: dateStr }),
     });
     const json = await res.json().catch(() => null);
+    const results = (json && Array.isArray(json.results)) ? json.results : null;
+
+    // 2026-07-24 資料遺失事故修復：不論整批是否全部成功，只要某一小時回報成功就先標記
+    // synced:true——原本的寫法是「非全部成功就整批當失敗、local 完全不更新」，會讓已經真的
+    // 寫進 Ragic 的那幾格，畫面上還是顯示「尚未送出」，反而製造新的誤導。
+    if (results) {
+      results.forEach((r) => {
+        const e = getEntry(day, r.hour);
+        if (e && r.ok) e.synced = true;
+      });
+      setDayState(dateStr, day);
+    }
+
     if (!res.ok || !json || json.ok !== true) {
-      const failed = (json && Array.isArray(json.results)) ? json.results.filter((r) => !r.ok) : [];
-      showToast(failed.length > 0
+      const failed = results ? results.filter((r) => !r.ok) : [];
+      const message = failed.length > 0
         ? `送出失敗：${failed.map((f) => `${f.hour}(${f.error})`).join('、')}`
-        : (json && json.error) ? `送出失敗：${json.error}` : '送出失敗，請稍後再試或截圖回報');
+        : (json && json.error) ? `送出失敗：${json.error}` : '送出失敗，請稍後再試或截圖回報';
+      submitErrorByDate[dateStr] = { message };
+      showToast(message);
       restoreBtn();
+      renderWorklogView();
       return;
     }
     day.submitted = true;
@@ -812,8 +869,10 @@ async function handleSubmit(btn) {
     location.hash = 'confirm';
     showToast(isTomorrow ? '已排定明天的工作日誌（已寫入 Ragic）' : '已送出今日工作日誌（已寫入 Ragic）');
   } catch (err) {
-    showToast('連線失敗，請檢查網路後重試');
+    submitErrorByDate[dateStr] = { message: '連線失敗，請檢查網路後重試（內容仍保留在草稿中，未遺失）' };
+    showToast(submitErrorByDate[dateStr].message);
     restoreBtn();
+    renderWorklogView();
   }
 }
 
@@ -850,6 +909,14 @@ function renderWorklogView() {
     : `${selectedDateDisplay()}・早上 10 點前先排今天的行程，下班前回來補實際紀錄就好，不用整天一直開表單。`));
   root.append(head);
   root.append(dateToggleNode());
+
+  // 2026-07-24 資料遺失事故修復：草稿提示要放在頁面最上面、不用捲動就看得到——事故當天送出
+  // 按鈕在文件最下面，使用者填完就以為結束，這裡在最顯眼的位置提前把話講清楚。
+  const draftCount = hourSlots().filter((s) => { const e = getEntry(day, s.label); return isFilled(e) && !e.synced; }).length;
+  if (draftCount > 0) {
+    root.append(make('div', 'mb-4 rounded-xl border-2 border-flag/50 bg-flagtint px-4 py-2.5 text-sm font-black text-flagdark',
+      `⚠ 你有 ${draftCount} 格已經填寫但還沒送出，捲到最下面按「送出」才會真的存進系統`));
+  }
 
   if (day.submitted) root.append(submittedBanner(day));
   root.append(renderQuickCta(day));
@@ -1183,10 +1250,21 @@ function updateChromeLabels() {
   byId('roleToggleBtn').textContent = `身分：${roleLabel(ROLE)} ⇄`;
 }
 
+// 2026-07-24 資料遺失事故修復（第二個根因）：原本兩處直接用 location.pathname 組新網址換
+// hash，pathname 不含 query string，等於把網址列的 ?token=... 整個丟掉。使用者之後只要重新整理
+// 頁面（分頁還原、瀏覽器重開、誤按 F5），就會用「已經沒有 token」的網址重新載入，整個工作階段
+// 悄悄降級成「本機模擬模式」（沒有任何錯誤訊息、頁面看起來完全正常）——填寫、送出、看到「已送出」
+// 的畫面全部都是假的（本機模擬模式的送出只是 setTimeout 假裝成功），從頭到尾沒有打到 Ragic。
+// 這完全符合「使用者說有存檔的感覺、但 Ragic 從未收到」的事故現象，修法：保留 location.search，
+// 只換 hash 那一段。
+function replaceHashKeepingQuery(hash) {
+  history.replaceState(null, '', location.pathname + location.search + hash);
+}
+
 function applyRoute() {
   let view = currentView();
   if (view === 'overview' && ROLE !== 'manager') {
-    history.replaceState(null, '', location.pathname + '#worklog');
+    replaceHashKeepingQuery('#worklog');
     view = 'worklog';
     showToast('此頁僅主管角色可查看，已切回工作日誌');
   }
@@ -1225,7 +1303,7 @@ byId('resetButton').addEventListener('click', () => {
   MOCK_CASES.forEach((c) => { const opt = document.createElement('option'); opt.value = c; dl.append(opt); });
 
   const initHash = (location.hash || '').replace('#', '');
-  if (!VALID_VIEWS.includes(initHash)) history.replaceState(null, '', location.pathname + '#worklog');
+  if (!VALID_VIEWS.includes(initHash)) replaceHashKeepingQuery('#worklog');
 
   const modeLabel = byId('modeLabel');
   if (modeLabel) modeLabel.textContent = API_MODE ? '已連線 API' : '原型・本機模擬（無 token）';
