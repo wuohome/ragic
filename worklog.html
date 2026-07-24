@@ -161,9 +161,12 @@ function parseApiEntry(rec) {
   };
 }
 
-async function loadMineFromApi() {
+// dateParam 選填（2026-07-24 新增，供「今天／明天」切換用）：不帶＝沿用 Worker 預設今天
+// （向下相容既有呼叫），帶了就查那個日期（YYYY-MM-DD，Worker 端會正規化）。
+async function loadMineFromApi(dateParam) {
   try {
-    const res = await fetch(`${WORKER_BASE}/worklogListMine?token=${encodeURIComponent(API_TOKEN)}`);
+    const qs = dateParam ? `&date=${encodeURIComponent(dateParam)}` : '';
+    const res = await fetch(`${WORKER_BASE}/worklogListMine?token=${encodeURIComponent(API_TOKEN)}${qs}`);
     let json = null;
     try { json = await res.json(); } catch { json = null; }
     if (!res.ok || !json || json.ok !== true) return { ok: false, status: res.status };
@@ -173,16 +176,37 @@ async function loadMineFromApi() {
   }
 }
 
-// 用 worklogListMine 回傳的今日紀錄覆寫本機當日狀態，讓「今天的紀錄」在任何裝置/清過快取
-// 後打開都以 Ragic 為準，不會停留在舊的本機快取。
-function applyMineData(json) {
+// 用 worklogListMine 回傳的紀錄覆寫本機對應日期的狀態，讓「那一天的紀錄」在任何裝置/清過快取
+// 後打開都以 Ragic 為準，不會停留在舊的本機快取。dateStr 由呼叫端指定要覆寫哪一天（今天或明天），
+// 不再寫死 todayStr()，才能同時支援「今天／明天」兩格各自獨立同步。
+function applyMineData(json, dateStr) {
   const day = { entries: {}, submitted: false, submittedAt: null };
   (json.entries || []).forEach((rec) => {
     if (!WORKLOG_HOURS.includes(rec.hour)) return; // 防禦：未知小時格值不採信
     day.entries[rec.hour] = parseApiEntry(rec);
   });
   day.submitted = Object.keys(day.entries).length > 0;
-  setDayState(todayStr(), day);
+  setDayState(dateStr, day);
+}
+
+// 記錄「today／tomorrow」這兩個日期身分是否已經跟 API 同步過一次，換頁籤時避免重複打 API
+// （today 在 init() 首次載入時就會標記完成）。dateSwitchReqId 比照既有 overviewReqId 手法防
+// race：使用者快速來回切換時，只採信最後一次切換觸發的回應，較舊的回應即使晚到也直接作廢。
+const LOADED_DATE_KEYS = new Set();
+let dateSwitchReqId = 0;
+async function switchSelectedDate(key) {
+  if (SELECTED_DATE === key) return;
+  const myReqId = ++dateSwitchReqId;
+  SELECTED_DATE = key;
+  EXPANDED = new Set(); // 換日期時收合狀態重置，避免殘留上一個日期的展開列造成混淆
+  if (API_MODE && !LOADED_DATE_KEYS.has(key)) {
+    renderWorklogView(); // 先渲染，不要讓畫面卡在切換前的樣子等網路
+    const result = await loadMineFromApi(key === 'tomorrow' ? selectedDateStr() : null);
+    if (myReqId !== dateSwitchReqId) return; // 使用者已經切到別的日期，這次結果作廢
+    LOADED_DATE_KEYS.add(key);
+    if (result.ok) applyMineData(result.json, selectedDateStr());
+  }
+  renderWorklogView();
 }
 
 function renderFatalError(msg) {
@@ -234,15 +258,21 @@ const pad = (n) => String(n).padStart(2, '0');
 function hourSlots() {
   return WORKLOG_HOURS.map((label) => ({ label }));
 }
-function todayStr() {
+// dateStrForOffset/dateDisplayForOffset：todayStr/todayDisplay 抽出「+N 天」版本，供下方
+// 「今天／明天」切換共用，不用另外複製一份日期運算邏輯。
+function dateStrForOffset(offsetDays) {
   const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
-function todayDisplay() {
+function todayStr() { return dateStrForOffset(0); }
+function dateDisplayForOffset(offsetDays) {
   const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
   const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
   return `${d.getMonth() + 1}/${d.getDate()}（${wd}）`;
 }
+function todayDisplay() { return dateDisplayForOffset(0); }
 function currentHourLabel() {
   const h = new Date().getHours();
   if (h < 9) return '0900之前';
@@ -251,6 +281,15 @@ function currentHourLabel() {
   const label = `${pad(h)}:00-${pad(h + 1)}:00`;
   return WORKLOG_HOURS.includes(label) ? label : null;
 }
+// 2026-07-24：新增「今天／明天」填寫切換——陳勁豪、葉恩廷實際使用後提出的真實需求，早上就能
+// 先把明天預定要做的事排好，不用等到當天。只開放「今天/明天」兩格，不做完整日期選擇器；維持
+// 既有跨日鎖定精神，不開放切到昨天或更早去編輯（Worker 端 date_locked_past 同步擋）。
+let SELECTED_DATE = 'today'; // 'today' | 'tomorrow'
+function selectedOffsetDays() { return SELECTED_DATE === 'tomorrow' ? 1 : 0; }
+function selectedDateStr() { return dateStrForOffset(selectedOffsetDays()); }
+function selectedDateDisplay() { return dateDisplayForOffset(selectedOffsetDays()); }
+// 「現在」高亮／快速記錄只對「今天」畫面有意義，明天畫面沒有現在進行式的小時
+function activeHourLabel() { return SELECTED_DATE === 'today' ? currentHourLabel() : null; }
 
 function loadAllState() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; }
@@ -335,15 +374,17 @@ function submittedBanner(day) {
   const el = make('div', 'mb-4 rounded-xl border border-sage/30 bg-sagetint px-4 py-2.5 text-sm font-bold text-sage');
   // submittedAt 可能是 null（API_MODE 下從 worklogListMine 載入既有紀錄，Ragic 沒存「送出時間」
   // 這個概念，只有本機這次 session 自己送出才會有精確時間），沒有就不編造假時間。
+  // 2026-07-24：明天分頁的措辭改「排定」而非「送出」，避免使用者誤以為明天已經發生過了。
+  const isTomorrow = SELECTED_DATE === 'tomorrow';
   el.textContent = day.submittedAt
-    ? `本日紀錄已於 ${new Date(day.submittedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })} 送出，今天內都還能修改，改完記得再送出一次。`
-    : '今天已經有紀錄了，今天內都還能修改，改完記得再送出一次。';
+    ? `${isTomorrow ? '明天的紀錄' : '本日紀錄'}已於 ${new Date(day.submittedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })} ${isTomorrow ? '排定' : '送出'}，到那天之前都還能修改，改完記得再送出一次。`
+    : (isTomorrow ? '明天已經有排定的紀錄了，到那天之前都還能修改，改完記得再送出一次。' : '今天已經有紀錄了，今天內都還能修改，改完記得再送出一次。');
   return el;
 }
 
 function renderQuickCta(day) {
   const wrap = make('div', 'mb-4 flex items-center justify-between gap-3 rounded-2xl border border-line bg-white p-4');
-  const cur = currentHourLabel();
+  const cur = activeHourLabel(); // 明天畫面永遠是 null，沒有「現在進行式」的小時
   const left = make('div', 'min-w-0');
   const btn = make('button', 'tap44 shrink-0 rounded-xl bg-coral px-4 text-sm font-black text-white transition-transform hover:bg-coraldark active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink disabled:cursor-not-allowed disabled:bg-line disabled:text-inkmuted');
   btn.type = 'button';
@@ -358,12 +399,12 @@ function renderQuickCta(day) {
   } else {
     const firstUnfilled = hourSlots().find((s) => !isFilled(getEntry(day, s.label)));
     if (firstUnfilled) {
-      left.append(make('p', 'text-sm font-bold text-ink', '不在工作時段內，仍可補填今天的紀錄'));
+      left.append(make('p', 'text-sm font-bold text-ink', SELECTED_DATE === 'tomorrow' ? '先把明天預定要做的事排一下' : '不在工作時段內，仍可補填今天的紀錄'));
       left.append(make('p', 'tnum mt-0.5 text-xs text-inkmuted', `建議從 ${firstUnfilled.label} 開始`));
-      btn.textContent = '開始補填 →';
+      btn.textContent = SELECTED_DATE === 'tomorrow' ? '+ 開始排定 →' : '開始補填 →';
       targetLabel = firstUnfilled.label;
     } else {
-      left.append(make('p', 'text-sm font-bold text-sage', '今天的時段都處理過了'));
+      left.append(make('p', 'text-sm font-bold text-sage', SELECTED_DATE === 'tomorrow' ? '明天的時段都排定過了' : '今天的時段都處理過了'));
       btn.textContent = '已全部完成';
       btn.disabled = true;
     }
@@ -400,8 +441,8 @@ function renderProgress(day) {
 
 function copyFromPrevious(idx) {
   const slots = hourSlots();
-  if (idx === 0) { showToast('這是今天第一個時段，沒有上一小時可以複製'); return; }
-  const dateStr = todayStr();
+  if (idx === 0) { showToast('這是第一個時段，沒有上一小時可以複製'); return; }
+  const dateStr = selectedDateStr();
   const day = getDayState(dateStr);
   const prevEntry = getEntry(day, slots[idx - 1].label);
   if (!prevEntry || !prevEntry.category) { showToast('上一小時還沒填寫，無法複製'); return; }
@@ -422,7 +463,7 @@ function copyFromPrevious(idx) {
 
 function quickSkip(idx) {
   const label = hourSlots()[idx].label;
-  const dateStr = todayStr();
+  const dateStr = selectedDateStr();
   const day = getDayState(dateStr);
   const entry = ensureEntry(day, label);
   entry.category = OTHER_CATEGORY;
@@ -436,7 +477,7 @@ function quickSkip(idx) {
 function applyForward(idx) {
   const slots = hourSlots();
   const label = slots[idx].label;
-  const dateStr = todayStr();
+  const dateStr = selectedDateStr();
   const day = getDayState(dateStr);
   const src = getEntry(day, label);
   if (!src || !src.category) return;
@@ -491,7 +532,7 @@ function renderHourRow(slot, idx, day) {
   const entry = ensureEntry(day, label);
   const filled = isFilled(entry);
   const expanded = EXPANDED.has(label);
-  const isCurrent = label === currentHourLabel();
+  const isCurrent = label === activeHourLabel();
   const panelId = `hour-panel-${idx}`;
 
   const wrap = make('div', `rounded-xl border bg-white ${isCurrent ? 'border-coral' : 'border-line'}`);
@@ -559,11 +600,11 @@ function renderHourRow(slot, idx, day) {
     optBtn.type = 'button';
     optBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     optBtn.addEventListener('click', () => {
-      const d = getDayState(todayStr());
+      const d = getDayState(selectedDateStr());
       const en = ensureEntry(d, label);
       en.category = name;
       if (en.category !== OTHER_CATEGORY) en.otherCategoryText = '';
-      setDayState(todayStr(), d);
+      setDayState(selectedDateStr(), d);
       pushRecentCat(en.category);
       renderWorklogView();
     });
@@ -580,7 +621,7 @@ function renderHourRow(slot, idx, day) {
   otherInput.type = 'text';
   otherInput.placeholder = '例如：搬運材料、等待廠商';
   otherInput.value = entry.otherCategoryText || '';
-  otherInput.addEventListener('input', () => { const d = getDayState(todayStr()); ensureEntry(d, label).otherCategoryText = otherInput.value; setDayState(todayStr(), d); });
+  otherInput.addEventListener('input', () => { const d = getDayState(selectedDateStr()); ensureEntry(d, label).otherCategoryText = otherInput.value; setDayState(selectedDateStr(), d); });
   // 2026-07-23 移除 blur→renderWorklogView()：blur 觸發整段重繪，若使用者緊接著把焦點移到同一
   // 列的下一個文字欄位，「移到下一欄」這個動作本身就是造成這裡 blur 的原因，兩者發生在同一個
   // synchronous 事件循環內——重繪會把「即將接住焦點」的下一個欄位整個換成新節點，導致那一欄的
@@ -599,7 +640,7 @@ function renderHourRow(slot, idx, day) {
   caseInput.placeholder = '輸入或從既有案件挑選，沒有可留空';
   caseInput.setAttribute('list', 'worklogCaseList');
   caseInput.value = entry.caseName || '';
-  caseInput.addEventListener('input', () => { const d = getDayState(todayStr()); ensureEntry(d, label).caseName = caseInput.value; setDayState(todayStr(), d); });
+  caseInput.addEventListener('input', () => { const d = getDayState(selectedDateStr()); ensureEntry(d, label).caseName = caseInput.value; setDayState(selectedDateStr(), d); });
   // 理由同上（otherInput 那段）：不靠 blur 重繪，避免緊接著切下一欄位時把該欄位吃掉。
   caseLabelEl.append(caseInput);
   form.append(caseLabelEl);
@@ -613,7 +654,7 @@ function renderHourRow(slot, idx, day) {
   repairInput.type = 'text';
   repairInput.placeholder = '例如：浴室天花板漏水複驗';
   repairInput.value = entry.repairReason || '';
-  repairInput.addEventListener('input', () => { const d = getDayState(todayStr()); ensureEntry(d, label).repairReason = repairInput.value; setDayState(todayStr(), d); });
+  repairInput.addEventListener('input', () => { const d = getDayState(selectedDateStr()); ensureEntry(d, label).repairReason = repairInput.value; setDayState(selectedDateStr(), d); });
   // 理由同上（otherInput 那段）：不靠 blur 重繪，避免緊接著切下一欄位時把該欄位吃掉。
   repairLabelEl.append(repairInput);
   repairInner.append(repairLabelEl);
@@ -626,7 +667,7 @@ function renderHourRow(slot, idx, day) {
   planInput.type = 'text';
   planInput.placeholder = '例如：原本排定 10 點去王公館驗收';
   planInput.value = entry.plannedSchedule || '';
-  planInput.addEventListener('input', () => { const d = getDayState(todayStr()); ensureEntry(d, label).plannedSchedule = planInput.value; setDayState(todayStr(), d); });
+  planInput.addEventListener('input', () => { const d = getDayState(selectedDateStr()); ensureEntry(d, label).plannedSchedule = planInput.value; setDayState(selectedDateStr(), d); });
   // 理由同上（otherInput 那段）：不靠 blur 重繪，避免緊接著切下一欄位時把該欄位吃掉。
   planLabelEl.append(planInput);
   form.append(planLabelEl);
@@ -640,9 +681,9 @@ function renderHourRow(slot, idx, day) {
   noteTextarea.value = entry.note || '';
   const counter = make('p', 'tnum mt-1 text-right text-[11px] text-inkfaint', `${noteTextarea.value.length}/150`);
   noteTextarea.addEventListener('input', () => {
-    const d = getDayState(todayStr());
+    const d = getDayState(selectedDateStr());
     ensureEntry(d, label).note = noteTextarea.value;
-    setDayState(todayStr(), d);
+    setDayState(selectedDateStr(), d);
     counter.textContent = `${noteTextarea.value.length}/150`;
     counter.className = `tnum mt-1 text-right text-[11px] ${noteTextarea.value.length >= 140 ? 'font-bold text-coraldark' : 'text-inkfaint'}`;
   });
@@ -699,7 +740,7 @@ function renderSubmitBar(day) {
   const row = make('div', 'flex items-center justify-between gap-3');
   const left = make('div', 'min-w-0');
   left.append(make('p', 'tnum text-xs font-bold text-inkmuted', `已填 ${filled} ／ ${total} 小時`));
-  const btn = make('button', 'tap44 shrink-0 rounded-xl bg-coral px-5 text-sm font-black text-white transition-transform hover:bg-coraldark active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', day.submitted ? '重新送出' : '送出今日紀錄');
+  const btn = make('button', 'tap44 shrink-0 rounded-xl bg-coral px-5 text-sm font-black text-white transition-transform hover:bg-coraldark active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', day.submitted ? '重新送出' : (SELECTED_DATE === 'tomorrow' ? '送出明日紀錄' : '送出今日紀錄'));
   btn.type = 'button';
   btn.addEventListener('click', () => handleSubmit(btn));
   row.append(left, btn);
@@ -710,9 +751,10 @@ function renderSubmitBar(day) {
 async function handleSubmit(btn) {
   btn.disabled = true;
   btn.textContent = '送出中…';
-  const dateStr = todayStr();
+  const dateStr = selectedDateStr();
+  const isTomorrow = SELECTED_DATE === 'tomorrow';
   const day = getDayState(dateStr);
-  const restoreBtn = () => { btn.disabled = false; btn.textContent = day.submitted ? '重新送出' : '送出今日紀錄'; };
+  const restoreBtn = () => { btn.disabled = false; btn.textContent = day.submitted ? '重新送出' : (isTomorrow ? '送出明日紀錄' : '送出今日紀錄'); };
 
   if (!API_MODE) {
     // 開發模擬模式（URL 沒有 ?token=）：沿用原本本機模擬送出，方便除錯 UI，不呼叫真實 API
@@ -721,7 +763,7 @@ async function handleSubmit(btn) {
       day.submittedAt = Date.now();
       setDayState(dateStr, day);
       location.hash = 'confirm';
-      showToast('已送出今日工作日誌（本機模擬，未連線 API）');
+      showToast(isTomorrow ? '已排定明天的工作日誌（本機模擬，未連線 API）' : '已送出今日工作日誌（本機模擬，未連線 API）');
     }, 450);
     return;
   }
@@ -753,14 +795,14 @@ async function handleSubmit(btn) {
     const res = await fetch(`${WORKER_BASE}/worklogCreate?token=${encodeURIComponent(API_TOKEN)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ entries }),
+      body: JSON.stringify({ entries, date: dateStr }),
     });
     const json = await res.json().catch(() => null);
     if (!res.ok || !json || json.ok !== true) {
       const failed = (json && Array.isArray(json.results)) ? json.results.filter((r) => !r.ok) : [];
       showToast(failed.length > 0
         ? `送出失敗：${failed.map((f) => `${f.hour}(${f.error})`).join('、')}`
-        : '送出失敗，請稍後再試或截圖回報');
+        : (json && json.error) ? `送出失敗：${json.error}` : '送出失敗，請稍後再試或截圖回報');
       restoreBtn();
       return;
     }
@@ -768,24 +810,46 @@ async function handleSubmit(btn) {
     day.submittedAt = Date.now();
     setDayState(dateStr, day);
     location.hash = 'confirm';
-    showToast('已送出今日工作日誌（已寫入 Ragic）');
+    showToast(isTomorrow ? '已排定明天的工作日誌（已寫入 Ragic）' : '已送出今日工作日誌（已寫入 Ragic）');
   } catch (err) {
     showToast('連線失敗，請檢查網路後重試');
     restoreBtn();
   }
 }
 
+// 2026-07-24：今天／明天切換的分頁按鈕（陳勁豪、葉恩廷實際使用後提出的真實需求）。
+function dateToggleNode() {
+  const wrap = make('div', 'mb-4 inline-flex gap-1 rounded-xl border-2 border-line bg-white p-1');
+  [{ key: 'today', label: '今天' }, { key: 'tomorrow', label: '明天' }].forEach((opt) => {
+    const active = SELECTED_DATE === opt.key;
+    const btn = make(
+      'button',
+      `tap44 rounded-lg px-4 text-sm font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${active ? 'bg-ink text-white' : 'text-inkmuted hover:bg-paper'}`,
+      opt.label,
+    );
+    btn.type = 'button';
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    btn.addEventListener('click', () => switchSelectedDate(opt.key));
+    wrap.append(btn);
+  });
+  return wrap;
+}
+
 function renderWorklogView() {
   const root = byId('view-worklog');
   root.replaceChildren();
-  const day = getDayState(todayStr());
+  const day = getDayState(selectedDateStr());
+  const isTomorrow = SELECTED_DATE === 'tomorrow';
 
-  const head = make('div', 'mb-5');
+  const head = make('div', 'mb-4');
   // 2026-07-23：同側欄字樣一樣原本寫死「工務部」，改用同一個 sidebarDeptLabel() 動態顯示。
   head.append(make('p', 'text-xs font-bold tracking-wide text-coraldark', `${sidebarDeptLabel()}・每小時工作紀錄`));
-  head.append(make('h2', 'text-xl font-black text-ink sm:text-2xl', '今天，你在忙什麼？'));
-  head.append(make('p', 'mt-1 text-sm text-inkmuted', `${todayDisplay()}・早上 10 點前先排今天的行程，下班前回來補實際紀錄就好，不用整天一直開表單。`));
+  head.append(make('h2', 'text-xl font-black text-ink sm:text-2xl', isTomorrow ? '明天，你打算做什麼？' : '今天，你在忙什麼？'));
+  head.append(make('p', 'mt-1 text-sm text-inkmuted', isTomorrow
+    ? `${selectedDateDisplay()}・先把明天預定的行程排好，時間到了再回來補實際紀錄。`
+    : `${selectedDateDisplay()}・早上 10 點前先排今天的行程，下班前回來補實際紀錄就好，不用整天一直開表單。`));
   root.append(head);
+  root.append(dateToggleNode());
 
   if (day.submitted) root.append(submittedBanner(day));
   root.append(renderQuickCta(day));
@@ -812,10 +876,11 @@ function confirmRow(slot, entry) {
 function renderConfirmView() {
   const root = byId('view-confirm');
   root.replaceChildren();
-  const day = getDayState(todayStr());
+  const day = getDayState(selectedDateStr());
+  const isTomorrow = SELECTED_DATE === 'tomorrow';
 
   if (!day.submitted) {
-    root.append(emptyNote('目前還沒有送出今天的紀錄，請先回到「工作日誌」完成填寫。'));
+    root.append(emptyNote(isTomorrow ? '目前還沒有排定明天的紀錄，請先回到「工作日誌」完成填寫。' : '目前還沒有送出今天的紀錄，請先回到「工作日誌」完成填寫。'));
     const back = make('button', 'mt-3 rounded-xl bg-ink px-4 py-2.5 text-sm font-bold text-white hover:bg-ink/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '回到工作日誌');
     back.type = 'button';
     back.addEventListener('click', () => { location.hash = 'worklog'; });
@@ -829,10 +894,10 @@ function renderConfirmView() {
   const card = make('div', 'rounded-2xl border border-line bg-white p-6 text-center shadow-sm sm:p-8');
   const iconWrap = make('div', 'mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-sagetint text-2xl font-black text-sage', '✓');
   card.append(iconWrap);
-  card.append(make('h2', 'text-xl font-black text-ink', '已送出今日工作日誌'));
-  card.append(make('p', 'tnum mt-1 text-sm text-inkmuted', `共送出 ${filledSlots.length} 筆・${skippedCount} 個小時未填寫`));
+  card.append(make('h2', 'text-xl font-black text-ink', isTomorrow ? '已排定明天的工作日誌' : '已送出今日工作日誌'));
+  card.append(make('p', 'tnum mt-1 text-sm text-inkmuted', `${isTomorrow ? '共排定' : '共送出'} ${filledSlots.length} 筆・${skippedCount} 個小時未填寫`));
   const timeText = day.submittedAt
-    ? `送出時間 ${new Date(day.submittedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}・`
+    ? `${isTomorrow ? '排定' : '送出'}時間 ${new Date(day.submittedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}・`
     : '';
   card.append(make('p', 'mt-1 text-xs text-inkfaint', `${timeText}小吳哥可在「主管總覽」看到這筆紀錄`));
 
@@ -909,22 +974,38 @@ function memberCard(member) {
   return card;
 }
 
+// 2026-07-24：主管總覽「後一天」接上真實查詢（本次真實需求：能看到明天大家排定的行程）。
+// 「前一天」spec 明確允許先維持既有 toast——查看更早日期是合理需求但非本次範圍，時間有限時
+// 優先確保「後一天/明天」這個方向能動。只開放 0（今天）／1（明天）兩格，避免無止盡往後查。
+let OVERVIEW_DATE_OFFSET = 0;
+function overviewOffsetDateStr() { return dateStrForOffset(OVERVIEW_DATE_OFFSET); }
+function overviewOffsetDateDisplay() { return dateDisplayForOffset(OVERVIEW_DATE_OFFSET); }
+
 function overviewHeadNode() {
   const head = make('div', 'mb-5');
   head.append(make('p', 'text-xs font-bold tracking-wide text-coraldark', '主管視角・唯讀'));
-  head.append(make('h2', 'text-xl font-black text-ink sm:text-2xl', '本日工作日誌總覽'));
-  head.append(make('p', 'mt-1 text-sm text-inkmuted', `${todayDisplay()}・依人員檢視，跟催進度不用再靠口頭回報。`));
+  head.append(make('h2', 'text-xl font-black text-ink sm:text-2xl', OVERVIEW_DATE_OFFSET > 0 ? '明日工作日誌總覽' : '本日工作日誌總覽'));
+  head.append(make('p', 'mt-1 text-sm text-inkmuted', `${overviewOffsetDateDisplay()}・依人員檢視，跟催進度不用再靠口頭回報。`));
   return head;
 }
 function overviewDayNavNode() {
   const dayNav = make('div', 'mb-4 flex items-center gap-2');
   const prevBtn = make('button', 'tap44 rounded-lg border border-line px-3 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '‹ 前一天');
   prevBtn.type = 'button';
-  prevBtn.addEventListener('click', () => showToast('原型僅示範今日資料，正式版可切換日期查詢'));
-  const nextBtn = make('button', 'tap44 rounded-lg border border-line px-3 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '後一天 ›');
+  prevBtn.addEventListener('click', () => {
+    // offset > 0（目前在看明天）時，前一天＝退回今天，是真的查詢；offset 已經是 0 時再往前
+    // 就是「查真正的過去」，spec 允許先維持既有 toast，非本次範圍。
+    if (OVERVIEW_DATE_OFFSET > 0) { OVERVIEW_DATE_OFFSET -= 1; refreshOverviewFromApi(); return; }
+    showToast('查看更早日期規劃中，目前僅開放今天／明天');
+  });
+  const nextBtn = make('button', `tap44 rounded-lg border border-line px-3 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink${OVERVIEW_DATE_OFFSET >= 1 ? ' cursor-not-allowed opacity-40' : ''}`, '後一天 ›');
   nextBtn.type = 'button';
-  nextBtn.addEventListener('click', () => showToast('原型僅示範今日資料，正式版可切換日期查詢'));
-  dayNav.append(prevBtn, make('span', 'tnum rounded-lg bg-paper px-3 py-2 text-xs font-bold text-ink', todayDisplay()), nextBtn);
+  nextBtn.addEventListener('click', () => {
+    if (OVERVIEW_DATE_OFFSET >= 1) { showToast('目前僅開放看到明天'); return; }
+    OVERVIEW_DATE_OFFSET += 1;
+    refreshOverviewFromApi();
+  });
+  dayNav.append(prevBtn, make('span', 'tnum rounded-lg bg-paper px-3 py-2 text-xs font-bold text-ink', overviewOffsetDateDisplay()), nextBtn);
   return dayNav;
 }
 
@@ -940,9 +1021,11 @@ function groupByReporter(entries) {
   return [...map.values()];
 }
 
-async function loadAllFromApi() {
+// dateParam 選填（2026-07-24 新增，供主管總覽「後一天」查詢用）：不帶＝沿用 Worker 預設今天。
+async function loadAllFromApi(dateParam) {
   try {
-    const res = await fetch(`${WORKER_BASE}/worklogListAll?token=${encodeURIComponent(API_TOKEN)}`);
+    const qs = dateParam ? `&date=${encodeURIComponent(dateParam)}` : '';
+    const res = await fetch(`${WORKER_BASE}/worklogListAll?token=${encodeURIComponent(API_TOKEN)}${qs}`);
     let json = null;
     try { json = await res.json(); } catch { json = null; }
     if (!res.ok || !json || json.ok !== true) return { ok: false, status: res.status };
@@ -968,7 +1051,7 @@ function renderOverviewBody(root) {
   }
   if (overviewState.status === 'loading') { root.append(emptyNote('載入中…')); return; }
   if (overviewState.status === 'error') { root.append(emptyNote(overviewState.errorMsg)); return; }
-  if (overviewState.members.length === 0) { root.append(emptyNote('今日尚無紀錄。', 'sage')); return; }
+  if (overviewState.members.length === 0) { root.append(emptyNote(OVERVIEW_DATE_OFFSET > 0 ? '明天尚無排定紀錄。' : '今日尚無紀錄。', 'sage')); return; }
   const list = make('div', 'space-y-3');
   overviewState.members.forEach((member) => list.append(memberCard(member)));
   root.append(list);
@@ -978,7 +1061,7 @@ async function refreshOverviewFromApi() {
   const myReqId = ++overviewReqId;
   overviewState = { status: 'loading', members: [], errorMsg: null };
   renderOverviewBody(byId('view-overview'));
-  const result = await loadAllFromApi();
+  const result = await loadAllFromApi(OVERVIEW_DATE_OFFSET > 0 ? overviewOffsetDateStr() : null);
   if (myReqId !== overviewReqId) return; // 使用者已經切走頁面，這次結果作廢，不要覆寫新畫面
   if (!result.ok) {
     // worklogListAll：token 完全無效／缺失一律 404；token 有效但非主管角色回 403——兩者訊息
@@ -1161,11 +1244,12 @@ byId('resetButton').addEventListener('click', () => {
     }
     IDENTITY = mine.json.viewer;
     ROLE = IDENTITY.role;
-    applyMineData(mine.json);
+    applyMineData(mine.json, todayStr());
+    LOADED_DATE_KEYS.add('today'); // 今天已經跟 API 同步過，切「今天／明天」時不用重打
   }
 
-  const cur = currentHourLabel();
-  const day = getDayState(todayStr());
+  const cur = activeHourLabel();
+  const day = getDayState(selectedDateStr());
   if (cur) EXPANDED.add(cur);
   else {
     const firstUnfilled = hourSlots().find((s) => !isFilled(getEntry(day, s.label)));
