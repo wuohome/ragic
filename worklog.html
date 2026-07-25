@@ -7,30 +7,21 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>窩的家工程平台｜工作日誌（原型）</title>
+<title>窩的家工程平台｜工作日誌 V2</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
+  /* 2026-07-25 接後端定案：配色鎖定 C「工地強光高對比」（Joan 拍板，見規格書 ai-ref），
+     A/B 兩組配色與切換 demo 鈕已移除，色碼直接寫死不再走 [data-palette] 切換。 */
   tailwind.config = {
     theme: {
       extend: {
         colors: {
-          /* 2026-07-22 依 Joan 指示改走 from.html（租客需求調查表）同一套「好填寫」語彙：
-             單一高對比主色（teal）、不強求窩的家 CI 多色配色，變數名稱不變只換色值，
-             現有 class 用法（bg-coral 等）不用逐一改。 */
-          ink: '#1F3A44',
-          inkdeep: '#12262E',
-          inkmuted: '#4B6570',
-          inkfaint: '#7C9298',
-          paper: '#F0F8FA',
-          line: '#C3D6DB',
-          coral: '#007894',
-          coraldark: '#00657D',
-          coraltint: '#EAF7F9',
-          flag: '#E2A400',
-          flagdark: '#8A6205',
-          flagtint: '#FFF3D6',
-          sage: '#1F8A63',
-          sagetint: '#E3F6ED',
+          ink: '#1F3A44', inkdeep: '#12262E', inkmuted: '#4B6570', inkfaint: '#7C9298',
+          paper: '#F0F8FA', line: '#C3D6DB',
+          coral: '#004C8C', coraldark: '#003864', coraltint: '#E1EEF8',
+          submitted: '#146C2E',
+          pending: '#8A5A00', pendingtint: '#FBF0DC', pendingdark: '#634100',
+          overlap: '#C81E1E', overlapdark: '#8F1414', overlaptint: '#FBE3E3',
         },
       },
     },
@@ -38,106 +29,143 @@
 </script>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif; }
-  /* 依 from.html（租客需求調查表）「好填寫」語彙：大字、粗框、明顯焦點狀態，不用細緻小巧的 CI 風格輸入框 */
-  select, textarea, input {
-    min-height: 52px;
-    font-size: 17px !important;
-    padding: 12px 14px !important;
-    border-width: 2px !important;
-    border-radius: 12px !important;
-    background-color: #FFFFFF !important;
-    border-color: #B9CBD1 !important;
+  :root { --c-gap-a: #E1EEF8; --c-gap-b: #C3DCF0; --c-gap-a-hover: #CFE3F5; --c-gap-b-hover: #A9CDE9; }
+
+  /* 「好填寫」語彙沿用 from.html／V1：大字、粗框、明顯焦點狀態，不用細緻小巧的輸入框 */
+  select, textarea, input:not([type="checkbox"]) {
+    min-height: 52px; font-size: 17px !important; padding: 12px 14px !important;
+    border-width: 2px !important; border-radius: 12px !important;
+    background-color: #FFFFFF !important; border-color: #B9CBD1 !important;
   }
-  select:focus, textarea:focus, input:focus {
-    border-color: #007894 !important;
-    outline: none;
-    box-shadow: 0 0 0 4px rgba(0, 120, 148, 0.18);
+  select:focus, textarea:focus, input:not([type="checkbox"]):focus {
+    border-color: #004C8C !important; outline: none;
+    box-shadow: 0 0 0 4px rgba(0, 76, 140, 0.18);
   }
+  input[type="checkbox"] { width: 18px; height: 18px; accent-color: #004C8C; }
   .tnum { font-variant-numeric: tabular-nums; }
   .tap44 { min-height: 44px; }
   #toast { transition: opacity 200ms ease-out; }
   .accordion { transition: grid-template-rows 200ms cubic-bezier(0.23, 1, 0.32, 1); }
   .accordion-inner { overflow: hidden; }
+
+  /* 彩色時間軸橫條（2026-07-25 Joan 拍板保留設計，只重做配色）。
+     判定邏輯（哪段是 gap／哪段是 block）在 computeTimelineWindow()／buildTimelineSegments()，
+     這裡只負責視覺呈現。 */
+  .timeline-track { display: flex; width: 100%; height: 38px; border-radius: 10px; overflow: hidden; border: 2px solid #C3D6DB; background: #fff; }
+  .timeline-seg { position: relative; height: 100%; min-width: 3px; }
+  .timeline-seg-gap { background-image: repeating-linear-gradient(135deg, var(--c-gap-a) 0 7px, var(--c-gap-b) 7px 14px); cursor: pointer; border: none; padding: 0; }
+  .timeline-seg-gap:hover, .timeline-seg-gap:focus-visible { background-image: repeating-linear-gradient(135deg, var(--c-gap-a-hover) 0 7px, var(--c-gap-b-hover) 7px 14px); }
+  .timeline-seg-block { cursor: pointer; border: none; padding: 0; }
+  .timeline-seg-submitted { background: #146C2E; }
+  .timeline-seg-pending { background: #FBF0DC; box-shadow: inset 0 0 0 2px #8A5A00; }
+  .timeline-seg-overlap { background: #C81E1E; }
+  .timeline-seg-overdue { background: repeating-linear-gradient(135deg, #FBF0DC 0 6px, #C81E1E 6px 12px); box-shadow: inset 0 0 0 2px #8A5A00; }
+  .timeline-now-marker { position: absolute; top: -5px; bottom: -5px; width: 2px; background: #1F3A44; z-index: 5; pointer-events: none; }
+  .timeline-now-dot { position: absolute; top: -12px; height: 6px; width: 6px; border-radius: 999px; background: #1F3A44; transform: translateX(-2px); pointer-events: none; }
+
   @media (prefers-reduced-motion: reduce) {
     * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
   }
 </style>
 </head>
-<body class="min-h-screen bg-paper text-ink">
+<body class="min-h-screen bg-white text-ink">
 <datalist id="worklogCaseList"></datalist>
 
-<div class="flex h-screen flex-col lg:flex-row">
-  <!-- 桌機側欄 -->
-  <aside class="hidden w-60 shrink-0 flex-col bg-inkdeep lg:flex">
+<div class="flex h-screen w-full overflow-hidden">
+  <!-- 桌機側欄：深色 app shell，比照 V1／decor-console 既有模組化平台外殼寫法 -->
+  <aside class="hidden w-56 shrink-0 flex-col bg-inkdeep lg:flex">
     <div class="flex items-center gap-2.5 border-b border-white/10 p-4">
       <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-coral text-sm font-black text-white" aria-hidden="true">窩</span>
       <div class="min-w-0">
         <p class="truncate text-sm font-black text-white">窩的家工程平台</p>
-        <p id="sidebarSubtitle" class="truncate text-[11px] font-bold text-white/50">工務部</p>
+        <p id="sidebarSubtitle" class="truncate text-[11px] font-bold text-white/60">工作日誌</p>
       </div>
     </div>
     <nav id="sidebarNav" class="flex-1 space-y-1 overflow-y-auto p-3" aria-label="主要模組"></nav>
     <div id="sidebarPlanned" class="space-y-1 border-t border-white/10 p-3"></div>
   </aside>
 
-  <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+  <div class="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
     <header class="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-white px-4 py-3 lg:px-6">
       <div class="flex min-w-0 items-center gap-2.5 lg:hidden">
-        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ink text-xs font-black text-white" aria-hidden="true">窩</span>
+        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-coral text-xs font-black text-white" aria-hidden="true">窩</span>
         <span class="truncate text-sm font-black text-ink">窩的家工程平台</span>
       </div>
       <h1 id="pageTitle" class="hidden text-lg font-black text-ink lg:block">工作日誌</h1>
       <div class="flex shrink-0 items-center gap-2">
-        <span id="modeLabel" class="hidden rounded-full bg-line px-2.5 py-1 text-xs font-bold text-inkmuted sm:inline-block">原型・本機資料</span>
-        <button id="roleToggleBtn" type="button" class="rounded-full bg-ink/10 px-2.5 py-1 text-xs font-bold text-ink hover:bg-ink/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink"></button>
-        <button id="resetButton" type="button" class="rounded-xl border border-line px-3 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink">重設資料</button>
+        <span id="modeLabel" class="hidden rounded-full bg-line px-2.5 py-1 text-xs font-bold text-inkmuted sm:inline-block"></span>
+        <button id="resetButton" type="button" class="tap44 rounded-xl border border-line px-3 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink">重設本機暫存</button>
       </div>
     </header>
-    <div class="h-[3px] w-full shrink-0 bg-gradient-to-r from-coral via-flag to-ink" aria-hidden="true"></div>
 
-    <main id="mainRoot" class="flex-1 overflow-y-auto px-4 pb-40 pt-5 lg:px-6 lg:pb-6">
+    <main id="mainRoot" class="flex-1 overflow-y-auto px-4 pb-6 pt-5 lg:px-6">
       <section id="view-worklog" class="mx-auto max-w-2xl"></section>
       <section id="view-overview" class="mx-auto max-w-2xl" hidden></section>
-      <section id="view-confirm" class="mx-auto max-w-2xl" hidden></section>
     </main>
 
-    <!-- 手機底部 tab bar -->
-    <nav id="bottomTabBar" class="fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-white lg:hidden" aria-label="主要模組"></nav>
+    <!-- 手機底部 tab bar：非 fixed，正常文件流最後一個 flex 項目（2026-07-25 沿用既驗證過的防遮擋結構） -->
+    <nav id="bottomTabBar" class="shrink-0 flex border-t border-line bg-white lg:hidden" aria-label="主要模組"></nav>
   </div>
 </div>
 
 <script>
 'use strict';
 
-// ================= 真實 Ragic 對照（2026-07-22 接 API 版） =================
-// 時間(小時) 11 個真實選項（agent-browser 登入 Design Mode 實測讀出，非猜測；中段跳過
-// 12:00-13:00 午休）。案名/地址 datalist 之外，這裡取代原本 07:00-20:00 numeric 假想時段。
-const WORKLOG_HOURS = [
-  '0900之前', '09:00-10:00', '10:00-11:00', '11:00-12:00', '13:00-14:00',
-  '14:00-15:00', '15:00-16:00', '16:00-17:00', '17:00-18:00', '18:00-19:00', '19:00之後',
-];
-// 項目選單依角色分流（2026-07-22 規格書 P2 補充落地，2026-07-23 實作）。工務 9 個既有選項
-// 與租賃 13 個選項（取自既有 [[每日行程點名]] property-data-kept/9 fid 1000610，運作 4 個月
-// 無問題的封閉選項）已一併加進 Ragic「項目」欄位(maintenance-management/9 fid 1003097)下拉，
-// 兩份清單必須與 Worker `WORKLOG_CATEGORY_SET`（src/index.js）保持同步。
-const CATEGORIES_WORK = ['場勘', '租客聯繫', '屋主聯繫', '報價', '廠商聯繫', '驗收', '內部會議', '文書作業', '其他'];
-const CATEGORIES_RENTAL = ['開發', '委託', '帶看', '簽約', '修繕', '續約', '議價', '請假', '休假', '上課', '活動', '上廣告', '退租點交'];
-// 「已選定類別」渲染（entry.category 已有值時）用這份固定聯集順序，讓已選中的按鈕在任何角色
-// 底下都找得到、位置穩定不隨分組跳動；「新列尚未選類別」時改用下面 orderedCategoriesForNewRow()
-// 依角色分組排序。
-const CATEGORIES = [...CATEGORIES_WORK, ...CATEGORIES_RENTAL];
+/* =====================================================================================
+   工作日誌 V2（2026-07-25 接後端版）── 真實 API，取代純本機原型。
+   核心資料模型變更（Joan 2026-07-25 拍板）：「計畫」不再另建資料結構，就是一筆「有起訖時間、
+   預先排定行程有填、紀錄內容還空著」的普通紀錄；下班補實際只是回頭補同一筆的「紀錄內容」。
+   Block 就是 Ragic maintenance-management/9 的一列，不再有獨立的 Plan 物件／convertPlanToBlock。
+   ===================================================================================== */
+
+// ================= 部門設定（真正分流：每個部門各自完整清單） =================
+const DEPARTMENTS = {
+  construction: {
+    key: 'construction', label: '工務部',
+    categories: ['場勘', '租客聯繫', '屋主聯繫', '報價', '廠商聯繫', '驗收', '內部會議', '文書作業', '其他'],
+    repairRelated: new Set(['驗收', '廠商聯繫']),
+  },
+  rental: {
+    key: 'rental', label: '租賃部',
+    categories: ['開發', '委託', '帶看', '簽約', '修繕', '續約', '議價', '請假', '休假', '上課', '活動', '上廣告', '退租點交'],
+    repairRelated: new Set(['修繕']),
+  },
+};
+const DEPARTMENT_ORDER = ['construction', 'rental'];
 const OTHER_CATEGORY = '其他';
-// 判斷依據：驗收／廠商聯繫這兩類最常伴隨修繕原因；規格書未逐字列出名單，此為介面設計判斷，非資料庫定案。
-// 2026-07-23 補：租賃分類新增「修繕」語意上就是報修相關，一併加入，否則恩廷選「修繕」會完全
-// 打不開報修原因欄位（此欄無其他手動展開方式）——這是本次新增類別直接造成的功能缺口，非額外擴張範圍。
-const REPAIR_RELATED = new Set(['驗收', '廠商聯繫', '修繕']);
-// ================= API 串接 =================
-// 2026-07-24 事故後補強：token 除了讀網址，也持久化到 localStorage——
-// 使用者若從瀏覽記錄/舊分頁點回「沒帶 ?token= 的網址」，自動用同一瀏覽器上次用過的 token 復原，
-// 不再掉進「本機模擬模式」假裝送出成功（勁豪 7/24 第二次資料事故的直接根因）。
-// 模擬模式僅限「這個瀏覽器從未帶 token 開過本頁」（純開發情境）才會出現，且 init() 會跳出全頁警告。
+// Worker 回傳的 categoryGroup 是中文（'工務'／'租賃'／null），對應到本檔的部門 key。
+function deptKeyForCategoryGroup(categoryGroup) {
+  if (categoryGroup === '工務') return 'construction';
+  if (categoryGroup === '租賃') return 'rental';
+  return null;
+}
+function categoriesForIdentity(identity) {
+  const deptKey = identity && deptKeyForCategoryGroup(identity.categoryGroup);
+  if (deptKey && DEPARTMENTS[deptKey]) return DEPARTMENTS[deptKey].categories;
+  // 主管／未分組：聯集去重，依 DEPARTMENT_ORDER 排列，不鎖死某一部門的優先順序。
+  const seen = new Set();
+  const out = [];
+  DEPARTMENT_ORDER.forEach((k) => DEPARTMENTS[k].categories.forEach((c) => { if (!seen.has(c)) { seen.add(c); out.push(c); } }));
+  return out;
+}
+function repairRelatedForIdentity(identity) {
+  const deptKey = identity && deptKeyForCategoryGroup(identity.categoryGroup);
+  if (deptKey && DEPARTMENTS[deptKey]) return DEPARTMENTS[deptKey].repairRelated;
+  const merged = new Set();
+  DEPARTMENT_ORDER.forEach((k) => DEPARTMENTS[k].repairRelated.forEach((c) => merged.add(c)));
+  return merged;
+}
+
+// P1 mock 案名（真實案件清單串接成本較高——需彙整 decor-console/工務報修兩套系統的案名，
+// 需新增 Worker 查詢 action，非本輪範圍，見交付摘要「spec 外決定」）。
+const MOCK_CASES = [
+  '王公館・台中市南屯區文心路三段', '陳宅・彰化縣員林市中山路', '日安大樓 3F・台中市西區精誠路',
+  '康橋苑 12F・台中市北屯區崇德路', '松林社區 B棟・彰化縣和美鎮彰南路', '幸福巷弄自宅・台中市大里區國光路',
+];
+
+// ================= API 串接（比照 V1 worklog.html 2026-07-25 安全修補版，完整沿用兩道防線） =================
 const WORKER_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
-const TOKEN_STORE_KEY = 'wuohome_worklog_token_v1';
+const TOKEN_STORE_KEY = 'wuohome_worklog_v2_token_v1';
 function getUrlToken() {
   try { return new URLSearchParams(location.search).get('token') || ''; } catch { return ''; }
 }
@@ -151,125 +179,9 @@ function resolveToken() {
 }
 const API_TOKEN = resolveToken();
 const API_MODE = Boolean(API_TOKEN);
-// 2026-07-23：真實身分（{role,name}）一律由 worklogListMine 回應的 viewer 欄位取得，不由前端
-// 自行宣告——token 對應誰、是不是主管，只有 Worker 說了算（比照既有 P5/Group T 手法）。
+// 真實身分一律由 worklogListMine 回應的 viewer 取得，不由前端自行宣告／不提供身分切換 UI——
+// token 對應誰、是不是主管、屬於哪個部門，只有 Worker 說了算。
 let IDENTITY = null;
-
-// 把 API 回傳的單筆紀錄（category/note 為 flat 字串）還原成前端表單用的 entry 形狀。
-// 「其他」類別的自訂文字在送出時被前端塞進 note 開頭的【】，讀回來要拆解還原，
-// 否則主管總覽／今天的紀錄會把自訂文字誤當成一般紀錄內容顯示。
-function parseApiEntry(rec) {
-  let category = rec.category || '';
-  let otherCategoryText = '';
-  let note = rec.note || '';
-  if (category === OTHER_CATEGORY) {
-    const m = /^【([^】]*)】([\s\S]*)$/.exec(note);
-    if (m) { otherCategoryText = m[1]; note = m[2]; }
-  }
-  return {
-    category, otherCategoryText, note,
-    caseName: rec.caseName || '',
-    repairReason: rec.repairReason || '',
-    plannedSchedule: rec.plannedSchedule || '',
-    synced: true, // 這筆是從 Ragic 讀回來的，定義上已經真的送出過
-  };
-}
-
-// dateParam 選填（2026-07-24 新增，供「今天／明天」切換用）：不帶＝沿用 Worker 預設今天
-// （向下相容既有呼叫），帶了就查那個日期（YYYY-MM-DD，Worker 端會正規化）。
-async function loadMineFromApi(dateParam) {
-  try {
-    const qs = dateParam ? `&date=${encodeURIComponent(dateParam)}` : '';
-    const res = await fetch(`${WORKER_BASE}/worklogListMine?token=${encodeURIComponent(API_TOKEN)}${qs}`);
-    let json = null;
-    try { json = await res.json(); } catch { json = null; }
-    if (!res.ok || !json || json.ok !== true) return { ok: false, status: res.status };
-    return { ok: true, json };
-  } catch {
-    return { ok: false, status: 0 }; // 0＝連線層失敗（非 HTTP 狀態碼），跟 404/403 分開顯示訊息
-  }
-}
-
-// 用 worklogListMine 回傳的紀錄覆寫本機對應日期的狀態，讓「那一天的紀錄」在任何裝置/清過快取
-// 後打開都以 Ragic 為準，不會停留在舊的本機快取。dateStr 由呼叫端指定要覆寫哪一天（今天或明天），
-// 不再寫死 todayStr()，才能同時支援「今天／明天」兩格各自獨立同步。
-//
-// 2026-07-24 資料遺失事故修復：原本這裡是「Ragic 回什麼、本機就整包被換成什麼」，Ragic 回空
-// （使用者從未成功送出，或送出失敗但沒被發現）就會把畫面上已經打好但還沒送出的草稿一併清空、
-// 使用者完全無法察覺（陳勁豪／Joan 2026-07-24 首日使用即中招，內容從未寫入 Ragic 但畫面看起來
-// 像存過）。治本：Ragic 有的小時格＝已送出真相，採用並標記 synced:true；Ragic 沒有、但本機已經
-// 填寫的小時格＝尚未送出的草稿，保留不清除、標記 synced:false，交給 UI 用「尚未送出」徽章／頁面
-// 提示讓使用者自己看得到，而不是被默默吃掉。
-function applyMineData(json, dateStr) {
-  const existing = getDayState(dateStr);
-  const day = { entries: {}, submitted: false, submittedAt: existing.submittedAt || null };
-  (json.entries || []).forEach((rec) => {
-    if (!WORKLOG_HOURS.includes(rec.hour)) return; // 防禦：未知小時格值不採信
-    day.entries[rec.hour] = parseApiEntry(rec);
-  });
-  Object.entries(existing.entries || {}).forEach(([hour, entry]) => {
-    if (!day.entries[hour] && isFilled(entry)) day.entries[hour] = { ...entry, synced: false };
-  });
-  day.submitted = Object.values(day.entries).some((e) => e.synced);
-  setDayState(dateStr, day);
-}
-
-// 記錄「today／tomorrow」這兩個日期身分是否已經跟 API 同步過一次，換頁籤時避免重複打 API
-// （today 在 init() 首次載入時就會標記完成）。dateSwitchReqId 比照既有 overviewReqId 手法防
-// race：使用者快速來回切換時，只採信最後一次切換觸發的回應，較舊的回應即使晚到也直接作廢。
-const LOADED_DATE_KEYS = new Set();
-let dateSwitchReqId = 0;
-async function switchSelectedDate(key) {
-  if (SELECTED_DATE === key) return;
-  const myReqId = ++dateSwitchReqId;
-  SELECTED_DATE = key;
-  EXPANDED = new Set(); // 換日期時收合狀態重置，避免殘留上一個日期的展開列造成混淆
-  if (API_MODE && !LOADED_DATE_KEYS.has(key)) {
-    renderWorklogView(); // 先渲染，不要讓畫面卡在切換前的樣子等網路
-    const result = await loadMineFromApi(key === 'tomorrow' ? selectedDateStr() : null);
-    if (myReqId !== dateSwitchReqId) return; // 使用者已經切到別的日期，這次結果作廢
-    LOADED_DATE_KEYS.add(key);
-    if (result.ok) applyMineData(result.json, selectedDateStr());
-  }
-  renderWorklogView();
-}
-
-function renderFatalError(msg) {
-  VALID_VIEWS.forEach((v) => { const el = byId('view-' + v); if (el) el.hidden = (v !== 'worklog'); });
-  byId('view-worklog').replaceChildren(emptyNote(msg));
-  byId('sidebarNav').replaceChildren();
-  byId('sidebarPlanned').replaceChildren();
-  byId('bottomTabBar').replaceChildren();
-  byId('pageTitle').textContent = '無法載入';
-}
-
-const MOCK_CASES = [
-  '王公館・台中市南屯區文心路三段',
-  '陳宅・彰化縣員林市中山路',
-  '日安大樓 3F・台中市西區精誠路',
-  '康橋苑 12F・台中市北屯區崇德路',
-  '松林社區 B棟・彰化縣和美鎮彰南路',
-  '幸福巷弄自宅・台中市大里區國光路',
-];
-// 主管總覽的示範同仁，角色化命名（同仁 A/B/C），不綁定真實人名
-const MOCK_TEAM = [
-  { id: 'A', label: '同仁 A', entries: {
-    '0900之前': { category: '場勘', otherCategoryText: '', caseName: '王公館・台中市南屯區文心路三段', repairReason: '', plannedSchedule: '原訂 8 點到王公館場勘', note: '確認客變位置，拍照存證' },
-    '09:00-10:00': { category: '廠商聯繫', otherCategoryText: '', caseName: '王公館・台中市南屯區文心路三段', repairReason: '磁磚色差需重新確認', plannedSchedule: '', note: '聯繫泥作師傅確認磁磚批號' },
-    '10:00-11:00': { category: '驗收', otherCategoryText: '', caseName: '陳宅・彰化縣員林市中山路', repairReason: '衛浴防水複驗', plannedSchedule: '原訂 10 點驗收', note: '複驗通過，補拍照片' },
-    '13:00-14:00': { category: '內部會議', otherCategoryText: '', caseName: '', repairReason: '', plannedSchedule: '', note: '工班排程週會' },
-    '14:00-15:00': { category: '文書作業', otherCategoryText: '', caseName: '', repairReason: '', plannedSchedule: '', note: '補登本週工項紀錄' },
-  } },
-  { id: 'B', label: '同仁 B', entries: {
-    '0900之前': { category: '場勘', otherCategoryText: '', caseName: '康橋苑 12F・台中市北屯區崇德路', repairReason: '', plannedSchedule: '', note: '新案場勘' },
-    '09:00-10:00': { category: OTHER_CATEGORY, otherCategoryText: '搬運材料', caseName: '康橋苑 12F・台中市北屯區崇德路', repairReason: '', plannedSchedule: '', note: '' },
-  } },
-  { id: 'C', label: '同仁 C', entries: {} },
-];
-
-const STORAGE_KEY = 'wuohome_worklog_mock_v1';
-const RECENT_CAT_KEY = 'wuohome_worklog_recent_cat_v1';
-const ROLE_KEY = 'wuohome_worklog_demo_role_v1';
 
 const byId = (id) => document.getElementById(id);
 function make(tag, cls, text) {
@@ -279,42 +191,48 @@ function make(tag, cls, text) {
   return node;
 }
 const pad = (n) => String(n).padStart(2, '0');
+function uid() { return 'x' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4); }
 
-function hourSlots() {
-  return WORKLOG_HOURS.map((label) => ({ label }));
+// ================= 時間工具（15 分鐘刻度） =================
+const STEP_MINUTES = 15;
+function timeToMinutes(t) { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; }
+function minutesToTime(mins) { mins = ((Math.round(mins) % 1440) + 1440) % 1440; return `${pad(Math.floor(mins / 60))}:${pad(mins % 60)}`; }
+function roundToStep(mins, step) { step = step || STEP_MINUTES; return Math.round(mins / step) * step; }
+function floorHour(mins) { return Math.floor(mins / 60) * 60; }
+function ceilHour(mins) { return Math.ceil(mins / 60) * 60; }
+function nowMinutes() { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); }
+function formatDuration(mins) {
+  const h = Math.floor(mins / 60), m = mins % 60;
+  if (h === 0) return `${m} 分鐘`;
+  if (m === 0) return `${h} 小時`;
+  return `${h} 小時 ${m} 分`;
 }
-// dateStrForOffset/dateDisplayForOffset：todayStr/todayDisplay 抽出「+N 天」版本，供下方
-// 「今天／明天」切換共用，不用另外複製一份日期運算邏輯。
+
+// ================= 日期（今天／明天／可往回查詢，沿用 V1 已驗證過的跨日鎖定精神） =================
 function dateStrForOffset(offsetDays) {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
-function todayStr() { return dateStrForOffset(0); }
 function dateDisplayForOffset(offsetDays) {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
   const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
   return `${d.getMonth() + 1}/${d.getDate()}（${wd}）`;
 }
-function todayDisplay() { return dateDisplayForOffset(0); }
-function currentHourLabel() {
-  const h = new Date().getHours();
-  if (h < 9) return '0900之前';
-  if (h >= 19) return '19:00之後';
-  if (h === 12) return null; // 午休無對應小時格
-  const label = `${pad(h)}:00-${pad(h + 1)}:00`;
-  return WORKLOG_HOURS.includes(label) ? label : null;
-}
-// 2026-07-24：新增「今天／明天」填寫切換——陳勁豪、葉恩廷實際使用後提出的真實需求，早上就能
-// 先把明天預定要做的事排好，不用等到當天。只開放「今天/明天」兩格，不做完整日期選擇器；維持
-// 既有跨日鎖定精神，不開放切到昨天或更早去編輯（Worker 端 date_locked_past 同步擋）。
-let SELECTED_DATE = 'today'; // 'today' | 'tomorrow'
-function selectedOffsetDays() { return SELECTED_DATE === 'tomorrow' ? 1 : 0; }
-function selectedDateStr() { return dateStrForOffset(selectedOffsetDays()); }
-function selectedDateDisplay() { return dateDisplayForOffset(selectedOffsetDays()); }
-// 「現在」高亮／快速記錄只對「今天」畫面有意義，明天畫面沒有現在進行式的小時
-function activeHourLabel() { return SELECTED_DATE === 'today' ? currentHourLabel() : null; }
+// 2026-07-25 修復：往回查看無上限會變成無意義的空查詢，上限訂 90 天；往前寫入規則不變
+// （後端只允許今天或未來，故 UI 也只開放到「明天」，不因本次開放回看而放寬寫入）。
+const NAV_MIN_OFFSET = -90;
+const NAV_MAX_OFFSET = 1;
+let SELECTED_OFFSET = 0; // 0=今天，正數=未來（僅開放到 1＝明天），負數=過去（唯讀）
+function selectedDateStr() { return dateStrForOffset(SELECTED_OFFSET); }
+function selectedDateDisplay() { return dateDisplayForOffset(SELECTED_OFFSET); }
+function isPastSelected() { return SELECTED_OFFSET < 0; }
+
+// ================= 本機資料（依日期分開存放；API_MODE 下靠 rid 跟 Ragic 對齊） =================
+// 形狀：{ [dateStr]: { blocks: { [localId]: Block } } }
+const STORAGE_KEY = 'wuohome_worklog_v2_data_v2';
+const RECENT_CAT_KEY = 'wuohome_worklog_v2_recent_cat_v1';
 
 function loadAllState() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; }
@@ -322,63 +240,99 @@ function loadAllState() {
 function saveAllState(s) { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
 function getDayState(dateStr) {
   const all = loadAllState();
-  if (!all[dateStr]) all[dateStr] = { entries: {}, submitted: false, submittedAt: null };
+  if (!all[dateStr]) all[dateStr] = { blocks: {} };
   return all[dateStr];
 }
-function setDayState(dateStr, dayState) {
+function setDayState(dateStr, day) {
   const all = loadAllState();
-  all[dateStr] = dayState;
+  all[dateStr] = day;
   saveAllState(all);
 }
-function blankEntry() { return { category: '', otherCategoryText: '', caseName: '', repairReason: '', plannedSchedule: '', note: '', synced: false }; }
-function ensureEntry(day, label) {
-  if (!day.entries[label]) day.entries[label] = blankEntry();
-  return day.entries[label];
-}
-function getEntry(day, label) { return day.entries[label] || null; }
-function isFilled(entry) { return !!(entry && entry.category); }
 
 function loadRecentCats() {
   try { return JSON.parse(localStorage.getItem(RECENT_CAT_KEY)) || []; } catch { return []; }
 }
 function pushRecentCat(name) {
   if (!name) return;
-  const list = [name, ...loadRecentCats().filter((x) => x !== name)].slice(0, 8);
+  const list = [name, ...loadRecentCats().filter((x) => x !== name)].slice(0, 6);
   localStorage.setItem(RECENT_CAT_KEY, JSON.stringify(list));
 }
-// 依角色 categoryGroup 決定「預設子集在前」的完整順序（顯示順序調整，不是砍選項——
-// 兩組都在完整清單內，只是誰排前面）。IDENTITY 在本機模擬模式（無 token）下是 null，
-// 走跟舊版一致的預設順序（工務優先），不影響既有開發/除錯流程。
-function categoryGroupOrder() {
-  const group = IDENTITY && IDENTITY.categoryGroup;
-  return group === '租賃' ? [...CATEGORIES_RENTAL, ...CATEGORIES_WORK] : [...CATEGORIES_WORK, ...CATEGORIES_RENTAL];
-}
-function orderedCategoriesForNewRow() {
-  const base = categoryGroupOrder();
+function orderedCategories() {
+  const base = categoriesForIdentity(IDENTITY);
   const recent = loadRecentCats().filter((c) => base.includes(c));
   const rest = base.filter((c) => !recent.includes(c));
   return [...recent, ...rest];
 }
 
-let ROLE = localStorage.getItem(ROLE_KEY) || 'staff';
-// API_MODE 下優先顯示 token 對應的真實姓名（IDENTITY，由 worklogListMine 取得）；
-// 無 token 的本機模擬模式維持原本的示範文字。
-function roleLabel(r) {
-  if (IDENTITY && IDENTITY.name) return r === 'manager' ? `${IDENTITY.name}（主管）` : IDENTITY.name;
-  return r === 'manager' ? '小吳哥（主管）' : '工務同仁（你）';
+// ================= Block 資料形狀 =================
+// { id, rid(伺服器 row id，尚未送出成功前為 null), start, end, category, otherCategoryText,
+//   caseName, repairReason, plannedSchedule, note, synced, saveError }
+function blankBlock() {
+  return { id: uid(), rid: null, start: '', end: '', category: '', otherCategoryText: '', caseName: '', repairReason: '', plannedSchedule: '', note: '', synced: false, saveError: null, isLegacy: false, legacyHourLabel: null };
 }
-function setRole(r) { ROLE = r; localStorage.setItem(ROLE_KEY, r); }
+function isBlockFilled(b) { return !!(b && b.category); }
+function blocksList(day) { return Object.values(day.blocks); }
+// 舊格式桶籃選項（0900之前／19:00之後）沒有精確起訖時間，排序時給定合理的相對位置：
+// 「0900之前」排最前、「19:00之後」排最後，其餘無法辨識的字串保守排在接近末段。
+function legacyHourSortHint(hourLabel) {
+  if (hourLabel === '0900之前') return -1;
+  if (hourLabel === '19:00之後') return 24 * 60 + 1;
+  return 24 * 60;
+}
+function blockSortMinutes(b) {
+  const m = timeToMinutes(b.start);
+  if (m != null) return m;
+  return b.isLegacy ? legacyHourSortHint(b.legacyHourLabel) : 0;
+}
+function sortedBlocks(day) {
+  return blocksList(day).slice().sort((a, b) => blockSortMinutes(a) - blockSortMinutes(b));
+}
+// 核心價值（Joan 2026-07-25 拍板）：排了但沒做，要自然可見——時段已過、預先排定行程有填，
+// 但紀錄內容還空著，代表「排了但沒真的去做／忘了補」，只對「今天」有意義（明天畫面沒有
+// 現在進行式，過去日期已鎖定不可再改也無從補救）。
+function isOverdueUnrecorded(dateStr, block) {
+  if (block.isLegacy) return false; // 舊格式歷史紀錄不適用「排了但沒做」判斷（唯讀呈現即可）
+  if (dateStr !== dateStrForOffset(0)) return false;
+  // 必須「已經有排定意圖」（項目已選）才算「排了但沒做」；完全空白、使用者才剛點開還沒填
+  // 任何東西的新草稿列，不該被當成逾期警示（2026-07-25 agent-browser 實測發現的假陽性）。
+  if (!block.end || block.note || !block.category) return false;
+  return timeToMinutes(block.end) < nowMinutes();
+}
 
-let EXPANDED = new Set();
-let EXPANDED_MEMBER = null;
+// ================= 建議的預設起訖時間（降低摩擦：接續上一筆結束時間） =================
+function suggestedStartTime(day) {
+  const filled = blocksList(day).filter((b) => b.start && b.end);
+  if (filled.length) {
+    const maxEnd = Math.max(...filled.map((b) => timeToMinutes(b.end)));
+    return minutesToTime(Math.min(maxEnd, 23 * 60 + 45));
+  }
+  if (SELECTED_OFFSET === 0) return minutesToTime(Math.min(roundToStep(nowMinutes()), 23 * 60 + 45));
+  return '09:00';
+}
+function suggestedEndTime(startTime) {
+  const s = timeToMinutes(startTime);
+  return minutesToTime(Math.min(s + 60, 23 * 60 + 45));
+}
 
-// 2026-07-24 資料遺失事故修復：送出失敗不能只靠 2.4 秒自動消失的 toast，容易被忽略、
-// 誤以為已經存檔。這裡用一個「不會自動消失」的錯誤狀態，畫在送出按鈕正上方，直到下一次
-// 送出（不論成敗）才清除，逼使用者一定看得到、也知道要按「重試送出」。依日期（今天／明天）
-// 分開記錄，切分頁不會互相蓋掉。
-let submitErrorByDate = {}; // { [dateStr]: { message } }
+// ================= 重疊偵測（軟提醒，不阻擋送出） =================
+function findOverlaps(day, blockId, start, end) {
+  const s = timeToMinutes(start), e = timeToMinutes(end);
+  if (s == null || e == null || e <= s) return [];
+  return blocksList(day)
+    .filter((b) => b.id !== blockId && b.start && b.end)
+    .map((b) => {
+      const bs = timeToMinutes(b.start), be = timeToMinutes(b.end);
+      const os = Math.max(s, bs), oe = Math.min(e, be);
+      return oe > os ? { block: b, minutes: oe - os } : null;
+    })
+    .filter(Boolean);
+}
+function blockHasOverlap(day, block) {
+  if (!block.start || !block.end) return false;
+  return findOverlaps(day, block.id, block.start, block.end).length > 0;
+}
 
-// ================= Toast =================
+// ================= Toast（僅用於非關鍵操作回饋；送出失敗一律走持久錯誤框） =================
 let toastTimer = null;
 function showToast(msg) {
   let t = byId('toast');
@@ -393,160 +347,25 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.style.opacity = '0'; }, 2400);
 }
-function emptyNote(text, tone) {
-  const cls = tone === 'sage'
-    ? 'rounded-xl border border-sage/30 bg-sagetint p-4 text-center text-sm font-bold text-sage'
-    : 'rounded-xl border border-line bg-white p-4 text-center text-sm text-inkmuted';
-  return make('div', cls, text);
+function emptyNote(text) {
+  return make('div', 'rounded-xl border border-line bg-white p-4 text-center text-sm text-inkmuted', text);
+}
+function renderFatalError(msg) {
+  ['worklog', 'overview'].forEach((v) => { const el = byId('view-' + v); if (el) el.hidden = (v !== 'worklog'); });
+  byId('view-worklog').replaceChildren(emptyNote(msg));
+  byId('sidebarNav').replaceChildren();
+  byId('sidebarPlanned').replaceChildren();
+  byId('bottomTabBar').replaceChildren();
+  byId('pageTitle').textContent = '無法載入';
+  // 2026-07-25：攔截畫面不顯示任何「模式」標籤，避免跟「無法載入」語意矛盾（見 init() 說明）。
+  const modeLabel = byId('modeLabel');
+  if (modeLabel) modeLabel.textContent = '';
 }
 
-// ================= 填寫頁：工作日誌 =================
-function submittedBanner(day) {
-  const el = make('div', 'mb-4 rounded-xl border border-sage/30 bg-sagetint px-4 py-2.5 text-sm font-bold text-sage');
-  // submittedAt 可能是 null（API_MODE 下從 worklogListMine 載入既有紀錄，Ragic 沒存「送出時間」
-  // 這個概念，只有本機這次 session 自己送出才會有精確時間），沒有就不編造假時間。
-  // 2026-07-24：明天分頁的措辭改「排定」而非「送出」，避免使用者誤以為明天已經發生過了。
-  const isTomorrow = SELECTED_DATE === 'tomorrow';
-  el.textContent = day.submittedAt
-    ? `${isTomorrow ? '明天的紀錄' : '本日紀錄'}已於 ${new Date(day.submittedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })} ${isTomorrow ? '排定' : '送出'}，到那天之前都還能修改，改完記得再送出一次。`
-    : (isTomorrow ? '明天已經有排定的紀錄了，到那天之前都還能修改，改完記得再送出一次。' : '今天已經有紀錄了，今天內都還能修改，改完記得再送出一次。');
-  return el;
-}
-
-function renderQuickCta(day) {
-  const wrap = make('div', 'mb-4 flex items-center justify-between gap-3 rounded-2xl border border-line bg-white p-4');
-  const cur = activeHourLabel(); // 明天畫面永遠是 null，沒有「現在進行式」的小時
-  const left = make('div', 'min-w-0');
-  const btn = make('button', 'tap44 shrink-0 rounded-xl bg-coral px-4 text-sm font-black text-white transition-transform hover:bg-coraldark active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink disabled:cursor-not-allowed disabled:bg-line disabled:text-inkmuted');
-  btn.type = 'button';
-
-  let targetLabel = null;
-  if (cur) {
-    const entry = getEntry(day, cur);
-    left.append(make('p', 'text-sm font-bold text-ink', isFilled(entry) ? '現在這個小時已經填過了' : '現在這個小時還沒填'));
-    left.append(make('p', 'tnum mt-0.5 text-xs text-inkmuted', cur));
-    btn.textContent = isFilled(entry) ? '檢視／修改 →' : '+ 記錄現在 →';
-    targetLabel = cur;
-  } else {
-    const firstUnfilled = hourSlots().find((s) => !isFilled(getEntry(day, s.label)));
-    if (firstUnfilled) {
-      left.append(make('p', 'text-sm font-bold text-ink', SELECTED_DATE === 'tomorrow' ? '先把明天預定要做的事排一下' : '不在工作時段內，仍可補填今天的紀錄'));
-      left.append(make('p', 'tnum mt-0.5 text-xs text-inkmuted', `建議從 ${firstUnfilled.label} 開始`));
-      btn.textContent = SELECTED_DATE === 'tomorrow' ? '+ 開始排定 →' : '開始補填 →';
-      targetLabel = firstUnfilled.label;
-    } else {
-      left.append(make('p', 'text-sm font-bold text-sage', SELECTED_DATE === 'tomorrow' ? '明天的時段都排定過了' : '今天的時段都處理過了'));
-      btn.textContent = '已全部完成';
-      btn.disabled = true;
-    }
-  }
-  wrap.append(left, btn);
-  if (targetLabel) {
-    btn.addEventListener('click', () => {
-      EXPANDED.add(targetLabel);
-      renderWorklogView();
-      requestAnimationFrame(() => {
-        const rowEl = byId(`row-${encodeURIComponent(targetLabel)}`);
-        if (rowEl) rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
-    });
-  }
-  return wrap;
-}
-
-function renderProgress(day) {
-  const total = hourSlots().length;
-  const filled = hourSlots().filter((s) => isFilled(getEntry(day, s.label))).length;
-  const wrap = make('div', 'mb-4');
-  const row = make('div', 'mb-1.5 flex items-center justify-between');
-  row.append(make('p', 'tnum text-xs font-bold text-inkmuted', `已填 ${filled} ／ ${total} 小時`));
-  row.append(make('p', 'text-[11px] text-inkfaint', filled < total ? '沒事的小時按「標記為無特別事項」快速跳過即可' : '可以送出了'));
-  wrap.append(row);
-  const track = make('div', 'h-1.5 w-full overflow-hidden rounded-full bg-line');
-  const fill = make('div', 'h-full rounded-full bg-ink');
-  fill.style.width = `${Math.round((filled / total) * 100)}%`;
-  track.append(fill);
-  wrap.append(track);
-  return wrap;
-}
-
-function copyFromPrevious(idx) {
-  const slots = hourSlots();
-  if (idx === 0) { showToast('這是第一個時段，沒有上一小時可以複製'); return; }
-  const dateStr = selectedDateStr();
-  const day = getDayState(dateStr);
-  const prevEntry = getEntry(day, slots[idx - 1].label);
-  if (!prevEntry || !prevEntry.category) { showToast('上一小時還沒填寫，無法複製'); return; }
-  const label = slots[idx].label;
-  const entry = ensureEntry(day, label);
-  entry.category = prevEntry.category;
-  entry.otherCategoryText = prevEntry.otherCategoryText || '';
-  entry.caseName = prevEntry.caseName || '';
-  entry.repairReason = prevEntry.repairReason || '';
-  entry.plannedSchedule = prevEntry.plannedSchedule || '';
-  // 紀錄內容刻意不複製：同一件事跨小時，細節通常不同，留給使用者補這一小時實際發生的事
-  setDayState(dateStr, day);
-  pushRecentCat(entry.category);
-  EXPANDED.add(label);
-  showToast(`已複製上一小時的內容到 ${label}`);
-  renderWorklogView();
-}
-
-function quickSkip(idx) {
-  const label = hourSlots()[idx].label;
-  const dateStr = selectedDateStr();
-  const day = getDayState(dateStr);
-  const entry = ensureEntry(day, label);
-  entry.category = OTHER_CATEGORY;
-  entry.otherCategoryText = '無特別事項';
-  entry.caseName = ''; entry.repairReason = ''; entry.plannedSchedule = ''; entry.note = '';
-  setDayState(dateStr, day);
-  showToast(`${label} 已標記為無特別事項`);
-  renderWorklogView();
-}
-
-function applyForward(idx) {
-  const slots = hourSlots();
-  const label = slots[idx].label;
-  const dateStr = selectedDateStr();
-  const day = getDayState(dateStr);
-  const src = getEntry(day, label);
-  if (!src || !src.category) return;
-  let count = 0;
-  for (let j = idx + 1; j < slots.length; j++) {
-    const l2 = slots[j].label;
-    const existing = getEntry(day, l2);
-    if (existing && existing.category) break;
-    const ne = ensureEntry(day, l2);
-    ne.category = src.category;
-    ne.otherCategoryText = src.otherCategoryText || '';
-    ne.caseName = src.caseName || '';
-    ne.repairReason = src.repairReason || '';
-    ne.plannedSchedule = src.plannedSchedule || '';
-    count++;
-  }
-  setDayState(dateStr, day);
-  showToast(count > 0 ? `已套用到之後 ${count} 個空白小時` : '後面沒有空白小時可以套用了');
-  renderWorklogView();
-}
-
-function toggleExpand(label) {
-  if (EXPANDED.has(label)) EXPANDED.delete(label); else EXPANDED.add(label);
-  renderWorklogView();
-}
-
-function fieldLabel(text) { return make('label', 'block text-xs font-bold text-inkmuted', text); }
-
-// 展開/收合視覺提示（2026-07-22 Joan 實測回饋：原本只有一個小小的淡灰 chevron「⌄」，
-// 看不出整列可以點開。改成粗線 SVG chevron＋動詞文字的 pill，沿用 from.html 粗框高對比語彙。
-// 2026-07-23 復原：這版修正曾在稍早的本機分支做過，但後續 Worker API 串接／blur 修復兩支
-// commit push 上去後在 origin 上遺失了（本機沒 rebase 到最新就沒重新套用），造成正式站又退回
-// 純字元 chevron。這次改動一律直接對照當下最新的 origin/main 內容修，避免再蓋掉別人接的東西。
 const CHEVRON_DOWN_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 const CHEVRON_UP_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>';
 function expandHintPill(expanded, filled) {
-  let cls;
-  let text;
+  let cls, text;
   if (expanded) { cls = 'border-line bg-paper text-ink'; text = '收合'; }
   else if (filled) { cls = 'border-line bg-white text-ink'; text = '查看'; }
   else { cls = 'border-coral bg-white text-coraldark'; text = '填寫'; }
@@ -557,77 +376,320 @@ function expandHintPill(expanded, filled) {
   pill.append(ic);
   return pill;
 }
+function fieldLabel(text) { return make('label', 'block text-xs font-bold text-inkmuted', text); }
 
-function renderHourRow(slot, idx, day) {
-  const label = slot.label;
-  const entry = ensureEntry(day, label);
-  const filled = isFilled(entry);
-  const expanded = EXPANDED.has(label);
-  const isCurrent = label === activeHourLabel();
-  const panelId = `hour-panel-${idx}`;
+let EXPANDED_BLOCKS = new Set();
+let EXPANDED_MEMBER = null;
 
-  const wrap = make('div', `rounded-xl border bg-white ${isCurrent ? 'border-coral' : 'border-line'}`);
-  wrap.id = `row-${encodeURIComponent(label)}`;
+// ================= 時間軸視覺化 =================
+function computeTimelineWindow(blocks) {
+  const filled = blocks.filter((b) => b.start && b.end);
+  const starts = filled.map((b) => timeToMinutes(b.start));
+  const ends = filled.map((b) => timeToMinutes(b.end));
+  const minS = starts.length ? Math.min(...starts, 7 * 60) : 7 * 60;
+  const maxE = ends.length ? Math.max(...ends, 20 * 60) : 20 * 60;
+  return { start: floorHour(minS), end: ceilHour(maxE) };
+}
+function buildTimelineSegments(blocks, win) {
+  const sorted = blocks.filter((b) => b.start && b.end).slice().sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+  const segs = [];
+  let cursor = win.start;
+  sorted.forEach((b) => {
+    const s = Math.max(timeToMinutes(b.start), win.start, cursor);
+    const e = Math.min(timeToMinutes(b.end), win.end);
+    if (e <= s) return;
+    if (s > cursor) segs.push({ type: 'gap', start: cursor, end: s });
+    segs.push({ type: 'block', start: s, end: e, block: b });
+    cursor = Math.max(cursor, e);
+  });
+  if (cursor < win.end) segs.push({ type: 'gap', start: cursor, end: win.end });
+  return segs;
+}
+function timelineLegendDot(cls, style) {
+  const dot = make('span', `inline-block h-3 w-3 shrink-0 rounded-[3px] ${cls}`);
+  if (style) Object.assign(dot.style, style);
+  return dot;
+}
+function renderTimelineLegend() {
+  const wrap = make('div', 'mt-2 flex flex-wrap gap-x-4 gap-y-1.5');
+  const items = [
+    { dot: timelineLegendDot('bg-submitted'), label: '已送出' },
+    { dot: timelineLegendDot('bg-pendingtint', { boxShadow: 'inset 0 0 0 2px #8A5A00' }), label: '尚未送出' },
+    { dot: timelineLegendDot('bg-overlap'), label: '時間重疊' },
+    { dot: timelineLegendDot('', { backgroundImage: 'repeating-linear-gradient(135deg, #FBF0DC 0 4px, #C81E1E 4px 8px)' }), label: '已排定・尚未補紀錄' },
+    { dot: timelineLegendDot('', { backgroundImage: 'repeating-linear-gradient(135deg, var(--c-gap-a) 0 4px, var(--c-gap-b) 4px 8px)' }), label: '空檔（可點擊新增）' },
+  ];
+  items.forEach((it) => {
+    const row = make('span', 'inline-flex items-center gap-1.5 text-[11px] font-bold text-inkmuted');
+    row.append(it.dot, make('span', '', it.label));
+    wrap.append(row);
+  });
+  return wrap;
+}
+function renderTimelineBar(dateStr, day, blocks) {
+  const win = computeTimelineWindow(blocks);
+  const segs = buildTimelineSegments(blocks, win);
+  const totalMin = Math.max(win.end - win.start, 1);
 
-  const headerBtn = make('button', `tap44 flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-paper active:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${expanded ? 'rounded-t-xl' : 'rounded-xl'}`);
-  headerBtn.type = 'button';
-  headerBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-  headerBtn.setAttribute('aria-controls', panelId);
+  const wrap = make('div', 'mb-4');
+  const track = make('div', 'timeline-track');
 
-  const timeCol = make('div', 'w-[86px] shrink-0');
-  timeCol.append(make('p', 'tnum text-sm font-black text-ink', label));
-  if (isCurrent) timeCol.append(make('span', 'mt-0.5 inline-block rounded-full bg-coraltint px-1.5 py-0.5 text-[10px] font-bold text-coraldark', '現在'));
-  headerBtn.append(timeCol);
+  segs.forEach((seg) => {
+    const dur = Math.max(seg.end - seg.start, 1);
+    if (seg.type === 'gap') {
+      const btn = make('button', 'timeline-seg timeline-seg-gap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink');
+      btn.type = 'button';
+      btn.style.flex = `${dur} 0 0%`;
+      btn.setAttribute('aria-label', `${minutesToTime(seg.start)}–${minutesToTime(seg.end)} 沒有紀錄，點擊新增`);
+      btn.addEventListener('click', () => addBlock(dateStr, { start: minutesToTime(seg.start), end: minutesToTime(seg.end) }));
+      track.append(btn);
+    } else {
+      const hasOverlap = blockHasOverlap(day, seg.block);
+      const overdue = isOverdueUnrecorded(dateStr, seg.block);
+      const stateCls = overdue ? 'timeline-seg-overdue' : hasOverlap ? 'timeline-seg-overlap' : (seg.block.synced ? 'timeline-seg-submitted' : 'timeline-seg-pending');
+      const catLabel = seg.block.category === OTHER_CATEGORY ? (seg.block.otherCategoryText || '其他') : (seg.block.category || '未填項目');
+      const stateText = overdue ? '（已排定・尚未補紀錄）' : hasOverlap ? '（時間重疊）' : seg.block.synced ? '（已送出）' : '（尚未送出）';
+      const legacySuffix = seg.block.isLegacy ? '（舊版格式）' : '';
+      const btn = make('button', `timeline-seg timeline-seg-block ${stateCls} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink`);
+      btn.type = 'button';
+      btn.style.flex = `${dur} 0 0%`;
+      btn.setAttribute('aria-label', `${seg.block.start}–${seg.block.end} ${catLabel}${stateText}${legacySuffix}`);
+      btn.addEventListener('click', () => {
+        // 舊格式紀錄唯讀呈現，不展開成編輯表單，只捲動過去讓使用者看到。
+        if (!seg.block.isLegacy) EXPANDED_BLOCKS.add(seg.block.id);
+        renderWorklogView();
+        requestAnimationFrame(() => {
+          const el = byId(`row-block-${seg.block.id}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+      });
+      track.append(btn);
+    }
+  });
 
-  const previewCol = make('div', 'min-w-0 flex-1');
-  if (filled) {
-    const line = make('p', 'flex flex-wrap items-center gap-1.5');
-    const catLabel = entry.category === OTHER_CATEGORY ? (entry.otherCategoryText || '其他') : entry.category;
-    line.append(make('span', 'inline-block shrink-0 rounded-full bg-paper px-2 py-0.5 text-xs font-bold text-inkmuted', catLabel));
-    // 2026-07-24 資料遺失事故修復：草稿（本機填過但還沒送出）與已送出（Ragic 確認收到）
-    // 視覺上一律要能一眼分辨，不能讓兩者長得一樣——這是本次事故的根本教訓。
-    line.append(entry.synced
-      ? make('span', 'inline-block shrink-0 rounded-full bg-sagetint px-2 py-0.5 text-xs font-bold text-sage', '已送出')
-      : make('span', 'inline-block shrink-0 rounded-full bg-flagtint px-2 py-0.5 text-xs font-bold text-flagdark', '尚未送出'));
-    if (entry.caseName) line.append(make('span', 'truncate text-sm font-bold text-ink', entry.caseName));
-    previewCol.append(line);
-    if (entry.repairReason) previewCol.append(make('p', 'mt-0.5 truncate text-xs text-inkmuted', `報修原因：${entry.repairReason}`));
-  } else {
-    previewCol.append(make('p', 'text-sm text-inkmuted', '尚未填寫'));
+  if (SELECTED_OFFSET === 0) {
+    const now = nowMinutes();
+    if (now >= win.start && now <= win.end) {
+      const pct = ((now - win.start) / totalMin) * 100;
+      const marker = make('div', 'timeline-now-marker');
+      marker.style.left = `${pct}%`;
+      const dot = make('div', 'timeline-now-dot');
+      dot.style.left = `${pct}%`;
+      const markerWrap = make('div', 'relative');
+      markerWrap.append(track, marker, dot);
+      wrap.append(markerWrap);
+      wrap.append(renderTimelineLegend());
+      return wrap;
+    }
   }
-  headerBtn.append(previewCol);
-  headerBtn.append(expandHintPill(expanded, filled));
-  headerBtn.addEventListener('click', () => toggleExpand(label));
-  wrap.append(headerBtn);
+  wrap.append(track);
+  wrap.append(renderTimelineLegend());
+  return wrap;
+}
 
-  if (!filled && !expanded) {
-    const quickRow = make('div', 'flex gap-2 px-3 pb-3');
-    const copyBtn = make('button', 'tap44 flex-1 rounded-lg border border-line text-xs font-bold text-ink transition-transform hover:bg-paper active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '複製上一小時');
-    copyBtn.type = 'button';
-    const prevEntry = idx > 0 ? getEntry(day, hourSlots()[idx - 1].label) : null;
-    if (!prevEntry || !prevEntry.category) copyBtn.disabled = true;
-    copyBtn.addEventListener('click', (e) => { e.stopPropagation(); copyFromPrevious(idx); });
-    const skipBtn = make('button', 'tap44 flex-1 rounded-lg border border-line text-xs font-bold text-inkmuted transition-transform hover:bg-paper active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '標記為無特別事項');
-    skipBtn.type = 'button';
-    skipBtn.addEventListener('click', (e) => { e.stopPropagation(); quickSkip(idx); });
-    quickRow.append(copyBtn, skipBtn);
-    wrap.append(quickRow);
+// ================= 快速起訖調整 =================
+function timeAdjustRow(getEnd, setEnd, rerender) {
+  const row = make('div', 'mt-1.5 flex flex-wrap gap-1.5');
+  [15, 30, 60].forEach((mins) => {
+    const btn = make('button', 'tap44 rounded-lg border border-line px-2.5 text-xs font-bold text-ink transition-transform hover:bg-paper active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', `+${mins < 60 ? mins + '分' : (mins / 60) + '小時'}`);
+    btn.type = 'button';
+    btn.addEventListener('click', () => { setEnd(minutesToTime(Math.min(timeToMinutes(getEnd()) + mins, 23 * 60 + 45))); rerender(); });
+    row.append(btn);
+  });
+  const nowBtn = make('button', 'tap44 rounded-lg border border-line px-2.5 text-xs font-bold text-coraldark transition-transform hover:bg-paper active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '到現在');
+  nowBtn.type = 'button';
+  nowBtn.addEventListener('click', () => { setEnd(minutesToTime(roundToStep(nowMinutes()))); rerender(); });
+  row.append(nowBtn);
+  return row;
+}
+
+// ================= 送出【其他】前綴組裝／還原（比照 V1 既有慣例，讀寫一致） =================
+function buildNoteForSubmit(block) {
+  return block.category === OTHER_CATEGORY && block.otherCategoryText
+    ? `【${block.otherCategoryText}】${block.note || ''}`.trim()
+    : (block.note || '');
+}
+
+// ================= V1 舊格式相容（唯讀顯示，不可編輯／不寫回 Ragic，見踩坑速查對應條目） =================
+// V1「時間(小時)」(fid 1003095) 是下拉選項字串；V2 上線（2026-07-25 新增 startTime/endTime 欄位）
+// 之前的所有真實歷史紀錄都是這個格式。中段 9 個選項是「HH:MM-HH:MM」可解析成起訖時間，直接讓它
+// 正常排序、畫進時間軸；頭尾「0900之前／19:00之後」是無法還原精確時間的桶籃選項，仍要在清單顯示
+// （用原字串當時段文字），但不勉強塞進時間軸。
+const LEGACY_HOUR_RANGE_RE = /^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/;
+function parseLegacyHourRange(hour) {
+  const m = LEGACY_HOUR_RANGE_RE.exec((hour || '').trim());
+  return m ? { start: `${m[1]}:${m[2]}`, end: `${m[3]}:${m[4]}` } : null;
+}
+function parseApiEntry(rec) {
+  const isLegacy = !(rec.startTime && rec.endTime);
+  let start = rec.startTime || '';
+  let end = rec.endTime || '';
+  let legacyHourLabel = null;
+  if (isLegacy) {
+    const parsed = parseLegacyHourRange(rec.hour);
+    if (parsed) { start = parsed.start; end = parsed.end; }
+    else legacyHourLabel = rec.hour || '';
+  }
+  let category = rec.category || '';
+  let otherCategoryText = '';
+  let note = rec.note || '';
+  if (category === OTHER_CATEGORY) {
+    const m = /^【([^】]*)】([\s\S]*)$/.exec(note);
+    if (m) { otherCategoryText = m[1]; note = m[2]; }
+  }
+  return {
+    id: 'r' + rec.rid, rid: rec.rid,
+    start, end, category, otherCategoryText, note,
+    caseName: rec.caseName || '', repairReason: rec.repairReason || '', plannedSchedule: rec.plannedSchedule || '',
+    synced: true, saveError: null,
+    isLegacy, legacyHourLabel,
+  };
+}
+
+// 2026-07-24 事故教訓（V1 同款修復，V2 沿用同一原則）：Ragic 回什麼、不能無條件覆寫本機——
+// Ragic 有的（有 rid）視為已送出真相採用；本機還有「沒有 rid、但已經填寫」的草稿，代表
+// 尚未成功送出，必須保留不清除，交給 UI 用「尚未送出」徽章讓使用者自己看得到。
+// 2026-07-25 修復：V1 舊格式（hour 小時格、無 startTime/endTime）的紀錄改由 parseApiEntry
+// 判斷格式並標記 isLegacy，不再整批過濾掉（見上方「V1 舊格式相容」區塊）。
+function applyMineData(json, dateStr) {
+  const existing = getDayState(dateStr);
+  const day = { blocks: {} };
+  (json.entries || []).forEach((rec) => {
+    const b = parseApiEntry(rec);
+    day.blocks[b.id] = b;
+  });
+  Object.entries(existing.blocks || {}).forEach(([id, b]) => {
+    if (!b.rid && isBlockFilled(b) && !day.blocks[id]) day.blocks[id] = { ...b, synced: false };
+  });
+  setDayState(dateStr, day);
+}
+
+async function loadMineFromApi(dateParam) {
+  try {
+    const qs = dateParam ? `&date=${encodeURIComponent(dateParam)}` : '';
+    const res = await fetch(`${WORKER_BASE}/worklogListMine?token=${encodeURIComponent(API_TOKEN)}${qs}`);
+    let json = null;
+    try { json = await res.json(); } catch { json = null; }
+    if (!res.ok || !json || json.ok !== true) return { ok: false, status: res.status };
+    return { ok: true, json };
+  } catch {
+    return { ok: false, status: 0 };
+  }
+}
+
+const LOADED_DATE_KEYS = new Set();
+let dateSwitchReqId = 0;
+async function switchSelectedDate(offset) {
+  offset = Math.max(NAV_MIN_OFFSET, Math.min(NAV_MAX_OFFSET, offset));
+  if (SELECTED_OFFSET === offset) return;
+  const myReqId = ++dateSwitchReqId;
+  SELECTED_OFFSET = offset;
+  EXPANDED_BLOCKS = new Set();
+  if (API_MODE && !LOADED_DATE_KEYS.has(offset)) {
+    renderWorklogView();
+    const result = await loadMineFromApi(offset === 0 ? null : selectedDateStr());
+    if (myReqId !== dateSwitchReqId) return;
+    LOADED_DATE_KEYS.add(offset);
+    if (result.ok) applyMineData(result.json, selectedDateStr());
+  }
+  renderWorklogView();
+}
+
+// ================= 實際紀錄區塊：新增／編輯／儲存（逐筆立即送出真實 API） =================
+async function saveBlock(dateStr, blockId, btn) {
+  const day = getDayState(dateStr);
+  const block = day.blocks[blockId];
+  if (!block) return;
+  if (!block.category) { showToast('請先選擇項目再儲存'); return; }
+  const s = timeToMinutes(block.start), e = timeToMinutes(block.end);
+  if (s == null || e == null) { showToast('請填寫開始與結束時間'); return; }
+  if (e <= s) { showToast('結束時間必須晚於開始時間'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '儲存中…';
+  block.saveError = null;
+
+  if (!API_MODE) {
+    // 開發模擬模式（網址帶 ?dev=1、無 token）：方便除錯 UI，不呼叫真實 API。
+    setTimeout(() => {
+      block.synced = true; block.saveError = null;
+      setDayState(dateStr, day);
+      EXPANDED_BLOCKS.delete(blockId);
+      renderWorklogView();
+      showToast('已儲存（本機模擬，未連線 API）');
+    }, 450);
+    return;
   }
 
-  const gridWrap = make('div', expanded ? '' : 'hidden');
-  gridWrap.id = panelId;
-  const inner = make('div', '');
-  const form = make('div', 'space-y-3 border-t border-line px-3 pb-3 pt-3');
+  const entry = {
+    startTime: block.start, endTime: block.end, category: block.category,
+    caseName: block.caseName || '', repairReason: block.repairReason || '',
+    plannedSchedule: block.plannedSchedule || '', note: buildNoteForSubmit(block),
+  };
+  if (block.rid) entry.rid = block.rid;
 
-  // 項目（按鈕化選擇，不用細小的下拉選單——比照 from.html 的選項按鈕做法，手機好點）
-  // 2026-07-23 修正：已填類別的列原本固定用 CATEGORIES（工務優先的聯集順序），代表恩廷只要
-  // 今天已經填過的小時（實測 11/11 全填），打開查看永遠看到工務分類排最前面，分流形同沒作用。
-  // 改用 categoryGroupOrder()（依角色分組、但不含「最近使用」重排），維持「同一列展開後不會
-  // 因為點擊重排跳動」的原始設計目的，同時讓已填列也照角色分組排序。
-  form.append(fieldLabel('項目'));
-  const catGrid = make('div', 'mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3');
-  (entry.category ? categoryGroupOrder() : orderedCategoriesForNewRow()).forEach((name) => {
-    const isActive = entry.category === name;
+  try {
+    const res = await fetch(`${WORKER_BASE}/worklogCreate?token=${encodeURIComponent(API_TOKEN)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entries: [entry], date: dateStr }),
+    });
+    const json = await res.json().catch(() => null);
+    const r = (json && Array.isArray(json.results)) ? json.results[0] : null;
+    if (!res.ok || !json || !r || !r.ok) {
+      const message = r && r.error
+        ? `送出失敗：${r.error}`
+        : (json && json.error) ? `送出失敗：${json.error}` : '送出失敗，請稍後再試或截圖回報';
+      block.saveError = message;
+      block.synced = false;
+      setDayState(dateStr, day);
+      renderWorklogView();
+      return;
+    }
+    block.rid = r.rid || block.rid;
+    block.synced = true;
+    block.saveError = null;
+    setDayState(dateStr, day);
+    EXPANDED_BLOCKS.delete(blockId);
+    renderWorklogView();
+  } catch (err) {
+    block.saveError = '連線失敗，請檢查網路後重試（內容仍保留在草稿中，未遺失）';
+    block.synced = false;
+    setDayState(dateStr, day);
+    renderWorklogView();
+  }
+}
+function deleteBlock(dateStr, blockId) {
+  const day = getDayState(dateStr);
+  delete day.blocks[blockId];
+  setDayState(dateStr, day);
+  EXPANDED_BLOCKS.delete(blockId);
+  renderWorklogView();
+}
+function addBlock(dateStr, prefill) {
+  const day = getDayState(dateStr);
+  const b = blankBlock();
+  const start = (prefill && prefill.start) || suggestedStartTime(day);
+  Object.assign(b, { start, end: (prefill && prefill.end) || suggestedEndTime(start) }, prefill && prefill.fields ? prefill.fields : {});
+  day.blocks[b.id] = b;
+  setDayState(dateStr, day);
+  EXPANDED_BLOCKS.add(b.id);
+  renderWorklogView();
+  requestAnimationFrame(() => {
+    const el = byId(`row-block-${b.id}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+  return b.id;
+}
+function addFullDayBlock(dateStr) {
+  addBlock(dateStr, { start: '09:00', end: '18:00' });
+  showToast('已建立整天區塊（09:00–18:00），可依實際情況調整起訖時間');
+}
+
+function categoryGrid(entryLike, onPick) {
+  const grid = make('div', 'mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3');
+  orderedCategories().forEach((name) => {
+    const isActive = entryLike.category === name;
     const optBtn = make(
       'button',
       `tap44 rounded-xl border-2 px-2 py-3 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${isActive ? 'border-coral bg-coral text-white' : 'border-line bg-white text-ink hover:border-coral'}`,
@@ -635,473 +697,429 @@ function renderHourRow(slot, idx, day) {
     );
     optBtn.type = 'button';
     optBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-    optBtn.addEventListener('click', () => {
-      const d = getDayState(selectedDateStr());
-      const en = ensureEntry(d, label);
-      en.category = name;
-      if (en.category !== OTHER_CATEGORY) en.otherCategoryText = '';
-      setDayState(selectedDateStr(), d);
-      pushRecentCat(en.category);
-      renderWorklogView();
-    });
-    catGrid.append(optBtn);
+    optBtn.addEventListener('click', () => onPick(name));
+    grid.append(optBtn);
   });
-  form.append(catGrid);
+  return grid;
+}
 
-  // 其他（請註明）
+function overlapWarningBox(day, block) {
+  const overlaps = findOverlaps(day, block.id, block.start, block.end);
+  if (overlaps.length === 0) return null;
+  const box = make('div', 'rounded-lg border-2 border-overlap bg-overlaptint px-3 py-2');
+  const lines = overlaps.map((o) => {
+    const catLabel = o.block.category === OTHER_CATEGORY ? (o.block.otherCategoryText || '其他') : o.block.category;
+    return `${o.block.start}–${o.block.end}（${catLabel}）重疊 ${formatDuration(o.minutes)}`;
+  });
+  box.append(make('p', 'text-xs font-black text-overlapdark', `⚠ 時間跟其他紀錄重疊：${lines.join('、')}`));
+  box.append(make('p', 'mt-0.5 text-[11px] text-inkmuted', '仍可以送出——工作本來就可能交錯（例如中途被打斷去處理別的事），這裡只是提醒你確認一下是不是打錯時間。'));
+  return box;
+}
+
+function renderBlockRow(dateStr, day, block) {
+  const filled = isBlockFilled(block);
+  const expanded = EXPANDED_BLOCKS.has(block.id);
+  const hasOverlap = blockHasOverlap(day, block);
+  const overdue = isOverdueUnrecorded(dateStr, block);
+  const wrap = make('div', 'rounded-xl border border-line bg-white');
+  wrap.id = `row-block-${block.id}`;
+
+  const headerBtn = make('button', `tap44 flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-paper active:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${expanded ? 'rounded-t-xl' : 'rounded-xl'}`);
+  headerBtn.type = 'button';
+  headerBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+
+  const timeCol = make('div', 'w-[104px] shrink-0');
+  timeCol.append(make('p', 'tnum text-sm font-black text-ink', block.start && block.end ? `${block.start}–${block.end}` : '（未設定時間）'));
+  if (block.start && block.end) timeCol.append(make('p', 'tnum text-[10px] text-inkfaint', formatDuration(timeToMinutes(block.end) - timeToMinutes(block.start))));
+  headerBtn.append(timeCol);
+
+  const previewCol = make('div', 'min-w-0 flex-1');
+  if (filled) {
+    const line = make('p', 'flex flex-wrap items-center gap-1.5');
+    const catLabel = block.category === OTHER_CATEGORY ? (block.otherCategoryText || '其他') : block.category;
+    line.append(make('span', 'inline-block shrink-0 rounded-full bg-paper px-2 py-0.5 text-xs font-bold text-inkmuted', catLabel));
+    line.append(block.synced
+      ? make('span', 'inline-flex shrink-0 items-center gap-0.5 rounded-full bg-submitted px-2 py-0.5 text-xs font-bold text-white', '✓ 已送出')
+      : make('span', 'inline-block shrink-0 rounded-full border-2 border-pending bg-pendingtint px-2 py-0.5 text-xs font-bold text-pendingdark', '尚未送出'));
+    if (overdue) line.append(make('span', 'inline-block shrink-0 rounded-full border-2 border-overlap bg-overlaptint px-2 py-0.5 text-xs font-bold text-overlapdark', '⏰ 已排定・尚未補紀錄'));
+    if (hasOverlap) {
+      const overlaps = findOverlaps(day, block.id, block.start, block.end);
+      const otherLabel = overlaps.length === 1
+        ? (overlaps[0].block.category === OTHER_CATEGORY ? (overlaps[0].block.otherCategoryText || '其他') : overlaps[0].block.category)
+        : `${overlaps.length} 筆`;
+      line.append(make('span', 'inline-block shrink-0 rounded-full border-2 border-overlap bg-overlaptint px-2 py-0.5 text-xs font-bold text-overlapdark', `⚠ 與 ${otherLabel} 重疊`));
+    }
+    if (block.caseName) line.append(make('span', 'truncate text-sm font-bold text-ink', block.caseName));
+    previewCol.append(line);
+    if (block.plannedSchedule && !block.note) previewCol.append(make('p', 'mt-0.5 truncate text-xs text-inkmuted', `預計：${block.plannedSchedule}`));
+    if (block.repairReason) previewCol.append(make('p', 'mt-0.5 truncate text-xs text-inkmuted', `報修原因：${block.repairReason}`));
+  } else {
+    previewCol.append(make('p', 'text-sm text-inkmuted', '尚未填寫項目'));
+  }
+  headerBtn.append(previewCol);
+  headerBtn.append(expandHintPill(expanded, filled));
+  headerBtn.addEventListener('click', () => { if (EXPANDED_BLOCKS.has(block.id)) EXPANDED_BLOCKS.delete(block.id); else EXPANDED_BLOCKS.add(block.id); renderWorklogView(); });
+  wrap.append(headerBtn);
+
+  if (!expanded) return wrap;
+
+  const form = make('div', 'space-y-3 border-t border-line px-3 pb-3 pt-3');
+
+  const timeRow = make('div', 'grid grid-cols-2 gap-2');
+  const startWrap = make('div');
+  startWrap.append(fieldLabel('開始時間'));
+  const startInput = make('input', 'mt-1 block w-full rounded-lg border border-line px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
+  startInput.type = 'time'; startInput.step = 900; startInput.value = block.start || '';
+  startWrap.append(startInput);
+  const endWrap = make('div');
+  endWrap.append(fieldLabel('結束時間'));
+  const endInput = make('input', 'mt-1 block w-full rounded-lg border border-line px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
+  endInput.type = 'time'; endInput.step = 900; endInput.value = block.end || '';
+  endWrap.append(endInput);
+  timeRow.append(startWrap, endWrap);
+  form.append(timeRow);
+
+  function commitTime(field, val) {
+    const d = getDayState(dateStr);
+    const b = d.blocks[block.id];
+    if (!b) return;
+    b[field] = val ? minutesToTime(roundToStep(timeToMinutes(val))) : '';
+    setDayState(dateStr, d);
+  }
+  startInput.addEventListener('change', () => { commitTime('start', startInput.value); renderWorklogView(); });
+  endInput.addEventListener('change', () => { commitTime('end', endInput.value); renderWorklogView(); });
+
+  form.append(timeAdjustRow(
+    () => getDayState(dateStr).blocks[block.id].end || block.start,
+    (val) => commitTime('end', val),
+    renderWorklogView,
+  ));
+
+  const overlapBox = overlapWarningBox(getDayState(dateStr), getDayState(dateStr).blocks[block.id]);
+  if (overlapBox) form.append(overlapBox);
+
+  form.append(fieldLabel('項目'));
+  form.append(categoryGrid(block, (name) => {
+    const d = getDayState(dateStr);
+    const b = d.blocks[block.id];
+    b.category = name;
+    if (name !== OTHER_CATEGORY) b.otherCategoryText = '';
+    setDayState(dateStr, d);
+    pushRecentCat(name);
+    renderWorklogView();
+  }));
+
   const otherWrap = make('div', 'accordion grid');
-  otherWrap.style.gridTemplateRows = entry.category === OTHER_CATEGORY ? '1fr' : '0fr';
+  otherWrap.style.gridTemplateRows = block.category === OTHER_CATEGORY ? '1fr' : '0fr';
   const otherInner = make('div', 'accordion-inner');
   const otherLabelEl = make('label', 'block pt-2 text-xs font-bold text-inkmuted', '其他項目名稱（請簡短說明）');
   const otherInput = make('input', 'mt-1 block w-full rounded-lg border border-line px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
   otherInput.type = 'text';
   otherInput.placeholder = '例如：搬運材料、等待廠商';
-  otherInput.value = entry.otherCategoryText || '';
-  otherInput.addEventListener('input', () => { const d = getDayState(selectedDateStr()); ensureEntry(d, label).otherCategoryText = otherInput.value; setDayState(selectedDateStr(), d); });
-  // 2026-07-23 移除 blur→renderWorklogView()：blur 觸發整段重繪，若使用者緊接著把焦點移到同一
-  // 列的下一個文字欄位，「移到下一欄」這個動作本身就是造成這裡 blur 的原因，兩者發生在同一個
-  // synchronous 事件循環內——重繪會把「即將接住焦點」的下一個欄位整個換成新節點，導致那一欄的
-  // 輸入被吃掉（headless 瀏覽器逐欄快速填寫可 100% 重現；真人手動操作下也有機率發生，只是不明顯）。
-  // input 事件已即時同步存進 state，不需要靠 blur 重繪；收合列時 toggleExpand() 本來就會重繪一次
-  // 更新預覽文字，時機已經足夠。
+  otherInput.value = block.otherCategoryText || '';
+  otherInput.addEventListener('input', () => { const d = getDayState(dateStr); d.blocks[block.id].otherCategoryText = otherInput.value; setDayState(dateStr, d); });
   otherLabelEl.append(otherInput);
   otherInner.append(otherLabelEl);
   otherWrap.append(otherInner);
   form.append(otherWrap);
 
-  // 案名(地址)
-  const caseLabelEl = fieldLabel('案名(地址)（選填）');
+  const caseLabelEl = fieldLabel('案名/地址（選填）');
   const caseInput = make('input', 'mt-1 block w-full rounded-lg border border-line px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
   caseInput.type = 'text';
   caseInput.placeholder = '輸入或從既有案件挑選，沒有可留空';
   caseInput.setAttribute('list', 'worklogCaseList');
-  caseInput.value = entry.caseName || '';
-  caseInput.addEventListener('input', () => { const d = getDayState(selectedDateStr()); ensureEntry(d, label).caseName = caseInput.value; setDayState(selectedDateStr(), d); });
-  // 理由同上（otherInput 那段）：不靠 blur 重繪，避免緊接著切下一欄位時把該欄位吃掉。
+  caseInput.value = block.caseName || '';
+  caseInput.addEventListener('input', () => { const d = getDayState(dateStr); d.blocks[block.id].caseName = caseInput.value; setDayState(dateStr, d); });
   caseLabelEl.append(caseInput);
   form.append(caseLabelEl);
 
-  // 報修原因（條件顯示）
+  const repairSet = repairRelatedForIdentity(IDENTITY);
   const repairWrap = make('div', 'accordion grid');
-  repairWrap.style.gridTemplateRows = REPAIR_RELATED.has(entry.category) ? '1fr' : '0fr';
+  repairWrap.style.gridTemplateRows = repairSet.has(block.category) ? '1fr' : '0fr';
   const repairInner = make('div', 'accordion-inner');
   const repairLabelEl = make('label', 'block pt-3 text-xs font-bold text-inkmuted', '報修原因（選填）');
   const repairInput = make('input', 'mt-1 block w-full rounded-lg border border-line px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
   repairInput.type = 'text';
   repairInput.placeholder = '例如：浴室天花板漏水複驗';
-  repairInput.value = entry.repairReason || '';
-  repairInput.addEventListener('input', () => { const d = getDayState(selectedDateStr()); ensureEntry(d, label).repairReason = repairInput.value; setDayState(selectedDateStr(), d); });
-  // 理由同上（otherInput 那段）：不靠 blur 重繪，避免緊接著切下一欄位時把該欄位吃掉。
+  repairInput.value = block.repairReason || '';
+  repairInput.addEventListener('input', () => { const d = getDayState(dateStr); d.blocks[block.id].repairReason = repairInput.value; setDayState(dateStr, d); });
   repairLabelEl.append(repairInput);
   repairInner.append(repairLabelEl);
   repairWrap.append(repairInner);
   form.append(repairWrap);
 
-  // 預先排定行程
+  // 預先排定行程（早上先填，跟紀錄內容共用同一筆——這是本次資料模型的核心設計）
   const planLabelEl = fieldLabel('預先排定行程（選填・建議上午先填）');
   const planInput = make('input', 'mt-1 block w-full rounded-lg border border-line px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
   planInput.type = 'text';
   planInput.placeholder = '例如：原本排定 10 點去王公館驗收';
-  planInput.value = entry.plannedSchedule || '';
-  planInput.addEventListener('input', () => { const d = getDayState(selectedDateStr()); ensureEntry(d, label).plannedSchedule = planInput.value; setDayState(selectedDateStr(), d); });
-  // 理由同上（otherInput 那段）：不靠 blur 重繪，避免緊接著切下一欄位時把該欄位吃掉。
+  planInput.value = block.plannedSchedule || '';
+  planInput.addEventListener('input', () => { const d = getDayState(dateStr); d.blocks[block.id].plannedSchedule = planInput.value; setDayState(dateStr, d); });
   planLabelEl.append(planInput);
   form.append(planLabelEl);
 
-  // 紀錄內容
+  // 紀錄內容（下班前補齊）
   const noteLabelEl = fieldLabel('紀錄內容（選填・建議下班前補齊，簡短就好）');
   const noteTextarea = make('textarea', 'mt-1 block w-full rounded-lg border border-line px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
   noteTextarea.rows = 2;
   noteTextarea.maxLength = 150;
-  noteTextarea.placeholder = '這個小時實際發生的細節，例如：完成客廳插座配線';
-  noteTextarea.value = entry.note || '';
+  noteTextarea.placeholder = '這段時間實際發生的細節，例如：完成客廳插座配線';
+  noteTextarea.value = block.note || '';
   const counter = make('p', 'tnum mt-1 text-right text-[11px] text-inkfaint', `${noteTextarea.value.length}/150`);
   noteTextarea.addEventListener('input', () => {
-    const d = getDayState(selectedDateStr());
-    ensureEntry(d, label).note = noteTextarea.value;
-    setDayState(selectedDateStr(), d);
+    const d = getDayState(dateStr);
+    d.blocks[block.id].note = noteTextarea.value;
+    setDayState(dateStr, d);
     counter.textContent = `${noteTextarea.value.length}/150`;
-    counter.className = `tnum mt-1 text-right text-[11px] ${noteTextarea.value.length >= 140 ? 'font-bold text-coraldark' : 'text-inkfaint'}`;
   });
   noteLabelEl.append(noteTextarea);
   form.append(noteLabelEl, counter);
 
-  // 動作列
+  if (block.saveError) {
+    const errBox = make('div', 'rounded-lg border-2 border-red-300 bg-red-50 px-3 py-2');
+    errBox.append(make('p', 'text-xs font-black text-red-700', '上次儲存失敗，內容還在，請確認後重試'));
+    errBox.append(make('p', 'mt-0.5 text-xs text-red-600', block.saveError));
+    form.append(errBox);
+  }
+
   const actionsRow = make('div', 'flex flex-wrap items-center gap-2 pt-1');
-  const copyBtn2 = make('button', 'tap44 rounded-lg border border-line px-3 text-xs font-bold text-ink transition-transform hover:bg-paper active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '複製上一小時');
-  copyBtn2.type = 'button';
-  const prevEntry2 = idx > 0 ? getEntry(day, hourSlots()[idx - 1].label) : null;
-  if (!prevEntry2 || !prevEntry2.category) copyBtn2.disabled = true;
-  copyBtn2.addEventListener('click', () => copyFromPrevious(idx));
-  actionsRow.append(copyBtn2);
+  const saveBtn = make('button', 'tap44 rounded-xl bg-coral px-4 text-sm font-black text-white transition-transform hover:bg-coraldark active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', block.saveError ? '重試儲存' : (block.synced ? '重新儲存' : '儲存這筆'));
+  saveBtn.type = 'button';
+  saveBtn.addEventListener('click', () => saveBlock(dateStr, block.id, saveBtn));
+  actionsRow.append(saveBtn);
 
-  const skipBtn2 = make('button', 'tap44 rounded-lg border border-line px-3 text-xs font-bold text-inkmuted transition-transform hover:bg-paper active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '標記為無特別事項');
-  skipBtn2.type = 'button';
-  skipBtn2.addEventListener('click', () => quickSkip(idx));
-  actionsRow.append(skipBtn2);
-
-  if (entry.category) {
-    const hasForwardBlank = hourSlots().slice(idx + 1).some((s) => !isFilled(getEntry(day, s.label)));
-    if (hasForwardBlank) {
-      const applyBtn = make('button', 'text-xs font-bold text-coraldark underline underline-offset-2 hover:text-coral focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '套用到後面空白小時 →');
-      applyBtn.type = 'button';
-      applyBtn.addEventListener('click', () => applyForward(idx));
-      actionsRow.append(applyBtn);
-    }
+  if (!block.synced) {
+    const delBtn = make('button', 'tap44 rounded-lg border border-line px-3 text-xs font-bold text-inkmuted hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '刪除這筆');
+    delBtn.type = 'button';
+    delBtn.addEventListener('click', () => { if (confirm('刪除這筆尚未送出的草稿？')) deleteBlock(dateStr, block.id); });
+    actionsRow.append(delBtn);
   }
   actionsRow.append(make('span', 'flex-1'));
   const collapseBtn = make('button', 'tap44 rounded-lg px-3 text-xs font-bold text-inkmuted hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '收合');
   collapseBtn.type = 'button';
-  collapseBtn.addEventListener('click', () => toggleExpand(label));
+  collapseBtn.addEventListener('click', () => { EXPANDED_BLOCKS.delete(block.id); renderWorklogView(); });
   actionsRow.append(collapseBtn);
   form.append(actionsRow);
 
-  inner.append(form);
-  gridWrap.append(inner);
-  wrap.append(gridWrap);
+  wrap.append(form);
   return wrap;
 }
 
-function renderSubmitBar(day) {
-  const total = hourSlots().length;
-  const filled = hourSlots().filter((s) => isFilled(getEntry(day, s.label))).length;
-  // Bug fix 2026-07-23（Playwright 375×812 實測＋elementFromPoint 驗證）：原本 sticky 版本只要
-  // 使用者還在往下捲清單，就一定會蓋到底下捲過的內容——不只展開卡片內的表單欄位／按鈕（項目選擇、
-  // 案名輸入、紀錄內容），連「全部收合、只是某些小時格還沒填」狀態下的快速操作按鈕（複製上一小時／
-  // 標記為無特別事項）在特定捲動位置也會被蓋住點不到。sticky 元素只要還在文件中段浮動就沒有安全的
-  // 中間解，因此改採 spec 提供的第三個方向：拿掉全域浮動，一律走一般文件流放在小時列表最下方，
-  // 使用者捲到底才看到，但保證 100% 不會蓋到任何欄位或按鈕（elementFromPoint 掃描全收合／展開
-  // 首列／展開中間列／展開末列共 4 種情境驗證過，均無遮擋）。
-  const unsynced = hourSlots().filter((s) => { const e = getEntry(day, s.label); return isFilled(e) && !e.synced; }).length;
-  const hasError = !!submitErrorByDate[selectedDateStr()];
-  const bar = make('div', '-mx-4 mt-2 border-t border-line bg-white px-4 py-3 shadow-[0_-4px_12px_rgba(63,82,98,0.16)] lg:mx-0 lg:rounded-2xl lg:border lg:shadow-sm');
-  // 2026-07-24 資料遺失事故修復：送出失敗不能只靠 toast，這裡放一個不會自動消失的紅色提示條，
-  // 貼在按鈕正上方，直到下一次送出（不論成敗）才清掉。
-  if (hasError) {
-    const errBox = make('div', 'mb-2 rounded-lg border-2 border-red-300 bg-red-50 px-3 py-2');
-    errBox.append(make('p', 'text-xs font-black text-red-700', '上次送出失敗，內容還在草稿裡，請確認後按「重試送出」'));
-    errBox.append(make('p', 'mt-0.5 text-xs text-red-600', submitErrorByDate[selectedDateStr()].message));
-    bar.append(errBox);
-  }
-  const row = make('div', 'flex items-center justify-between gap-3');
-  const left = make('div', 'min-w-0');
-  left.append(make('p', 'tnum text-xs font-bold text-inkmuted', `已填 ${filled} ／ ${total} 小時`));
-  if (unsynced > 0) left.append(make('p', 'tnum mt-0.5 text-xs font-bold text-flagdark', `⚠ 還有 ${unsynced} 格尚未送出`));
-  const btnLabel = hasError ? '重試送出' : (day.submitted ? '重新送出' : (SELECTED_DATE === 'tomorrow' ? '送出明日紀錄' : '送出今日紀錄'));
-  const btn = make('button', 'tap44 shrink-0 rounded-xl bg-coral px-5 text-sm font-black text-white transition-transform hover:bg-coraldark active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', btnLabel);
-  btn.type = 'button';
-  btn.addEventListener('click', () => handleSubmit(btn));
-  row.append(left, btn);
-  bar.append(row);
-  return bar;
-}
+// ================= 日期導覽（同仁填寫頁／主管總覽共用；2026-07-25 修復：開放往回查看） =================
+// 往回無上限會變成無意義的空查詢，故 offset 夾在 [NAV_MIN_OFFSET, NAV_MAX_OFFSET]；
+// 邊界一律用 disabled 呈現（非 toast 擋下），讓使用者一眼看出還能不能繼續按。
+function dateNavRow(offset, onChange) {
+  const wrap = make('div', 'mb-4 flex flex-wrap items-center gap-2');
 
-async function handleSubmit(btn) {
-  btn.disabled = true;
-  btn.textContent = '送出中…';
-  const dateStr = selectedDateStr();
-  const isTomorrow = SELECTED_DATE === 'tomorrow';
-  const day = getDayState(dateStr);
-  const restoreBtn = () => {
-    btn.disabled = false;
-    btn.textContent = submitErrorByDate[dateStr] ? '重試送出' : (day.submitted ? '重新送出' : (isTomorrow ? '送出明日紀錄' : '送出今日紀錄'));
-  };
+  const atMin = offset <= NAV_MIN_OFFSET;
+  const prevBtn = make('button', `tap44 rounded-lg border-2 border-line px-3 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink${atMin ? ' cursor-not-allowed opacity-40' : ''}`, '‹ 前一天');
+  prevBtn.type = 'button';
+  prevBtn.disabled = atMin;
+  if (atMin) prevBtn.title = `最多只能往回看 ${-NAV_MIN_OFFSET} 天`;
+  prevBtn.addEventListener('click', () => onChange(offset - 1));
+  wrap.append(prevBtn);
 
-  if (!API_MODE) {
-    // 開發模擬模式（URL 沒有 ?token=）：沿用原本本機模擬送出，方便除錯 UI，不呼叫真實 API
-    setTimeout(() => {
-      day.submitted = true;
-      day.submittedAt = Date.now();
-      setDayState(dateStr, day);
-      location.hash = 'confirm';
-      showToast(isTomorrow ? '已排定明天的工作日誌（本機模擬，未連線 API）' : '已送出今日工作日誌（本機模擬，未連線 API）');
-    }, 450);
-    return;
-  }
+  wrap.append(make('span', 'tnum rounded-lg bg-paper px-3 py-2 text-sm font-black text-ink', dateDisplayForOffset(offset)));
 
-  const entries = hourSlots()
-    .filter((s) => isFilled(getEntry(day, s.label)))
-    .map((s) => {
-      const e = getEntry(day, s.label);
-      const note = e.category === OTHER_CATEGORY && e.otherCategoryText
-        ? `【${e.otherCategoryText}】${e.note || ''}`.trim()
-        : (e.note || '');
-      return {
-        hour: s.label,
-        category: e.category,
-        caseName: e.caseName || '',
-        repairReason: e.repairReason || '',
-        plannedSchedule: e.plannedSchedule || '',
-        note,
-      };
-    });
+  const atMax = offset >= NAV_MAX_OFFSET;
+  const nextBtn = make('button', `tap44 rounded-lg border-2 border-line px-3 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink${atMax ? ' cursor-not-allowed opacity-40' : ''}`, '後一天 ›');
+  nextBtn.type = 'button';
+  nextBtn.disabled = atMax;
+  if (atMax) nextBtn.title = '目前只開放排到明天';
+  nextBtn.addEventListener('click', () => onChange(offset + 1));
+  wrap.append(nextBtn);
 
-  if (entries.length === 0) {
-    restoreBtn();
-    showToast('目前沒有已填寫的小時格，至少填一格再送出');
-    return;
-  }
-
-  // 每次送出前先清掉上一次的錯誤狀態，這次結果會重新決定要不要顯示，避免殘留舊訊息誤導。
-  delete submitErrorByDate[dateStr];
-
-  try {
-    const res = await fetch(`${WORKER_BASE}/worklogCreate?token=${encodeURIComponent(API_TOKEN)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ entries, date: dateStr }),
-    });
-    const json = await res.json().catch(() => null);
-    const results = (json && Array.isArray(json.results)) ? json.results : null;
-
-    // 2026-07-24 資料遺失事故修復：不論整批是否全部成功，只要某一小時回報成功就先標記
-    // synced:true——原本的寫法是「非全部成功就整批當失敗、local 完全不更新」，會讓已經真的
-    // 寫進 Ragic 的那幾格，畫面上還是顯示「尚未送出」，反而製造新的誤導。
-    if (results) {
-      results.forEach((r) => {
-        const e = getEntry(day, r.hour);
-        if (e && r.ok) e.synced = true;
-      });
-      setDayState(dateStr, day);
-    }
-
-    if (!res.ok || !json || json.ok !== true) {
-      const failed = results ? results.filter((r) => !r.ok) : [];
-      const message = failed.length > 0
-        ? `送出失敗：${failed.map((f) => `${f.hour}(${f.error})`).join('、')}`
-        : (json && json.error) ? `送出失敗：${json.error}` : '送出失敗，請稍後再試或截圖回報';
-      submitErrorByDate[dateStr] = { message };
-      showToast(message);
-      restoreBtn();
-      renderWorklogView();
-      return;
-    }
-    day.submitted = true;
-    day.submittedAt = Date.now();
-    setDayState(dateStr, day);
-    location.hash = 'confirm';
-    showToast(isTomorrow ? '已排定明天的工作日誌（已寫入 Ragic）' : '已送出今日工作日誌（已寫入 Ragic）');
-  } catch (err) {
-    submitErrorByDate[dateStr] = { message: '連線失敗，請檢查網路後重試（內容仍保留在草稿中，未遺失）' };
-    showToast(submitErrorByDate[dateStr].message);
-    restoreBtn();
-    renderWorklogView();
-  }
-}
-
-// 2026-07-24：今天／明天切換的分頁按鈕（陳勁豪、葉恩廷實際使用後提出的真實需求）。
-function dateToggleNode() {
-  const wrap = make('div', 'mb-4 inline-flex gap-1 rounded-xl border-2 border-line bg-white p-1');
-  [{ key: 'today', label: '今天' }, { key: 'tomorrow', label: '明天' }].forEach((opt) => {
-    const active = SELECTED_DATE === opt.key;
-    const btn = make(
-      'button',
-      `tap44 rounded-lg px-4 text-sm font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${active ? 'bg-ink text-white' : 'text-inkmuted hover:bg-paper'}`,
-      opt.label,
-    );
+  const pillGroup = make('div', 'inline-flex gap-1 rounded-xl border-2 border-line bg-white p-1');
+  [{ off: 0, label: '今天' }, { off: 1, label: '明天' }].forEach((opt) => {
+    const active = offset === opt.off;
+    const btn = make('button', `tap44 rounded-lg px-3 text-sm font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${active ? 'bg-coral text-white' : 'text-inkmuted hover:bg-paper'}`, opt.label);
     btn.type = 'button';
-    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-    btn.addEventListener('click', () => switchSelectedDate(opt.key));
-    wrap.append(btn);
+    btn.addEventListener('click', () => onChange(opt.off));
+    pillGroup.append(btn);
   });
+  wrap.append(pillGroup);
+
+  if (offset !== 0) {
+    const todayBtn = make('button', 'tap44 rounded-lg bg-ink px-3 text-sm font-black text-white hover:bg-ink/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '回到今天');
+    todayBtn.type = 'button';
+    todayBtn.addEventListener('click', () => onChange(0));
+    wrap.append(todayBtn);
+  }
   return wrap;
 }
 
 function renderWorklogView() {
   const root = byId('view-worklog');
   root.replaceChildren();
-  const day = getDayState(selectedDateStr());
-  const isTomorrow = SELECTED_DATE === 'tomorrow';
+  const dateStr = selectedDateStr();
+  const day = getDayState(dateStr);
+  const isTomorrow = SELECTED_OFFSET === 1;
+  const isPast = isPastSelected();
 
+  const deptKey = IDENTITY && deptKeyForCategoryGroup(IDENTITY.categoryGroup);
   const head = make('div', 'mb-4');
-  // 2026-07-23：同側欄字樣一樣原本寫死「工務部」，改用同一個 sidebarDeptLabel() 動態顯示。
-  head.append(make('p', 'text-xs font-bold tracking-wide text-coraldark', `${sidebarDeptLabel()}・每小時工作紀錄`));
-  head.append(make('h2', 'text-xl font-black text-ink sm:text-2xl', isTomorrow ? '明天，你打算做什麼？' : '今天，你在忙什麼？'));
-  head.append(make('p', 'mt-1 text-sm text-inkmuted', isTomorrow
-    ? `${selectedDateDisplay()}・先把明天預定的行程排好，時間到了再回來補實際紀錄。`
-    : `${selectedDateDisplay()}・早上 10 點前先排今天的行程，下班前回來補實際紀錄就好，不用整天一直開表單。`));
+  head.append(make('p', 'text-xs font-bold tracking-wide text-coraldark', `${deptKey ? DEPARTMENTS[deptKey].label : '窩的家'}・自訂起訖時間`));
+  head.append(make('h2', 'text-xl font-black text-ink sm:text-2xl', isPast ? `${selectedDateDisplay()} 的紀錄` : isTomorrow ? '明天，你打算做什麼？' : '今天，你在忙什麼？'));
+  head.append(make('p', 'mt-1 text-sm text-inkmuted', isPast
+    ? `${selectedDateDisplay()}・這天已鎖定不可修改，僅供查看。`
+    : isTomorrow
+      ? `${selectedDateDisplay()}・先列幾筆明天的計畫（填「預先排定行程」即可），時間到了再回來補實際紀錄。`
+      : `${selectedDateDisplay()}・想幾點記就幾點記；早上先排大概行程（填「預先排定行程」），下班前回來把「紀錄內容」補齊——同一筆補、不用重填。`));
   root.append(head);
-  root.append(dateToggleNode());
+  root.append(dateNavRow(SELECTED_OFFSET, switchSelectedDate));
 
-  // 2026-07-24 資料遺失事故修復：草稿提示要放在頁面最上面、不用捲動就看得到——事故當天送出
-  // 按鈕在文件最下面，使用者填完就以為結束，這裡在最顯眼的位置提前把話講清楚。
-  const draftCount = hourSlots().filter((s) => { const e = getEntry(day, s.label); return isFilled(e) && !e.synced; }).length;
-  if (draftCount > 0) {
-    root.append(make('div', 'mb-4 rounded-xl border-2 border-flag/50 bg-flagtint px-4 py-2.5 text-sm font-black text-flagdark',
-      `⚠ 你有 ${draftCount} 格已經填寫但還沒送出，捲到最下面按「送出」才會真的存進系統`));
-  }
-
-  if (day.submitted) root.append(submittedBanner(day));
-  root.append(renderQuickCta(day));
-  root.append(renderProgress(day));
-
-  const list = make('div', 'space-y-2');
-  hourSlots().forEach((slot, idx) => list.append(renderHourRow(slot, idx, day)));
-  root.append(list);
-
-  root.append(make('div', 'h-6'));
-  root.append(renderSubmitBar(day));
-}
-
-// ================= 確認頁 =================
-function confirmRow(slot, entry) {
-  const row = make('div', 'flex items-center gap-2 rounded-lg bg-paper px-3 py-2 text-sm');
-  row.append(make('span', 'tnum w-[80px] shrink-0 text-xs font-bold text-inkmuted', slot.label));
-  const catLabel = entry.category === OTHER_CATEGORY ? (entry.otherCategoryText || '其他') : entry.category;
-  row.append(make('span', 'shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-bold text-inkmuted', catLabel));
-  if (entry.caseName) row.append(make('span', 'truncate text-ink', entry.caseName));
-  return row;
-}
-
-function renderConfirmView() {
-  const root = byId('view-confirm');
-  root.replaceChildren();
-  const day = getDayState(selectedDateStr());
-  const isTomorrow = SELECTED_DATE === 'tomorrow';
-
-  if (!day.submitted) {
-    root.append(emptyNote(isTomorrow ? '目前還沒有排定明天的紀錄，請先回到「工作日誌」完成填寫。' : '目前還沒有送出今天的紀錄，請先回到「工作日誌」完成填寫。'));
-    const back = make('button', 'mt-3 rounded-xl bg-ink px-4 py-2.5 text-sm font-bold text-white hover:bg-ink/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '回到工作日誌');
-    back.type = 'button';
-    back.addEventListener('click', () => { location.hash = 'worklog'; });
-    root.append(back);
+  // 過去日期：後端規則是「今天或未來可寫，過去一律拒絕」，前端必須同步鎖成純唯讀——
+  // 不顯示任何輸入欄位／新增／儲存類按鈕，避免使用者打字後才被拒絕（7/24 資料遺失事故同款傷害）。
+  if (isPast) {
+    root.append(make('div', 'mb-4 rounded-xl border-2 border-line bg-paper px-4 py-2.5 text-sm font-black text-ink',
+      `🔒 這是 ${selectedDateDisplay()} 的紀錄，已鎖定不可修改`));
+    const list = make('div', 'space-y-2');
+    const blocks = sortedBlocks(day);
+    if (blocks.length === 0) {
+      list.append(emptyNote(`${selectedDateDisplay()} 這天沒有紀錄。`));
+    } else {
+      blocks.forEach((b) => list.append(memberEntryLine(dateStr, b, true)));
+    }
+    root.append(list);
     return;
   }
 
-  const filledSlots = hourSlots().filter((s) => isFilled(getEntry(day, s.label)));
-  const skippedCount = hourSlots().length - filledSlots.length;
-
-  const card = make('div', 'rounded-2xl border border-line bg-white p-6 text-center shadow-sm sm:p-8');
-  const iconWrap = make('div', 'mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-sagetint text-2xl font-black text-sage', '✓');
-  card.append(iconWrap);
-  card.append(make('h2', 'text-xl font-black text-ink', isTomorrow ? '已排定明天的工作日誌' : '已送出今日工作日誌'));
-  card.append(make('p', 'tnum mt-1 text-sm text-inkmuted', `${isTomorrow ? '共排定' : '共送出'} ${filledSlots.length} 筆・${skippedCount} 個小時未填寫`));
-  const timeText = day.submittedAt
-    ? `${isTomorrow ? '排定' : '送出'}時間 ${new Date(day.submittedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}・`
-    : '';
-  card.append(make('p', 'mt-1 text-xs text-inkfaint', `${timeText}小吳哥可在「主管總覽」看到這筆紀錄`));
-
-  const list = make('div', 'mt-5 space-y-1.5 text-left');
-  filledSlots.forEach((s) => list.append(confirmRow(s, getEntry(day, s.label))));
-  card.append(list);
-
-  const actions = make('div', 'mt-6 flex flex-col gap-2 sm:flex-row');
-  const backBtn = make('button', 'tap44 flex-1 rounded-xl border border-line px-4 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '返回繼續補填');
-  backBtn.type = 'button';
-  backBtn.addEventListener('click', () => { location.hash = 'worklog'; });
-  actions.append(backBtn);
-  if (ROLE === 'manager') {
-    const overviewBtn = make('button', 'tap44 flex-1 rounded-xl bg-ink px-4 text-sm font-bold text-white hover:bg-ink/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '查看主管總覽');
-    overviewBtn.type = 'button';
-    overviewBtn.addEventListener('click', () => { location.hash = 'overview'; });
-    actions.append(overviewBtn);
+  const unsyncedFilled = blocksList(day).filter((b) => isBlockFilled(b) && !b.synced);
+  if (unsyncedFilled.length > 0) {
+    root.append(make('div', 'mb-4 rounded-xl border-2 border-pending bg-pendingtint px-4 py-2.5 text-sm font-black text-pendingdark',
+      `⚠ 你有 ${unsyncedFilled.length} 筆已經填寫但還沒送出成功，展開後按「儲存這筆」才會真的存進系統`));
   }
-  card.append(actions);
-  root.append(card);
-}
-
-// ================= 主管總覽 =================
-function memberFilledSlots(member) { return hourSlots().filter((s) => member.entries[s.label] && member.entries[s.label].category); }
-function statusDotEl(kind) {
-  const cls = kind === 'coral' ? 'bg-coral' : kind === 'flag' ? 'bg-flag' : 'bg-sage';
-  return make('span', `inline-block h-2.5 w-2.5 shrink-0 rounded-full ${cls}`);
-}
-function memberEntryLine(slot, e) {
-  const wrap = make('div', 'rounded-lg bg-paper p-2.5 text-sm');
-  const catLabel = e.category === OTHER_CATEGORY ? (e.otherCategoryText || '其他') : e.category;
-  const top = make('p', 'flex flex-wrap items-center gap-1.5');
-  top.append(make('span', 'tnum text-xs font-bold text-inkfaint', slot.label));
-  top.append(make('span', 'rounded-full bg-white px-2 py-0.5 text-xs font-bold text-inkmuted', catLabel));
-  if (e.caseName) top.append(make('span', 'text-ink', e.caseName));
-  wrap.append(top);
-  if (e.repairReason) wrap.append(make('p', 'mt-1 text-xs text-inkmuted', `報修原因：${e.repairReason}`));
-  if (e.plannedSchedule) wrap.append(make('p', 'mt-0.5 text-xs text-inkmuted', `預先排定：${e.plannedSchedule}`));
-  if (e.note) wrap.append(make('p', 'mt-0.5 text-xs text-ink', e.note));
-  return wrap;
-}
-function memberCard(member) {
-  const filled = memberFilledSlots(member);
-  const total = hourSlots().length;
-  const expanded = EXPANDED_MEMBER === member.id;
-  const status = filled.length === 0 ? 'coral' : (filled.length < total ? 'flag' : 'sage');
-  const statusText = filled.length === 0 ? '今日尚無紀錄' : (filled.length < total ? `已填 ${filled.length}／${total} 小時（有缺漏）` : `已填 ${filled.length}／${total} 小時`);
-  const statusCls = status === 'coral' ? 'bg-coraltint text-coraldark' : status === 'flag' ? 'bg-flagtint text-flagdark' : 'bg-sagetint text-sage';
-
-  const card = make('div', 'rounded-2xl border border-line bg-white');
-  const headerBtn = make('button', `tap44 flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-paper active:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${expanded ? 'rounded-t-2xl' : 'rounded-2xl'}`);
-  headerBtn.type = 'button';
-  headerBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-  const left = make('div', 'flex items-center gap-2.5');
-  left.append(statusDotEl(status), make('span', 'text-sm font-black text-ink', member.label));
-  headerBtn.append(left);
-  const right = make('div', 'flex items-center gap-2');
-  right.append(make('span', `rounded-full px-2.5 py-1 text-xs font-bold ${statusCls}`, statusText));
-  // 同工作日誌時段列：淡灰字元 chevron 換成粗線 SVG＋圓框，讓「可以點開」更明顯
-  const chevWrap = make('span', 'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-line bg-white text-ink');
-  chevWrap.innerHTML = expanded ? CHEVRON_UP_SVG : CHEVRON_DOWN_SVG;
-  right.append(chevWrap);
-  headerBtn.append(right);
-  // 純展開/收合，不重打 API（真正的資料刷新只在導覽進頁時發生，見 renderOverviewView）
-  headerBtn.addEventListener('click', () => { EXPANDED_MEMBER = expanded ? null : member.id; renderOverviewBody(byId('view-overview')); });
-  card.append(headerBtn);
-
-  if (expanded) {
-    const body = make('div', 'space-y-2 border-t border-line p-4');
-    if (filled.length === 0) body.append(emptyNote('今日尚無紀錄。'));
-    else filled.forEach((s) => body.append(memberEntryLine(s, member.entries[s.label])));
-    card.append(body);
+  const overdueList = blocksList(day).filter((b) => isOverdueUnrecorded(dateStr, b));
+  if (!isTomorrow && overdueList.length > 0) {
+    root.append(make('div', 'mb-4 rounded-xl border-2 border-overlap bg-overlaptint px-4 py-2.5 text-sm font-black text-overlapdark',
+      `⏰ 有 ${overdueList.length} 筆時段已過但「紀錄內容」還空著，記得回頭補一下`));
   }
-  return card;
+
+  const quickRow = make('div', 'mb-4 flex flex-wrap gap-2');
+  const addBtn = make('button', 'tap44 rounded-xl bg-coral px-4 text-sm font-black text-white transition-transform hover:bg-coraldark active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '+ 新增一筆');
+  addBtn.type = 'button';
+  addBtn.addEventListener('click', () => addBlock(dateStr));
+  const fullDayBtn = make('button', 'tap44 rounded-xl border-2 border-line px-4 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '整天都在忙同一件事');
+  fullDayBtn.type = 'button';
+  fullDayBtn.addEventListener('click', () => addFullDayBlock(dateStr));
+  quickRow.append(addBtn, fullDayBtn);
+  root.append(quickRow);
+
+  const blocks = blocksList(day);
+  root.append(renderTimelineBar(dateStr, day, blocks));
+
+  root.append(make('h3', 'mb-2 text-sm font-black text-ink', '今天的紀錄'));
+  const list = make('div', 'space-y-2');
+  if (blocks.length === 0) {
+    list.append(emptyNote('還沒有任何紀錄，點上面「+ 新增一筆」開始。'));
+  } else {
+    // 舊格式紀錄（V1 hour 小時格，理論上只會出現在 V1/V2 並存過渡期間的同一天）一律唯讀呈現，
+    // 不進 renderBlockRow 編輯表單。
+    sortedBlocks(day).forEach((b) => list.append(b.isLegacy ? memberEntryLine(dateStr, b, true) : renderBlockRow(dateStr, day, b)));
+  }
+  root.append(list);
+
+  const stillUnsynced = blocksList(day).filter((b) => isBlockFilled(b) && !b.synced);
+  if (stillUnsynced.length > 0) {
+    root.append(make('div', 'h-4'));
+    const retryBar = make('div', 'rounded-xl border-2 border-pending bg-white px-4 py-3');
+    const row = make('div', 'flex items-center justify-between gap-3');
+    row.append(make('p', 'text-sm font-bold text-pendingdark', `還有 ${stillUnsynced.length} 筆尚未送出成功`));
+    const retryAllBtn = make('button', 'tap44 shrink-0 rounded-xl bg-ink px-4 text-sm font-black text-white hover:bg-ink/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '全部重試送出');
+    retryAllBtn.type = 'button';
+    retryAllBtn.addEventListener('click', async () => {
+      retryAllBtn.disabled = true;
+      retryAllBtn.textContent = '送出中…';
+      for (const b of stillUnsynced) {
+        // eslint-disable-next-line no-await-in-loop
+        await saveBlock(dateStr, b.id, retryAllBtn);
+      }
+      renderWorklogView();
+    });
+    row.append(retryAllBtn);
+    retryBar.append(row);
+    root.append(retryBar);
+  }
 }
 
-// 2026-07-24：主管總覽「後一天」接上真實查詢（本次真實需求：能看到明天大家排定的行程）。
-// 「前一天」spec 明確允許先維持既有 toast——查看更早日期是合理需求但非本次範圍，時間有限時
-// 優先確保「後一天/明天」這個方向能動。只開放 0（今天）／1（明天）兩格，避免無止盡往後查。
+// ================= 主管總覽（唯讀，真實 API） =================
 let OVERVIEW_DATE_OFFSET = 0;
 function overviewOffsetDateStr() { return dateStrForOffset(OVERVIEW_DATE_OFFSET); }
 function overviewOffsetDateDisplay() { return dateDisplayForOffset(OVERVIEW_DATE_OFFSET); }
 
+// withRowId：同仁填寫頁需要 row-block-<id> 這個 DOM id 給時間軸點擊/捲動定位用；
+// 主管總覽不需要（避免跟同仁頁的 id 撞在一起），預設不加。
+function memberEntryLine(dateStr, b, withRowId) {
+  const wrap = make('div', 'rounded-lg bg-paper p-2.5 text-sm');
+  if (withRowId) wrap.id = `row-block-${b.id}`;
+  const top = make('p', 'flex flex-wrap items-center gap-1.5');
+  const timeLabel = (b.start && b.end) ? `${b.start}–${b.end}` : (b.isLegacy && b.legacyHourLabel) ? b.legacyHourLabel : '（時段未知）';
+  top.append(make('span', 'tnum text-xs font-bold text-inkfaint', timeLabel));
+  top.append(make('span', 'rounded-full bg-white px-2 py-0.5 text-xs font-bold text-inkmuted', b.category === OTHER_CATEGORY ? (b.otherCategoryText || '其他') : (b.category || '未填項目')));
+  if (b.isLegacy) top.append(make('span', 'rounded-full border border-inkfaint/50 bg-white px-2 py-0.5 text-[10px] font-bold text-inkfaint', '舊版格式'));
+  if (isOverdueUnrecorded(dateStr, b)) top.append(make('span', 'rounded-full border-2 border-overlap bg-overlaptint px-2 py-0.5 text-xs font-bold text-overlapdark', '⏰ 已排定・尚未補紀錄'));
+  if (b.caseName) top.append(make('span', 'text-ink', b.caseName));
+  wrap.append(top);
+  if (b.repairReason) wrap.append(make('p', 'mt-1 text-xs text-inkmuted', `報修原因：${b.repairReason}`));
+  if (b.plannedSchedule) wrap.append(make('p', 'mt-0.5 text-xs text-inkmuted', `預先排定：${b.plannedSchedule}`));
+  if (b.note) wrap.append(make('p', 'mt-0.5 text-xs text-ink', b.note));
+  return wrap;
+}
+function memberCard(dateStr, member) {
+  const total = member.blocks.length;
+  const overdueCount = member.blocks.filter((b) => isOverdueUnrecorded(dateStr, b)).length;
+  const expanded = EXPANDED_MEMBER === member.id;
+  const statusText = total === 0 ? '今日尚無紀錄' : (overdueCount > 0 ? `已記 ${total} 筆・${overdueCount} 筆待補紀錄` : `已記 ${total} 筆`);
+  const statusCls = total === 0 ? 'border border-line bg-white text-inkmuted' : overdueCount > 0 ? 'bg-overlap text-white' : 'bg-coral text-white';
+
+  const card = make('div', 'rounded-2xl border border-line bg-white');
+  const headerBtn = make('button', `tap44 flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-paper active:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${expanded ? 'rounded-t-2xl' : 'rounded-2xl'}`);
+  headerBtn.type = 'button';
+  const left = make('div', 'flex items-center gap-2.5');
+  left.append(make('span', 'text-sm font-black text-ink', member.label));
+  headerBtn.append(left);
+  const right = make('div', 'flex items-center gap-2');
+  right.append(make('span', `rounded-full px-2.5 py-1 text-xs font-bold ${statusCls}`, statusText));
+  const chevWrap = make('span', 'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-line bg-white text-ink');
+  chevWrap.innerHTML = expanded ? CHEVRON_UP_SVG : CHEVRON_DOWN_SVG;
+  right.append(chevWrap);
+  headerBtn.append(right);
+  headerBtn.addEventListener('click', () => { EXPANDED_MEMBER = expanded ? null : member.id; renderOverviewBody(byId('view-overview')); });
+  card.append(headerBtn);
+
+  if (expanded) {
+    const body = make('div', 'space-y-3 border-t border-line p-4');
+    if (total === 0) body.append(emptyNote('今日尚無紀錄。'));
+    else member.blocks.slice().sort((a, b) => blockSortMinutes(a) - blockSortMinutes(b)).forEach((b) => body.append(memberEntryLine(dateStr, b)));
+    card.append(body);
+  }
+  return card;
+}
+function overviewTitleForOffset(offset) {
+  if (offset === 0) return '今日工作日誌總覽';
+  if (offset === 1) return '明日工作日誌總覽';
+  return `${dateDisplayForOffset(offset)} 工作日誌總覽`;
+}
 function overviewHeadNode() {
   const head = make('div', 'mb-5');
   head.append(make('p', 'text-xs font-bold tracking-wide text-coraldark', '主管視角・唯讀'));
-  head.append(make('h2', 'text-xl font-black text-ink sm:text-2xl', OVERVIEW_DATE_OFFSET > 0 ? '明日工作日誌總覽' : '本日工作日誌總覽'));
-  head.append(make('p', 'mt-1 text-sm text-inkmuted', `${overviewOffsetDateDisplay()}・依人員檢視，跟催進度不用再靠口頭回報。`));
+  head.append(make('h2', 'text-xl font-black text-ink sm:text-2xl', overviewTitleForOffset(OVERVIEW_DATE_OFFSET)));
+  head.append(make('p', 'mt-1 text-sm text-inkmuted', `${overviewOffsetDateDisplay()}・依人員檢視，跨部門一起看，「已排定・尚未補紀錄」是排了但沒做的警示。`));
   return head;
 }
-function overviewDayNavNode() {
-  const dayNav = make('div', 'mb-4 flex items-center gap-2');
-  const prevBtn = make('button', 'tap44 rounded-lg border border-line px-3 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '‹ 前一天');
-  prevBtn.type = 'button';
-  prevBtn.addEventListener('click', () => {
-    // offset > 0（目前在看明天）時，前一天＝退回今天，是真的查詢；offset 已經是 0 時再往前
-    // 就是「查真正的過去」，spec 允許先維持既有 toast，非本次範圍。
-    if (OVERVIEW_DATE_OFFSET > 0) { OVERVIEW_DATE_OFFSET -= 1; refreshOverviewFromApi(); return; }
-    showToast('查看更早日期規劃中，目前僅開放今天／明天');
-  });
-  const nextBtn = make('button', `tap44 rounded-lg border border-line px-3 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink${OVERVIEW_DATE_OFFSET >= 1 ? ' cursor-not-allowed opacity-40' : ''}`, '後一天 ›');
-  nextBtn.type = 'button';
-  nextBtn.addEventListener('click', () => {
-    if (OVERVIEW_DATE_OFFSET >= 1) { showToast('目前僅開放看到明天'); return; }
-    OVERVIEW_DATE_OFFSET += 1;
-    refreshOverviewFromApi();
-  });
-  dayNav.append(prevBtn, make('span', 'tnum rounded-lg bg-paper px-3 py-2 text-xs font-bold text-ink', overviewOffsetDateDisplay()), nextBtn);
-  return dayNav;
+function changeOverviewOffset(next) {
+  OVERVIEW_DATE_OFFSET = Math.max(NAV_MIN_OFFSET, Math.min(NAV_MAX_OFFSET, next));
+  refreshOverviewFromApi();
 }
-
-// worklogListAll 回傳的是攤平列表（每列一筆紀錄，含 reporter），這裡依 reporter 姓名分組成
-// memberCard() 原本預期的 { id, label, entries:{hour:entry} } 形狀；不是固定名冊，人員憑當天
-// 實際有寫入紀錄的姓名自然出現，沒人填就不會有卡片（下方 members.length===0 另外處理空狀態）。
 function groupByReporter(entries) {
   const map = new Map();
   entries.forEach((rec) => {
-    if (!map.has(rec.reporter)) map.set(rec.reporter, { id: rec.reporter, label: rec.reporter, entries: {} });
-    map.get(rec.reporter).entries[rec.hour] = parseApiEntry(rec);
+    // 2026-07-25 修復：V1 舊格式小時列不再整批過濾，parseApiEntry 會標記 isLegacy 唯讀顯示。
+    if (!map.has(rec.reporter)) map.set(rec.reporter, { id: rec.reporter, label: rec.reporter, blocks: [] });
+    map.get(rec.reporter).blocks.push(parseApiEntry(rec));
   });
   return [...map.values()];
 }
-
-// dateParam 選填（2026-07-24 新增，供主管總覽「後一天」查詢用）：不帶＝沿用 Worker 預設今天。
 async function loadAllFromApi(dateParam) {
   try {
     const qs = dateParam ? `&date=${encodeURIComponent(dateParam)}` : '';
@@ -1114,38 +1132,30 @@ async function loadAllFromApi(dateParam) {
     return { ok: false, status: 0 };
   }
 }
-
-// status: 'idle' | 'loading' | 'ok' | 'error'。快取起來是因為 memberCard 展開/收合也會呼叫
-// renderOverviewBody，若每次展開都重打 API 會一直閃「載入中」，體驗很差；只有「導覽進入本頁」
-// 才觸發真正的 refreshOverviewFromApi()。
 let overviewState = { status: 'idle', members: [], errorMsg: null };
 let overviewReqId = 0;
-
+function overviewEmptyText(offset) {
+  if (offset === 0) return '今日尚無紀錄。';
+  if (offset === 1) return '明天尚無排定紀錄。';
+  return `${dateDisplayForOffset(offset)} 這天沒有紀錄。`;
+}
 function renderOverviewBody(root) {
-  root.replaceChildren(overviewHeadNode(), overviewDayNavNode());
-  if (!API_MODE) {
-    const list = make('div', 'space-y-3');
-    MOCK_TEAM.forEach((member) => list.append(memberCard(member)));
-    root.append(list);
-    return;
-  }
+  root.replaceChildren(overviewHeadNode(), dateNavRow(OVERVIEW_DATE_OFFSET, changeOverviewOffset));
+  const dateStr = overviewOffsetDateStr();
   if (overviewState.status === 'loading') { root.append(emptyNote('載入中…')); return; }
   if (overviewState.status === 'error') { root.append(emptyNote(overviewState.errorMsg)); return; }
-  if (overviewState.members.length === 0) { root.append(emptyNote(OVERVIEW_DATE_OFFSET > 0 ? '明天尚無排定紀錄。' : '今日尚無紀錄。', 'sage')); return; }
+  if (overviewState.members.length === 0) { root.append(emptyNote(overviewEmptyText(OVERVIEW_DATE_OFFSET))); return; }
   const list = make('div', 'space-y-3');
-  overviewState.members.forEach((member) => list.append(memberCard(member)));
+  overviewState.members.forEach((member) => list.append(memberCard(dateStr, member)));
   root.append(list);
 }
-
 async function refreshOverviewFromApi() {
   const myReqId = ++overviewReqId;
   overviewState = { status: 'loading', members: [], errorMsg: null };
   renderOverviewBody(byId('view-overview'));
-  const result = await loadAllFromApi(OVERVIEW_DATE_OFFSET > 0 ? overviewOffsetDateStr() : null);
-  if (myReqId !== overviewReqId) return; // 使用者已經切走頁面，這次結果作廢，不要覆寫新畫面
+  const result = await loadAllFromApi(OVERVIEW_DATE_OFFSET !== 0 ? overviewOffsetDateStr() : null);
+  if (myReqId !== overviewReqId) return;
   if (!result.ok) {
-    // worklogListAll：token 完全無效／缺失一律 404；token 有效但非主管角色回 403——兩者訊息
-    // 分開講清楚，其餘（500／逾時／斷線）給通用訊息，畫面一律停在可讀狀態，不留白畫面或卡死。
     const msg = result.status === 403
       ? '此連結沒有主管檢視權限，如有需要請聯繫管理者確認。'
       : result.status === 404
@@ -1157,15 +1167,14 @@ async function refreshOverviewFromApi() {
   }
   renderOverviewBody(byId('view-overview'));
 }
-
 function renderOverviewView() {
   const root = byId('view-overview');
-  if (ROLE !== 'manager') {
-    root.replaceChildren(emptyNote('此頁僅主管角色可查看，請用右上角「身分」切換為小吳哥（主管）預覽。'));
+  if (!IDENTITY || IDENTITY.role !== 'manager') {
+    root.replaceChildren(emptyNote('此頁僅主管角色可查看。'));
     return;
   }
   renderOverviewBody(root);
-  if (API_MODE && overviewState.status !== 'loading') refreshOverviewFromApi();
+  if (overviewState.status !== 'loading') refreshOverviewFromApi();
 }
 
 // ================= 平台外殼：側欄／底部 tab／路由 =================
@@ -1174,47 +1183,38 @@ function icon(name) {
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2" fill="none" stroke-linecap="round"/>',
     clipboard: '<rect x="6" y="4" width="12" height="16" rx="2" fill="none"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1" fill="none"/><path d="M9 10h6M9 14h6M9 18h3" stroke-linecap="round"/>',
     link: '<path d="M8 12.5l4.2-4.2" stroke-linecap="round"/><path d="M9.5 15.5A4 4 0 0 1 8 9.4l2-2a4 4 0 0 1 5.6 5.6l-.9.9" fill="none"/><path d="M14.5 8.5A4 4 0 0 1 16 14.6l-2 2a4 4 0 0 1-5.6-5.6l.9-.9" fill="none"/>',
-    stats: '<rect x="4" y="12" width="4" height="8" rx="1"/><rect x="10" y="7" width="4" height="13" rx="1"/><rect x="16" y="3" width="4" height="17" rx="1"/>',
   };
   return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">${paths[name] || ''}</svg>`;
 }
-
-const VALID_VIEWS = ['worklog', 'overview', 'confirm'];
-const VIEW_TITLES = { worklog: '工作日誌', overview: '主管總覽', confirm: '已送出' };
+const VALID_VIEWS = ['worklog', 'overview'];
+const VIEW_TITLES = { worklog: '工作日誌', overview: '主管總覽' };
 const NAV_ITEMS = [
   { id: 'worklog', label: '工作日誌', icon: 'clock' },
   { id: 'overview', label: '主管總覽', icon: 'clipboard', managerOnly: true },
 ];
 const PLANNED_ITEMS = [
-  { id: 'link', label: '案件正式關聯', icon: 'link', note: '工作日誌與工程案件的正式資料關聯規劃中（P2），目前案名為文字＋自動建議，尚未串接。' },
-  { id: 'stats', label: '填寫率統計報表', icon: 'stats', note: '每人每日填寫率、排定與實際落差率報表規劃中（P3），尚未開發。' },
+  { id: 'link', label: '案件正式關聯', icon: 'link', note: '工作日誌與工程案件的正式資料關聯規劃中，目前案名為文字＋自動建議，尚未串接。' },
 ];
-
+function currentRole() { return IDENTITY ? IDENTITY.role : null; }
 function currentView() {
   const h = (location.hash || '').replace('#', '');
   return VALID_VIEWS.includes(h) ? h : 'worklog';
 }
-
 function sidebarNavButton(item) {
   const active = currentView() === item.id;
-  const locked = item.managerOnly && ROLE !== 'manager';
-  const cls = active
-    ? 'bg-coral text-white'
-    : locked ? 'text-white/25 hover:bg-white/5' : 'text-white/70 hover:bg-white/5 hover:text-white';
-  const btn = make('button', `flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${cls}`);
+  const locked = item.managerOnly && currentRole() !== 'manager';
+  const cls = active ? 'bg-coral text-white' : locked ? 'text-white/30 hover:bg-white/10' : 'text-white/70 hover:bg-white/10 hover:text-white';
+  const btn = make('button', `flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${cls}`);
   btn.type = 'button';
   if (active) btn.setAttribute('aria-current', 'page');
   const ic = make('span', 'h-5 w-5 shrink-0');
   ic.innerHTML = icon(item.icon);
   btn.append(ic, make('span', 'flex-1 text-left', item.label + (locked ? '（主管專用）' : '')));
-  btn.addEventListener('click', () => {
-    if (locked) { showToast('此頁僅主管角色可查看，右上角可切換身分預覽'); return; }
-    location.hash = item.id;
-  });
+  btn.addEventListener('click', () => { if (locked) { showToast('此頁僅主管角色可查看'); return; } location.hash = item.id; });
   return btn;
 }
 function plannedButton(item) {
-  const btn = make('button', 'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-white/35 hover:bg-white/5 hover:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60');
+  const btn = make('button', 'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-white/40 hover:bg-white/10 hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white');
   btn.type = 'button';
   const ic = make('span', 'h-5 w-5 shrink-0');
   ic.innerHTML = icon(item.icon);
@@ -1235,48 +1235,33 @@ function renderBottomTabs() {
   bar.replaceChildren();
   NAV_ITEMS.forEach((item) => {
     const active = currentView() === item.id;
-    const locked = item.managerOnly && ROLE !== 'manager';
-    const cls = locked ? 'text-inkfaint/50' : active ? 'text-ink' : 'text-inkfaint';
+    const locked = item.managerOnly && currentRole() !== 'manager';
+    const cls = locked ? 'text-inkfaint/50' : active ? 'text-coral' : 'text-inkfaint';
     const btn = make('button', `flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink ${cls}`);
     btn.type = 'button';
     if (active) btn.setAttribute('aria-current', 'page');
     const ic = make('span', 'h-5 w-5');
     ic.innerHTML = icon(item.icon);
     btn.append(ic, make('span', '', item.label));
-    btn.addEventListener('click', () => {
-      if (locked) { showToast('此頁僅主管角色可查看，右上角可切換身分預覽'); return; }
-      location.hash = item.id;
-    });
+    btn.addEventListener('click', () => { if (locked) { showToast('此頁僅主管角色可查看'); return; } location.hash = item.id; });
     bar.append(btn);
   });
 }
-
-// 2026-07-23：側欄部門字樣原本寫死「工務部」，擴及租賃部（恩廷）後會顯示錯誤部門，
-// 改依 IDENTITY.categoryGroup 動態顯示；本機模擬模式（無 token）維持舊版「工務部」字樣。
-function sidebarDeptLabel() {
-  const group = IDENTITY && IDENTITY.categoryGroup;
-  if (group) return `${group}部`;
-  return API_MODE ? '窩的家' : '工務部';
-}
 function updateChromeLabels() {
-  byId('sidebarSubtitle').textContent = `${sidebarDeptLabel()}・${roleLabel(ROLE)}`;
-  byId('roleToggleBtn').textContent = `身分：${roleLabel(ROLE)} ⇄`;
+  const deptKey = IDENTITY && deptKeyForCategoryGroup(IDENTITY.categoryGroup);
+  const deptLabel = deptKey ? DEPARTMENTS[deptKey].label : (IDENTITY && IDENTITY.role === 'manager' ? '主管視角' : '窩的家');
+  const nameLabel = IDENTITY ? (IDENTITY.role === 'manager' ? `${IDENTITY.name}（主管）` : IDENTITY.name) : '本機模擬';
+  byId('sidebarSubtitle').textContent = `${deptLabel}・${nameLabel}`;
 }
 
-// 2026-07-24 資料遺失事故修復（第二個根因）：原本兩處直接用 location.pathname 組新網址換
-// hash，pathname 不含 query string，等於把網址列的 ?token=... 整個丟掉。使用者之後只要重新整理
-// 頁面（分頁還原、瀏覽器重開、誤按 F5），就會用「已經沒有 token」的網址重新載入，整個工作階段
-// 悄悄降級成「本機模擬模式」（沒有任何錯誤訊息、頁面看起來完全正常）——填寫、送出、看到「已送出」
-// 的畫面全部都是假的（本機模擬模式的送出只是 setTimeout 假裝成功），從頭到尾沒有打到 Ragic。
-// 這完全符合「使用者說有存檔的感覺、但 Ragic 從未收到」的事故現象，修法：保留 location.search，
-// 只換 hash 那一段。
+// 2026-07-24 事故修復同款：改網址 hash 一律保留 location.search，不弄丟 token。
 function replaceHashKeepingQuery(hash) {
   history.replaceState(null, '', location.pathname + location.search + hash);
 }
 
 function applyRoute() {
   let view = currentView();
-  if (view === 'overview' && ROLE !== 'manager') {
+  if (view === 'overview' && currentRole() !== 'manager') {
     replaceHashKeepingQuery('#worklog');
     view = 'worklog';
     showToast('此頁僅主管角色可查看，已切回工作日誌');
@@ -1286,24 +1271,12 @@ function applyRoute() {
   renderSidebarNav();
   renderBottomTabs();
   if (view === 'worklog') renderWorklogView();
-  else if (view === 'overview') renderOverviewView();
-  else if (view === 'confirm') renderConfirmView();
+  else renderOverviewView();
 }
 window.addEventListener('hashchange', applyRoute);
 
-// API_MODE 下身分由 token 決定（IDENTITY，見 init() 內 loadMineFromApi），不開放使用者自行切換
-// 身分，否則會出現「畫面顯示主管選單但打 API 被 403」這種假象；本機模擬模式（無 token）才保留
-// 這顆切換鈕方便開發除錯。
-if (!API_MODE) {
-  byId('roleToggleBtn').addEventListener('click', () => {
-    setRole(ROLE === 'manager' ? 'staff' : 'manager');
-    updateChromeLabels();
-    showToast(`已切換為：${roleLabel(ROLE)}（原型示範用，正式版由連結 token 決定）`);
-    applyRoute();
-  });
-}
 byId('resetButton').addEventListener('click', () => {
-  if (!confirm('清空本機暫存的資料快取，重新整理頁面？（不影響 Ragic 裡已經送出的紀錄）')) return;
+  if (!confirm('清空本機暫存的草稿快取，重新整理頁面？（不影響 Ragic 裡已經送出的紀錄）')) return;
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(RECENT_CAT_KEY);
   location.hash = 'worklog';
@@ -1318,40 +1291,32 @@ byId('resetButton').addEventListener('click', () => {
   const initHash = (location.hash || '').replace('#', '');
   if (!VALID_VIEWS.includes(initHash)) replaceHashKeepingQuery('#worklog');
 
-  const modeLabel = byId('modeLabel');
-  if (modeLabel) modeLabel.textContent = API_MODE ? '已連線 API' : '原型・本機模擬（無 token）';
-
-  // 2026-07-24 事故後補強：無 token（連 localStorage 都沒有）一律整頁擋下，不再提供
-  // 「填得動、送出假成功」的模擬模式給正式使用者。開發除錯要用模擬模式，網址加 ?dev=1。
+  // 無 token（連 localStorage 都沒有）一律整頁擋下，不提供「填得動、送出假成功」的模擬模式給
+  // 正式使用者；開發除錯要用模擬模式，網址加 ?dev=1（比照 V1 worklog.html 既有防線）。
+  // 2026-07-25 修掉既有小瑕疵：攔截畫面不再顯示任何「模式」標籤——之前不論是否被攔截都固定
+  // 顯示「原型・本機模擬（無 token）」，跟「無法載入」訊息語意矛盾（明明整頁被擋，右上角卻說
+  // 一切正常在模擬）。攔截時完全不顯示模式標籤；只有真的進入 dev=1 本機模擬或已連線 API 這兩種
+  // 「頁面確實可運作」的狀態，才顯示對應標籤。
   if (!API_MODE && !new URLSearchParams(location.search).has('dev')) {
     renderFatalError('這個網址少了你的專屬通行碼，填寫的內容不會被儲存。請回到 LINE 找到管理者傳給你的完整連結，重新點開。');
     return;
   }
 
+  const modeLabel = byId('modeLabel');
+  if (modeLabel) modeLabel.textContent = API_MODE ? '已連線 API' : '開發模式・本機模擬（?dev=1）';
+
   if (API_MODE) {
-    byId('roleToggleBtn').style.display = 'none';
     byId('view-worklog').replaceChildren(emptyNote('載入中…'));
     const mine = await loadMineFromApi();
     if (!mine.ok) {
-      // token 完全失效／缺失一律 404；其餘（斷線、500）給通用訊息。整頁停在可讀的錯誤狀態，
-      // 不留白畫面、不繼續往下渲染可能半殘的表單（驗收契約 #6：錯誤一律清楚可讀，不卡死）。
       renderFatalError(mine.status === 404
         ? '此連結已失效或不存在，請聯繫窩的家管理者重新取得連結。'
         : '暫時無法連線到系統，請確認網路後重新整理頁面再試一次。');
       return;
     }
     IDENTITY = mine.json.viewer;
-    ROLE = IDENTITY.role;
-    applyMineData(mine.json, todayStr());
-    LOADED_DATE_KEYS.add('today'); // 今天已經跟 API 同步過，切「今天／明天」時不用重打
-  }
-
-  const cur = activeHourLabel();
-  const day = getDayState(selectedDateStr());
-  if (cur) EXPANDED.add(cur);
-  else {
-    const firstUnfilled = hourSlots().find((s) => !isFilled(getEntry(day, s.label)));
-    if (firstUnfilled) EXPANDED.add(firstUnfilled.label);
+    applyMineData(mine.json, dateStrForOffset(0));
+    LOADED_DATE_KEYS.add(0);
   }
 
   updateChromeLabels();
