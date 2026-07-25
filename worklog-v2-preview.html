@@ -276,7 +276,9 @@ function sortedBlocks(day) {
 // 現在進行式，過去日期已鎖定不可再改也無從補救）。
 function isOverdueUnrecorded(dateStr, block) {
   if (dateStr !== dateStrForOffset(0)) return false;
-  if (!block.end || block.note) return false;
+  // 必須「已經有排定意圖」（項目已選）才算「排了但沒做」；完全空白、使用者才剛點開還沒填
+  // 任何東西的新草稿列，不該被當成逾期警示（2026-07-25 agent-browser 實測發現的假陽性）。
+  if (!block.end || block.note || !block.category) return false;
   return timeToMinutes(block.end) < nowMinutes();
 }
 
