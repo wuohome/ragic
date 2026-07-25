@@ -208,7 +208,7 @@ function formatDuration(mins) {
   return `${h} 小時 ${m} 分`;
 }
 
-// ================= 日期（今天／明天，沿用 V1 已驗證過的跨日鎖定精神） =================
+// ================= 日期（今天／明天／可往回查詢，沿用 V1 已驗證過的跨日鎖定精神） =================
 function dateStrForOffset(offsetDays) {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
@@ -220,10 +220,14 @@ function dateDisplayForOffset(offsetDays) {
   const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
   return `${d.getMonth() + 1}/${d.getDate()}（${wd}）`;
 }
-let SELECTED_DATE = 'today'; // 'today' | 'tomorrow'
-function selectedOffsetDays() { return SELECTED_DATE === 'tomorrow' ? 1 : 0; }
-function selectedDateStr() { return dateStrForOffset(selectedOffsetDays()); }
-function selectedDateDisplay() { return dateDisplayForOffset(selectedOffsetDays()); }
+// 2026-07-25 修復：往回查看無上限會變成無意義的空查詢，上限訂 90 天；往前寫入規則不變
+// （後端只允許今天或未來，故 UI 也只開放到「明天」，不因本次開放回看而放寬寫入）。
+const NAV_MIN_OFFSET = -90;
+const NAV_MAX_OFFSET = 1;
+let SELECTED_OFFSET = 0; // 0=今天，正數=未來（僅開放到 1＝明天），負數=過去（唯讀）
+function selectedDateStr() { return dateStrForOffset(SELECTED_OFFSET); }
+function selectedDateDisplay() { return dateDisplayForOffset(SELECTED_OFFSET); }
+function isPastSelected() { return SELECTED_OFFSET < 0; }
 
 // ================= 本機資料（依日期分開存放；API_MODE 下靠 rid 跟 Ragic 對齊） =================
 // 形狀：{ [dateStr]: { blocks: { [localId]: Block } } }
@@ -289,7 +293,7 @@ function suggestedStartTime(day) {
     const maxEnd = Math.max(...filled.map((b) => timeToMinutes(b.end)));
     return minutesToTime(Math.min(maxEnd, 23 * 60 + 45));
   }
-  if (SELECTED_DATE === 'today') return minutesToTime(Math.min(roundToStep(nowMinutes()), 23 * 60 + 45));
+  if (SELECTED_OFFSET === 0) return minutesToTime(Math.min(roundToStep(nowMinutes()), 23 * 60 + 45));
   return '09:00';
 }
 function suggestedEndTime(startTime) {
@@ -448,7 +452,7 @@ function renderTimelineBar(dateStr, day, blocks) {
     }
   });
 
-  if (SELECTED_DATE === 'today') {
+  if (SELECTED_OFFSET === 0) {
     const now = nowMinutes();
     if (now >= win.start && now <= win.end) {
       const pct = ((now - win.start) / totalMin) * 100;
@@ -541,16 +545,17 @@ async function loadMineFromApi(dateParam) {
 
 const LOADED_DATE_KEYS = new Set();
 let dateSwitchReqId = 0;
-async function switchSelectedDate(key) {
-  if (SELECTED_DATE === key) return;
+async function switchSelectedDate(offset) {
+  offset = Math.max(NAV_MIN_OFFSET, Math.min(NAV_MAX_OFFSET, offset));
+  if (SELECTED_OFFSET === offset) return;
   const myReqId = ++dateSwitchReqId;
-  SELECTED_DATE = key;
+  SELECTED_OFFSET = offset;
   EXPANDED_BLOCKS = new Set();
-  if (API_MODE && !LOADED_DATE_KEYS.has(key)) {
+  if (API_MODE && !LOADED_DATE_KEYS.has(offset)) {
     renderWorklogView();
-    const result = await loadMineFromApi(key === 'tomorrow' ? selectedDateStr() : null);
+    const result = await loadMineFromApi(offset === 0 ? null : selectedDateStr());
     if (myReqId !== dateSwitchReqId) return;
-    LOADED_DATE_KEYS.add(key);
+    LOADED_DATE_KEYS.add(offset);
     if (result.ok) applyMineData(result.json, selectedDateStr());
   }
   renderWorklogView();
@@ -866,16 +871,46 @@ function renderBlockRow(dateStr, day, block) {
   return wrap;
 }
 
-// ================= 填寫頁 =================
-function dateToggleNode() {
-  const wrap = make('div', 'mb-4 inline-flex gap-1 rounded-xl border-2 border-line bg-white p-1');
-  [{ key: 'today', label: '今天' }, { key: 'tomorrow', label: '明天' }].forEach((opt) => {
-    const active = SELECTED_DATE === opt.key;
-    const btn = make('button', `tap44 rounded-lg px-4 text-sm font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${active ? 'bg-coral text-white' : 'text-inkmuted hover:bg-paper'}`, opt.label);
+// ================= 日期導覽（同仁填寫頁／主管總覽共用；2026-07-25 修復：開放往回查看） =================
+// 往回無上限會變成無意義的空查詢，故 offset 夾在 [NAV_MIN_OFFSET, NAV_MAX_OFFSET]；
+// 邊界一律用 disabled 呈現（非 toast 擋下），讓使用者一眼看出還能不能繼續按。
+function dateNavRow(offset, onChange) {
+  const wrap = make('div', 'mb-4 flex flex-wrap items-center gap-2');
+
+  const atMin = offset <= NAV_MIN_OFFSET;
+  const prevBtn = make('button', `tap44 rounded-lg border-2 border-line px-3 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink${atMin ? ' cursor-not-allowed opacity-40' : ''}`, '‹ 前一天');
+  prevBtn.type = 'button';
+  prevBtn.disabled = atMin;
+  if (atMin) prevBtn.title = `最多只能往回看 ${-NAV_MIN_OFFSET} 天`;
+  prevBtn.addEventListener('click', () => onChange(offset - 1));
+  wrap.append(prevBtn);
+
+  wrap.append(make('span', 'tnum rounded-lg bg-paper px-3 py-2 text-sm font-black text-ink', dateDisplayForOffset(offset)));
+
+  const atMax = offset >= NAV_MAX_OFFSET;
+  const nextBtn = make('button', `tap44 rounded-lg border-2 border-line px-3 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink${atMax ? ' cursor-not-allowed opacity-40' : ''}`, '後一天 ›');
+  nextBtn.type = 'button';
+  nextBtn.disabled = atMax;
+  if (atMax) nextBtn.title = '目前只開放排到明天';
+  nextBtn.addEventListener('click', () => onChange(offset + 1));
+  wrap.append(nextBtn);
+
+  const pillGroup = make('div', 'inline-flex gap-1 rounded-xl border-2 border-line bg-white p-1');
+  [{ off: 0, label: '今天' }, { off: 1, label: '明天' }].forEach((opt) => {
+    const active = offset === opt.off;
+    const btn = make('button', `tap44 rounded-lg px-3 text-sm font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${active ? 'bg-coral text-white' : 'text-inkmuted hover:bg-paper'}`, opt.label);
     btn.type = 'button';
-    btn.addEventListener('click', () => switchSelectedDate(opt.key));
-    wrap.append(btn);
+    btn.addEventListener('click', () => onChange(opt.off));
+    pillGroup.append(btn);
   });
+  wrap.append(pillGroup);
+
+  if (offset !== 0) {
+    const todayBtn = make('button', 'tap44 rounded-lg bg-ink px-3 text-sm font-black text-white hover:bg-ink/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '回到今天');
+    todayBtn.type = 'button';
+    todayBtn.addEventListener('click', () => onChange(0));
+    wrap.append(todayBtn);
+  }
   return wrap;
 }
 
@@ -884,17 +919,36 @@ function renderWorklogView() {
   root.replaceChildren();
   const dateStr = selectedDateStr();
   const day = getDayState(dateStr);
-  const isTomorrow = SELECTED_DATE === 'tomorrow';
+  const isTomorrow = SELECTED_OFFSET === 1;
+  const isPast = isPastSelected();
 
   const deptKey = IDENTITY && deptKeyForCategoryGroup(IDENTITY.categoryGroup);
   const head = make('div', 'mb-4');
   head.append(make('p', 'text-xs font-bold tracking-wide text-coraldark', `${deptKey ? DEPARTMENTS[deptKey].label : '窩的家'}・自訂起訖時間`));
-  head.append(make('h2', 'text-xl font-black text-ink sm:text-2xl', isTomorrow ? '明天，你打算做什麼？' : '今天，你在忙什麼？'));
-  head.append(make('p', 'mt-1 text-sm text-inkmuted', isTomorrow
-    ? `${selectedDateDisplay()}・先列幾筆明天的計畫（填「預先排定行程」即可），時間到了再回來補實際紀錄。`
-    : `${selectedDateDisplay()}・想幾點記就幾點記；早上先排大概行程（填「預先排定行程」），下班前回來把「紀錄內容」補齊——同一筆補、不用重填。`));
+  head.append(make('h2', 'text-xl font-black text-ink sm:text-2xl', isPast ? `${selectedDateDisplay()} 的紀錄` : isTomorrow ? '明天，你打算做什麼？' : '今天，你在忙什麼？'));
+  head.append(make('p', 'mt-1 text-sm text-inkmuted', isPast
+    ? `${selectedDateDisplay()}・這天已鎖定不可修改，僅供查看。`
+    : isTomorrow
+      ? `${selectedDateDisplay()}・先列幾筆明天的計畫（填「預先排定行程」即可），時間到了再回來補實際紀錄。`
+      : `${selectedDateDisplay()}・想幾點記就幾點記；早上先排大概行程（填「預先排定行程」），下班前回來把「紀錄內容」補齊——同一筆補、不用重填。`));
   root.append(head);
-  root.append(dateToggleNode());
+  root.append(dateNavRow(SELECTED_OFFSET, switchSelectedDate));
+
+  // 過去日期：後端規則是「今天或未來可寫，過去一律拒絕」，前端必須同步鎖成純唯讀——
+  // 不顯示任何輸入欄位／新增／儲存類按鈕，避免使用者打字後才被拒絕（7/24 資料遺失事故同款傷害）。
+  if (isPast) {
+    root.append(make('div', 'mb-4 rounded-xl border-2 border-line bg-paper px-4 py-2.5 text-sm font-black text-ink',
+      `🔒 這是 ${selectedDateDisplay()} 的紀錄，已鎖定不可修改`));
+    const list = make('div', 'space-y-2');
+    const blocks = sortedBlocks(day);
+    if (blocks.length === 0) {
+      list.append(emptyNote(`${selectedDateDisplay()} 這天沒有紀錄。`));
+    } else {
+      blocks.forEach((b) => list.append(memberEntryLine(dateStr, b)));
+    }
+    root.append(list);
+    return;
+  }
 
   const unsyncedFilled = blocksList(day).filter((b) => isBlockFilled(b) && !b.synced);
   if (unsyncedFilled.length > 0) {
@@ -1000,30 +1054,21 @@ function memberCard(dateStr, member) {
   }
   return card;
 }
+function overviewTitleForOffset(offset) {
+  if (offset === 0) return '今日工作日誌總覽';
+  if (offset === 1) return '明日工作日誌總覽';
+  return `${dateDisplayForOffset(offset)} 工作日誌總覽`;
+}
 function overviewHeadNode() {
   const head = make('div', 'mb-5');
   head.append(make('p', 'text-xs font-bold tracking-wide text-coraldark', '主管視角・唯讀'));
-  head.append(make('h2', 'text-xl font-black text-ink sm:text-2xl', OVERVIEW_DATE_OFFSET > 0 ? '明日工作日誌總覽' : '本日工作日誌總覽'));
+  head.append(make('h2', 'text-xl font-black text-ink sm:text-2xl', overviewTitleForOffset(OVERVIEW_DATE_OFFSET)));
   head.append(make('p', 'mt-1 text-sm text-inkmuted', `${overviewOffsetDateDisplay()}・依人員檢視，跨部門一起看，「已排定・尚未補紀錄」是排了但沒做的警示。`));
   return head;
 }
-function overviewDayNavNode() {
-  const dayNav = make('div', 'mb-4 flex items-center gap-2');
-  const prevBtn = make('button', 'tap44 rounded-lg border border-line px-3 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '‹ 前一天');
-  prevBtn.type = 'button';
-  prevBtn.addEventListener('click', () => {
-    if (OVERVIEW_DATE_OFFSET > 0) { OVERVIEW_DATE_OFFSET -= 1; refreshOverviewFromApi(); return; }
-    showToast('查看更早日期規劃中，目前僅開放今天／明天');
-  });
-  const nextBtn = make('button', `tap44 rounded-lg border border-line px-3 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink${OVERVIEW_DATE_OFFSET >= 1 ? ' cursor-not-allowed opacity-40' : ''}`, '後一天 ›');
-  nextBtn.type = 'button';
-  nextBtn.addEventListener('click', () => {
-    if (OVERVIEW_DATE_OFFSET >= 1) { showToast('目前僅開放看到明天'); return; }
-    OVERVIEW_DATE_OFFSET += 1;
-    refreshOverviewFromApi();
-  });
-  dayNav.append(prevBtn, make('span', 'tnum rounded-lg bg-paper px-3 py-2 text-xs font-bold text-ink', overviewOffsetDateDisplay()), nextBtn);
-  return dayNav;
+function changeOverviewOffset(next) {
+  OVERVIEW_DATE_OFFSET = Math.max(NAV_MIN_OFFSET, Math.min(NAV_MAX_OFFSET, next));
+  refreshOverviewFromApi();
 }
 function groupByReporter(entries) {
   const map = new Map();
@@ -1048,12 +1093,17 @@ async function loadAllFromApi(dateParam) {
 }
 let overviewState = { status: 'idle', members: [], errorMsg: null };
 let overviewReqId = 0;
+function overviewEmptyText(offset) {
+  if (offset === 0) return '今日尚無紀錄。';
+  if (offset === 1) return '明天尚無排定紀錄。';
+  return `${dateDisplayForOffset(offset)} 這天沒有紀錄。`;
+}
 function renderOverviewBody(root) {
-  root.replaceChildren(overviewHeadNode(), overviewDayNavNode());
+  root.replaceChildren(overviewHeadNode(), dateNavRow(OVERVIEW_DATE_OFFSET, changeOverviewOffset));
   const dateStr = overviewOffsetDateStr();
   if (overviewState.status === 'loading') { root.append(emptyNote('載入中…')); return; }
   if (overviewState.status === 'error') { root.append(emptyNote(overviewState.errorMsg)); return; }
-  if (overviewState.members.length === 0) { root.append(emptyNote(OVERVIEW_DATE_OFFSET > 0 ? '明天尚無排定紀錄。' : '今日尚無紀錄。')); return; }
+  if (overviewState.members.length === 0) { root.append(emptyNote(overviewEmptyText(OVERVIEW_DATE_OFFSET))); return; }
   const list = make('div', 'space-y-3');
   overviewState.members.forEach((member) => list.append(memberCard(dateStr, member)));
   root.append(list);
@@ -1062,7 +1112,7 @@ async function refreshOverviewFromApi() {
   const myReqId = ++overviewReqId;
   overviewState = { status: 'loading', members: [], errorMsg: null };
   renderOverviewBody(byId('view-overview'));
-  const result = await loadAllFromApi(OVERVIEW_DATE_OFFSET > 0 ? overviewOffsetDateStr() : null);
+  const result = await loadAllFromApi(OVERVIEW_DATE_OFFSET !== 0 ? overviewOffsetDateStr() : null);
   if (myReqId !== overviewReqId) return;
   if (!result.ok) {
     const msg = result.status === 403
@@ -1225,7 +1275,7 @@ byId('resetButton').addEventListener('click', () => {
     }
     IDENTITY = mine.json.viewer;
     applyMineData(mine.json, dateStrForOffset(0));
-    LOADED_DATE_KEYS.add('today');
+    LOADED_DATE_KEYS.add(0);
   }
 
   updateChromeLabels();
