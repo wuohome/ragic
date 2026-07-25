@@ -93,7 +93,7 @@
       </div>
       <h1 id="pageTitle" class="hidden text-lg font-black text-ink lg:block">工作日誌</h1>
       <div class="flex shrink-0 items-center gap-2">
-        <span id="modeLabel" class="hidden rounded-full bg-line px-2.5 py-1 text-xs font-bold text-inkmuted sm:inline-block">原型・本機模擬（無 token）</span>
+        <span id="modeLabel" class="hidden rounded-full bg-line px-2.5 py-1 text-xs font-bold text-inkmuted sm:inline-block"></span>
         <button id="resetButton" type="button" class="tap44 rounded-xl border border-line px-3 text-sm font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink">重設本機暫存</button>
       </div>
     </header>
@@ -338,6 +338,9 @@ function renderFatalError(msg) {
   byId('sidebarPlanned').replaceChildren();
   byId('bottomTabBar').replaceChildren();
   byId('pageTitle').textContent = '無法載入';
+  // 2026-07-25：攔截畫面不顯示任何「模式」標籤，避免跟「無法載入」語意矛盾（見 init() 說明）。
+  const modeLabel = byId('modeLabel');
+  if (modeLabel) modeLabel.textContent = '';
 }
 
 const CHEVRON_DOWN_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
@@ -1195,15 +1198,19 @@ byId('resetButton').addEventListener('click', () => {
   const initHash = (location.hash || '').replace('#', '');
   if (!VALID_VIEWS.includes(initHash)) replaceHashKeepingQuery('#worklog');
 
-  const modeLabel = byId('modeLabel');
-  if (modeLabel) modeLabel.textContent = API_MODE ? '已連線 API' : '原型・本機模擬（無 token）';
-
   // 無 token（連 localStorage 都沒有）一律整頁擋下，不提供「填得動、送出假成功」的模擬模式給
   // 正式使用者；開發除錯要用模擬模式，網址加 ?dev=1（比照 V1 worklog.html 既有防線）。
+  // 2026-07-25 修掉既有小瑕疵：攔截畫面不再顯示任何「模式」標籤——之前不論是否被攔截都固定
+  // 顯示「原型・本機模擬（無 token）」，跟「無法載入」訊息語意矛盾（明明整頁被擋，右上角卻說
+  // 一切正常在模擬）。攔截時完全不顯示模式標籤；只有真的進入 dev=1 本機模擬或已連線 API 這兩種
+  // 「頁面確實可運作」的狀態，才顯示對應標籤。
   if (!API_MODE && !new URLSearchParams(location.search).has('dev')) {
     renderFatalError('這個網址少了你的專屬通行碼，填寫的內容不會被儲存。請回到 LINE 找到管理者傳給你的完整連結，重新點開。');
     return;
   }
+
+  const modeLabel = byId('modeLabel');
+  if (modeLabel) modeLabel.textContent = API_MODE ? '已連線 API' : '開發模式・本機模擬（?dev=1）';
 
   if (API_MODE) {
     byId('view-worklog').replaceChildren(emptyNote('載入中…'));
