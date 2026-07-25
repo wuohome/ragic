@@ -176,6 +176,35 @@ const LEAVE_FIELDS_WHITELIST = new Set([
   '1000961','1000963','1000964','1000965','1002025','1002026','1000967','1000966',
 ]);
 
+// ── Group A hardening: 見紅休（設計部+瓊安）週末/國定假日禁止 createLeave 排值日/值班 ──
+// 三度誤排事故根治（2026-07-26）：6/13 張瓊安、6/28 呂鴻墀(rid 4768)、7/25 呂鴻墀(rid 5428)，
+// 三次都是「一次性資料操作」腳本直接呼叫 createLeave 寫入，繞過 schedule.html 前端的見紅休擋下
+// （前端該擋自 2026-03-23 commit 5c7f7185 起就存在且從未失效，問題出在不經前端的腳本寫入）。
+// 此處補上 Worker 端伺服器驗證，不管呼叫方是不是瀏覽器都擋得住。
+// 與 schedule-common.js 的 SC.GOV_REST_NAMES / SC.HOLIDAYS_2026 保持同步，異動需同時改兩邊。
+const GOV_REST_NAMES = new Set(['張瓊安', '沈郁雯', '呂鴻墀']);
+const GOV_HOLIDAYS_2026 = new Set([
+  '2026/01/01','2026/02/16','2026/02/17','2026/02/18','2026/02/19','2026/02/20',
+  '2026/02/27','2026/04/03','2026/04/06','2026/05/01','2026/06/19','2026/09/25',
+  '2026/09/28','2026/10/09','2026/10/26','2026/12/25',
+]);
+function isGovRestDateStr(dateStr) {
+  const m = /^(\d{4})\/(\d{2})\/(\d{2})$/.exec(dateStr || '');
+  if (!m) return false;
+  const dow = new Date(+m[1], +m[2] - 1, +m[3]).getDay();
+  return dow === 0 || dow === 6 || GOV_HOLIDAYS_2026.has(dateStr);
+}
+// 禁休覆蓋：當天若已有 TYPE=禁休 紀錄，見紅休失效（全員含見紅休 3 人正常上班）
+// 查詢失敗一律視為「無覆蓋」（fail closed）：寧可擋下讓人工確認，不要放行造成第四次事故
+async function hasNoRestOverride(env, dateStr) {
+  try {
+    const qs = `naming=EID&where=${encodeURIComponent('1002025,eq,禁休')}&where=${encodeURIComponent('1000963,eq,' + dateStr)}&limit=0,1`;
+    const { upstream, data } = await getFromRagic(env, 'ragicforms4/2', qs);
+    if (!upstream.ok) return false;
+    return Object.keys(data || {}).length > 0;
+  } catch { return false; }
+}
+
 const ALLOWED_PASSTHROUGH_PARAMS = ['limit', 'subtables', 'naming', 'order'];
 const ALLOWED_WHERE_FIELDS = new Set([
   '1000254','1000257','1000260','1000274','1000285',
@@ -900,6 +929,16 @@ export default {
         if (fieldKeys.length === 0) return jsonResp({ error: 'empty_fields' }, 400, allowedOrigin);
         for (const k of fieldKeys) {
           if (!LEAVE_FIELDS_WHITELIST.has(k)) return jsonResp({ error: 'invalid_field', key: k }, 400, allowedOrigin);
+        }
+        // 見紅休（設計部+瓊安）週末/國定假日禁止排值日/值班 — 三度誤排事故根治，見上方常數區註解
+        const leaveEmp = body['1000961'];
+        const leaveDate = body['1000963'];
+        const leaveType = body['1002025'];
+        if ((leaveType === '值日' || leaveType === '值班') && GOV_REST_NAMES.has(leaveEmp) && isGovRestDateStr(leaveDate)) {
+          const overridden = await hasNoRestOverride(env, leaveDate);
+          if (!overridden) {
+            return jsonResp({ error: 'gov_rest_conflict', msg: `${leaveEmp} 屬見紅休（設計部/瓊安），${leaveDate} 不排${leaveType}` }, 400, allowedOrigin);
+          }
         }
         const params = new URLSearchParams();
         for (const [k, v] of Object.entries(body)) params.append(k, String(v == null ? '' : v));

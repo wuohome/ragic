@@ -56,8 +56,8 @@
 <script type="text/babel">
 
 /* ── Constants (from schedule-common.js) ───────────────────── */
-const JIAN_HONG_NAMES = new Set(SC.GOV_REST_NAMES);
-const PUBLIC_HOLIDAYS_2026 = SC.HOLIDAYS_2026;
+// 見紅休判斷（日期/人員命中）已集中到 SC.isGovRestDay / SC.isGovRestFor（2026-07-26 三度誤排事故根治），
+// 本檔不再自行維護 JIAN_HONG_NAMES / isRedHoliday 這份獨立複製
 
 // Department display overrides
 const DEPT_DISPLAY = { '韓珊珊':'管理部/秘書', '張瓊安':'管理部/特助' };
@@ -115,11 +115,6 @@ function getInitialMonth() {
 function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); }
 function getDOW(y, m, d)   { return new Date(y, m-1, d).getDay(); }
 const fmtDate = SC.fmtDate;
-function isRedHoliday(y, m, d) {
-  const dow = getDOW(y, m, d);
-  if (dow === 0 || dow === 6) return true;
-  return fmtDate(y, m, d) in PUBLIC_HOLIDAYS_2026;
-}
 
 // Ordering: 租賃部=0, 管理部(珊珊+瓊安)=1, 社宅部+設計部=2
 function getOrder(emp) {
@@ -292,7 +287,7 @@ function getCellStatuses(emp, y, m, d, leaves, duties, noRest) {
     if (!result.includes(key)) result.push(key);
   }
   // 見紅休: only if NOT 禁休 day AND no other status AND employee qualifies
-  if (result.length === 0 && !noRest[date] && JIAN_HONG_NAMES.has(emp.name) && isRedHoliday(y, m, d)) {
+  if (result.length === 0 && !noRest[date] && SC.isGovRestFor(emp.name, y, m, d)) {
     result.push('見紅休');
   }
   return result;
@@ -695,7 +690,7 @@ function PersonalView({ emp, onBack }) {
   // Can this cell be edited?
   function isCellEditable(d) {
     if (!open) return false;
-    if (JIAN_HONG_NAMES.has(emp.name) && isRedHoliday(year, month, d)) return false;
+    if (SC.isGovRestFor(emp.name, year, month, d)) return false;
     return true;
   }
 
@@ -976,11 +971,11 @@ function TeamView({ emps, onBack }) {
     // Count 見紅休 days for qualified employees (exclude 禁休 days)
     const totalDays = daysInMonth(year, month);
     for (const e of emps) {
-      if (!JIAN_HONG_NAMES.has(e.name)) continue;
+      if (!SC.GOV_REST_NAMES.includes(e.name)) continue;
       let cnt = 0;
       for (let d = 1; d <= totalDays; d++) {
         const date = fmtDate(year, month, d);
-        if (isRedHoliday(year, month, d) && !noRest[date]) cnt++;
+        if (SC.isGovRestDay(year, month, d) && !noRest[date]) cnt++;
       }
       s[e.name]['見紅休'] = cnt;
     }

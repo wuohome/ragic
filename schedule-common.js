@@ -105,6 +105,19 @@ SC.getHolidayName = (y, m, d) => SC.HOLIDAYS_2026[SC.fmtDate(y, m, d)] || "";
 SC.isGovHoliday = (dateStr, isWeekend) => isWeekend || dateStr in SC.HOLIDAYS_2026;
 SC.isOpenPeriod = () => new Date().getDate() >= 20;
 
+// ── 見紅休判斷（集中版，2026-07-26 三度誤排事故根治）──
+// 本函式只判斷「該日是否為見紅休適用日」與「某人在該日是否見紅休」，
+// 不含「禁休」覆蓋（禁休會強制全員上班，覆蓋見紅休）；禁休狀態由呼叫端各自的
+// noRest[dateStr] 檢查後再 && 起來，因為 noRest 是各頁面自己 load 的 runtime 狀態，
+// 不適合塞進這個純日期計算的共用函式。
+// schedule.html（自動排班／手動點格）與 schedule-view.html（個人排休）皆改用這兩個函式，
+// 取代原本三處各自重算「週末/國定假日 + 名單命中」的重複邏輯。
+SC.isGovRestDay = (year, month, day) => {
+    const dow = new Date(year, month - 1, day).getDay();
+    return SC.isGovHoliday(SC.fmtDate(year, month, day), dow === 0 || dow === 6);
+};
+SC.isGovRestFor = (name, year, month, day) => SC.GOV_REST_NAMES.includes(name) && SC.isGovRestDay(year, month, day);
+
 // ── 月休上限：當月有三節（春節/端午/中秋）→ 9 天，否則 8 天 ──
 SC.MAJOR_FESTIVAL_NAMES = ["春節", "除夕", "端午", "中秋"];
 SC.monthLeaveLimit = (year, month) => {
