@@ -131,12 +131,25 @@ const OTHER_CATEGORY = '其他';
 // 2026-07-23 補：租賃分類新增「修繕」語意上就是報修相關，一併加入，否則恩廷選「修繕」會完全
 // 打不開報修原因欄位（此欄無其他手動展開方式）——這是本次新增類別直接造成的功能缺口，非額外擴張範圍。
 const REPAIR_RELATED = new Set(['驗收', '廠商聯繫', '修繕']);
-// ================= API 串接（有 token 才走真實 API，沒有 token 保留原本本機模擬方便開發除錯） =================
+// ================= API 串接 =================
+// 2026-07-24 事故後補強：token 除了讀網址，也持久化到 localStorage——
+// 使用者若從瀏覽記錄/舊分頁點回「沒帶 ?token= 的網址」，自動用同一瀏覽器上次用過的 token 復原，
+// 不再掉進「本機模擬模式」假裝送出成功（勁豪 7/24 第二次資料事故的直接根因）。
+// 模擬模式僅限「這個瀏覽器從未帶 token 開過本頁」（純開發情境）才會出現，且 init() 會跳出全頁警告。
 const WORKER_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+const TOKEN_STORE_KEY = 'wuohome_worklog_token_v1';
 function getUrlToken() {
   try { return new URLSearchParams(location.search).get('token') || ''; } catch { return ''; }
 }
-const API_TOKEN = getUrlToken();
+function resolveToken() {
+  const fromUrl = getUrlToken();
+  if (fromUrl) {
+    try { localStorage.setItem(TOKEN_STORE_KEY, fromUrl); } catch {}
+    return fromUrl;
+  }
+  try { return localStorage.getItem(TOKEN_STORE_KEY) || ''; } catch { return ''; }
+}
+const API_TOKEN = resolveToken();
 const API_MODE = Boolean(API_TOKEN);
 // 2026-07-23：真實身分（{role,name}）一律由 worklogListMine 回應的 viewer 欄位取得，不由前端
 // 自行宣告——token 對應誰、是不是主管，只有 Worker 說了算（比照既有 P5/Group T 手法）。
@@ -1307,6 +1320,13 @@ byId('resetButton').addEventListener('click', () => {
 
   const modeLabel = byId('modeLabel');
   if (modeLabel) modeLabel.textContent = API_MODE ? '已連線 API' : '原型・本機模擬（無 token）';
+
+  // 2026-07-24 事故後補強：無 token（連 localStorage 都沒有）一律整頁擋下，不再提供
+  // 「填得動、送出假成功」的模擬模式給正式使用者。開發除錯要用模擬模式，網址加 ?dev=1。
+  if (!API_MODE && !new URLSearchParams(location.search).has('dev')) {
+    renderFatalError('這個網址少了你的專屬通行碼，填寫的內容不會被儲存。請回到 LINE 找到管理者傳給你的完整連結，重新點開。');
+    return;
+  }
 
   if (API_MODE) {
     byId('roleToggleBtn').style.display = 'none';
