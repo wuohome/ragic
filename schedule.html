@@ -89,7 +89,8 @@ const FLOOR_COLORS = SC.FLOOR_COLORS;
 // 2026 台灣國定假日（非週末的放假日）— 含名稱
 const GOV_HOLIDAYS_2026 = SC.HOLIDAYS_2026;
 
-const isGovHoliday = SC.isGovHoliday;
+// 見紅休判斷（日期/人員命中）已集中到 SC.isGovRestDay / SC.isGovRestFor（2026-07-26 三度誤排事故根治），
+// 本檔不再自行組合 GOV_REST_EMPLOYEES.has(name) + isGovHoliday(dateStr, isWeekend)
 
 const EDIT_PASSWORD = "0718";
 const isOpenPeriod = SC.isOpenPeriod;
@@ -936,15 +937,13 @@ const App = () => {
                 const availFloors = baseFloors.filter(f => !manualFloors.has(f));
                 if (availFloors.length === 0) continue; // 全部手動排完，無需自動補
 
-                const d = new Date(year, month-1, day);
-                const isWknd = d.getDay()===0||d.getDay()===6;
                 const weekNum = getWeekNum(day);
                 const onLeaveToday = new Set();
                 Object.entries(leaves).forEach(([k, arr]) => {
                     if (!k.endsWith("|" + dateStr)) return;
                     if (Array.isArray(arr) && arr.some(e => e.type !== "值班")) onLeaveToday.add(k.split("|")[0]);
                 });
-                if (!noRest[dateStr] && isGovHoliday(dateStr, isWknd)) {
+                if (!noRest[dateStr] && SC.isGovRestDay(year, month, day)) {
                     GOV_REST_EMPLOYEES.forEach(name => onLeaveToday.add(name));
                 }
                 // 生日當天不排值日生
@@ -1169,14 +1168,12 @@ const App = () => {
                 const mm = String(month).padStart(2,"0");
                 const dd = String(day).padStart(2,"0");
                 const dateStr = `${year}/${mm}/${dd}`;
-                const d = new Date(year, month-1, day);
-                const isWknd = d.getDay()===0||d.getDay()===6;
                 const onLeave = new Set();
                 Object.entries(leaves).forEach(([k, arr]) => {
                     if (!k.endsWith("|" + dateStr)) return;
                     if (Array.isArray(arr) && arr.some(e => e.type !== "值班")) onLeave.add(k.split("|")[0]);
                 });
-                if (!noRest[dateStr] && isGovHoliday(dateStr, isWknd)) {
+                if (!noRest[dateStr] && SC.isGovRestDay(year, month, day)) {
                     GOV_REST_EMPLOYEES.forEach(n => onLeave.add(n));
                 }
                 // 排序：本月次數少的優先（月內均勻），同分時保持原始順序（部門+年資）
@@ -1291,13 +1288,9 @@ const App = () => {
         if (GOV_REST_EMPLOYEES.has(empName)) {
             const dim = new Date(year, month, 0).getDate();
             for (let d = 1; d <= dim; d++) {
-                const mm = String(month).padStart(2,"0");
-                const dd = String(d).padStart(2,"0");
-                const ds = `${year}/${mm}/${dd}`;
+                const ds = SC.fmtDate(year, month, d);
                 if (noRest[ds]) continue; // 禁休日不算
-                const dt = new Date(year, month-1, d);
-                const isWk = dt.getDay()===0||dt.getDay()===6;
-                if (isGovHoliday(ds, isWk)) govRestDays++;
+                if (SC.isGovRestDay(year, month, d)) govRestDays++;
             }
         }
         const totalRest = paixiu + texiu + qingjia + govRestDays;
@@ -1586,7 +1579,7 @@ const App = () => {
                                             const myDuties = dutyList.filter(d => d.empName === emp.name);
                                             const myDuty = myDuties[0] || null;
                                             const hasMultiFloor = myDuties.length > 1;
-                                            const isGovRest = !nrInfo && GOV_REST_EMPLOYEES.has(emp.name) && isGovHoliday(dateStr, isWeekend);
+                                            const isGovRest = !nrInfo && SC.isGovRestFor(emp.name, year, month, day);
                                             const savingKey = mode === "值日" ? `duty|${dateStr}` : key;
                                             const cellSaving = saving[savingKey];
                                             const floorLabel = hasMultiFloor
