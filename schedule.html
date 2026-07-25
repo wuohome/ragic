@@ -74,6 +74,45 @@ const apiBatchCreate = async (records, onProgress) => {
     }
     return results;
 };
+
+// ── 一鍵重排刪除前安全快照（技術債修復 2026-07-26，見 技術筆記/技術債.md）──
+// 把即將被刪除的紀錄完整下載成 JSON 檔到使用者本機，作為 Ragic 回收桶之外的第二道復原保險。
+// 復原步驟：開啟下載的 JSON，取 records 陣列，逐筆移除 ragicId 欄位後，
+// 用 SC.proxyFetch("createLeave", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(record)}) 重新建立。
+const exportScheduleSnapshot = (type, year, month, rawEntries) => {
+    const now = new Date();
+    const ts = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const payload = {
+        _meta: {
+            purpose: "schedule.html 一鍵預排／排值班：刪除前自動快照（技術債修復 2026-07-26）",
+            type, year, month,
+            exportedAt: now.toISOString(),
+            recordCount: rawEntries.length,
+            restoreHint: "逐筆移除 ragicId 欄位後，用 SC.proxyFetch('createLeave', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(record)}) 重建；或優先嘗試 Ragic 網頁版回收桶還原（同一批刪除通常還在桶內）。"
+        },
+        records: rawEntries.map(([id, f]) => ({
+            ragicId: id,
+            [CONFIG.F_LEAVE.EMP]: f[CONFIG.F_LEAVE.EMP] || "",
+            [CONFIG.F_LEAVE.DATE]: f[CONFIG.F_LEAVE.DATE] || "",
+            [CONFIG.F_LEAVE.YEAR]: f[CONFIG.F_LEAVE.YEAR] || "",
+            [CONFIG.F_LEAVE.MONTH]: f[CONFIG.F_LEAVE.MONTH] || "",
+            [CONFIG.F_LEAVE.TYPE]: f[CONFIG.F_LEAVE.TYPE] || "",
+            [CONFIG.F_LEAVE.DEPT]: f[CONFIG.F_LEAVE.DEPT] || "",
+            [CONFIG.F_LEAVE.NOTE]: f[CONFIG.F_LEAVE.NOTE] || "",
+            [CONFIG.F_LEAVE.IS_AUTO]: f[CONFIG.F_LEAVE.IS_AUTO] || "",
+        }))
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `schedule-snapshot_${type}_${year}-${String(month).padStart(2,"0")}_${ts}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
 const DAYS = SC.DAYS_TW;
 const DEPT_COLORS = SC.DEPT_COLORS;
 const DEPT_ORDER = SC.DEPT_ORDER;
@@ -864,6 +903,40 @@ const App = () => {
                     }
                 });
             console.log("保留手動值日天數:", Object.keys(manualByDate).length);
+
+            // ── 二次確認（技術債修復 2026-07-26）：顯示實際即將刪除的筆數/月份/樓層，並在真的動手前自動匯出 JSON 快照 ──
+            if (toDelete.length > 0) {
+                const affectedDates = [...new Set(toDelete.map(([, f]) => f[CONFIG.F_LEAVE.DATE] || ""))].filter(Boolean).sort();
+                const affectedFloors = [...new Set(toDelete.map(([, f]) => {
+                    const note = f[CONFIG.F_LEAVE.NOTE] || "";
+                    return /^(1F|2F|3F|4F)$/.test(note) ? note : null;
+                }).filter(Boolean))].sort();
+                const manualKeptCount = Object.values(manualByDate).reduce((s, a) => s + a.length, 0);
+                const okFinalDuty = await openConfirm(
+                    `⚠️ 最終確認：即將「刪除」${toDelete.length} 筆值日紀錄並重新產生新排班\n\n` +
+                    `影響月份：${year}-${String(month).padStart(2, "0")}（共 ${affectedDates.length} 天）\n` +
+                    `影響樓層：${affectedFloors.join("、") || "（無樓層標記）"}\n` +
+                    `手動排班（不受影響、會保留）：${manualKeptCount} 筆\n\n` +
+                    `按「確定」會先自動下載一份 JSON 備份到你的電腦，再執行刪除＋重排。\n` +
+                    `此動作無法在頁面內復原，請確認是本人操作、且真的要重排整月。`
+                );
+                if (!okFinalDuty) {
+                    showToast("已取消，未做任何變更");
+                    setProgress(null);
+                    setAutoScheduling(false);
+                    return;
+                }
+                try {
+                    exportScheduleSnapshot("值日", year, month, toDelete);
+                } catch (snapErr) {
+                    console.error("快照匯出失敗", snapErr);
+                    await openAlert("快照匯出失敗，為安全起見已中止本次預排（尚未刪除任何紀錄）：\n" + snapErr.message);
+                    setProgress(null);
+                    setAutoScheduling(false);
+                    return;
+                }
+            }
+
             for (let di = 0; di < toDelete.length; di++) {
                 const [id, f] = toDelete[di];
                 setProgress({ text: "清除舊值日紀錄", current: di + 1, total: toDelete.length });
@@ -1152,6 +1225,35 @@ const App = () => {
                     const p = date.replace(/\//g,"-").split("-");
                     return parseInt(p[0]) === year && parseInt(p[1]) === month;
                 });
+
+            // ── 二次確認（技術債修復 2026-07-26）：顯示實際即將刪除的筆數/月份/人數，並在真的動手前自動匯出 JSON 快照 ──
+            if (toDelete.length > 0) {
+                const affectedDates = [...new Set(toDelete.map(([, f]) => f[CONFIG.F_LEAVE.DATE] || ""))].filter(Boolean).sort();
+                const affectedEmps = [...new Set(toDelete.map(([, f]) => f[CONFIG.F_LEAVE.EMP] || "").filter(Boolean))];
+                const okFinalZhiban = await openConfirm(
+                    `⚠️ 最終確認：即將「刪除」${toDelete.length} 筆值班紀錄並重新產生新排班\n\n` +
+                    `影響月份：${year}-${String(month).padStart(2, "0")}（共 ${affectedDates.length} 天）\n` +
+                    `涉及人員：${affectedEmps.length} 人（含手動排的也會一併清除重排）\n\n` +
+                    `按「確定」會先自動下載一份 JSON 備份到你的電腦，再執行刪除＋重排。\n` +
+                    `此動作無法在頁面內復原，請確認是本人操作、且真的要重排整月。`
+                );
+                if (!okFinalZhiban) {
+                    showToast("已取消，未做任何變更");
+                    setProgress(null);
+                    setAutoZhiban(false);
+                    return;
+                }
+                try {
+                    exportScheduleSnapshot("值班", year, month, toDelete);
+                } catch (snapErr) {
+                    console.error("快照匯出失敗", snapErr);
+                    await openAlert("快照匯出失敗，為安全起見已中止本次預排（尚未刪除任何紀錄）：\n" + snapErr.message);
+                    setProgress(null);
+                    setAutoZhiban(false);
+                    return;
+                }
+            }
+
             for (let di = 0; di < toDelete.length; di++) {
                 setProgress({ text: "清除舊值班紀錄", current: di + 1, total: toDelete.length });
                 await SC.proxyFetch(`deleteLeave/${toDelete[di][0]}`, { method: "DELETE" });
