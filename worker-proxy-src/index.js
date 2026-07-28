@@ -2870,7 +2870,37 @@ export default {
       if (action === 'listEmployees') {
         const { upstream, data } = await getFromRagic(env, 'ragicforms4/20004', 'naming=EID&limit=200');
         if (!upstream.ok) return jsonResp({ error: 'upstream_error', code: upstream.status }, 502, allowedOrigin);
-        return jsonResp(data || {}, 200, allowedOrigin);
+        // ── SEC-2026-07-28 個資外洩止血：回傳前欄位白名單 ──────────────────────────
+        // 本 action 與 listStaff 打同一張人事表 ragicforms4/20004，差別只在 naming=EID
+        // （key 是 7 位數欄位 ID 而非中文名）。原本整張原樣回傳，敏感欄位一項不少。
+        // 消費端逐行盤點（schedule-common.js 的 SC.F_EMP 常數）：
+        //   3000933 姓名 / 3000937 部門 / 3000945 在職狀態 / 3000955 聘雇類別
+        //     → schedule.html／schedule-view.html／fairness-dashboard.html 三頁共用的
+        //       人員名單與「在職 + 排除經營階層 + 承攬/設計部/社宅部」過濾條件
+        //   3000943 到職日期 → schedule.html 與 fairness-dashboard.html 的人員排序
+        //   3000954 出生日期 → schedule.html 排班格生日黃框（SC.isBirthday）
+        // F_EMP 另外定義但全機零使用的 DISPLAY(1000848)／FL1-3(1002028-30) 不納入
+        // （FL 欄位已改由歷史值日紀錄即時計算，見 schedule.html load() 註解）。
+        const LIST_EMPLOYEES_PUBLIC_FIELDS = ['3000933', '3000937', '3000945', '3000955', '3000943', '3000954'];
+        // 出生日期特別處理：年份改寫為 0000，只留月/日。SC.isBirthday 只取 split('/') 的
+        // [1] 月與 [2] 日，功能完全不受影響，但出生年（＝年齡）不再流出到瀏覽器。
+        const EMP_BIRTHDAY_FIELD = '3000954';
+        const empOut = {};
+        for (const [rid, rec] of Object.entries(data || {})) {
+          if (!rec || typeof rec !== 'object') continue;
+          const slim = {};
+          for (const f of LIST_EMPLOYEES_PUBLIC_FIELDS) {
+            if (rec[f] === undefined) continue;
+            if (f === EMP_BIRTHDAY_FIELD) {
+              const p = String(rec[f]).split('/');
+              slim[f] = p.length === 3 ? `0000/${p[1]}/${p[2]}` : '';
+            } else {
+              slim[f] = rec[f];
+            }
+          }
+          empOut[rid] = slim;
+        }
+        return jsonResp(empOut, 200, allowedOrigin);
       }
 
       if (action === 'listStaff') {
