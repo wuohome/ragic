@@ -1,3 +1,25 @@
+// wuohome-ragic-proxy v42 — 企業入口第 3 批：公布欄 + 心情留言板（Group W，2026-07-28）。
+// **本 Worker 第一組非 Ragic 後端的 action** — 資料在 Supabase 專案 wuohome-systems
+// (zqngfhkcftpeqbhllzvl, ap-northeast-1)，表 portal_posts / portal_moods（2026-07-28 建，
+// 前綴依車可充移植包架構決策）。既有 74 個 Ragic action 一行未動（additive only）。
+// 新增 7 個 action：portalListPosts / portalCreatePost / portalPinPost / portalDeletePost /
+// portalListMoods / portalCreateMood / portalDeleteMood。
+// 資安設計（規格書 § 公布欄與心情留言板 兩條資安鐵律）：
+//  1. **前端不得直連 Supabase**。窩的家沒有真認證（shared.js 的 ensureAuth 只是姓名下拉＋
+//     localStorage），RLS 沒有可信身分可判。service_role 等級的 secret key 只存在 Worker
+//     secret `SUPABASE_SERVICE_KEY`，前端只能呼叫本 Worker（CORS 仍鎖 wuohome.github.io）。
+//     附帶佐證：Supabase 本身會擋帶瀏覽器 UA 的 secret key 請求（實測回 401「Forbidden use of
+//     secret API key in browser」），故 portalSupabase() 明確送出非瀏覽器 User-Agent。
+//  2. **不照抄車可充的 supabase_setup.sql**。他們對這兩張表開 `for all using(true) with
+//     check(true)`（全網匿名可讀寫刪）。窩的家版：兩表 RLS 開啟但**刻意零 policy**，且
+//     anon/authenticated 完全無 grant（2026-07-28 用 publishable key 實測 GET/POST 皆 401
+//     permission denied）。只有 service_role（BYPASSRLS）進得去。
+// 權限模型（v1 誠實版）：發文者身分由前端送 `actor` 姓名，Worker **自己**判定是否為管理層
+//     （PORTAL_MANAGERS，與 js/shared.js 的 MANAGERS 同一份名單），不接受前端傳來的角色旗標。
+//     ⚠️ 這**不是**存取控制——v1 沒有可信身分，任何人都能冒名。此為規格書明列的已知取捨
+//     （「v1 不得宣稱有權限控制」），v2 升級一人一條 token 後才成立。
+// 刪除：一律 soft delete（寫 deleted_at/deleted_by，不 DELETE），本人可刪自己、MANAGERS 可刪
+//     任何一則。保留期為「查詢時過濾」不是刪除：公布欄 30 天、心情留言板 7 天。
 // wuohome-ragic-proxy v40 — 工作日誌 V2（自訂起訖時間）接後端：既有 worklogCreate/
 // worklogListMine/worklogListAll 3 個 action 就地擴充（不新增 action，沿用原名，符合規格書
 // 「V2 寫新欄位，既有 action 不得破壞」要求）。maintenance-management/9 新增「開始時間」
@@ -219,6 +241,16 @@ const ALLOWED_ACTIONS = {
   // 持有」的分享token 逐筆交叉比對，token-only IDOR 防護見下方 handler 註解。
   rqCreate:              { method: 'POST' },
   rqGet:                 { method: 'GET' },
+  // Group W: 企業入口 公布欄 + 心情留言板（Supabase portal_posts / portal_moods，2026-07-28）。
+  // 本組是唯一不打 Ragic 的 action group。無固定 token gate（全公司首頁，人人可讀），守門靠
+  // CORS lock + action/欄位白名單 + Worker 端自行判定管理層身分；service_role key 只在 Worker。
+  portalListPosts:       { method: 'GET' },
+  portalCreatePost:      { method: 'POST' },
+  portalPinPost:         { method: 'POST' },
+  portalDeletePost:      { method: 'POST' },
+  portalListMoods:       { method: 'GET' },
+  portalCreateMood:      { method: 'POST' },
+  portalDeleteMood:      { method: 'POST' },
 };
 
 const REPAIR_INTERNAL_ACTIONS = new Set([
@@ -769,6 +801,212 @@ async function handleWorklogAction(action, request, env, identity, origin) {
     }
 
     return jsonResp({ ok: results.every((r) => r.ok), results }, 200, origin);
+  }
+
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Group W: 企業入口 公布欄 + 心情留言板（Supabase，2026-07-28）
+// 後端是 Supabase PostgREST，不是 Ragic。詳細資安脈絡見檔頭 v42 段落。
+// ═══════════════════════════════════════════════════════════════════════════════
+const PORTAL_ACTIONS = new Set([
+  'portalListPosts', 'portalCreatePost', 'portalPinPost', 'portalDeletePost',
+  'portalListMoods', 'portalCreateMood', 'portalDeleteMood',
+]);
+const PORTAL_POSTS_TABLE = 'portal_posts';
+const PORTAL_MOODS_TABLE = 'portal_moods';
+// 與 wuohome/ragic 的 js/shared.js `MANAGERS` 同一份名單（經營階層＋管理部）。兩邊都要改時
+// 以 shared.js 為顯示端、本表為裁決端——Worker 不接受前端傳來的角色旗標，只認姓名。
+const PORTAL_MANAGERS = new Set(['吳彥廷', '蕭靜芳', '韓珊珊', '張瓊安']);
+const PORTAL_POST_RETENTION_DAYS = 30; // 規格書：公布欄 30 天後不顯示（不刪）
+const PORTAL_MOOD_RETENTION_DAYS = 7;  // 規格書：心情留言板 7 天
+const PORTAL_POST_MAX_CHARS = 2000;    // 與資料表 CHECK 約束一致
+const PORTAL_MOOD_MAX_CHARS = 500;     // 與資料表 CHECK 約束一致
+const PORTAL_NAME_MAX_CHARS = 40;      // 與資料表 CHECK 約束一致
+const PORTAL_POST_LIST_LIMIT = 100;
+const PORTAL_MOOD_LIST_LIMIT = 200;
+// Supabase 會擋「看起來像瀏覽器」的 secret key 請求（實測 401 Forbidden use of secret API key
+// in browser）。Worker 的 subrequest 不會自動帶上使用者的 UA，但這裡明確指定，免得未來 runtime
+// 預設值改變導致整組 action 一起 401。
+const PORTAL_SUPABASE_UA = 'wuohome-ragic-proxy';
+
+async function portalSupabase(env, table, { method = 'GET', qs = '', body = null, prefer = null } = {}) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
+    console.error('portalSupabase: SUPABASE_URL / SUPABASE_SERVICE_KEY 未設定');
+    return { ok: false, status: 500, error: 'supabase_not_configured', data: null };
+  }
+  const headers = {
+    'apikey': env.SUPABASE_SERVICE_KEY,
+    'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'User-Agent': PORTAL_SUPABASE_UA,
+    'Accept': 'application/json',
+  };
+  if (body !== null) headers['Content-Type'] = 'application/json';
+  if (prefer) headers['Prefer'] = prefer;
+
+  let resp;
+  try {
+    resp = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}${qs ? `?${qs}` : ''}`, {
+      method,
+      headers,
+      body: body === null ? undefined : JSON.stringify(body),
+    });
+  } catch (e) {
+    console.error('portalSupabase fetch failed', table, method, String(e));
+    return { ok: false, status: 502, error: 'supabase_unreachable', data: null };
+  }
+
+  const text = await resp.text();
+  let data = null;
+  if (text) { try { data = JSON.parse(text); } catch { data = null; } }
+  if (!resp.ok) {
+    // 比照既有 detectUpstreamFailure 精神：上游錯誤落 console.error 供 `wrangler tail` 追，
+    // 但不把 Supabase 原始訊息回給前端（避免外洩表結構/權限提示）。
+    console.error('portalSupabase upstream error', table, method, resp.status, text.slice(0, 500));
+    return { ok: false, status: 502, error: 'supabase_error', data };
+  }
+  return { ok: true, status: resp.status, error: null, data };
+}
+
+function portalClean(v) { return String(v ?? '').replace(/\u0000/g, '').trim(); }
+function portalValidActor(s) { return typeof s === 'string' && s.length >= 1 && s.length <= PORTAL_NAME_MAX_CHARS; }
+function portalIsManager(name) { return PORTAL_MANAGERS.has(name); }
+function portalSinceIso(days) { return new Date(Date.now() - days * 86400000).toISOString(); }
+
+// 回前端的欄位一律 camelCase，且只回白名單欄位——deleted_at / deleted_by 不外流。
+function portalPublicPost(row, actor, isManager) {
+  return {
+    id: row.id,
+    authorName: row.author_name,
+    content: row.content,
+    isPinned: row.is_pinned === true,
+    createdAt: row.created_at,
+    canDelete: isManager || row.author_name === actor,
+    canPin: isManager,
+  };
+}
+function portalPublicMood(row, actor, isManager) {
+  return {
+    id: row.id,
+    authorName: row.author_name,
+    content: row.content,
+    createdAt: row.created_at,
+    canDelete: isManager || row.author_name === actor,
+  };
+}
+
+async function handlePortalAction(action, request, env, origin) {
+  const url = new URL(request.url);
+
+  // ── 讀取：公布欄 / 心情留言板 ────────────────────────────────────────────────
+  if (action === 'portalListPosts' || action === 'portalListMoods') {
+    const isPosts = action === 'portalListPosts';
+    // actor 只用來算每一則的 canDelete/canPin，缺省仍可讀（首頁未選身分時也要看得到公告）。
+    const actor = portalClean(url.searchParams.get('actor'));
+    const isManager = portalIsManager(actor);
+    const days = isPosts ? PORTAL_POST_RETENTION_DAYS : PORTAL_MOOD_RETENTION_DAYS;
+
+    const params = new URLSearchParams();
+    params.set('select', isPosts
+      ? 'id,author_name,content,is_pinned,created_at'
+      : 'id,author_name,content,created_at');
+    params.set('deleted_at', 'is.null');
+    params.set('created_at', `gte.${portalSinceIso(days)}`);
+    params.set('order', isPosts ? 'is_pinned.desc,created_at.desc' : 'created_at.desc');
+    params.set('limit', String(isPosts ? PORTAL_POST_LIST_LIMIT : PORTAL_MOOD_LIST_LIMIT));
+
+    const res = await portalSupabase(env, isPosts ? PORTAL_POSTS_TABLE : PORTAL_MOODS_TABLE, { qs: params.toString() });
+    if (!res.ok) return jsonResp({ error: res.error }, res.status, origin);
+    const rows = Array.isArray(res.data) ? res.data : [];
+    const items = rows.map((r) => (isPosts ? portalPublicPost(r, actor, isManager) : portalPublicMood(r, actor, isManager)));
+    return jsonResp({
+      ok: true,
+      [isPosts ? 'posts' : 'moods']: items,
+      retentionDays: days,
+      viewer: { name: actor, isManager },
+    }, 200, origin);
+  }
+
+  // ── 以下皆為寫入類，統一先解析 body 與 actor ───────────────────────────────
+  let body;
+  try { body = await request.json(); } catch { return jsonResp({ error: 'bad_json' }, 400, origin); }
+  const actor = portalClean(body?.actor);
+  if (!portalValidActor(actor)) return jsonResp({ error: 'invalid_actor' }, 400, origin);
+  const isManager = portalIsManager(actor);
+
+  if (action === 'portalCreatePost' || action === 'portalCreateMood') {
+    const isPosts = action === 'portalCreatePost';
+    // 公布欄限經營階層＋管理部；心情留言板全體同仁。
+    if (isPosts && !isManager) return jsonResp({ error: 'forbidden', reason: 'not_manager' }, 403, origin);
+    const maxChars = isPosts ? PORTAL_POST_MAX_CHARS : PORTAL_MOOD_MAX_CHARS;
+    const content = portalClean(body?.content);
+    if (!content) return jsonResp({ error: 'empty_content' }, 400, origin);
+    if (content.length > maxChars) return jsonResp({ error: 'content_too_long', max: maxChars }, 400, origin);
+
+    // 欄位白名單：Worker 自己組出要寫的欄位，前端 body 其餘 key 一律丟棄。
+    // id / created_at / deleted_at 全部由資料庫或 Worker 決定，前端不得指定。
+    const row = isPosts
+      ? { author_name: actor, content, is_pinned: body?.isPinned === true }
+      : { author_name: actor, content };
+
+    const res = await portalSupabase(env, isPosts ? PORTAL_POSTS_TABLE : PORTAL_MOODS_TABLE, {
+      method: 'POST', body: [row], prefer: 'return=representation',
+    });
+    if (!res.ok) return jsonResp({ error: res.error }, res.status, origin);
+    const created = Array.isArray(res.data) ? res.data[0] : null;
+    // 讀回驗證，比照 createPaymentReceipt / rqCreate 的「不憑 2xx 就宣稱寫入成功」手法。
+    if (!created?.id) return jsonResp({ error: 'write_unverified' }, 502, origin);
+    return isPosts
+      ? jsonResp({ ok: true, post: portalPublicPost(created, actor, isManager) }, 200, origin)
+      : jsonResp({ ok: true, mood: portalPublicMood(created, actor, isManager) }, 200, origin);
+  }
+
+  if (action === 'portalPinPost') {
+    if (!isManager) return jsonResp({ error: 'forbidden', reason: 'not_manager' }, 403, origin);
+    const id = portalClean(body?.id);
+    if (!validUuid(id)) return jsonResp({ error: 'invalid_id' }, 400, origin);
+    if (typeof body?.isPinned !== 'boolean') return jsonResp({ error: 'invalid_is_pinned' }, 400, origin);
+
+    const qs = new URLSearchParams({ id: `eq.${id}`, deleted_at: 'is.null' }).toString();
+    const res = await portalSupabase(env, PORTAL_POSTS_TABLE, {
+      method: 'PATCH',
+      qs,
+      body: { is_pinned: body.isPinned, updated_at: new Date().toISOString() },
+      prefer: 'return=representation',
+    });
+    if (!res.ok) return jsonResp({ error: res.error }, res.status, origin);
+    const row = Array.isArray(res.data) ? res.data[0] : null;
+    if (!row) return jsonResp({ error: 'not_found' }, 404, origin);
+    return jsonResp({ ok: true, post: portalPublicPost(row, actor, isManager) }, 200, origin);
+  }
+
+  if (action === 'portalDeletePost' || action === 'portalDeleteMood') {
+    const table = action === 'portalDeletePost' ? PORTAL_POSTS_TABLE : PORTAL_MOODS_TABLE;
+    const id = portalClean(body?.id);
+    if (!validUuid(id)) return jsonResp({ error: 'invalid_id' }, 400, origin);
+
+    // 先讀出這一則的作者，權限在 Worker 端判：本人可刪自己、MANAGERS 可刪任何一則。
+    const findQs = new URLSearchParams({ id: `eq.${id}`, deleted_at: 'is.null', select: 'id,author_name' }).toString();
+    const found = await portalSupabase(env, table, { qs: findQs });
+    if (!found.ok) return jsonResp({ error: found.error }, found.status, origin);
+    const target = Array.isArray(found.data) ? found.data[0] : null;
+    if (!target) return jsonResp({ error: 'not_found' }, 404, origin);
+    if (!isManager && target.author_name !== actor) {
+      return jsonResp({ error: 'forbidden', reason: 'not_owner' }, 403, origin);
+    }
+
+    // soft delete：留底可追（不當留言要有紀錄可查），前端一律看不到 deleted_at 不為 null 的列。
+    const res = await portalSupabase(env, table, {
+      method: 'PATCH',
+      qs: new URLSearchParams({ id: `eq.${id}`, deleted_at: 'is.null' }).toString(),
+      body: { deleted_at: new Date().toISOString(), deleted_by: actor },
+      prefer: 'return=representation',
+    });
+    if (!res.ok) return jsonResp({ error: res.error }, res.status, origin);
+    const row = Array.isArray(res.data) ? res.data[0] : null;
+    if (!row) return jsonResp({ error: 'not_found' }, 404, origin);
+    return jsonResp({ ok: true, id: row.id }, 200, origin);
   }
 
   return null;
@@ -2548,6 +2786,13 @@ export default {
       if (action.startsWith('worklog')) {
         const worklogResponse = await handleWorklogAction(action, request, env, worklogIdentity, allowedOrigin);
         if (worklogResponse) return worklogResponse;
+      }
+
+      // Group W: 企業入口 公布欄／心情留言板（Supabase，非 Ragic）。無 token gate——全公司首頁
+      // 人人可讀；發文/刪除的權限判定在 handlePortalAction 內以 actor 姓名比對 PORTAL_MANAGERS。
+      if (PORTAL_ACTIONS.has(action)) {
+        const portalResponse = await handlePortalAction(action, request, env, allowedOrigin);
+        if (portalResponse) return portalResponse;
       }
 
       if (action === 'lookupOperator') {
