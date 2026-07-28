@@ -19,7 +19,8 @@
 //     ⚠️ 這**不是**存取控制——v1 沒有可信身分，任何人都能冒名。此為規格書明列的已知取捨
 //     （「v1 不得宣稱有權限控制」），v2 升級一人一條 token 後才成立。
 // 刪除：一律 soft delete（寫 deleted_at/deleted_by，不 DELETE），本人可刪自己、MANAGERS 可刪
-//     任何一則。保留期為「查詢時過濾」不是刪除：公布欄 30 天、心情留言板 7 天。
+//     任何一則。保留期為「查詢時過濾」不是刪除：公布欄 30 天、心情留言板 7 天，
+//     **但置頂公告不受保留期限制、永遠顯示**（Joan 2026-07-28 拍板）。
 // wuohome-ragic-proxy v40 — 工作日誌 V2（自訂起訖時間）接後端：既有 worklogCreate/
 // worklogListMine/worklogListAll 3 個 action 就地擴充（不新增 action，沿用原名，符合規格書
 // 「V2 寫新欄位，既有 action 不得破壞」要求）。maintenance-management/9 新增「開始時間」
@@ -912,7 +913,14 @@ async function handlePortalAction(action, request, env, origin) {
       ? 'id,author_name,content,is_pinned,created_at'
       : 'id,author_name,content,created_at');
     params.set('deleted_at', 'is.null');
-    params.set('created_at', `gte.${portalSinceIso(days)}`);
+    // 保留期：留言板一律 7 天。公布欄 30 天，但**置頂公告不受保留期限制、永遠顯示**
+    // （Joan 2026-07-28 拍板：置頂就是要常駐，不能自己消失）。PostgREST 的 or 語法＝
+    // 「is_pinned 為真」OR「發布時間在 30 天內」。
+    if (isPosts) {
+      params.set('or', `(is_pinned.eq.true,created_at.gte.${portalSinceIso(days)})`);
+    } else {
+      params.set('created_at', `gte.${portalSinceIso(days)}`);
+    }
     params.set('order', isPosts ? 'is_pinned.desc,created_at.desc' : 'created_at.desc');
     params.set('limit', String(isPosts ? PORTAL_POST_LIST_LIMIT : PORTAL_MOOD_LIST_LIMIT));
 
@@ -924,6 +932,9 @@ async function handlePortalAction(action, request, env, origin) {
       ok: true,
       [isPosts ? 'posts' : 'moods']: items,
       retentionDays: days,
+      // 公布欄專屬：明講「置頂不受 retentionDays 限制」，免得前端看到 retentionDays:30
+      // 就以為所有公告都會在 30 天後消失。
+      ...(isPosts ? { pinnedNeverExpires: true } : {}),
       viewer: { name: actor, isManager },
     }, 200, origin);
   }
