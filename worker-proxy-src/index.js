@@ -2878,7 +2878,28 @@ export default {
         if (!/^\d{1,4}$/.test(limit)) return jsonResp({ error: 'invalid_limit' }, 400, allowedOrigin);
         const { upstream, data } = await getFromRagic(env, 'ragicforms4/20004', `limit=${limit}`);
         if (!upstream.ok) return jsonResp({ error: 'upstream_error', code: upstream.status }, 502, allowedOrigin);
-        return jsonResp(data || {}, 200, allowedOrigin);
+        // ── SEC-2026-07-28 個資外洩止血：回傳前欄位白名單 ──────────────────────────
+        // 人事表 ragicforms4/20004 含 身分證字號 / 出生日期 / 戶籍與通訊地址 / 銀行·代號·
+        // 分行·帳號 / 存摺上傳 / 主要與次要手機 / LINE User ID，以及子表格的緊急聯絡人、
+        // 證件檔案、學歷、工作經驗。呼叫端在 GitHub Pages 上且無 token gate，原本整張表
+        // 原樣回傳 = 任何人開 F12 就看得到全公司同仁個資。
+        // 白名單做在「回傳前過濾」而非 Ragic 端 field 參數，確保任何呼叫路徑都吃得到，
+        // 不會因為漏帶參數就整包吐出。子表格與 _ragicId 等 meta 一併移除。
+        //   姓名 / 部門 / 在職狀態 → js/shared.js fetchStaffList（選人下拉、部門顯示）
+        //                          + staff-dashboard.html 在職名單與離職判定
+        //   到職日期              → staff-dashboard.html 年資計算與到職月曲線起點
+        //   Email / 員工帳號      → 下一階段 Google 帳號登入的白名單比對
+        const LIST_STAFF_PUBLIC_FIELDS = ['姓名', '部門', '在職狀態', '到職日期', 'Email', '員工帳號'];
+        const staffOut = {};
+        for (const [rid, rec] of Object.entries(data || {})) {
+          if (!rec || typeof rec !== 'object') continue;
+          const slim = {};
+          for (const f of LIST_STAFF_PUBLIC_FIELDS) {
+            if (rec[f] !== undefined) slim[f] = rec[f];
+          }
+          staffOut[rid] = slim;
+        }
+        return jsonResp(staffOut, 200, allowedOrigin);
       }
 
       if (action === 'listLeaves') {
