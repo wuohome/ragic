@@ -44,6 +44,8 @@
   input[type="checkbox"] { width: 18px; height: 18px; accent-color: #004C8C; }
   .tnum { font-variant-numeric: tabular-nums; }
   .tap44 { min-height: 44px; }
+  /* 「時：分」兩個下拉要並排塞進半格寬（手機 375px 也要容得下），收窄左右內距、數字置中 */
+  select.time-part { padding: 12px 4px !important; text-align: center; font-variant-numeric: tabular-nums; }
   #toast { transition: opacity 200ms ease-out; }
   .accordion { transition: grid-template-rows 200ms cubic-bezier(0.23, 1, 0.32, 1); }
   .accordion-inner { overflow: hidden; }
@@ -487,6 +489,44 @@ function renderTimelineBar(dateStr, day, blocks) {
   return wrap;
 }
 
+// ================= 時間選擇（自訂「時：分」下拉，取代 input[type=time]） =================
+// 桌面瀏覽器的原生 time 輸入會跟著作業系統語系跑出「上午／下午」，同仁反映不好填也容易選錯；
+// 手機叫的是系統選擇器所以沒這問題。改用兩個下拉自己畫，兩邊都固定 24 小時制、15 分刻度，
+// 送出格式仍是 "HH:MM"，資料層（commitTime／Ragic startTime,endTime）完全不變。
+function timeSelectField(value, onCommit) {
+  const wrap = make('div', 'mt-1 flex items-center gap-1');
+  const hourSel = make('select', 'time-part min-w-0 flex-1');
+  const minSel = make('select', 'time-part min-w-0 flex-1');
+  const addOpt = (sel, val, label) => { const o = make('option', null, label); o.value = val; sel.append(o); };
+
+  const cur = /^\d{1,2}:\d{2}$/.test(value || '') ? value.split(':') : ['', ''];
+  const curHour = cur[0] ? pad(Number(cur[0])) : '';
+  const curMin = cur[1] ? pad(Number(cur[1])) : '';
+
+  addOpt(hourSel, '', '時');
+  for (let h = 0; h < 24; h++) addOpt(hourSel, pad(h), pad(h));
+  addOpt(minSel, '', '分');
+  for (let m = 0; m < 60; m += STEP_MINUTES) addOpt(minSel, pad(m), pad(m));
+  // 舊資料若不是 15 分刻度（例如 V1 相容紀錄），補一個該值的選項，避免下拉顯示空白把時間洗掉
+  if (curMin && Number(curMin) % STEP_MINUTES !== 0) addOpt(minSel, curMin, curMin);
+  hourSel.value = curHour;
+  minSel.value = curMin;
+
+  function emit() {
+    if (!hourSel.value) {
+      if (!minSel.value) onCommit('');   // 兩邊都清空才算清掉這格時間
+      return;                            // 只選了分還沒選時：先不寫回，也不重繪，讓使用者把時選完
+    }
+    if (!minSel.value) minSel.value = '00';
+    onCommit(`${hourSel.value}:${minSel.value}`);
+  }
+  hourSel.addEventListener('change', emit);
+  minSel.addEventListener('change', emit);
+
+  wrap.append(hourSel, make('span', 'shrink-0 text-sm font-bold text-inkmuted', ':'), minSel);
+  return wrap;
+}
+
 // ================= 快速起訖調整 =================
 function timeAdjustRow(getEnd, setEnd, rerender) {
   const row = make('div', 'mt-1.5 flex flex-wrap gap-1.5');
@@ -765,17 +805,14 @@ function renderBlockRow(dateStr, day, block) {
 
   const form = make('div', 'space-y-3 border-t border-line px-3 pb-3 pt-3');
 
-  const timeRow = make('div', 'grid grid-cols-2 gap-2');
+  // 起訖各自是「時：分」兩個下拉，四個框並排；組間留大間距，才看得出哪兩個是同一組
+  const timeRow = make('div', 'grid grid-cols-2 gap-4');
   const startWrap = make('div');
   startWrap.append(fieldLabel('開始時間'));
-  const startInput = make('input', 'mt-1 block w-full rounded-lg border border-line px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
-  startInput.type = 'time'; startInput.step = 900; startInput.value = block.start || '';
-  startWrap.append(startInput);
+  startWrap.append(timeSelectField(block.start, (val) => { commitTime('start', val); renderWorklogView(); }));
   const endWrap = make('div');
   endWrap.append(fieldLabel('結束時間'));
-  const endInput = make('input', 'mt-1 block w-full rounded-lg border border-line px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink');
-  endInput.type = 'time'; endInput.step = 900; endInput.value = block.end || '';
-  endWrap.append(endInput);
+  endWrap.append(timeSelectField(block.end, (val) => { commitTime('end', val); renderWorklogView(); }));
   timeRow.append(startWrap, endWrap);
   form.append(timeRow);
 
@@ -786,8 +823,6 @@ function renderBlockRow(dateStr, day, block) {
     b[field] = val ? minutesToTime(roundToStep(timeToMinutes(val))) : '';
     setDayState(dateStr, d);
   }
-  startInput.addEventListener('change', () => { commitTime('start', startInput.value); renderWorklogView(); });
-  endInput.addEventListener('change', () => { commitTime('end', endInput.value); renderWorklogView(); });
 
   form.append(timeAdjustRow(
     () => getDayState(dateStr).blocks[block.id].end || block.start,
