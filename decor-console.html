@@ -619,8 +619,11 @@ function renderProgressGroup(cases) {
 function renderNormalList(cases) {
   const wrap = byId('normalList');
   wrap.replaceChildren();
-  if (!cases.length) { wrap.append(emptyNote('目前沒有其他工程中案件。')); return; }
-  cases.forEach((c) => wrap.append(caseCard(c, 'normal')));
+  if (!cases.length) { wrap.append(emptyNote('目前沒有工程中案件。')); return; }
+  // bugfix 2026-07-29：「工程案件」模組「進行中」頁籤原本只收 cases.js 傳入的 normal 陣列，
+  // 逾期／停更案件（urgent bucket）從未進到這份清單。這裡改用呼叫端已算好的 isOverdue()/isStale()
+  // 逐筆判定 kind（沿用 groupRow() 同款寫法），不新增判定邏輯，只是不再把 kind 寫死成 'normal'。
+  cases.forEach((c) => wrap.append(caseCard(c, isOverdue(c) ? 'overdue' : isStale(c) ? 'stale' : 'normal')));
 }
 
 // ---------- 資料待補（工期未填／日期有誤）----------
@@ -1394,7 +1397,9 @@ function renderLists() {
   renderFilterBanner();
   renderActionFeed(urgent);
   renderProgressGroup(normal);
-  renderNormalList(normal);
+  // bugfix 2026-07-29：「工程案件」進行中頁籤比照下一行 renderGantt 既有寫法，
+  // 涵蓋 urgent（逾期／停更）＋normal 全集合，不再只收 normal（原本漏掉 7 筆 urgent 案）。
+  renderNormalList(FILTER_MODE ? urgent : urgent.concat(normal));
   renderGantt(FILTER_MODE ? urgent : urgent.concat(normal));
   renderDataIssueList(dataIssueCases);
   renderClosed();
