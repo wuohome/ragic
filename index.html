@@ -2,54 +2,667 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>窩的家 行動辦公室</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>窩的家企業入口</title>
+  <script>
+  // cache-bust: force fresh load every deploy day (2026-05-19 pattern)
+  (function(){
+    var u = new URL(location.href);
+    if (!u.searchParams.has('v')) {
+      u.searchParams.set('v', new Date().toISOString().slice(0,10).replace(/-/g,''));
+      location.replace(u.toString());
+    }
+  })();
+  </script>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+/* ══════════════════════════════════════════════════════════════════
+   本檔樣式來源：車可充企業入口 app/globals.css（彣錩）整段移植。
+   結構（玻璃質感／流動漸層／圓角／陰影／RWD 斷點）原樣保留，
+   只把色值換成窩的家 CI：深藍灰 #3F5262 主色、珊瑚紅 #DD6650、明黃 #F2CF00。
+   零框架依賴，本頁不載入 Tailwind。
+   ══════════════════════════════════════════════════════════════════ */
+:root{
+  --ink:#2a3540; --muted:#5c6775; --line:rgba(63,82,98,.18);
+  --amber:#f2cf00; --amber-d:#c7ab00;
+  --blue:#3f5262; --navy:#2e3d49; --coral:#dd6650;
+  --glass:rgba(255,255,255,.55);
+  --glass-strong:rgba(255,255,255,.72);
+  --r:22px;
+  --shadow:0 10px 34px rgba(45,62,76,.13);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:"PingFang TC","Microsoft JhengHei",system-ui,sans-serif;color:var(--ink);line-height:1.6;
+  background:linear-gradient(135deg,#eef2f6 0%,#f8fafc 45%,#fdf6ec 100%);min-height:100vh;overflow-x:hidden}
+a{text-decoration:none;color:inherit}
+button{font-family:inherit}
+
+/* liquid background */
+.blob{position:fixed;border-radius:50%;filter:blur(70px);opacity:.55;z-index:0;pointer-events:none;will-change:transform}
+.b1{width:520px;height:520px;background:radial-gradient(circle,#92a6b6,#3f5262);top:-140px;left:-120px}
+.b2{width:480px;height:480px;background:radial-gradient(circle,#f8e77a,#f2cf00);bottom:-160px;right:-100px;opacity:.34}
+.b3{width:420px;height:420px;background:radial-gradient(circle,#f0ac9c,#dd6650);top:38%;right:18%;opacity:.24}
+@keyframes drift{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(40px,30px) scale(1.08)}}
+.b1{animation:drift 22s ease-in-out infinite}
+.b2{animation:drift 26s ease-in-out infinite reverse}
+.b3{animation:drift 30s ease-in-out infinite}
+
+/* layout */
+.app{display:flex;min-height:100vh;position:relative;z-index:1}
+.side{width:236px;flex-shrink:0;position:sticky;top:0;height:100vh;padding:24px 16px;display:flex;flex-direction:column;
+  background:linear-gradient(165deg,rgba(46,61,73,.86),rgba(63,82,98,.90));
+  backdrop-filter:blur(22px) saturate(150%);-webkit-backdrop-filter:blur(22px) saturate(150%);
+  border-right:1px solid rgba(255,255,255,.12);color:#e7edf2}
+.side .brand{display:flex;align-items:center;gap:11px;padding:2px 6px 18px;border-bottom:1px solid rgba(255,255,255,.13);margin-bottom:14px}
+.side .brand img{height:64px}
+.side .brand b{font-size:14.5px;letter-spacing:1px;color:#fff}
+.navlab{font-size:11px;letter-spacing:1.5px;color:#a9bac7;margin:14px 12px 6px;font-weight:700}
+.nav a{display:flex;align-items:center;gap:11px;padding:10px 13px;border-radius:13px;color:#c6d3dc;font-size:14px;font-weight:500;margin-bottom:2px;transition:.16s;cursor:pointer}
+.nav a:hover{background:rgba(255,255,255,.1);color:#fff}
+.nav a.active{background:linear-gradient(100deg,var(--blue),#55697b);color:#fff;box-shadow:0 6px 16px rgba(63,82,98,.45)}
+.nav a .i{font-size:16px;width:20px;text-align:center}
+.side .foot{margin-top:auto;font-size:11px;color:#9daebb;padding-top:12px;border-top:1px solid rgba(255,255,255,.12)}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+
+/* top */
+.top{padding:18px 30px;display:flex;align-items:center;gap:22px;position:sticky;top:0;z-index:20;
+  background:var(--glass);backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);
+  border-bottom:1px solid var(--line)}
+.hello b{font-size:27px;font-weight:800;letter-spacing:-.5px;display:block;line-height:1.15}
+.hello span{font-size:13px;color:var(--muted)}
+.search{flex:1;max-width:380px;position:relative}
+.search input{width:100%;padding:11px 15px 11px 40px;border:1px solid var(--line);border-radius:14px;font-size:14px;
+  background:rgba(255,255,255,.6);backdrop-filter:blur(8px);outline:none;transition:.15s}
+.search input:focus{border-color:var(--blue);background:#fff}
+.search .mag{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.weather{display:flex;align-items:center;gap:11px;white-space:nowrap}
+.weather .ico{font-size:38px;line-height:1;filter:drop-shadow(0 3px 6px rgba(0,0,0,.12))}
+.weather .tp b{font-size:22px;font-weight:800;letter-spacing:-.5px}
+.weather .tp small{display:block;font-size:11px;color:var(--muted)}
+.quote{font-size:13px;color:var(--navy);background:rgba(242,207,0,.16);padding:9px 15px;border-radius:13px;font-weight:600;max-width:300px;line-height:1.4;border:1px solid rgba(242,207,0,.42)}
+.hamb{display:none;font-size:24px;background:none;border:none;color:var(--navy);cursor:pointer}
+
+/* content */
+.wrap{padding:26px 30px 46px;max-width:1300px;width:100%;margin:0 auto}
+.grid{display:grid;gap:22px}
+.g-stats{grid-template-columns:repeat(3,1fr);margin-bottom:22px}
+.g-mid{grid-template-columns:1fr 1.1fr}
+
+.card{background:var(--glass);backdrop-filter:blur(20px) saturate(165%);-webkit-backdrop-filter:blur(20px) saturate(165%);
+  border:1px solid rgba(255,255,255,.6);border-radius:var(--r);box-shadow:var(--shadow);padding:22px}
+.card h3{font-size:15.5px;display:flex;align-items:center;gap:9px;margin-bottom:16px}
+.card h3 .e{font-size:18px}
+.card h3 .more{margin-left:auto;font-size:12px;color:var(--blue);font-weight:600;cursor:pointer}
+
+/* stat cards (stacked donut + legend) */
+.statcard{text-align:center}
+.st-title{font-weight:800;font-size:17px}
+.st-sub{font-size:11.5px;color:var(--muted);margin:2px 0 16px}
+.sring{width:172px;height:172px;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center}
+.sring .hole{width:120px;height:120px;background:var(--glass-strong);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.sring .hole b{font-size:46px;font-weight:800;letter-spacing:-1.5px;line-height:1}
+.sring .hole span{font-size:12px;color:var(--muted)}
+.legend{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.lg{background:rgba(255,255,255,.5);border:1px solid var(--line);border-radius:13px;padding:10px 4px}
+.lg .nm{font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:5px}
+.lg .d{width:8px;height:8px;border-radius:50%;display:inline-block}
+.lg b{font-size:23px;display:block;margin:3px 0 1px}
+.lg small{font-size:11px;color:var(--muted)}
+.d.blue{background:#3f5262}.d.teal{background:#7d93a3}.d.amber{background:#f2cf00}
+
+/* scrollable list */
+.scrollbox{max-height:300px;overflow-y:auto;padding-right:6px;margin-right:-6px}
+.scrollbox::-webkit-scrollbar{width:6px}
+.scrollbox::-webkit-scrollbar-thumb{background:rgba(63,82,98,.3);border-radius:10px}
+.post{padding:12px 0;border-bottom:1px solid var(--line);display:flex;gap:11px}
+.post:last-child{border-bottom:none}
+.post .dot{width:8px;height:8px;border-radius:50%;background:var(--coral);margin-top:8px;flex-shrink:0}
+.post .t{font-weight:600;font-size:14px}
+.post .m{font-size:13px;color:var(--muted);margin-top:2px}
+.post .meta{font-size:11px;color:var(--muted);margin-top:4px}
+.addbtn{margin-top:14px;width:100%;padding:10px;border:1.5px dashed var(--line);border-radius:13px;background:rgba(255,255,255,.4);color:var(--blue);font-weight:600;font-size:13.5px;cursor:pointer;transition:.15s}
+.addbtn:hover{background:rgba(63,82,98,.1);border-color:var(--blue)}
+
+/* mood */
+.mood{display:flex;gap:9px;margin-bottom:13px}
+.mood input{flex:1;padding:11px 14px;border:1px solid var(--line);border-radius:13px;font-size:13.5px;background:rgba(255,255,255,.6);outline:none}
+.mood input:focus{border-color:var(--blue);background:#fff}
+.mood button{padding:0 17px;background:var(--blue);color:#fff;border:none;border-radius:13px;font-weight:600;cursor:pointer}
+.msg{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.msg:last-child{border-bottom:none}
+.av{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#7d93a3,#3f5262);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0}
+.msg b{font-size:13px} .msg p{font-size:13.5px;color:#3a4654} .msg small{font-size:11px;color:var(--muted)}
+
+/* reactions + comments */
+.react{display:flex;gap:6px;margin-top:7px;align-items:center;flex-wrap:wrap}
+.react button{background:none;border:none;cursor:pointer;font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;transition:.14s}
+.react button:hover{background:rgba(63,82,98,.13)}
+.react button.on{color:var(--blue);background:rgba(63,82,98,.1)}
+.react button.onh{color:#dd6650;background:rgba(221,102,80,.12)}
+.cmts{margin-top:9px;display:none}
+.cmts.show{display:block}
+.cmt{font-size:12.5px;padding:6px 0;border-top:1px dashed var(--line)}
+.cmt b{color:var(--ink)} .cmt span{color:#3a4654}
+.cmtbox{display:flex;gap:7px;margin-top:8px}
+.cmtbox input{flex:1;padding:8px 11px;border:1px solid var(--line);border-radius:10px;font-size:12.5px;background:rgba(255,255,255,.6);outline:none}
+.cmtbox input:focus{border-color:var(--blue);background:#fff}
+.cmtbox button{padding:0 13px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:12.5px;cursor:pointer}
+.policy{font-size:11px;color:var(--muted);margin-top:11px;text-align:right}
+
+/* portal category cards */
+.cats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.cat{display:flex;align-items:center;gap:13px;padding:16px;border-radius:16px;cursor:pointer;transition:.16s;
+  background:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.55)}
+.cat:hover{transform:translateY(-3px);box-shadow:var(--shadow);background:rgba(255,255,255,.8)}
+.cat .ic{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:23px;flex-shrink:0}
+.cat b{font-size:14px;display:block}
+.cat span{font-size:11.5px;color:var(--muted)}
+.cat .cnt{margin-left:auto;font-size:12px;color:var(--muted);font-weight:700;background:rgba(63,82,98,.12);padding:3px 9px;border-radius:20px}
+
+/* calendar full */
+.cal-frame{width:100%;height:620px;border:none;border-radius:16px;background:#fff}
+.cal-note{font-size:12px;color:var(--muted);margin-top:10px;background:rgba(242,207,0,.14);padding:10px 13px;border-radius:11px}
+
+.seg{font-size:12px;color:var(--muted);text-align:center;margin:36px 0 0;padding-top:16px;border-top:1px solid var(--line)}
+
+/* modal */
+.ov{position:fixed;inset:0;background:rgba(45,62,76,.4);backdrop-filter:blur(6px);z-index:80;display:none;align-items:center;justify-content:center;padding:20px}
+.ov.show{display:flex}
+.modal{background:var(--glass-strong);backdrop-filter:blur(28px) saturate(170%);border:1px solid rgba(255,255,255,.7);border-radius:24px;box-shadow:0 24px 60px rgba(45,62,76,.3);padding:28px;width:100%;max-width:420px;animation:pop .22s ease;position:relative}
+@keyframes pop{from{transform:scale(.92) translateY(10px);opacity:0}to{transform:none;opacity:1}}
+.modal h2{font-size:19px;margin-bottom:4px;display:flex;align-items:center;gap:10px}
+.modal .desc{font-size:13px;color:var(--muted);margin-bottom:18px}
+.modal .sub a{display:flex;align-items:center;gap:12px;padding:13px 15px;border-radius:14px;background:rgba(255,255,255,.6);margin-bottom:9px;transition:.14s;border:1px solid var(--line)}
+.modal .sub a:hover{background:#fff;box-shadow:var(--shadow);transform:translateX(3px)}
+.modal .sub .si{font-size:20px}
+.modal .sub b{font-size:14px}
+.modal .sub small{font-size:11.5px;color:var(--muted);display:block}
+.modal .x{position:absolute;top:18px;right:20px;font-size:22px;color:var(--muted);cursor:pointer;background:none;border:none}
+.field{margin-bottom:13px}
+.field label{font-size:12.5px;font-weight:600;color:var(--muted);display:block;margin-bottom:5px}
+/* 原檔只有 .field input（公告內容要多行），選擇器延伸到 textarea，宣告值一字未改 */
+.field input,.field textarea{width:100%;padding:11px 14px;border:1px solid var(--line);border-radius:12px;font-size:14px;background:#fff;outline:none}
+.field input:focus,.field textarea:focus{border-color:var(--blue)}
+.field textarea{font-family:inherit;line-height:1.6;resize:vertical;min-height:110px}
+.gbtn{width:100%;padding:13px;border-radius:13px;border:1px solid var(--line);background:#fff;font-size:14.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:14px;transition:.15s}
+.gbtn:hover{box-shadow:var(--shadow)}
+.pbtn{width:100%;padding:13px;border-radius:13px;border:none;background:linear-gradient(100deg,var(--blue),#55697b);color:#fff;font-size:14.5px;font-weight:700;cursor:pointer}
+.hr{text-align:center;font-size:12px;color:var(--muted);margin:6px 0 14px}
+
+@media(max-width:980px){
+  .g-stats,.g-mid{grid-template-columns:1fr}
+  .side{position:fixed;left:-246px;z-index:90;transition:.25s}.side.open{left:0}
+  .hamb{display:block}
+  .cats{grid-template-columns:1fr}
+  .search{order:5;flex-basis:100%;max-width:none}.top{flex-wrap:wrap;gap:14px}
+  .hello b{font-size:23px}
+}
+@media(max-width:560px){
+  .wrap{padding:16px 14px 40px}
+  .card{padding:16px;border-radius:14px}
+  .top{padding:12px 14px;gap:12px}
+  .hello b{font-size:19px}
+  .hello span{font-size:12px}
+  .weather .ico{font-size:30px}
+  .weather .tp b{font-size:17px}
+  .g-stats{gap:14px;margin-bottom:16px}
+  .grid{gap:16px}
+  .sring{width:150px;height:150px}
+  .sring .hole{width:104px;height:104px}
+  .sring .hole b{font-size:38px}
+  .legend{gap:6px}
+  .lg b{font-size:20px}
+  .cal-frame{height:440px}
+  .scrollbox{max-height:260px}
+  .st-title{font-size:16px}
+  .card h3{font-size:15px}
+}
+.backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:85}.backdrop.show{display:block}
+
+/* ---- SOP 流程圖頁（橢圓/矩形/平行四邊形/菱形 正規流程圖畫法） ---- */
+.sop-hero{margin-bottom:22px}
+.sop-hero h1{font-size:21px;font-weight:800;letter-spacing:-.3px;display:flex;align-items:center;gap:10px}
+.sop-hero p{font-size:13.5px;color:var(--muted);margin-top:8px;line-height:1.7;max-width:760px}
+
+/* 圖例（形狀 + 負責方共用外框） */
+.fc-legend-box{display:flex;flex-direction:column;gap:14px;margin-top:16px;padding:16px 18px;background:rgba(255,255,255,.45);
+  border:1px solid var(--line);border-radius:16px}
+.fc-legend-row{display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+.fc-legend-row .cap{font-size:11px;font-weight:800;color:var(--muted);letter-spacing:.5px;width:100%;margin-bottom:-2px}
+.fc-legend-item{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:#3a4654}
+.fc-sw{flex-shrink:0;display:inline-block}
+.fc-sw.oval{width:38px;height:20px;border-radius:999px;background:linear-gradient(100deg,var(--navy),#3f5262)}
+.fc-sw.rect{width:38px;height:20px;border-radius:5px;background:var(--blue)}
+.fc-sw.para{width:38px;height:20px;background:var(--amber-d);clip-path:polygon(18% 0,100% 0,82% 100%,0 100%)}
+.fc-sw.diamond{width:26px;height:26px;background:var(--coral);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
+.fc-tag{font-size:11px;font-weight:700;padding:4px 11px;border-radius:20px;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.fc-tag.owner{background:rgba(242,207,0,.22);color:#8a7500}
+.fc-tag.tp{background:rgba(63,82,98,.13);color:var(--blue)}
+.fc-tag.tech{background:rgba(43,184,154,.16);color:#1f8f78}
+.fc-tag.installer{background:rgba(221,102,80,.16);color:#b1442f}
+.fc-tag.power{background:rgba(224,83,61,.14);color:#c0392b}
+.fc-tag.dur{background:rgba(63,82,98,.14);color:var(--muted)}
+
+/* 主流程容器 */
+.fc-flow{display:flex;flex-direction:column;align-items:center;padding:6px 0 4px}
+
+/* 連接線＋箭頭（實際線條，不只是卡片間距） */
+.fc-arrow{display:flex;flex-direction:column;align-items:center;position:relative;height:34px}
+.fc-arrow .ln{width:3px;flex:1;background:var(--line);border-radius:2px}
+.fc-arrow .tri{width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:11px solid var(--line);margin-top:-1px}
+.fc-arrow .lbl{position:absolute;left:50%;top:50%;transform:translate(18px,-50%);font-size:11.5px;font-weight:800;color:#1f8f78;white-space:nowrap;
+  background:rgba(43,184,154,.14);padding:2px 9px;border-radius:20px}
+
+/* 節點基底 */
+.fc-node{width:100%;max-width:600px;position:relative}
+.fc-num{position:absolute;top:-11px;left:-11px;width:26px;height:26px;border-radius:50%;background:var(--navy);color:#fff;
+  font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(46,61,73,.35);z-index:3}
+
+/* 橢圓（開始／結束） */
+.fc-oval{border-radius:999px;background:linear-gradient(100deg,var(--navy),#3f5262);color:#fff;padding:13px 40px;
+  font-weight:800;font-size:14.5px;max-width:200px;box-shadow:0 8px 20px rgba(46,61,73,.3);text-align:center}
+
+/* 矩形（審查／施工類動作） */
+.fc-rect{background:var(--glass);border:1.5px solid rgba(63,82,98,.4);border-left:6px solid var(--blue);border-radius:9px;
+  box-shadow:var(--shadow);padding:15px 20px}
+
+/* 平行四邊形（送件／申報／繳費類動作） */
+.fc-para{background:var(--glass);border:1.5px solid rgba(199,171,0,.42);border-left:6px solid var(--amber-d);border-radius:4px;
+  box-shadow:var(--shadow);padding:15px 34px;clip-path:polygon(6.5% 0,100% 0,93.5% 100%,0 100%)}
+
+.fc-titlerow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:5px}
+.fc-title{font-size:15px;font-weight:800}
+.fc-desc{font-size:13px;color:#3a4654;line-height:1.6;margin-bottom:11px}
+.fc-tags{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+
+/* 瓶頸樣式（第6關：紅色粗框＋紅底＋角標） */
+.fc-rect.bottleneck{border:2.5px solid #d13a26;background:rgba(224,83,61,.1);box-shadow:0 8px 22px rgba(224,83,61,.28)}
+.fc-ribbon{position:absolute;top:-13px;right:-10px;background:linear-gradient(100deg,#d13a26,#ef6a52);color:#fff;
+  font-size:11px;font-weight:800;padding:6px 13px;border-radius:20px;box-shadow:0 4px 12px rgba(209,58,38,.45);z-index:3;white-space:nowrap}
+.fc-tag.dur.warn{background:rgba(224,83,61,.16);color:#c0392b;font-weight:800}
+
+/* 決策分支區塊（菱形＋不可行迴圈；窄螢幕允許獨立橫向捲動） */
+.fc-decision-scroll{width:100%;max-width:600px;overflow-x:auto;padding-bottom:4px}
+.fc-decision-cluster{position:relative;width:600px;height:225px;margin:0 auto}
+.fc-loop-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.fc-diamond{position:absolute;left:0;top:38px;width:190px;height:150px;background:linear-gradient(135deg,#dd6650,#e88b78);
+  clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);color:#fff;display:flex;align-items:center;justify-content:center;
+  text-align:center;box-shadow:0 8px 20px rgba(221,102,80,.4);z-index:1}
+.fc-diamond span{max-width:112px;font-size:12.5px;font-weight:800;line-height:1.4}
+.fc-branch-label{position:absolute;font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;white-space:nowrap;z-index:2}
+.fc-branch-label.notok{left:206px;top:98px;background:rgba(224,83,61,.16);color:#c0392b}
+.fc-branch-label.loop{left:200px;top:2px;background:rgba(221,102,80,.16);color:#b1442f}
+.fc-rect.alt{position:absolute;left:308px;top:63px;width:232px;padding:13px 17px;z-index:1}
+.fc-rect.alt .fc-title{font-size:13.5px}
+.fc-rect.alt .fc-desc{font-size:12px;margin-bottom:0}
+
+@media(max-width:640px){
+  .sop-hero h1{font-size:18px}
+  .fc-node{max-width:100%}
+  .fc-rect,.fc-para{padding-left:18px;padding-right:18px}
+  .fc-title{font-size:14px}
+  .fc-desc{font-size:12.5px}
+}
+
+/* ══ 以下為窩的家版新增（原檔沒有的三小段，最小必要） ══ */
+
+/* 1. 規劃中卡位：沿用 .cat，只加一個停用狀態修飾 */
+.cat.soon{opacity:.5;cursor:not-allowed;background:rgba(255,255,255,.3);border-style:dashed}
+.cat.soon:hover{transform:none;box-shadow:none;background:rgba(255,255,255,.3)}
+
+/* 2. js/shared.js 的登入畫面與身分徽章是用 Tailwind class 寫死的，
+      本頁不載入 Tailwind，故補上最小等價樣式。不改 shared.js。 */
+.min-h-screen{min-height:100vh}.flex{display:flex}.items-center{align-items:center}
+.justify-center{justify-content:center}.text-center{text-align:center}
+.bg-slate-50{background:transparent}
+.bg-white{background:var(--glass-strong);backdrop-filter:blur(28px) saturate(170%);border:1px solid rgba(255,255,255,.7)}
+.rounded-2xl{border-radius:24px}.shadow-lg{box-shadow:0 24px 60px rgba(45,62,76,.3)}
+.p-8{padding:28px}.w-full{width:100%}.max-w-sm{max-width:380px}
+.mb-6{margin-bottom:18px}.mb-2{margin-bottom:8px}.mt-1{margin-top:4px}.mt-4{margin-top:14px}
+.text-3xl{font-size:34px;line-height:1.1}.text-xl{font-size:19px}.text-sm{font-size:13px}
+.font-bold{font-weight:800}.text-slate-900{color:var(--ink)}.text-slate-500{color:var(--muted)}
+.text-slate-600{color:var(--ink)}.text-slate-400{color:var(--muted)}.text-xs{font-size:12px}
+.gap-2{gap:8px}.underline{text-decoration:underline}
+#staffSelect{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:13px;font-size:15px;background:#fff;outline:none}
+#staffSelect:focus{border-color:var(--blue)}
+#loginBtn{width:100%;margin-top:14px;padding:13px;border-radius:13px;border:none;
+  background:linear-gradient(100deg,var(--blue),#55697b);color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+#loginBtn:disabled{opacity:.4;cursor:not-allowed}
+#userBadge{display:flex;align-items:center;gap:8px;font-size:13px;white-space:nowrap}
+#userBadge button{background:rgba(63,82,98,.1);border:1px solid var(--line);color:var(--muted);
+  font-size:12px;padding:4px 10px;border-radius:20px;cursor:pointer;text-decoration:none}
+#userBadge button:hover{background:#fff;color:var(--ink)}
+/* 同上：showToast / confirmDialog 也是 Tailwind class 寫死的，補最小等價樣式。
+   色值一律取自本檔既有的 CI 變數與既有色，不另開一套。 */
+.fixed{position:fixed}.inset-0{inset:0}.top-4{top:16px}.right-4{right:16px}
+.z-50{z-index:100}.justify-end{justify-content:flex-end}.gap-3{gap:12px}
+.px-4{padding-left:16px;padding-right:16px}.py-2{padding-top:8px;padding-bottom:8px}
+.px-6{padding-left:24px;padding-right:24px}.py-3{padding-top:12px;padding-bottom:12px}
+.p-6{padding:24px}.mx-4{margin-left:16px;margin-right:16px}
+.rounded-lg{border-radius:11px}.rounded-xl{border-radius:14px}
+.shadow-xl{box-shadow:0 24px 60px rgba(45,62,76,.3)}
+.text-white{color:#fff}.text-base{font-size:15px}.font-medium{font-weight:600}
+.text-slate-800{color:var(--ink)}
+.transition,.transition-all{transition:.2s}.duration-300{transition-duration:.3s}
+.bg-black\/40{background:rgba(45,62,76,.4);backdrop-filter:blur(6px)}
+.bg-blue-600{background:var(--blue)}.bg-emerald-600{background:#1f8f78}
+.bg-red-600{background:#c0392b}.bg-amber-600{background:#8a7500}
+.hover\:bg-blue-700:hover{background:var(--navy)}
+.hover\:bg-slate-100:hover{background:rgba(63,82,98,.1)}
+
+/* 3. 卡片標題列（區塊 h3 內的說明字） */
+.card h3 .note{margin-left:auto;font-size:11.5px;color:var(--muted);font-weight:500}
+.empty{font-size:13px;color:var(--muted);padding:8px 0}
+
+/* 4. 手機修正（沿用原檔 980/560 斷點，只調三圓環與每日一句）：
+      原檔 g-stats 在 980 以下變 1 欄，車可充有真數字所以合理；
+      我們的圓環現在是空的「示意」，一欄一環會讓手機首屏被三個空圓佔滿、
+      卡片要滑三屏才看得到，違反「首屏 3 秒知道要用的東西在哪」。故手機維持 3 欄縮小版。
+      每日一句在窄螢幕會被裁掉半句，改成只在桌機顯示。 */
+@media(max-width:980px){
+  .quote{display:none}
+  .g-stats{grid-template-columns:repeat(3,1fr);gap:10px}
+  .statcard{padding:14px 8px}
+  .sring{width:112px;height:112px;margin-bottom:0}
+  .sring .hole{width:78px;height:78px}
+  .sring .hole b{font-size:26px}
+  .st-title{font-size:14px}
+  .st-sub{font-size:10.5px;margin:2px 0 10px}
+}
+@media(max-width:560px){
+  .g-stats{gap:8px}
+  .statcard{padding:12px 6px}
+  .sring{width:84px;height:84px}
+  .sring .hole{width:58px;height:58px}
+  .sring .hole b{font-size:19px}
+  .sring .hole span{font-size:10px}
+  .st-title{font-size:12.5px;line-height:1.25}
+  .st-sub{display:none}
+}
   </style>
 </head>
-<body class="bg-slate-50 min-h-screen">
+<body>
+  <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
   <div id="app"></div>
 
   <script type="module">
     import { ensureAuth, renderUserBadge, isManager } from './js/shared.js';
+    // 功能模組獨立成檔，殼只掛載不放邏輯（規格書 § 開發路徑）
+    import { mountBoard } from './js/portal-board.js';
+    import { mountMoods } from './js/portal-moods.js';
+
+    // ════════════════════════════════════════════════════════════════
+    // 卡片與部門設定（殼只有一份，部門差異靠這個物件驅動）
+    // 依 窩的家企業入口_規格書 § v1 卡片配置
+    // 新增部門＝改這個物件，不是複製一份 HTML
+    // ════════════════════════════════════════════════════════════════
+
+    // 每一組＝畫面上的一個區塊。租賃部那一區沿用「行動辦公室」這四個字（同仁認得）
+    const GROUPS = [
+      {
+        key: '租賃部', id: 'g-rental', icon: '🏠',
+        title: '行動辦公室', note: '租賃部日常工具',
+        cards: [
+          // ⚠️ 以下 4 張是舊版 index.html 就有的連結，租賃部同仁每天在用，不得移除
+          { title: '開發募集',      desc: '開發屋主、591 物件管理', icon: '📞', href: 'outreach.html',        tone: 'ink' },
+          { title: '租賃物件',      desc: '物件總表新增、編輯、查詢', icon: '🏠', href: 'property.html',        tone: 'ink' },
+          { title: '定金 / 斡旋',   desc: '要約定金收據簽署',       icon: '💰', href: 'earnest.html',         tone: 'amber' },
+          { title: '定金單建單',    desc: '建立定金單、產生簽署連結', icon: '🧾', href: 'deposit.html',         tone: 'amber' },
+          // 以下為依規格書新增
+          { title: '租押金 / 服務費', desc: '簽約時的收款單建立',    icon: '📝', href: 'payment-create.html',  tone: 'coral' },
+          { title: '業績儀表板',    desc: '個人與全店業績',         icon: '📊', href: 'staff-dashboard.html', tone: 'ink' },
+          { title: '排班表',        desc: '看班表、排班',           icon: '📅', href: 'schedule.html',        tone: 'coral' },
+          { title: '拋轉 591',      desc: '產生 591 刊登包',        icon: '🔁', href: 'toss591.html',         tone: 'ink' },
+        ],
+      },
+      {
+        key: '工務部', id: 'g-repair', icon: '🛠️',
+        title: '工務部', note: '報修、報價、工地日誌',
+        cards: [
+          { title: '工務工作台',       desc: '報修案件進度總覽', icon: '🛠️', href: 'repair-console.html',       tone: 'ink' },
+          { title: '工務報修',         desc: '建立報修單',       icon: '🧰', href: 'repair-request.html',       tone: 'coral' },
+          { title: '修繕報價單產生器', desc: '產生客戶報價單',   icon: '🧮', href: 'repair-quote-builder.html', tone: 'amber' },
+          { title: '工作日誌',         desc: '每日工地進度回報', icon: '📓', href: 'worklog.html',              tone: 'ink' },
+        ],
+      },
+      {
+        key: '設計部', id: 'g-design', icon: '🎨',
+        title: '設計部', note: '工程平台入口',
+        cards: [
+          { title: '設計部工作檯', desc: '案件、甘特圖、待辦', icon: '🎨', href: 'decor-console.html', tone: 'ink' },
+        ],
+      },
+      {
+        key: '管理部', id: 'g-admin', icon: '🗂️',
+        title: '管理 / 人資', note: '行政與人事',
+        cards: [
+          { title: '新進人員資料表', desc: '新人到職資料填寫', icon: '👤', href: 'hr-onboarding.html', tone: 'ink' },
+        ],
+      },
+      {
+        key: '共用', id: 'g-common', icon: '🔗',
+        title: '全公司共用', note: '',
+        cards: [
+          { title: '名片資料調查', desc: '名片印製資料填報', icon: '💳', href: 'bcard-survey.html', tone: 'amber' },
+        ],
+      },
+    ];
+
+    // 未上線的六套：灰色「規劃中」卡位（前端標準既定做法，讓平台全貌可見）
+    const PLANNED = [
+      { title: '零用金請款',     desc: '規劃中' },
+      { title: '材料成本資料庫', desc: '規劃中' },
+      { title: '供應商地圖',     desc: '規劃中' },
+      { title: '場勘規劃書',     desc: '規劃中' },
+      { title: '案件儀表板',     desc: '規劃中' },
+      { title: '業務開發 CRM',   desc: '規劃中' },
+    ];
+
+    const ALL_GROUPS = GROUPS.map(g => g.key);
+
+    // 部門 → 看得到哪幾組。key 對應 Ragic 人事表「部門」欄的值
+    // ⚠️ Ragic 人事表「部門」欄目前沒有「工務部」選項（工務部 2026-07-16 才成立），
+    //    陳勁豪那筆實際填什麼值未知；對不上時走下面的 fallback 顯示全部，不會變空白頁。
+    const DEPT_CONFIG = {
+      '租賃部':   ['租賃部', '共用'],
+      '工務部':   ['工務部', '共用'],
+      '設計部':   ['設計部', '共用'],
+      '管理部':   ALL_GROUPS,
+      '經營階層': ALL_GROUPS,
+      // TODO 社宅部（張玉慧）實際用哪些系統尚未定案（規格書 § 開工前必須先問清楚的事 第 1 點）。
+      //      在她本人確認前，先給跟管理部一樣的預設集合。
+      '社宅部':   ALL_GROUPS,
+    };
+
+    // 三圓環：本批不接資料，一律標「示意」（沿用車可充的誠實標註做法）
+    // ⚠️ 圓環的顏色是 conic-gradient inline style，不在 CSS 裡；只搬 CSS 會得到空白圓。
+    //    這裡沿用車可充的 GRAY_RING 當「未接資料」狀態。
+    const GRAY_RING = 'conic-gradient(#e3e8f2 0 100%)';
+    const RINGS = [
+      { title: '本月業績達成率', sub: '示意 · 待接 Ragic 業績目標' },
+      { title: '本月成交',       sub: '示意 · 待接 Ragic 簽約日' },
+      { title: '本月新進委託',   sub: '示意 · 待接 Ragic 委託時間' },
+    ];
+
+    const QUOTES = [
+      '今天也順順利利，平平安安。',
+      '把今天該做的做好，就是最棒的一天。',
+      '再忙，也記得喝水休息一下 ☕',
+      '每一個小進度，都在替未來鋪路。',
+      '穩穩做、慢慢來，品質是窩的家的招牌。',
+      '帶看辛苦了，安全第一、平安回家。',
+      '今天的細心，是明天房東房客的安心。',
+      '卡關時休息五分鐘，回來會更清楚。',
+      '把複雜變簡單，是專業，也是體貼。',
+      '累的時候，記得你不是一個人在扛。',
+      '每通電話、每次帶看，都是在累積信任。',
+      '遇到難題別慌，一步一步拆解就好。',
+      '把事情做對，再把事情做好。',
+      '保持節奏，不疾不徐最長久。',
+      '對同事多一點耐心，對自己多一點肯定。',
+      '細節決定成敗，你的用心客戶感受得到。',
+      '謝謝你今天的付出，辛苦了！',
+      '今天的你，比昨天更厲害一點點。',
+      '團隊一起扛，沒有過不去的案子。',
+      '好心情會傳染，今天先對自己微笑吧 😊',
+    ];
+
+    const TONE_BG = {
+      ink:   'rgba(63,82,98,.13)',
+      amber: 'rgba(242,207,0,.22)',
+      coral: 'rgba(221,102,80,.15)',
+    };
+
+    // ════════════════════════════════════════════════════════════════
+    // Render
+    // ════════════════════════════════════════════════════════════════
 
     const app = document.getElementById('app');
     const user = await ensureAuth(app);
 
-    const cards = [
-      { title: '開發募集', desc: '新增/編輯開發屋主、591 物件管理', icon: '📞', href: 'outreach.html', color: 'blue' },
-      { title: '租賃物件', desc: '物件總表新增、編輯、查詢', icon: '🏠', href: 'property.html', color: 'emerald' },
-      { title: '定金 / 斡旋', desc: '定金收據、斡旋金紀錄', icon: '💰', href: 'earnest.html', color: 'amber' },
-      { title: '租押金 / 服務費', desc: '簽約時的租押金、服務費收據', icon: '📝', href: 'deposit.html', color: 'rose', wip: true },
-    ];
+    const dept = (user.dept || '').trim();
+    // fallback：部門對不上任何已知部門（含空值、買賣部、未來新部門）→ 顯示全部卡片，絕不空白
+    const known = Object.prototype.hasOwnProperty.call(DEPT_CONFIG, dept);
+    const visibleKeys = isManager(user.name) ? ALL_GROUPS : (known ? DEPT_CONFIG[dept] : ALL_GROUPS);
+    const visibleGroups = GROUPS.filter(g => visibleKeys.includes(g.key));
+
+    const h = new Date().getHours();
+    const greet = h < 11 ? '早安，新的一天開始囉！'
+                : h < 14 ? '午安，記得吃飯休息一下'
+                : h < 18 ? '午後加油，離下班不遠了'
+                : '辛苦了，今天也順利收工';
+    const doy = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
+    const quote = QUOTES[doy % QUOTES.length];
+
+    const catHtml = (c) => `
+      <a class="cat" href="${c.href}" data-q="${(c.title + ' ' + c.desc).toLowerCase()}">
+        <div class="ic" style="background:${TONE_BG[c.tone] || TONE_BG.ink}">${c.icon}</div>
+        <div><b>${c.title}</b><span>${c.desc}</span></div>
+      </a>`;
+
+    const soonHtml = (c) => `
+      <div class="cat soon" data-q="${c.title.toLowerCase()}">
+        <div class="ic" style="background:rgba(63,82,98,.08)">🧩</div>
+        <div><b>${c.title}</b><span>${c.desc}</span></div>
+      </div>`;
+
+    const groupHtml = (g) => `
+      <section class="card" id="${g.id}" style="margin-bottom:22px">
+        <h3><span class="e">${g.icon}</span>${g.title}${g.note ? `<span class="note">${g.note}</span>` : ''}</h3>
+        <div class="cats">${g.cards.map(catHtml).join('')}</div>
+      </section>`;
 
     app.innerHTML = `
-      <div class="max-w-4xl mx-auto px-4 py-8">
-        <!-- Header -->
-        <div class="flex items-center justify-between mb-8">
-          <div>
-            <h1 class="text-2xl font-bold text-slate-900">🏠 窩的家 行動辦公室</h1>
-            <p class="text-slate-500 text-sm mt-1">${isManager(user.name) ? '管理層檢視' : user.name + '（' + user.dept + '）'}</p>
+      <div class="app">
+        <aside class="side" id="side">
+          <div class="brand">
+            <img src="assets/wuohome-logo.png" alt="窩的家"
+                 style="background:#fff;border-radius:12px;padding:5px">
+            <b>企業入口</b>
           </div>
-          <div id="userBadge"></div>
-        </div>
+          <nav class="nav">
+            <a class="active" href="#top"><span class="i">🏠</span>首頁總覽</a>
+            <div class="navlab">系統入口</div>
+            ${visibleGroups.map(g => `<a href="#${g.id}"><span class="i">${g.icon}</span>${g.title}</a>`).join('')}
+            <div class="navlab">公司動態</div>
+            <a href="#g-portal"><span class="i">📌</span>公布欄</a>
+            <a href="#portal-moods"><span class="i">💬</span>心情留言板</a>
+            <div class="navlab">其他</div>
+            <a href="#g-planned"><span class="i">🧩</span>規劃中</a>
+          </nav>
+          <div class="foot">
+            ${user.name}${dept ? '（' + dept + '）' : ''}<br>窩的家企業入口 v1
+          </div>
+        </aside>
+        <div class="backdrop" id="backdrop"></div>
 
-        <!-- Cards -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          ${cards.map(c => `
-            <a href="${c.wip ? 'javascript:void(0)' : c.href}" class="relative bg-white rounded-2xl p-6 shadow-sm border border-slate-100 ${c.wip ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md hover:border-' + c.color + '-200'} transition group">
-              ${c.wip ? '<span class="absolute top-3 right-3 text-xs bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">施工中</span>' : ''}
-              <div class="text-3xl mb-3">${c.icon}</div>
-              <h2 class="text-lg font-bold text-slate-900 ${c.wip ? '' : 'group-hover:text-' + c.color + '-600'} transition">${c.title}</h2>
-              <p class="text-slate-500 text-sm mt-1">${c.desc}</p>
-            </a>
-          `).join('')}
+        <div class="main" id="top">
+          <header class="top">
+            <button class="hamb" id="hamb">☰</button>
+            <div class="hello">
+              <b>Hi ${user.name} 👋</b>
+              <span>${greet}${isManager(user.name) ? ' · 管理層檢視' : ''}</span>
+            </div>
+            <div class="search"><span class="mag">🔍</span>
+              <input id="q" placeholder="搜尋系統、工具⋯⋯">
+            </div>
+            <div class="quote">💬 ${quote}</div>
+            <div id="userBadge"></div>
+          </header>
+
+          <div class="wrap">
+            <!-- 三圓環（示意佔位，本批不接資料） -->
+            <section class="grid g-stats">
+              ${RINGS.map(r => `
+                <div class="card statcard">
+                  <div class="st-title">${r.title}</div>
+                  <div class="st-sub">${r.sub}</div>
+                  <div class="sring" style="background:${GRAY_RING}">
+                    <div class="hole"><b>—</b><span>示意</span></div>
+                  </div>
+                </div>`).join('')}
+            </section>
+            <div class="cal-note" style="margin:-8px 0 22px">
+              📌 三個圓環的數字為示意，後續接 Ragic 自動更新。
+            </div>
+
+            <!-- 公布欄／留言板（模組掛載點，邏輯在 js/portal-board.js、js/portal-moods.js） -->
+            <section class="grid g-mid" id="g-portal" style="margin-bottom:22px">
+              <div class="card" id="portal-board"></div>
+              <div class="card" id="portal-moods"></div>
+            </section>
+
+            <!-- 卡片 -->
+            ${visibleGroups.map(groupHtml).join('')}
+
+            <!-- 規劃中卡位 -->
+            <section class="card" id="g-planned">
+              <h3><span class="e">🧩</span>規劃中<span class="note">尚未開放，先讓你看到平台全貌</span></h3>
+              <div class="cats">${PLANNED.map(soonHtml).join('')}</div>
+            </section>
+
+            <div class="seg">窩的家企業入口 v1 · 有問題找管理部</div>
+          </div>
         </div>
       </div>`;
 
     renderUserBadge(document.getElementById('userBadge'), user);
+
+    // 公布欄與留言板：各自獨立模組，任一失敗只讓那一區顯示錯誤，不拖垮整頁卡片
+    mountBoard(document.getElementById('portal-board'), user);
+    mountMoods(document.getElementById('portal-moods'), user);
+
+    // 手機側欄開關
+    const side = document.getElementById('side');
+    const backdrop = document.getElementById('backdrop');
+    const closeNav = () => { side.classList.remove('open'); backdrop.classList.remove('show'); };
+    document.getElementById('hamb').addEventListener('click', () => {
+      side.classList.toggle('open');
+      backdrop.classList.toggle('show');
+    });
+    backdrop.addEventListener('click', closeNav);
+    side.querySelectorAll('.nav a').forEach(a => a.addEventListener('click', closeNav));
+
+    // 搜尋：即時過濾卡片，整組沒東西就把該組收起來
+    document.getElementById('q').addEventListener('input', (e) => {
+      const q = e.target.value.trim().toLowerCase();
+      document.querySelectorAll('.wrap section.card').forEach(sec => {
+        const items = sec.querySelectorAll('.cat');
+        if (!items.length) return;
+        let hit = 0;
+        items.forEach(el => {
+          const match = !q || (el.dataset.q || '').includes(q);
+          el.style.display = match ? '' : 'none';
+          if (match) hit++;
+        });
+        sec.style.display = hit ? '' : 'none';
+      });
+    });
   </script>
 </body>
 </html>

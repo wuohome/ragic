@@ -67,6 +67,36 @@ export async function workerPost(action, data = {}) {
   return json;
 }
 
+/**
+ * POST via Cloudflare Worker proxy with a JSON body.
+ *
+ * ⚠️ 不要拿 workerPost 去打 portal* action。workerPost 送的是 URLSearchParams（表單），
+ * 而 portal* action 只收 Content-Type: application/json，會全數回 400 bad_json。
+ * 反過來也一樣：既有 39 支頁面都依賴 workerPost 的表單行為，不得改它，故另開這一支。
+ *
+ * 與 workerPost 的第二個差別：非 2xx 時**不 throw**。呼叫端需要拿到機器錯誤碼
+ * （見 窩的家企業入口_前端契約_公布欄與留言板 § 錯誤總表）才能顯示對應中文訊息，
+ * 包進 Error 字串裡就取不回來了。
+ *
+ * @param {string} action - worker action name (e.g. 'portalCreatePost')
+ * @param {Record<string, unknown>} payload - JSON body
+ * @returns {Promise<{ok: boolean, status: number, data: any}>}
+ */
+export async function workerPostJson(action, payload = {}) {
+  try {
+    const res = await fetch(`${WORKER_BASE}/${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    let data = null;
+    try { data = await res.json(); } catch { data = null; }
+    return { ok: res.ok, status: res.status, data };
+  } catch {
+    return { ok: false, status: 0, data: null };
+  }
+}
+
 // Backward-compat aliases used by files that still call ragicGet/ragicPost via shared.js
 // These now route through the worker instead of hitting Ragic directly.
 export const ragicGet  = (action, params = '') => workerGet(action, params ? Object.fromEntries(new URLSearchParams(params)) : {});
