@@ -1,3 +1,21 @@
+// wuohome-ragic-proxy v45 — 零用金請款開發批次 2（Group X，2026-07-28）：新增 5 個 action
+// pettyCashIdentity / pettyCashCreate / pettyCashListMine / pettyCashListAll /
+// pettyCashMarkPaid，讀寫 finance2/14（批次 1 已建表，主表 19 欄 + 發票號碼 noDup 唯一索引）。
+// 兩種 token 身分：A 同仁（`?token=` 反查人事表 ragicforms4/20004 的 1003215「零用金請款
+// Token」，在職狀態必須 ∈ {在職,試用}）／B 財務（`?token=` 比對新 secret
+// PETTY_CASH_FINANCE_TOKENS_JSON，格式比照既有 WORKLOG_TOKENS_JSON）。同一支 gate 函式
+// `authenticatePettyCash()` 先試 A 再試 B，每個 action 只接受其中一種角色，token 失敗或角色
+// 不符一律同型 `not_found` 404（不回 403，避免洩漏 token 有效性，比照 v29/v30/P5/Group T/U
+// IDOR root-fix 手法）。請款人身分（1003196）只能由 token 反查得出，前端傳入的任何姓名欄位
+// 一律不讀取（service-fee.html 既定鐵律，避開 earnest.html 的 IDOR 教訓）；建立時間
+// （1003195）伺服器端產生台北時間、已付款（1003212）建立時一律寫 No。發票號碼重複防呆兩層：
+// 寫入前 GET 查重（P0-3，整套最重要一條）+ Ragic noDup 唯一索引兜底，兩者皆轉譯成同一個
+// `duplicate_invoice` 409（不吐 upstream_invalid）。pettyCashCreate 建單後讀回驗證自動編號
+// （1003194）確實有值，比照 createPaymentReceipt/createServiceFeeOrder「防謊報成功」手法；
+// pettyCashMarkPaid 寫入後讀回確認 1003212 狀態真的變了才回成功。日期時間格式沿用批次1 已修
+// 正的大寫 `HH`（見踩坑速查 2026-07-28 條目，小寫 `hh` 會讓時間部分靜默歸零）。既有 79 個
+// action 一行未動（additive only）。v1 已知落差：規格書「代 key 人」機制（1003197 代填人）
+// 因 Joan 明確指示「請款人一律 token 反查」而未實作，欄位保留不寫入，待 Joan 拍板，詳交付摘要。
 // wuohome-ragic-proxy v42 — 企業入口第 3 批：公布欄 + 心情留言板（Group W，2026-07-28）。
 // **本 Worker 第一組非 Ragic 後端的 action** — 資料在 Supabase 專案 wuohome-systems
 // (zqngfhkcftpeqbhllzvl, ap-northeast-1)，表 portal_posts / portal_moods（2026-07-28 建，
@@ -252,6 +270,14 @@ const ALLOWED_ACTIONS = {
   portalListMoods:       { method: 'GET' },
   portalCreateMood:      { method: 'POST' },
   portalDeleteMood:      { method: 'POST' },
+  // Group X: 零用金請款（petty-cash.html / petty-cash-admin.html，finance2/14，2026-07-28）。
+  // 兩種 token 身分（同仁反查人事表 / 財務比對 PETTY_CASH_FINANCE_TOKENS_JSON），全 action 強制
+  // 驗證，失敗或角色不符一律同型 404（不分因由防列舉）。
+  pettyCashIdentity:     { method: 'GET' },
+  pettyCashCreate:       { method: 'POST' },
+  pettyCashListMine:     { method: 'GET' },
+  pettyCashListAll:      { method: 'GET' },
+  pettyCashMarkPaid:     { method: 'POST' },
 };
 
 const REPAIR_INTERNAL_ACTIONS = new Set([
@@ -802,6 +828,402 @@ async function handleWorklogAction(action, request, env, identity, origin) {
     }
 
     return jsonResp({ ok: results.every((r) => r.ok), results }, 200, origin);
+  }
+
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Group X: 零用金請款（petty-cash.html / petty-cash-admin.html，finance2/14，2026-07-28）
+// 開發批次 2（Worker）。批次 1（Ragic 建表＋人事表 token 欄位）已完成，見規格書。
+// 兩種身分：A 同仁（`?token=` 反查人事表 ragicforms4/20004 的 1003215，在職狀態必須 ∈
+// {在職,試用}）／B 財務（`?token=` 比對 Worker secret PETTY_CASH_FINANCE_TOKENS_JSON，格式
+// 比照 WORKLOG_TOKENS_JSON）。同一支 token gate 函式先試 A 再試 B；每個 action 只接受其中
+// 一種角色，角色不符或 token 驗證失敗一律回同型 `not_found` 404（不回 403，避免洩漏 token
+// 有效性），比照 v29/v30/Group S/T/U IDOR root-fix 手法。請款人身分只能由 token 反查得出，
+// 前端傳入的任何姓名欄位一律不讀取（service-fee.html 既定鐵律，避開 earnest.html 的 IDOR 教訓）。
+// ═══════════════════════════════════════════════════════════════════════════════
+const PETTY_CASH_SHEET = 'finance2/14';
+const PETTY_CASH_STAFF_SHEET = 'ragicforms4/20004';
+const PC_STAFF_TOKEN_FIELD = '1003215';
+const PC_STAFF_NAME_FIELD = '3000933';
+const PC_STAFF_DEPT_FIELD = '3000937';
+const PC_STAFF_STATUS_FIELD = '3000945';
+const PC_ACTIVE_STATUSES = new Set(['在職', '試用']); // 只有這兩種在職狀態可請款
+const PC = Object.freeze({
+  claimNo: '1003194', createdAt: '1003195', claimant: '1003196', delegate: '1003197',
+  category: '1003198', item: '1003199', site: '1003200', note: '1003201',
+  invoiceType: '1003202', invoiceNumber: '1003203', invoiceDate: '1003204',
+  sellerTaxId: '1003205', store: '1003206', amountExTax: '1003207', taxAmount: '1003208',
+  amount: '1003209', photo: '1003210', source: '1003211', isPaid: '1003212', paidAt: '1003213',
+});
+const PC_CATEGORIES = new Set(['交通', '餐費', '五金', '耗材', '規費', '其他']);
+const PC_INVOICE_TYPES = new Set(['電子發票', '手開發票', '收據', '免用統一發票']);
+const PC_SOURCES = new Set(['qr', 'manual']);
+// spec 僅寫「一般 2000 字，短欄位自己訂合理值」，未給精確數字，以下為 spec-外決定的保守上限
+const PC_TEXT_MAX = { item: 200, site: 100, note: 2000, invoiceNumber: 30, sellerTaxId: 20, store: 100 };
+// 零用金上限：金額（含稅）>= 3000 要改走請款單（需吳彥廷簽名），不走本系統。
+// 規則來源：韓珊珊 2026-07-29 口頭、Joan 當日轉述（非書面規定，日後有爭議回頭找珊珊確認）。
+// 前端 petty-cash 頁也擋一次，這裡是防 F12 繞過前端的第二層。
+// 見 窩的家/系統部/規格書/零用金請款_規格書.md § 片段 A
+const PC_AMOUNT_LIMIT = 3000;
+const PC_MAX_FILE_BYTES = 5 * 1024 * 1024; // 比照既有 size guard
+const PC_STAFF_ACTIONS = new Set(['pettyCashIdentity', 'pettyCashCreate', 'pettyCashListMine']);
+const PC_FINANCE_ACTIONS = new Set(['pettyCashListAll', 'pettyCashMarkPaid']);
+const PETTY_CASH_ACTIONS = new Set([...PC_STAFF_ACTIONS, ...PC_FINANCE_ACTIONS]);
+
+function pcClean(v) { return typeof v === 'string' ? v.trim() : ''; }
+function pcVal(v) { return typeof v === 'string' ? v : (v == null ? '' : String(v)); }
+function pcNum(v) {
+  if (v === '' || v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+// 台北時間日期時間字串，格式 `YYYY/MM/DD HH:mm:ss`（24 小時制）。2026-07-28 建表踩坑：日期
+// 時間欄位若設小寫 `hh`，POST 寫入的時間部分會被靜默歸零；1003195/1003213 建表時已改用大寫
+// `HH`（見踩坑速查 § Ragic API 補充 2026-07-28），這裡另外防 `Intl.DateTimeFormat`
+// `hour12:false` 在午夜輸出 `"24"` 而非 `"00"` 的已知 ICU 怪癖（同類保護，未實際踩到也先擋）。
+function nowTaipeiDateTime() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(new Date()).reduce((out, p) => { out[p.type] = p.value; return out; }, {});
+  const hh = parts.hour === '24' ? '00' : parts.hour;
+  return `${parts.year}/${parts.month}/${parts.day} ${hh}:${parts.minute}:${parts.second}`;
+}
+
+// Ragic 附件欄位（多檔）GET 回傳值可能是單一 token 字串或字串陣列，統一轉陣列。file.jsp 端點
+// 實測不需要 Authorization header（同 decorFile/decorContractFile 既有做法，token 本身即為
+// 存取憑證），可直接組 URL 回給前端，不需要額外做位元組代理。
+function pettyCashPhotoUrls(raw) {
+  const arr = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+  return arr
+    .map((t) => pcClean(t))
+    .filter(Boolean)
+    .map((t) => `https://ap15.ragic.com/sims/file.jsp?a=wuohome&f=${encodeURIComponent(t)}`);
+}
+
+function pettyCashPublicRecord(rid, rec) {
+  const photoUrls = pettyCashPhotoUrls(rec[PC.photo]);
+  return {
+    rid: String(rid),
+    claimNo: pcVal(rec[PC.claimNo]),
+    createdAt: pcVal(rec[PC.createdAt]),
+    claimant: pcVal(rec[PC.claimant]),
+    category: pcVal(rec[PC.category]),
+    item: pcVal(rec[PC.item]),
+    site: pcVal(rec[PC.site]),
+    note: pcVal(rec[PC.note]),
+    invoiceType: pcVal(rec[PC.invoiceType]),
+    invoiceNumber: pcVal(rec[PC.invoiceNumber]),
+    invoiceDate: pcVal(rec[PC.invoiceDate]),
+    sellerTaxId: pcVal(rec[PC.sellerTaxId]),
+    store: pcVal(rec[PC.store]),
+    amountExTax: pcNum(rec[PC.amountExTax]),
+    taxAmount: pcNum(rec[PC.taxAmount]),
+    amount: pcNum(rec[PC.amount]),
+    source: pcVal(rec[PC.source]),
+    photoUrl: photoUrls[0] || '',
+    photoUrls, // spec 外決定：憑證照片是多檔欄位，額外提供完整陣列，photoUrl 仍保留供契約相容
+    isPaid: pcVal(rec[PC.isPaid]) === 'Yes',
+    paidAt: pcVal(rec[PC.paidAt]) || null,
+  };
+}
+
+async function findPettyCashByInvoice(env, invoiceNumber) {
+  const qs = `naming=EID&limit=0,1&where=${PC.invoiceNumber},eq,${encodeURIComponent(invoiceNumber)}`;
+  const { upstream, data } = await getFromRagic(env, PETTY_CASH_SHEET, qs);
+  if (!upstream.ok || !data) return null;
+  const entries = Object.entries(data).filter(([k]) => /^\d+$/.test(k));
+  if (entries.length === 0) return null;
+  const [rid, rec] = entries[0];
+  return { rid, rec };
+}
+
+function pettyCashDuplicateResponse(found, invoiceNumber, origin) {
+  const rec = found ? found.rec : null;
+  const createdAt = rec ? pcVal(rec[PC.createdAt]) : '';
+  return jsonResp({
+    error: 'duplicate_invoice',
+    invoiceNumber,
+    existing: {
+      claimNo: rec ? pcVal(rec[PC.claimNo]) : undefined,
+      claimant: rec ? pcVal(rec[PC.claimant]) : undefined,
+      claimedAt: createdAt ? createdAt.split(' ')[0] : undefined,
+    },
+  }, 409, origin);
+}
+
+// A：同仁身分，`?token=` 反查人事表。失敗（不存在／格式錯／離職／非在職試用狀態）一律回 null，
+// 呼叫端統一映射同型 404（不分因由防列舉）。
+async function authenticatePettyCashStaff(url, env) {
+  const token = url.searchParams.get('token') || '';
+  if (!validUuid(token)) return null;
+  const qs = `naming=EID&limit=0,1&where=${PC_STAFF_TOKEN_FIELD},eq,${encodeURIComponent(token)}`;
+  const { upstream, data } = await getFromRagic(env, PETTY_CASH_STAFF_SHEET, qs);
+  if (!upstream.ok || !data) return null;
+  const records = Object.values(data).filter((r) => r && typeof r === 'object');
+  if (records.length === 0) return null;
+  const rec = records[0];
+  const status = pcClean(rec[PC_STAFF_STATUS_FIELD]);
+  if (!PC_ACTIVE_STATUSES.has(status)) return null;
+  const name = pcClean(rec[PC_STAFF_NAME_FIELD]);
+  if (!name) return null;
+  return { role: 'staff', name, department: pcClean(rec[PC_STAFF_DEPT_FIELD]) };
+}
+
+// B：財務身分，`?token=` 比對 Worker secret（比照 parseWorklogTokenConfig 手法）。
+function parsePettyCashFinanceTokens(env) {
+  let tokens;
+  try { tokens = JSON.parse(env.PETTY_CASH_FINANCE_TOKENS_JSON || '{}'); } catch { return null; }
+  if (!tokens || typeof tokens !== 'object' || Array.isArray(tokens)) return null;
+  const normalized = {};
+  for (const [token, raw] of Object.entries(tokens)) {
+    if (!token || !raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const name = typeof raw.name === 'string' ? raw.name.trim() : '';
+    if (!name) return null;
+    normalized[token] = { name };
+  }
+  return normalized;
+}
+
+function authenticatePettyCashFinance(url, env) {
+  const tokens = parsePettyCashFinanceTokens(env);
+  if (!tokens) return null;
+  const token = url.searchParams.get('token') || '';
+  const entry = tokens[token];
+  if (!entry) return null;
+  return { role: 'finance', name: entry.name };
+}
+
+// 同一支 gate：先試 A（同仁）再試 B（財務）。呼叫端再檢查 role 是否符合該 action 需求，
+// 不符也回同型 404（見路由段落）。
+async function authenticatePettyCash(url, env) {
+  const staff = await authenticatePettyCashStaff(url, env);
+  if (staff) return staff;
+  return authenticatePettyCashFinance(url, env);
+}
+
+async function handlePettyCashAction(action, request, env, identity, origin) {
+  const url = new URL(request.url);
+
+  if (action === 'pettyCashIdentity') {
+    return jsonResp({
+      ok: true,
+      viewer: { name: identity.name, department: identity.department || '', role: 'staff' },
+    }, 200, origin);
+  }
+
+  if (action === 'pettyCashCreate') {
+    const ct = request.headers.get('Content-Type') || '';
+    if (!ct.toLowerCase().startsWith('multipart/form-data')) {
+      return jsonResp({ error: 'expect_multipart' }, 400, origin);
+    }
+    let form;
+    try { form = await request.formData(); } catch { return jsonResp({ error: 'bad_multipart' }, 400, origin); }
+
+    // 前端只有以下 key 會被讀取；其餘一律不讀（含前端可能誤送的 claimant，防冒名唯一防線是
+    // 「Worker 根本不看這個 key」，不是格式檢查）。spec 外決定：不逐一 error 每個未知 key，
+    // 統一「忽略」（既有 invalid_field 手法用於 Ragic fid 白名單，這裡欄位是前端命名鍵不是
+    // fid，性質不同，見交付摘要）。
+    const category = pcClean(form.get('category'));
+    const item = pcClean(form.get('item'));
+    const site = pcClean(form.get('site'));
+    const note = pcClean(form.get('note'));
+    const invoiceType = pcClean(form.get('invoiceType'));
+    const invoiceNumber = pcClean(form.get('invoiceNumber'));
+    const invoiceDateRaw = form.get('invoiceDate');
+    const sellerTaxId = pcClean(form.get('sellerTaxId'));
+    const store = pcClean(form.get('store'));
+    const amountExTaxRaw = form.get('amountExTax');
+    const taxAmountRaw = form.get('taxAmount');
+    const amountRaw = form.get('amount');
+    const source = pcClean(form.get('source'));
+    const photos = form.getAll('photo').filter((v) => v instanceof File);
+
+    if (!PC_CATEGORIES.has(category)) return jsonResp({ error: 'invalid_category' }, 400, origin);
+    if (!item || item.length > PC_TEXT_MAX.item) return jsonResp({ error: 'invalid_item' }, 400, origin);
+    if (site.length > PC_TEXT_MAX.site) return jsonResp({ error: 'invalid_site' }, 400, origin);
+    if (note.length > PC_TEXT_MAX.note) return jsonResp({ error: 'invalid_note' }, 400, origin);
+    if (!PC_INVOICE_TYPES.has(invoiceType)) return jsonResp({ error: 'invalid_invoiceType' }, 400, origin);
+    if (!invoiceNumber || invoiceNumber.length > PC_TEXT_MAX.invoiceNumber) return jsonResp({ error: 'invalid_invoiceNumber' }, 400, origin);
+    const invoiceDate = decorNormalizeDate(invoiceDateRaw);
+    if (!invoiceDate) return jsonResp({ error: 'invalid_invoiceDate' }, 400, origin);
+    if (sellerTaxId.length > PC_TEXT_MAX.sellerTaxId) return jsonResp({ error: 'invalid_sellerTaxId' }, 400, origin);
+    if (store.length > PC_TEXT_MAX.store) return jsonResp({ error: 'invalid_store' }, 400, origin);
+    const amountExTax = (amountExTaxRaw !== null && amountExTaxRaw !== '') ? Number(amountExTaxRaw) : null;
+    if (amountExTax !== null && (!Number.isFinite(amountExTax) || amountExTax < 0)) return jsonResp({ error: 'invalid_amountExTax' }, 400, origin);
+    const taxAmount = (taxAmountRaw !== null && taxAmountRaw !== '') ? Number(taxAmountRaw) : null;
+    if (taxAmount !== null && (!Number.isFinite(taxAmount) || taxAmount < 0)) return jsonResp({ error: 'invalid_taxAmount' }, 400, origin);
+    const amount = Number(amountRaw);
+    if (!Number.isFinite(amount) || amount <= 0) return jsonResp({ error: 'invalid_amount' }, 400, origin);
+    if (amount >= PC_AMOUNT_LIMIT) return jsonResp({ error: 'amount_over_limit', limit: PC_AMOUNT_LIMIT }, 400, origin);
+    if (!PC_SOURCES.has(source)) return jsonResp({ error: 'invalid_source' }, 400, origin);
+    if (photos.length === 0) return jsonResp({ error: 'photo_required' }, 400, origin);
+    for (const f of photos) {
+      if (f.size > PC_MAX_FILE_BYTES) return jsonResp({ error: 'file_too_large', size: f.size }, 400, origin);
+    }
+
+    // 發票號碼重複防呆：前端第一道防線（P0-3，整套最重要的一條）
+    const dup = await findPettyCashByInvoice(env, invoiceNumber);
+    if (dup) return pettyCashDuplicateResponse(dup, invoiceNumber, origin);
+
+    const createdAt = nowTaipeiDateTime();
+    const writeForm = new FormData();
+    writeForm.append(PC.claimant, identity.name); // 唯一來源：token 反查，前端傳什麼都不採信
+    writeForm.append(PC.createdAt, createdAt);
+    writeForm.append(PC.category, category);
+    writeForm.append(PC.item, item);
+    if (site) writeForm.append(PC.site, site);
+    if (note) writeForm.append(PC.note, note);
+    writeForm.append(PC.invoiceType, invoiceType);
+    writeForm.append(PC.invoiceNumber, invoiceNumber);
+    writeForm.append(PC.invoiceDate, invoiceDate);
+    if (sellerTaxId) writeForm.append(PC.sellerTaxId, sellerTaxId);
+    if (store) writeForm.append(PC.store, store);
+    if (amountExTax !== null) writeForm.append(PC.amountExTax, String(amountExTax));
+    if (taxAmount !== null) writeForm.append(PC.taxAmount, String(taxAmount));
+    writeForm.append(PC.amount, String(amount));
+    writeForm.append(PC.source, source);
+    writeForm.append(PC.isPaid, 'No');
+    for (const f of photos) writeForm.append(PC.photo, f, f.name || 'receipt.jpg');
+
+    const upstream = await ragicFetch(`${env.RAGIC_BASE}/${PETTY_CASH_SHEET}?api&v=3`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Basic ' + env.RAGIC_KEY },
+      body: writeForm,
+    });
+    const text = await upstream.text();
+    let data = null; try { data = JSON.parse(text); } catch {}
+    const fail = detectUpstreamFailure(upstream, data);
+    if (fail) {
+      // 資料庫唯一索引第二道防線：Ragic noDup 擋撞號回 status:INVALID，轉譯成前端看得懂的
+      // duplicate_invoice（不吐 upstream_invalid），existing 允許缺值（見 spec）
+      if (fail.error === 'upstream_invalid' && /發票號碼/.test(String(fail.msg || ''))) {
+        const dup2 = await findPettyCashByInvoice(env, invoiceNumber);
+        return pettyCashDuplicateResponse(dup2, invoiceNumber, origin);
+      }
+      console.error('[pettyCashCreate] write_failed', { ragicCode: fail.code, ragicMsg: fail.msg });
+      return jsonResp({ error: 'write_failed', ...fail }, 502, origin);
+    }
+    const newRid = data?.ragicId;
+    if (!newRid) return jsonResp({ error: 'no_rid_returned' }, 502, origin);
+
+    // 讀回驗證（防謊報成功；自動編號有時序問題，比照 createPaymentReceipt/createServiceFeeOrder 手法）
+    let rec = null;
+    try {
+      const { upstream: ru, data: rd } = await getFromRagic(env, `${PETTY_CASH_SHEET}/${newRid}`, 'naming=EID');
+      if (ru.ok && rd) rec = rd[String(newRid)] || Object.values(rd)[0] || null;
+    } catch { /* rec stays null，下面統一回 write_unverified */ }
+    if (!rec || !pcVal(rec[PC.claimNo])) return jsonResp({ error: 'write_unverified', ragicId: newRid }, 502, origin);
+
+    return jsonResp({
+      ok: true,
+      claim: {
+        rid: String(newRid),
+        claimNo: pcVal(rec[PC.claimNo]),
+        createdAt: pcVal(rec[PC.createdAt]) || createdAt,
+        claimant: pcVal(rec[PC.claimant]) || identity.name,
+        amount,
+        invoiceNumber,
+      },
+    }, 200, origin);
+  }
+
+  if (action === 'pettyCashListMine') {
+    const paid = url.searchParams.get('paid') || 'all';
+    if (!['all', 'unpaid', 'paid'].includes(paid)) return jsonResp({ error: 'invalid_paid' }, 400, origin);
+    let limit = Number(url.searchParams.get('limit') || '100');
+    if (!Number.isFinite(limit) || limit <= 0) limit = 100;
+    limit = Math.min(Math.floor(limit), 500);
+
+    // where 條件完全由 Worker 自行組（請款人=token 反查到的姓名），不接受前端指定任何 where
+    const whereParts = [`where=${PC.claimant},eq,${encodeURIComponent(identity.name)}`];
+    if (paid === 'unpaid') whereParts.push(`where=${PC.isPaid},eq,No`);
+    if (paid === 'paid') whereParts.push(`where=${PC.isPaid},eq,Yes`);
+    const qs = `naming=EID&limit=0,${limit}&${whereParts.join('&')}`;
+    const { upstream, data } = await getFromRagic(env, PETTY_CASH_SHEET, qs);
+    const fail = detectUpstreamFailure(upstream, data);
+    if (fail) return jsonResp(fail, 502, origin);
+    const claims = Object.entries(data || {})
+      .filter(([k]) => /^\d+$/.test(k))
+      .map(([rid, rec]) => pettyCashPublicRecord(rid, rec))
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    return jsonResp({ ok: true, claims, viewer: { name: identity.name, role: 'staff' } }, 200, origin);
+  }
+
+  if (action === 'pettyCashListAll') {
+    const paid = url.searchParams.get('paid') || 'all';
+    if (!['all', 'unpaid', 'paid'].includes(paid)) return jsonResp({ error: 'invalid_paid' }, 400, origin);
+    const claimantFilter = pcClean(url.searchParams.get('claimant'));
+    const dateFromRaw = url.searchParams.get('dateFrom');
+    const dateToRaw = url.searchParams.get('dateTo');
+    let limit = Number(url.searchParams.get('limit') || '200');
+    if (!Number.isFinite(limit) || limit <= 0) limit = 200;
+    limit = Math.min(Math.floor(limit), 1000);
+
+    const whereParts = [];
+    if (paid === 'unpaid') whereParts.push(`where=${PC.isPaid},eq,No`);
+    if (paid === 'paid') whereParts.push(`where=${PC.isPaid},eq,Yes`);
+    if (claimantFilter) whereParts.push(`where=${PC.claimant},eq,${encodeURIComponent(claimantFilter)}`);
+    if (dateFromRaw) {
+      const nd = decorNormalizeDate(dateFromRaw);
+      if (!nd) return jsonResp({ error: 'invalid_dateFrom' }, 400, origin);
+      whereParts.push(`where=${PC.createdAt},gte,${encodeURIComponent(nd + ' 00:00:00')}`);
+    }
+    if (dateToRaw) {
+      const nd = decorNormalizeDate(dateToRaw);
+      if (!nd) return jsonResp({ error: 'invalid_dateTo' }, 400, origin);
+      whereParts.push(`where=${PC.createdAt},lte,${encodeURIComponent(nd + ' 23:59:59')}`);
+    }
+    const qs = `naming=EID&limit=0,${limit}${whereParts.length ? '&' + whereParts.join('&') : ''}`;
+    const { upstream, data } = await getFromRagic(env, PETTY_CASH_SHEET, qs);
+    const fail = detectUpstreamFailure(upstream, data);
+    if (fail) return jsonResp(fail, 502, origin);
+    const claims = Object.entries(data || {})
+      .filter(([k]) => /^\d+$/.test(k))
+      .map(([rid, rec]) => pettyCashPublicRecord(rid, rec))
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    const summary = claims.reduce((s, c) => {
+      s.total += 1;
+      if (c.isPaid) { s.paidCount += 1; s.paidAmount += c.amount || 0; }
+      else { s.unpaidCount += 1; s.unpaidAmount += c.amount || 0; }
+      return s;
+    }, { total: 0, unpaidCount: 0, unpaidAmount: 0, paidCount: 0, paidAmount: 0 });
+    return jsonResp({ ok: true, claims, summary, viewer: { name: identity.name, role: 'finance' } }, 200, origin);
+  }
+
+  if (action === 'pettyCashMarkPaid') {
+    let body;
+    try { body = await request.json(); } catch { return jsonResp({ error: 'bad_json' }, 400, origin); }
+    const ridRaw = body?.rid;
+    if (typeof ridRaw !== 'string' && typeof ridRaw !== 'number') return jsonResp({ error: 'invalid_rid' }, 400, origin);
+    const rid = String(ridRaw);
+    if (!/^\d{1,12}$/.test(rid)) return jsonResp({ error: 'invalid_rid' }, 400, origin);
+    if (typeof body?.isPaid !== 'boolean') return jsonResp({ error: 'invalid_is_paid' }, 400, origin);
+    const isPaid = body.isPaid;
+
+    const { upstream: cu, data: cd } = await getFromRagic(env, `${PETTY_CASH_SHEET}/${rid}`, 'naming=EID');
+    if (!cu.ok || !cd || Object.keys(cd).length === 0) return jsonResp({ error: 'not_found' }, 404, origin);
+    const existingRec = cd[rid] || Object.values(cd)[0];
+    if (!existingRec) return jsonResp({ error: 'not_found' }, 404, origin);
+
+    const params = new URLSearchParams();
+    params.append(PC.isPaid, isPaid ? 'Yes' : 'No');
+    params.append(PC.paidAt, isPaid ? nowTaipeiDateTime() : ''); // 取消誤勾要能清空，財務一定會誤勾
+    const { upstream, data } = await postUrlEncodedToRagic(env, `${PETTY_CASH_SHEET}/${rid}`, params.toString());
+    const fail = detectUpstreamFailure(upstream, data);
+    if (fail) return jsonResp({ error: 'write_failed', ...fail }, 502, origin);
+
+    // 讀回確認狀態真的變了，沒變回 502（不假裝成功）
+    const { upstream: ru, data: rd } = await getFromRagic(env, `${PETTY_CASH_SHEET}/${rid}`, 'naming=EID');
+    if (!ru.ok || !rd) return jsonResp({ error: 'write_unverified' }, 502, origin);
+    const rec = rd[rid] || Object.values(rd)[0];
+    const actualPaid = rec ? pcVal(rec[PC.isPaid]) === 'Yes' : null;
+    if (actualPaid !== isPaid) return jsonResp({ error: 'write_unverified' }, 502, origin);
+
+    return jsonResp({ ok: true, claim: pettyCashPublicRecord(rid, rec) }, 200, origin);
   }
 
   return null;
@@ -2788,6 +3210,18 @@ export default {
       if (!worklogIdentity) return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
     }
 
+    // Group X: 零用金請款 — 兩種身分 token gate（同仁 token 反查人事表 / 財務 token 比對
+    // PETTY_CASH_FINANCE_TOKENS_JSON，同一支 gate 函式先試 A 再試 B）。角色不符該 action 所需
+    // 角色一律同型 404（不回 403，避免洩漏 token 有效性），比照上方 v29/v30/P5/Group T/U 手法。
+    let pettyCashIdentity = null;
+    if (PETTY_CASH_ACTIONS.has(action)) {
+      pettyCashIdentity = await authenticatePettyCash(url, env);
+      const requiredRole = PC_STAFF_ACTIONS.has(action) ? 'staff' : 'finance';
+      if (!pettyCashIdentity || pettyCashIdentity.role !== requiredRole) {
+        return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
+      }
+    }
+
     try {
       if (action.startsWith('repair')) {
         const repairResponse = await handleRepairAction(action, request, env, ctx, repairIdentity, allowedOrigin);
@@ -2797,6 +3231,11 @@ export default {
       if (action.startsWith('worklog')) {
         const worklogResponse = await handleWorklogAction(action, request, env, worklogIdentity, allowedOrigin);
         if (worklogResponse) return worklogResponse;
+      }
+
+      if (action.startsWith('pettyCash')) {
+        const pettyCashResponse = await handlePettyCashAction(action, request, env, pettyCashIdentity, allowedOrigin);
+        if (pettyCashResponse) return pettyCashResponse;
       }
 
       // Group W: 企業入口 公布欄／心情留言板（Supabase，非 Ragic）。無 token gate——全公司首頁
