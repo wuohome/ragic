@@ -1092,7 +1092,8 @@ function memberEntryLine(dateStr, b, withRowId) {
   const top = make('p', 'flex flex-wrap items-center gap-1.5');
   const timeLabel = (b.start && b.end) ? `${b.start}–${b.end}` : (b.isLegacy && b.legacyHourLabel) ? b.legacyHourLabel : '（時段未知）';
   top.append(make('span', 'tnum text-xs font-bold text-inkfaint', timeLabel));
-  top.append(make('span', 'rounded-full bg-white px-2 py-0.5 text-xs font-bold text-inkmuted', b.category === OTHER_CATEGORY ? (b.otherCategoryText || '其他') : (b.category || '未填項目')));
+  const entryLabel = categoryLabelOf(b);
+  top.append(make('span', `rounded-full border px-2 py-0.5 text-xs font-bold ${categoryToneClass(entryLabel)}`, entryLabel));
   if (b.isLegacy) top.append(make('span', 'rounded-full border border-inkfaint/50 bg-white px-2 py-0.5 text-[10px] font-bold text-inkfaint', '舊版格式'));
   if (isOverdueUnrecorded(dateStr, b)) top.append(make('span', 'rounded-full border-2 border-overlap bg-overlaptint px-2 py-0.5 text-xs font-bold text-overlapdark', '⏰ 已排定・尚未補紀錄'));
   if (b.caseName) top.append(make('span', 'text-ink', b.caseName));
@@ -1102,6 +1103,46 @@ function memberEntryLine(dateStr, b, withRowId) {
   if (b.note) wrap.append(make('p', 'mt-0.5 text-xs text-ink', b.note));
   return wrap;
 }
+// 標題列項目標籤：主管不展開卡片也能看到今天有哪些項目，待補的那一項直接標紅
+// （狀態徽章只給得出「1 筆待補」的數量，說不出是哪一項）。
+const HEAD_TAG_MAX = 6;
+
+// 項目標籤配色：22 個項目依性質分成 6 組（同組同色），色相拉開到一眼能分。
+// 配色 C「工地強光高對比」的做法沿用：淺底＋深字＋同色描邊，不用低對比粉彩。
+// 全組一律避開紅色系——紅色只留給「已排定・尚未補紀錄」的警示標籤，不能被搶掉。
+const CATEGORY_TONES = {
+  field: 'border-[#6FC3AC] bg-[#D9F2EA] text-[#0A5A46]', // 現場作業
+  contact: 'border-[#93A6EE] bg-[#E4E9FB] text-[#2A3C96]', // 對外聯繫
+  deal: 'border-[#C297DC] bg-[#F0E4F8] text-[#632E86]', // 成交合約
+  office: 'border-[#9FB6BF] bg-[#E6EDF0] text-[#35525E]', // 內務行政
+  off: 'border-[#EFAF77] bg-[#FCE9D9] text-[#8A4200]', // 不在崗
+  learn: 'border-[#DB9BD0] bg-[#F7E3F2] text-[#7A2168]', // 教育訓練／活動
+  other: 'border-line bg-paper text-inkmuted', // 其他／自訂項目
+};
+const CATEGORY_TONE_OF = {
+  場勘: 'field', 帶看: 'field', 驗收: 'field', 修繕: 'field', 退租點交: 'field',
+  租客聯繫: 'contact', 屋主聯繫: 'contact', 廠商聯繫: 'contact', 開發: 'contact', 委託: 'contact', 議價: 'contact',
+  報價: 'deal', 簽約: 'deal', 續約: 'deal',
+  內部會議: 'office', 文書作業: 'office', 上廣告: 'office',
+  請假: 'off', 休假: 'off',
+  上課: 'learn', 活動: 'learn',
+};
+function categoryToneClass(label) {
+  return CATEGORY_TONES[CATEGORY_TONE_OF[label]] || CATEGORY_TONES.other;
+}
+function categoryLabelOf(b) {
+  return b.category === OTHER_CATEGORY ? (b.otherCategoryText || '其他') : (b.category || '未填項目');
+}
+function headTagsForMember(dateStr, member) {
+  const map = new Map();
+  member.blocks.slice().sort((a, b) => blockSortMinutes(a) - blockSortMinutes(b)).forEach((b) => {
+    const label = categoryLabelOf(b);
+    const overdue = isOverdueUnrecorded(dateStr, b);
+    if (!map.has(label)) map.set(label, { label, overdue });
+    else if (overdue) map.get(label).overdue = true;
+  });
+  return [...map.values()];
+}
 function memberCard(dateStr, member) {
   const total = member.blocks.length;
   const overdueCount = member.blocks.filter((b) => isOverdueUnrecorded(dateStr, b)).length;
@@ -1110,12 +1151,26 @@ function memberCard(dateStr, member) {
   const statusCls = total === 0 ? 'border border-line bg-white text-inkmuted' : overdueCount > 0 ? 'bg-overlap text-white' : 'bg-coral text-white';
 
   const card = make('div', 'rounded-2xl border border-line bg-white');
-  const headerBtn = make('button', `tap44 flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-paper active:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${expanded ? 'rounded-t-2xl' : 'rounded-2xl'}`);
+  const headerBtn = make('button', `tap44 flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3.5 text-left transition-colors hover:bg-paper active:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${expanded ? 'rounded-t-2xl' : 'rounded-2xl'}`);
   headerBtn.type = 'button';
-  const left = make('div', 'flex items-center gap-2.5');
-  left.append(make('span', 'text-sm font-black text-ink', member.label));
-  headerBtn.append(left);
-  const right = make('div', 'flex items-center gap-2');
+  headerBtn.append(make('span', 'order-1 shrink-0 text-sm font-black text-ink', member.label));
+  // 標籤列：窄螢幕排到姓名下方整行（order-3），sm 以上回到姓名與狀態徽章中間同一行。
+  const headTags = headTagsForMember(dateStr, member);
+  if (headTags.length > 0) {
+    const tagRow = make('div', 'order-3 flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:order-2 sm:w-auto sm:flex-1');
+    headTags.slice(0, HEAD_TAG_MAX).forEach((t) => {
+      tagRow.append(make('span',
+        t.overdue
+          ? 'rounded-full border-2 border-overlap bg-overlaptint px-2 py-0.5 text-xs font-bold text-overlapdark'
+          : `rounded-full border px-2 py-0.5 text-xs font-bold ${categoryToneClass(t.label)}`,
+        t.overdue ? `⏰ ${t.label}` : t.label));
+    });
+    if (headTags.length > HEAD_TAG_MAX) {
+      tagRow.append(make('span', 'rounded-full border border-line bg-paper px-2 py-0.5 text-xs font-bold text-inkfaint', `+${headTags.length - HEAD_TAG_MAX}`));
+    }
+    headerBtn.append(tagRow);
+  }
+  const right = make('div', 'order-2 flex shrink-0 items-center gap-2 sm:order-3');
   right.append(make('span', `rounded-full px-2.5 py-1 text-xs font-bold ${statusCls}`, statusText));
   const chevWrap = make('span', 'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-line bg-white text-ink');
   chevWrap.innerHTML = expanded ? CHEVRON_UP_SVG : CHEVRON_DOWN_SVG;
