@@ -1,3 +1,15 @@
+// wuohome-ragic-proxy v46 — earnest/payment-receipt token 收尾加嚴（2026-07-30）：
+// getEarnest / verifyEarnestToken（定金 token 1002558）、getPaymentReceipt /
+// verifyPaymentReceiptToken（收款憑單 token 1003029）、getPaymentSource / submitPaymentSource
+// （同用 1003029 做 gate）、以及 submitEarnest/submitEarnestAsync/submitPaymentReceipt 共用的
+// processMultipart() token 欄位解析，全部從純 validUuid() regex 換成 v38 refund 就已存在的
+// validHardenedToken()（UUID regex + 非 nil-UUID + hex 唯一字元數 ≥5），與 refund 三條路徑同級。
+// 只動 token 格式驗證這一層，查詢欄位/白名單/錯誤碼慣例一律不變（格式不合格仍 400
+// invalid_token；查無記錄仍 404 record_not_found；缺參數仍 400 missing_param）。
+// 版號更正說明：原任務指示寫「升 v39」，但實際 git HEAD 已到 v41、且本機工作區另有尚未
+// commit 但**已部署上線**的 v42/v42.1(portal)／v43(listStaff 白名單)／v44(listEmployees 白名單)／
+// v45(pettyCash) —— 開發時 stash 隔離、寫完後已用 git apply --reject 合併回同一份檔案，故本次
+// 用 v46（見 2026-07-30 交付摘要「spec 外決定」）。既有 84 個 action 一行未動（hardening only）。
 // wuohome-ragic-proxy v45 — 零用金請款開發批次 2（Group X，2026-07-28）：新增 5 個 action
 // pettyCashIdentity / pettyCashCreate / pettyCashListMine / pettyCashListAll /
 // pettyCashMarkPaid，讀寫 finance2/14（批次 1 已建表，主表 19 欄 + 發票號碼 noDup 唯一索引）。
@@ -2478,7 +2490,8 @@ async function processMultipart(request, allowedOrigin, whitelist, signatureFiel
     if (key === 'token') {
       // Not written to Ragic — consumed by caller (submitEarnest/submitEarnestAsync) to
       // cross-validate against the target record's 1002558 before allowing the write.
-      if (typeof value !== 'string' || !validUuid(value)) {
+      // v43: hardened from plain validUuid() — same class of credential as refund token.
+      if (typeof value !== 'string' || !validHardenedToken(value)) {
         return { error: jsonResp({ error: 'invalid_token' }, 400, allowedOrigin) };
       }
       token = value;
@@ -2507,7 +2520,8 @@ async function processMultipart(request, allowedOrigin, whitelist, signatureFiel
 // token, mismatch, upstream error) — callers must map false to a uniform 404, never
 // distinguish reasons, to avoid leaking which rid/token pairs exist (enumeration guard).
 async function verifyEarnestToken(env, rid, token) {
-  if (!rid || !token || !validUuid(token)) return false;
+  // v43: hardened from plain validUuid() — same class of credential as refund token.
+  if (!rid || !token || !validHardenedToken(token)) return false;
   try {
     const { upstream, data } = await getFromRagic(env, `payments/1/${rid}`, 'naming=EID');
     if (!upstream.ok || !data || Object.keys(data).length === 0) return false;
@@ -2529,7 +2543,8 @@ async function verifyEarnestToken(env, rid, token) {
 // Same uniform-failure contract as verifyEarnestToken above — never distinguish WHY it
 // failed, always let callers map to a single record_not_found 404 (enumeration guard).
 async function verifyPaymentReceiptToken(env, rid, token) {
-  if (!rid || !token || !validUuid(token)) return false;
+  // v43: hardened from plain validUuid() — same class of credential as refund token.
+  if (!rid || !token || !validHardenedToken(token)) return false;
   try {
     const { upstream, data } = await getFromRagic(env, `payments/2/${rid}`, 'naming=EID');
     if (!upstream.ok || !data || Object.keys(data).length === 0) return false;
@@ -3548,7 +3563,7 @@ export default {
 
         // Branch 1: pure token lookup — no code/rid supplied
         if (tokenParam && !codeParam && !ridParam) {
-          if (!validUuid(tokenParam)) return jsonResp({ error: 'invalid_token' }, 400, allowedOrigin);
+          if (!validHardenedToken(tokenParam)) return jsonResp({ error: 'invalid_token' }, 400, allowedOrigin); // v43 hardened
           const tokenQs = `naming=EID&where=1002558,eq,${encodeURIComponent(tokenParam)}&limit=0,1`;
           const { upstream: tu, data: td } = await getFromRagic(env, 'payments/1', tokenQs);
           if (!tu.ok) return jsonResp({ error: 'upstream_error', code: tu.status }, 502, allowedOrigin);
@@ -3558,7 +3573,7 @@ export default {
 
         // Branch 2: code or rid supplied (legacy format) — MUST also carry a matching token
         if (codeParam || ridParam) {
-          if (!tokenParam || !validUuid(tokenParam)) {
+          if (!tokenParam || !validHardenedToken(tokenParam)) { // v43 hardened
             return jsonResp({ error: 'record_not_found' }, 404, allowedOrigin); // uniform 404, don't hint "you're missing a token"
           }
 
@@ -3639,7 +3654,7 @@ export default {
 
         // Branch 1: pure token lookup — no rid/code supplied
         if (tokenParam && !ridOrCodeParam) {
-          if (!validUuid(tokenParam)) return jsonResp({ error: 'invalid_token' }, 400, allowedOrigin);
+          if (!validHardenedToken(tokenParam)) return jsonResp({ error: 'invalid_token' }, 400, allowedOrigin); // v43 hardened
           const tokenQs = `naming=EID&where=1003029,eq,${encodeURIComponent(tokenParam)}&limit=0,1`;
           const { upstream: tu, data: td } = await getFromRagic(env, 'payments/2', tokenQs);
           if (!tu.ok) return jsonResp({ error: 'upstream_error', code: tu.status }, 502, allowedOrigin);
@@ -3649,7 +3664,7 @@ export default {
 
         // Branch 2: rid or code supplied (legacy format) — MUST also carry a matching token
         if (ridOrCodeParam) {
-          if (!tokenParam || !validUuid(tokenParam)) {
+          if (!tokenParam || !validHardenedToken(tokenParam)) { // v43 hardened
             return jsonResp({ error: 'record_not_found' }, 404, allowedOrigin); // uniform 404, don't hint "you're missing a token"
           }
 
@@ -3708,7 +3723,7 @@ export default {
         const sheetKey = url.searchParams.get('sheet');
         const sheetPath = PAYMENT_SOURCE_SHEETS[sheetKey];
         if (!sheetPath) return jsonResp({ error: 'invalid_sheet' }, 400, allowedOrigin);
-        if (!tokenParam || !validUuid(tokenParam)) return jsonResp({ error: 'record_not_found' }, 404, allowedOrigin);
+        if (!tokenParam || !validHardenedToken(tokenParam)) return jsonResp({ error: 'record_not_found' }, 404, allowedOrigin); // v43 hardened
 
         const tokenQs = `naming=EID&where=1003029,eq,${encodeURIComponent(tokenParam)}&limit=0,1`;
         const { upstream: tu, data: td } = await getFromRagic(env, 'payments/2', tokenQs);
@@ -3883,7 +3898,7 @@ export default {
         const tokenParam = form.get('_token');
         const sheetPath = PAYMENT_SOURCE_SHEETS[sheetKey];
         if (!sheetPath) return jsonResp({ error: 'invalid_sheet' }, 400, allowedOrigin);
-        if (typeof tokenParam !== 'string' || !validUuid(tokenParam)) return jsonResp({ error: 'record_not_found' }, 404, allowedOrigin);
+        if (typeof tokenParam !== 'string' || !validHardenedToken(tokenParam)) return jsonResp({ error: 'record_not_found' }, 404, allowedOrigin); // v43 hardened
 
         const tokenQs = `naming=EID&where=1003029,eq,${encodeURIComponent(tokenParam)}&limit=0,1`;
         const { upstream: tu, data: td } = await getFromRagic(env, 'payments/2', tokenQs);
