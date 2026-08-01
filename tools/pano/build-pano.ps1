@@ -22,6 +22,7 @@ param(
   [Parameter(Mandatory)] [string] $Source,
   [Parameter(Mandatory)] [string] $Out,
   [string] $Title,
+  [string] $Address,
   [int]    $Width   = 2048,   # 環景貼圖寬度，需為 2 的冪（WebGL 水平接縫需要 REPEAT）
   [int]    $Quality = 82
 )
@@ -43,7 +44,8 @@ $enc = New-Object System.Text.UTF8Encoding($false)
 $cfgPath = Join-Path $Source 'scenes.json'
 if (Test-Path $cfgPath) {
   $cfg = [System.IO.File]::ReadAllText($cfgPath, $enc) | ConvertFrom-Json
-  if (-not $Title) { $Title = $cfg.title }
+  if (-not $Title)   { $Title = $cfg.title }
+  if (-not $Address) { $Address = $cfg.address }
   $scenes = @($cfg.scenes | ForEach-Object {
     [PSCustomObject]@{
       file = $_.file
@@ -99,7 +101,12 @@ if ($outDir -and -not (Test-Path $outDir)) { New-Item -ItemType Directory $outDi
 
 $sw = New-Object System.IO.StreamWriter($Out, $false, $enc)
 try {
-  $head = [System.IO.File]::ReadAllText($headPath, $enc).Replace('{{TITLE}}', $Title)
+  $addrBlock = if ($Address) {
+    '<div class="addr">' + (([string]$Address) -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;') + '</div>'
+  } else { '' }
+  $head = [System.IO.File]::ReadAllText($headPath, $enc).
+            Replace('{{TITLE}}', $Title).
+            Replace('{{ADDR_BLOCK}}', $addrBlock)
   $sw.Write($head)
 
   for ($k = 0; $k -lt $scenes.Count; $k++) {

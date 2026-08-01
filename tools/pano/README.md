@@ -9,7 +9,21 @@
 少了那段標記，Google 相簿、Facebook 都不會把它當環景，只會顯示成一張左右拉長、天花板扭曲的怪圖。
 這支腳本不依賴那段標記，直接照 2:1 的投影規則把圖貼回球面上重畫，所以轉傳過的照片也能正常看。
 
-## 用法
+## 兩條路，用途不同
+
+| | `360環景製作工具.html` | `build-pano.ps1` |
+|---|---|---|
+| 誰用 | **Joan 自己**，雙擊就開 | main／自動化 |
+| 怎麼給資料 | 拖照片進去、畫面上填 | `scenes.json` ＋ 指令參數 |
+| 產出 | 瀏覽器直接下載成品 | 寫到指定路徑 |
+| 需要什麼 | 只要有 Chrome／Edge | PowerShell ＋ .NET |
+
+兩邊產出的成品格式一模一樣。**Joan 的正式副本放在 `C:\Users\Joan\Downloads\360環景\`**，這裡這份是版本控管用的備份。
+
+⚠️ 檢視器的程式碼在兩邊各有一份（工具檔內的 `PANO_VIEWER` 函式＋`viewerCss`；PowerShell 這邊的 `template-head.html`＋`template-tail.html`）。
+**改了操作手感或畫面，兩邊都要改**，否則兩條路產出的成品會不一致。
+
+## 用法（PowerShell 版）
 
 ```powershell
 cd tools\pano
@@ -21,6 +35,7 @@ cd tools\pano
 ```json
 {
   "title": "雙城街 2 樓",
+  "address": "台北市中山區雙城街 00 號 2 樓",
   "scenes": [
     { "file": "S__27869217_0.jpg", "name": "入口主房", "desc": "進門第一間，連接走道與衛浴" },
     { "file": "S__27869219_0.jpg", "name": "主房衛浴", "desc": "主房內側的洗手台與馬桶" }
@@ -54,7 +69,8 @@ cd tools\pano
 |---|---|---|
 | `-Source` | 必填 | 放環景照的資料夾 |
 | `-Out` | 必填 | 輸出的 HTML 路徑 |
-| `-Title` | 取自 `scenes.json`，再取資料夾名 | 顯示在頁面左上角的標題 |
+| `-Title` | 取自 `scenes.json`，再取資料夾名 | 顯示在頁面左上角的案名 |
+| `-Address` | 取自 `scenes.json` 的 `address` | 顯示在案名下方的地址，留空就不顯示 |
 | `-Width` | 2048 | 環景貼圖寬度，**必須是 2 的冪**，否則左右接縫會出現破圖 |
 | `-Quality` | 82 | JPEG 品質。8 張照片約 2.7 MB，調高會變大 |
 

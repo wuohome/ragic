@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>360 環景製作工具</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#f4f6f8;color:#1f2933;font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  line-height:1.65;padding:28px 20px 80px}
+.wrap{max-width:940px;margin:0 auto}
+h1{font-size:23px;font-weight:700;letter-spacing:.02em}
+.lead{margin-top:6px;color:#6b7684;font-size:14px}
+
+.step{background:#fff;border:1px solid #e1e5ea;border-radius:12px;padding:22px 24px;margin-top:18px}
+.step > h2{font-size:15px;font-weight:700;color:#2b4a7d;display:flex;align-items:center;gap:9px}
+.step > h2 b{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;
+  border-radius:50%;background:#2b4a7d;color:#fff;font-size:12.5px}
+.step .hint{margin-top:5px;color:#8792a2;font-size:13px}
+
+#drop{margin-top:15px;border:2px dashed #c3ccd7;border-radius:11px;padding:38px 20px;text-align:center;
+  cursor:pointer;transition:border-color .15s,background .15s}
+#drop:hover,#drop.over{border-color:#2b4a7d;background:#f2f6fc}
+#drop .big{font-size:15px;font-weight:600}
+#drop .sub{margin-top:5px;color:#8792a2;font-size:13px}
+input[type=file]{display:none}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:15px}
+.grid.one{grid-template-columns:1fr}
+label{display:block;font-size:13px;font-weight:600;color:#4a5563;margin-bottom:5px}
+label .req{color:#c1440e;margin-left:3px}
+input[type=text],input[type=date]{width:100%;padding:9px 11px;border:1px solid #d3d9e0;border-radius:8px;
+  font-size:14px;font-family:inherit;background:#fff;color:#1f2933}
+input[type=text]:focus,input[type=date]:focus{outline:none;border-color:#2b4a7d;box-shadow:0 0 0 3px rgba(43,74,125,.1)}
+
+#list{margin-top:15px;display:flex;flex-direction:column;gap:10px}
+.row{display:flex;gap:13px;align-items:center;background:#fafbfc;border:1px solid #e6eaef;
+  border-radius:10px;padding:10px 12px}
+.row.drag{opacity:.4}
+.row.over{border-color:#2b4a7d;background:#eef3fb}
+.row .grip{cursor:grab;color:#b3bcc7;font-size:17px;user-select:none;padding:0 2px}
+.row img{width:104px;height:52px;object-fit:cover;border-radius:6px;flex:0 0 auto;background:#e6eaef}
+.row .no{flex:0 0 auto;width:22px;text-align:center;font-size:12px;font-weight:700;color:#8792a2}
+.row .fields{flex:1;display:grid;grid-template-columns:1fr 1.5fr;gap:8px;min-width:0}
+.row .fields input{padding:7px 9px;font-size:13px}
+.row .ops{display:flex;gap:4px;flex:0 0 auto}
+.row .ops button{width:28px;height:28px;border:1px solid #d3d9e0;background:#fff;border-radius:6px;
+  cursor:pointer;font-size:13px;color:#4a5563;line-height:1}
+.row .ops button:hover{background:#eef1f5}
+.row .ops button.del:hover{background:#fdeeea;border-color:#e3a091;color:#c1440e}
+
+.bad{margin-top:13px;background:#fdf3f0;border:1px solid #f0d3c9;border-radius:9px;padding:12px 14px;
+  font-size:13px;color:#8a3a1c}
+.bad b{display:block;margin-bottom:3px}
+.bad ul{margin:4px 0 0 18px}
+
+.go{margin-top:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+button.primary{background:#2b4a7d;color:#fff;border:none;border-radius:9px;padding:13px 30px;
+  font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;transition:background .15s}
+button.primary:hover:not(:disabled){background:#1f3860}
+button.primary:disabled{background:#c3ccd7;cursor:not-allowed}
+.status{font-size:13.5px;color:#6b7684}
+.status.ok{color:#2f7a3d;font-weight:600}
+.status.err{color:#c1440e;font-weight:600}
+
+.done{margin-top:16px;background:#f0f8f2;border:1px solid #c5e3cd;border-radius:10px;padding:16px 18px;display:none}
+.done.show{display:block}
+.done h3{font-size:14.5px;color:#2f7a3d;font-weight:700}
+.done p{margin-top:6px;font-size:13.5px;color:#4a5563}
+.done .fname{font-family:ui-monospace,Consolas,monospace;background:#fff;border:1px solid #d7e6db;
+  border-radius:6px;padding:3px 8px;display:inline-block;margin-top:7px;font-size:13px}
+
+.foot{margin-top:26px;color:#8792a2;font-size:12.5px;line-height:1.9}
+</style>
+
+<script type="text/plain" id="viewerCss">
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#0e0f11;
+  font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;color:#fff}
+#stage{position:fixed;inset:0}
+canvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+canvas.dragging{cursor:grabbing}
+.top{position:fixed;top:0;left:0;right:0;padding:18px 22px 46px;z-index:5;pointer-events:none;
+  background:linear-gradient(180deg,rgba(0,0,0,.62),rgba(0,0,0,0))}
+.top h1{font-size:15px;font-weight:600;letter-spacing:.06em;opacity:.92}
+.top .now{margin-top:5px;font-size:26px;font-weight:700;letter-spacing:.02em;
+  text-shadow:0 2px 14px rgba(0,0,0,.6)}
+.top .desc{margin-top:3px;font-size:13px;opacity:.62}
+.top .addr{margin-top:9px;font-size:12.5px;opacity:.5;letter-spacing:.02em}
+.hint{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:6;
+  padding:13px 26px;border-radius:999px;background:rgba(0,0,0,.5);backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.16);font-size:14px;letter-spacing:.05em;
+  transition:opacity .6s;pointer-events:none}
+.hint.gone{opacity:0}
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:5;padding:52px 14px 14px;
+  background:linear-gradient(0deg,rgba(0,0,0,.78),rgba(0,0,0,0));
+  overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.bar::-webkit-scrollbar{height:5px}
+.bar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:9px}
+.strip{display:flex;gap:10px;min-width:min-content;padding-bottom:2px}
+.thumb{flex:0 0 auto;width:118px;border:2px solid transparent;border-radius:9px;
+  overflow:hidden;cursor:pointer;background:#1a1c1f;transition:border-color .18s,transform .18s;position:relative}
+.thumb:hover{transform:translateY(-2px)}
+.thumb img{display:block;width:100%;height:59px;object-fit:cover;opacity:.72;transition:opacity .18s}
+.thumb:hover img{opacity:1}
+.thumb span{display:block;padding:5px 7px 6px;font-size:11.5px;line-height:1.3;
+  text-align:center;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thumb.on{border-color:#f0b429;transform:translateY(-2px)}
+.thumb.on img{opacity:1}
+.thumb.on span{opacity:1;font-weight:600;color:#f0b429}
+.thumb i{position:absolute;top:4px;left:5px;font-style:normal;font-size:10px;font-weight:700;
+  padding:1px 5px;border-radius:4px;background:rgba(0,0,0,.62);opacity:.8}
+.nav{position:fixed;top:50%;transform:translateY(-50%);z-index:6;width:44px;height:64px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  background:rgba(0,0,0,.34);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(6px);
+  font-size:22px;opacity:.55;transition:opacity .18s,background .18s;user-select:none}
+.nav:hover{opacity:1;background:rgba(0,0,0,.55)}
+#prev{left:0;border-radius:0 10px 10px 0;border-left:none}
+#next{right:0;border-radius:10px 0 0 10px;border-right:none}
+.tools{position:fixed;top:16px;right:16px;z-index:6;display:flex;gap:8px}
+.tools button{width:40px;height:40px;border-radius:10px;border:1px solid rgba(255,255,255,.16);
+  background:rgba(0,0,0,.42);backdrop-filter:blur(6px);color:#fff;font-size:16px;cursor:pointer;
+  transition:background .18s}
+.tools button:hover{background:rgba(0,0,0,.68)}
+.tools button.on{background:#f0b429;color:#141414;border-color:#f0b429}
+@media(max-width:640px){
+  .top{padding:14px 16px 40px}
+  .top .now{font-size:20px}
+  .top h1{font-size:13px}
+  .thumb{width:98px}
+  .thumb img{height:49px}
+  .nav{width:36px;height:56px;font-size:18px}
+}
+</script>
+</head>
+<body>
+<div class="wrap">
+  <h1>360 環景製作工具</h1>
+  <p class="lead">把 360 相機拍的照片做成一個可以拖曳環顧的看屋頁。全部在這台電腦上完成，不會上傳到任何地方。</p>
+
+  <div class="step">
+    <h2><b>1</b>放照片進來</h2>
+    <p class="hint">支援 360 相機拍的環景照（左右延展、寬高剛好 2 比 1 的那種）。不是環景的會自動擋掉。</p>
+    <div id="drop">
+      <div class="big">把照片拖進這個框</div>
+      <div class="sub">或點一下這裡選檔案　·　可以一次選很多張</div>
+    </div>
+    <input type="file" id="file" multiple accept="image/*">
+    <div class="bad" id="bad" style="display:none"></div>
+  </div>
+
+  <div class="step">
+    <h2><b>2</b>這是哪間房子</h2>
+    <p class="hint">案名會顯示在頁面最上面，地址顯示在下面一行。地址、樓層、日期可以不填。</p>
+    <div class="grid">
+      <div>
+        <label>案名<span class="req">＊必填</span></label>
+        <input type="text" id="fTitle" placeholder="例：雙城街 2 樓" autocomplete="off">
+      </div>
+      <div>
+        <label>地址</label>
+        <input type="text" id="fAddr" placeholder="例：台北市中山區雙城街 00 號 2 樓" autocomplete="off">
+      </div>
+      <div>
+        <label>樓層／房型（會接在案名後面）</label>
+        <input type="text" id="fFloor" placeholder="例：整層 5 套房" autocomplete="off">
+      </div>
+      <div>
+        <label>拍攝日期（用在檔名）</label>
+        <input type="date" id="fDate">
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <h2><b>3</b>排順序、幫每個空間取名</h2>
+    <p class="hint">照參觀動線由上往下排。左邊那條線可以直接拖曳換位置，也可以用箭頭按鈕。名字會顯示在看的人的畫面上。</p>
+    <div id="list"></div>
+    <p class="hint" id="empty" style="margin-top:14px">還沒有照片。</p>
+  </div>
+
+  <div class="step">
+    <h2><b>4</b>產生</h2>
+    <p class="hint">產生出來的是一個檔案，雙擊就能看，也可以直接用 LINE 或 email 傳給別人，對方沒網路也打得開。</p>
+    <div class="go">
+      <button class="primary" id="go" disabled>產生看屋頁</button>
+      <span class="status" id="status"></span>
+    </div>
+    <div class="done" id="done">
+      <h3>做好了，檔案已經下載</h3>
+      <p>去你的「下載」資料夾找這個檔案，雙擊就能看：</p>
+      <div class="fname" id="doneName"></div>
+      <p style="margin-top:9px">要變成一條可以傳的網址，跟我說一聲就好。</p>
+    </div>
+  </div>
+
+  <p class="foot">
+    這個工具不會把照片傳到網路上，全部在你的電腦裡處理。<br>
+    照片會自動縮到 2048 × 1024，8 張大約產出 2.7 MB 的檔案。
+  </p>
+</div>
+
+<script>
+/* ========== 成品頁的檢視器程式碼 ==========
+   這個函式會被原封不動寫進產生出來的檔案裡。
+   改這裡就等於改所有之後產生的看屋頁。 */
+function PANO_VIEWER(){
+  var cv = document.getElementById('cv');
+  var gl = cv.getContext('webgl') || cv.getContext('experimental-webgl');
+  var ttl = document.getElementById('ttl'), dsc = document.getElementById('dsc');
+  var strip = document.getElementById('strip'), hint = document.getElementById('hint');
+
+  if(!gl){
+    document.body.innerHTML =
+      '<div style="padding:40px;line-height:2;font-size:16px">這台裝置的瀏覽器不支援 3D 顯示（WebGL）。<br>' +
+      '請改用 Chrome 或 Edge 開啟這個檔案。</div>';
+    return;
+  }
+
+  var VS = 'attribute vec2 aPos; varying vec2 vPos;' +
+    'void main(){ vPos = aPos; gl_Position = vec4(aPos, 0.0, 1.0); }';
+  var FS = 'precision highp float; varying vec2 vPos;' +
+    'uniform float uYaw, uPitch, uFov, uAspect; uniform sampler2D uTex;' +
+    'const float PI = 3.141592653589793;' +
+    'void main(){' +
+    '  float t = tan(uFov * 0.5);' +
+    '  vec3 d = normalize(vec3(vPos.x * t * uAspect, vPos.y * t, -1.0));' +
+    '  float cp = cos(uPitch), sp = sin(uPitch);' +
+    '  d = vec3(d.x, d.y * cp - d.z * sp, d.y * sp + d.z * cp);' +
+    '  float cy = cos(uYaw), sy = sin(uYaw);' +
+    '  d = vec3(d.x * cy + d.z * sy, d.y, -d.x * sy + d.z * cy);' +
+    '  float lon = atan(d.x, -d.z);' +
+    '  float lat = asin(clamp(d.y, -1.0, 1.0));' +
+    '  gl_FragColor = texture2D(uTex, vec2(lon / (2.0 * PI) + 0.5, 0.5 + lat / PI));' +
+    '}';
+
+  function sh(type, src){
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  var prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS));
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog);
+  gl.useProgram(prog);
+
+  var buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  var aPos = gl.getAttribLocation(prog, 'aPos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  var uYaw = gl.getUniformLocation(prog, 'uYaw'),
+      uPitch = gl.getUniformLocation(prog, 'uPitch'),
+      uFov = gl.getUniformLocation(prog, 'uFov'),
+      uAspect = gl.getUniformLocation(prog, 'uAspect'),
+      uTex = gl.getUniformLocation(prog, 'uTex');
+
+  var tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE,
+    new Uint8Array([26, 28, 31]));
+  gl.uniform1i(uTex, 0);
+
+  var yaw = 0, pitch = 0, fov = 1.3, cur = -1, auto = false, ready = false;
+  var MINF = 0.5, MAXF = 2.0, PITCH_LIM = 1.4835;
+
+  function resize(){
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
+    if(cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; }
+    gl.viewport(0, 0, cv.width, cv.height);
+  }
+  window.addEventListener('resize', resize);
+
+  function draw(){
+    resize();
+    gl.uniform1f(uYaw, yaw);
+    gl.uniform1f(uPitch, pitch);
+    gl.uniform1f(uFov, fov);
+    gl.uniform1f(uAspect, cv.width / cv.height);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+  function loop(){
+    if(auto && ready){ yaw -= 0.0016; }
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  var imgs = [];
+  function show(i){
+    if(i === cur) return;
+    cur = i;
+    var s = SCENES[i];
+    ttl.textContent = s.name;
+    dsc.textContent = s.desc;
+    Array.prototype.forEach.call(strip.children, function(el, k){
+      el.className = 'thumb' + (k === i ? ' on' : '');
+    });
+    var t = strip.children[i];
+    if(t) t.scrollIntoView({behavior:'smooth', block:'nearest', inline:'center'});
+    yaw = 0; pitch = 0; fov = 1.3;
+
+    var im = imgs[i];
+    function up(){
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, im);
+      ready = true;
+      draw();
+    }
+    if(im.complete && im.naturalWidth) up(); else im.onload = up;
+  }
+
+  SCENES.forEach(function(s, i){
+    var im = new Image(); im.src = s.img; imgs.push(im);
+    var d = document.createElement('div');
+    d.className = 'thumb';
+    d.innerHTML = '<i>' + (i + 1) + '</i><img src="' + s.thumb + '" alt=""><span>' + s.name + '</span>';
+    d.onclick = function(){ show(i); };
+    strip.appendChild(d);
+  });
+
+  var down = false, lx = 0, ly = 0, moved = false, pinch = 0;
+  function pDown(x, y){ down = true; moved = false; lx = x; ly = y; cv.className = 'dragging'; }
+  function pMove(x, y){
+    if(!down) return;
+    // 兩軸都是「抓著畫面拖」：畫面內容跟著手指走（同 Google 街景）
+    var k = fov / cv.clientHeight * 1.15;
+    yaw += (x - lx) * k;
+    pitch += (y - ly) * k;
+    if(pitch > PITCH_LIM) pitch = PITCH_LIM;
+    if(pitch < -PITCH_LIM) pitch = -PITCH_LIM;
+    lx = x; ly = y;
+    if(!moved){ moved = true; auto = false; syncAuto(); hint.className = 'hint gone'; }
+    draw();
+  }
+  function pUp(){ down = false; cv.className = ''; }
+
+  cv.addEventListener('mousedown', function(e){ pDown(e.clientX, e.clientY); });
+  window.addEventListener('mousemove', function(e){ pMove(e.clientX, e.clientY); });
+  window.addEventListener('mouseup', pUp);
+  cv.addEventListener('touchstart', function(e){
+    if(e.touches.length === 1) pDown(e.touches[0].clientX, e.touches[0].clientY);
+  }, {passive:true});
+  cv.addEventListener('touchmove', function(e){
+    if(e.touches.length === 1){ pMove(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); }
+    else if(e.touches.length === 2){
+      var dx = e.touches[0].clientX - e.touches[1].clientX;
+      var dy = e.touches[0].clientY - e.touches[1].clientY;
+      var d = Math.sqrt(dx*dx + dy*dy);
+      if(pinch) zoom((pinch - d) * 0.004);
+      pinch = d; e.preventDefault();
+    }
+  }, {passive:false});
+  cv.addEventListener('touchend', function(){ pinch = 0; pUp(); });
+
+  function zoom(dz){
+    fov += dz;
+    if(fov < MINF) fov = MINF;
+    if(fov > MAXF) fov = MAXF;
+    draw();
+  }
+  cv.addEventListener('wheel', function(e){
+    zoom(e.deltaY * 0.0013);
+    hint.className = 'hint gone';
+    e.preventDefault();
+  }, {passive:false});
+
+  function step(d){
+    show((cur + d + SCENES.length) % SCENES.length);
+    hint.className = 'hint gone';
+  }
+  document.getElementById('prev').onclick = function(){ step(-1); };
+  document.getElementById('next').onclick = function(){ step(1); };
+  window.addEventListener('keydown', function(e){
+    if(e.key === 'ArrowRight') step(1);
+    else if(e.key === 'ArrowLeft') step(-1);
+    else if(e.key === 'ArrowUp') zoom(-0.08);
+    else if(e.key === 'ArrowDown') zoom(0.08);
+  });
+
+  var btnAuto = document.getElementById('btnAuto');
+  function syncAuto(){ btnAuto.className = auto ? 'on' : ''; }
+  btnAuto.onclick = function(){ auto = !auto; syncAuto(); hint.className = 'hint gone'; };
+  document.getElementById('btnFull').onclick = function(){
+    if(document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen();
+  };
+
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState === 'visible') draw();
+  });
+  setTimeout(function(){ hint.className = 'hint gone'; }, 6000);
+  show(0);
+  draw();
+  loop();
+}
+/* ========== 檢視器程式碼結束 ========== */
+
+(function(){
+'use strict';
+var PANO_W = 2048, PANO_H = 1024, PANO_Q = 0.82, THUMB_W = 320, THUMB_H = 160, THUMB_Q = 0.72;
+
+var scenes = [];          // {name, desc, thumbUrl, file, w, h}
+var rejected = [];
+var el = function(id){ return document.getElementById(id); };
+var drop = el('drop'), fileInput = el('file'), list = el('list'), badBox = el('bad');
+
+function esc(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+function today(){
+  var d = new Date(), p = function(n){ return (n < 10 ? '0' : '') + n; };
+  return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
+}
+el('fDate').value = today();
+
+/* ---------- 讀檔 ---------- */
+function loadFiles(files){
+  var arr = Array.prototype.slice.call(files).filter(function(f){ return /^image\//.test(f.type); });
+  if(!arr.length) return;
+  arr.sort(function(a,b){ return a.name.localeCompare(b.name, 'zh-Hant', {numeric:true}); });
+  var pending = arr.length;
+  setStatus('讀取照片中…');
+  arr.forEach(function(f){
+    var url = URL.createObjectURL(f);
+    var im = new Image();
+    im.onload = function(){
+      var ratio = im.naturalWidth / im.naturalHeight;
+      if(Math.abs(ratio - 2) > 0.06){
+        rejected.push({ name:f.name, size:im.naturalWidth + '×' + im.naturalHeight });
+        URL.revokeObjectURL(url);
+      } else {
+        scenes.push({
+          name: '空間 ' + (scenes.length + 1), desc: '',
+          file: f, thumbUrl: url, w: im.naturalWidth, h: im.naturalHeight
+        });
+      }
+      if(--pending === 0) render();
+    };
+    im.onerror = function(){
+      rejected.push({ name:f.name, size:'讀不到' });
+      URL.revokeObjectURL(url);
+      if(--pending === 0) render();
+    };
+    im.src = url;
+  });
+}
+
+drop.onclick = function(){ fileInput.click(); };
+fileInput.onchange = function(){ loadFiles(this.files); this.value = ''; };
+['dragenter','dragover'].forEach(function(ev){
+  drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.add('over'); });
+});
+['dragleave','drop'].forEach(function(ev){
+  drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.remove('over'); });
+});
+drop.addEventListener('drop', function(e){ loadFiles(e.dataTransfer.files); });
+window.addEventListener('dragover', function(e){ e.preventDefault(); });
+window.addEventListener('drop', function(e){ e.preventDefault(); });
+
+/* ---------- 清單 ---------- */
+var dragFrom = -1;
+function render(){
+  list.innerHTML = '';
+  scenes.forEach(function(s, i){
+    var row = document.createElement('div');
+    row.className = 'row';
+    row.draggable = true;
+    row.innerHTML =
+      '<span class="grip" title="拖曳換位置">⣿</span>' +
+      '<span class="no">' + (i+1) + '</span>' +
+      '<img src="' + s.thumbUrl + '" alt="">' +
+      '<div class="fields">' +
+        '<input type="text" class="nm" value="' + esc(s.name) + '" placeholder="空間名稱">' +
+        '<input type="text" class="ds" value="' + esc(s.desc) + '" placeholder="補一句說明（可不填）">' +
+      '</div>' +
+      '<div class="ops">' +
+        '<button class="up" title="往上">↑</button>' +
+        '<button class="dn" title="往下">↓</button>' +
+        '<button class="del" title="移除">✕</button>' +
+      '</div>';
+    row.querySelector('.nm').oninput = function(){ s.name = this.value; };
+    row.querySelector('.ds').oninput = function(){ s.desc = this.value; };
+    row.querySelector('.up').onclick = function(){ move(i, -1); };
+    row.querySelector('.dn').onclick = function(){ move(i, 1); };
+    row.querySelector('.del').onclick = function(){
+      URL.revokeObjectURL(s.thumbUrl); scenes.splice(i,1); render();
+    };
+    row.addEventListener('dragstart', function(){ dragFrom = i; row.classList.add('drag'); });
+    row.addEventListener('dragend', function(){ dragFrom = -1; row.classList.remove('drag'); });
+    row.addEventListener('dragover', function(e){ e.preventDefault(); row.classList.add('over'); });
+    row.addEventListener('dragleave', function(){ row.classList.remove('over'); });
+    row.addEventListener('drop', function(e){
+      e.preventDefault(); row.classList.remove('over');
+      if(dragFrom < 0 || dragFrom === i) return;
+      var moved = scenes.splice(dragFrom, 1)[0];
+      scenes.splice(i, 0, moved);
+      render();
+    });
+    list.appendChild(row);
+  });
+
+  el('empty').style.display = scenes.length ? 'none' : 'block';
+  el('go').disabled = !scenes.length;
+
+  if(rejected.length){
+    badBox.style.display = 'block';
+    badBox.innerHTML = '<b>這幾張不是環景照，已經排除：</b><ul>' +
+      rejected.map(function(r){ return '<li>' + esc(r.name) + '（' + esc(r.size) + '）</li>'; }).join('') +
+      '</ul>環景照的寬度剛好是高度的兩倍。一般手機拍的照片不能用。';
+  } else {
+    badBox.style.display = 'none';
+  }
+  setStatus(scenes.length ? scenes.length + ' 個空間' : '');
+}
+function move(i, d){
+  var j = i + d;
+  if(j < 0 || j >= scenes.length) return;
+  var t = scenes[i]; scenes[i] = scenes[j]; scenes[j] = t;
+  render();
+}
+function setStatus(txt, cls){
+  var s = el('status');
+  s.textContent = txt || '';
+  s.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+/* ---------- 壓縮 ---------- */
+function shrink(file, w, h, q){
+  return new Promise(function(resolve, reject){
+    var url = URL.createObjectURL(file);
+    var im = new Image();
+    im.onload = function(){
+      var c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      var cx = c.getContext('2d');
+      cx.imageSmoothingEnabled = true;
+      cx.imageSmoothingQuality = 'high';
+      cx.drawImage(im, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', q));
+    };
+    im.onerror = function(){ URL.revokeObjectURL(url); reject(new Error('讀不到 ' + file.name)); };
+    im.src = url;
+  });
+}
+
+/* ---------- 組成品 ---------- */
+function buildHtml(meta, data){
+  var css = el('viewerCss').textContent;
+  var head = meta.title + (meta.floor ? '　' + meta.floor : '');
+  var addr = meta.addr ? '<div class="addr">' + esc(meta.addr) + '</div>' : '';
+  var S = '<scr' + 'ipt>', E = '</scr' + 'ipt>';
+  return '<!DOCTYPE html>\n<html lang="zh-Hant">\n<head>\n' +
+    '<meta charset="utf-8">\n' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n' +
+    '<meta name="robots" content="noindex,nofollow,noarchive,noimageindex">\n' +
+    '<meta name="referrer" content="no-referrer">\n' +
+    '<title>' + esc(head) + ' · 360 環景</title>\n' +
+    '<style>' + css + '</style>\n</head>\n<body>\n' +
+    '<div id="stage"><canvas id="cv"></canvas></div>\n' +
+    '<div class="top">\n' +
+    '  <h1>' + esc(head) + ' · 360 度環景</h1>\n' +
+    '  <div class="now" id="ttl"></div>\n' +
+    '  <div class="desc" id="dsc"></div>\n' +
+    '  ' + addr + '\n' +
+    '</div>\n' +
+    '<div class="hint" id="hint">按住畫面拖曳，可以看向四周</div>\n' +
+    '<div class="nav" id="prev">‹</div>\n<div class="nav" id="next">›</div>\n' +
+    '<div class="tools">\n' +
+    '  <button id="btnAuto" title="自動旋轉">↻</button>\n' +
+    '  <button id="btnFull" title="全螢幕">⛶</button>\n' +
+    '</div>\n' +
+    '<div class="bar"><div class="strip" id="strip"></div></div>\n' +
+    S + '\nvar SCENES = ' + JSON.stringify(data) + ';\n(' +
+    PANO_VIEWER.toString() + ')();\n' + E + '\n</body>\n</html>\n';
+}
+
+function safeName(s){
+  return String(s).replace(/[\\\/:*?"<>|]/g, '').replace(/\s+/g, '').slice(0, 60) || '環景';
+}
+
+el('go').onclick = function(){
+  var title = el('fTitle').value.trim();
+  if(!title){
+    setStatus('案名還沒填', 'err');
+    el('fTitle').focus();
+    return;
+  }
+  if(!scenes.length) return;
+
+  var meta = {
+    title: title,
+    addr: el('fAddr').value.trim(),
+    floor: el('fFloor').value.trim()
+  };
+  el('go').disabled = true;
+  el('done').classList.remove('show');
+
+  var data = [], i = 0;
+  function next(){
+    if(i >= scenes.length){
+      setStatus('組合檔案中…');
+      var html = buildHtml(meta, data);
+      var dateStr = (el('fDate').value || today()).replace(/-/g, '');
+      var fname = safeName(title) + '-' + dateStr + '.html';
+      var blob = new Blob([html], {type:'text/html;charset=utf-8'});
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+
+      el('doneName').textContent = fname;
+      el('done').classList.add('show');
+      setStatus('完成，共 ' + data.length + ' 個空間，約 ' +
+        (Math.round(html.length / 1048576 * 10) / 10) + ' MB', 'ok');
+      el('go').disabled = false;
+      return;
+    }
+    var s = scenes[i];
+    setStatus('處理第 ' + (i+1) + ' / ' + scenes.length + ' 張：' + s.name);
+    shrink(s.file, PANO_W, PANO_H, PANO_Q).then(function(big){
+      return shrink(s.file, THUMB_W, THUMB_H, THUMB_Q).then(function(thumb){
+        data.push({ name: s.name || ('空間 ' + (i+1)), desc: s.desc || '', thumb: thumb, img: big });
+        i++;
+        setTimeout(next, 0);
+      });
+    }).catch(function(err){
+      setStatus('第 ' + (i+1) + ' 張處理失敗：' + err.message, 'err');
+      el('go').disabled = false;
+    });
+  }
+  next();
+};
+
+render();
+})();
+</script>
+</body>
+</html>
