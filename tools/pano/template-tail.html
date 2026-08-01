@@ -87,7 +87,7 @@ function draw(){
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
 function loop(){
-  if(auto && ready){ yaw += 0.0016; }
+  if(auto && ready){ yaw -= 0.0016; }   // 視角由左往右緩慢掃過
   draw();
   requestAnimationFrame(loop);
 }
@@ -129,8 +129,9 @@ var down = false, lx = 0, ly = 0, moved = false;
 function pDown(x, y){ down = true; moved = false; lx = x; ly = y; cv.className = 'dragging'; }
 function pMove(x, y){
   if(!down) return;
+  // 兩軸都是「抓著畫面拖」：畫面內容跟著手指走（同 Google 街景）
   var k = fov / cv.clientHeight * 1.15;
-  yaw -= (x - lx) * k;
+  yaw += (x - lx) * k;
   pitch += (y - ly) * k;
   if(pitch > PITCH_LIM) pitch = PITCH_LIM;
   if(pitch < -PITCH_LIM) pitch = -PITCH_LIM;
