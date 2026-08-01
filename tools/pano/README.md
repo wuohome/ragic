@@ -1,4 +1,4 @@
-# 360 環景頁產生器
+# 走一遍　360 環景看屋頁
 
 把一疊 360 環景照（equirectangular，寬高比 2:1，例如 LINE 傳來的 `S__xxxxx.jpg`）打包成
 **一個可以拖曳環顧的單一 HTML 檔**。
@@ -11,14 +11,14 @@
 
 ## 兩條路，用途不同
 
-| | `360環景製作工具.html` | `build-pano.ps1` |
+| | `走一遍.html` | `build-pano.ps1` |
 |---|---|---|
 | 誰用 | **Joan 自己**，雙擊就開 | main／自動化 |
 | 怎麼給資料 | 拖照片進去、畫面上填 | `scenes.json` ＋ 指令參數 |
 | 產出 | 瀏覽器直接下載成品 | 寫到指定路徑 |
 | 需要什麼 | 只要有 Chrome／Edge | PowerShell ＋ .NET |
 
-兩邊產出的成品格式一模一樣。**Joan 的正式副本放在 `C:\Users\Joan\Downloads\360環景\`**，這裡這份是版本控管用的備份。
+兩邊產出的成品格式一模一樣。**線上版 https://wuohome.github.io/ragic/pano-maker.html ；本機副本 `C:\Users\Joan\Downloads\360環景\走一遍.html`**，這裡這份是版本控管用的備份。
 
 ⚠️ 檢視器的程式碼在兩邊各有一份（工具檔內的 `PANO_VIEWER` 函式＋`viewerCss`；PowerShell 這邊的 `template-head.html`＋`template-tail.html`）。
 **改了操作手感或畫面，兩邊都要改**，否則兩條路產出的成品會不一致。
