@@ -34,8 +34,8 @@ const SC = {
         IS_AUTO: "1000966",
     },
 
-    // ── 見紅休人員（設計部 + 瓊安）──
-    GOV_REST_NAMES: ["張瓊安", "沈郁雯", "呂鴻墀"],
+    // ── 見紅休人員（固定姓名清單，2026-08-02 Joan 更正為四位，補上陳勁豪）──
+    GOV_REST_NAMES: ["張瓊安", "沈郁雯", "呂鴻墀", "陳勁豪"],
 
     // ── 2026 台灣國定假日 ──
     HOLIDAYS_2026: {
@@ -82,6 +82,10 @@ const SC = {
     // ── 清運值日關鍵字（備註含任一即為清運值日，不佔樓層格）──
     // 與 n8n 點名判斷關鍵字保持一致，異動需同步兩邊
     TRASH_DUTY_KEYWORDS: ["清運", "垃圾", "全棟", "全樓", "倒垃圾"],
+
+    // ── 清運值日自動預排新寫入的備註文字（2026-08-02 新增，Joan 拍板）──
+    // 沿用既有人工排班的措辭「全棟垃圾清運」，確保寫入後 SC.isTrashDuty() 判定為 true
+    TRASH_DUTY_NOTE_DEFAULT: "全棟垃圾清運",
 
     // ── 夫妻同排 ──
     COUPLES: [["張忠豪", "蕭頤臻"]],
@@ -170,6 +174,12 @@ SC.isTrashDuty = (note) => SC.TRASH_DUTY_KEYWORDS.some(kw => (note || "").includ
 SC.expectedDutyFloors = (year, month, day) => {
     const isFriday = new Date(year, month - 1, day).getDay() === 5;
     return isFriday ? ["1F", "3F", "2F", "4F"] : ["1F", "3F", "2F"];
+};
+
+// ── 清運值日是否可排（2026-08-02 新增，Joan 拍板）：三重清潔隊週三、週日不收垃圾，不排 ──
+SC.isTrashCollectionDay = (year, month, day) => {
+    const dow = new Date(year, month - 1, day).getDay();
+    return dow !== 0 && dow !== 3; // 0=日, 3=三
 };
 
 // ══════════════════════════════════════════════════════════════

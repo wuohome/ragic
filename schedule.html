@@ -789,7 +789,7 @@ const App = () => {
 
     const handleAutoSchedule = async () => {
         if (employees.length === 0) { showToast("尚未載入員工資料", false); return; }
-        const okAutoDuty = await openConfirm(`確定要自動預排 ${year} 年 ${month} 月的值日生？\n每天 3 位（1F/2F/3F），週五加排 4F；清運值日（🗑️）不受影響、會保留。現有的自動排班紀錄會被覆蓋。`);
+        const okAutoDuty = await openConfirm(`確定要自動預排 ${year} 年 ${month} 月的值日生？\n每天 3 位（1F/2F/3F），週五加排 4F；清運值日（🗑️）已有紀錄的日子維持不動，沒排的日子會自動補（週三、週日不排，六日僅承攬同仁可排，當天排休/請假者跳過，近期次數少者優先）。現有的自動排班紀錄會被覆蓋。`);
         if (!okAutoDuty) return;
 
         setAutoScheduling(true);
@@ -884,7 +884,8 @@ const App = () => {
                     if (y !== year || m !== month) return;
                     const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
                     const noteRaw = f[CONFIG.F_LEAVE.NOTE] || "";
-                    // 清運值日（🗑️）不由自動排管理：一律保留不刪，並記下當天清運的人
+                    // 清運值日（🗑️）既有紀錄一律保留不刪（不管來源是手動還是先前自動預排），並記下當天清運的人；
+                    // 沒有紀錄的日子改由下面新增的清運自動補位邏輯處理（2026-08-02 新增，見 newTrashDuties）
                     if (SC.isTrashDuty(noteRaw)) {
                         const tEmp = f[CONFIG.F_LEAVE.EMP] || "";
                         if (!trashByDate[date]) trashByDate[date] = [];
@@ -903,6 +904,48 @@ const App = () => {
                     }
                 });
             console.log("保留手動值日天數:", Object.keys(manualByDate).length);
+
+            // ══════════════════════════════════════════════════════════════
+            // 清運值日自動預排（2026-08-02 新增，Joan 看流程圖拍板「可以 改吧」）
+            // 只補「當月尚未有任何清運紀錄」的日子；已有紀錄（含上面 trashByDate 記錄到的
+            // 手動/歷史保留紀錄）一律不覆蓋，維持既有「保留清運不刪」行為不變。
+            // 四條規則：①週三/週日不排（三重清潔隊不收）②週六僅承攬同仁可排③當天排休/
+            // 特休/請假者跳過④已有紀錄的日子不補。選人：近期（上月+當月）次數少者優先，
+            // 同次數比最後一次值清運日期，越久沒排的越優先。
+            // ══════════════════════════════════════════════════════════════
+            const trashCountMap = {}; // trashCountMap[name] = 近期（上月+當月）清運次數
+            const trashLastDateMap = {}; // trashLastDateMap[name] = 最後一次清運日期（YYYY/MM/DD）
+            allEmployees.forEach(e => { trashCountMap[e.name] = 0; trashLastDateMap[e.name] = ""; });
+            Object.entries(allLeaveForDuty)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([id, f]) => {
+                    if ((f[CONFIG.F_LEAVE.TYPE] || "") !== "值日") return;
+                    const noteRaw = f[CONFIG.F_LEAVE.NOTE] || "";
+                    if (!SC.isTrashDuty(noteRaw)) return;
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    const empName = f[CONFIG.F_LEAVE.EMP] || "";
+                    if (!date || !empName) return;
+                    if (!trashCountMap.hasOwnProperty(empName)) { trashCountMap[empName] = 0; trashLastDateMap[empName] = ""; }
+                    trashCountMap[empName]++;
+                    if (!trashLastDateMap[empName] || date > trashLastDateMap[empName]) trashLastDateMap[empName] = date;
+                });
+            // 當月排休/特休/請假名單（清運跳過用；不含見紅休/生日/值班，四條規則沒提到的不額外加）
+            const trashOffByDate = {}; // dateStr -> Set(empName)
+            Object.entries(allLeaveForDuty)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([id, f]) => {
+                    const type = f[CONFIG.F_LEAVE.TYPE] || "";
+                    if (!["排休","特休","請假"].includes(type)) return;
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    if (!date) return;
+                    const parts = date.replace(/\//g,"-").split("-");
+                    if (parseInt(parts[0]) !== year || parseInt(parts[1]) !== month) return;
+                    const empName = f[CONFIG.F_LEAVE.EMP] || "";
+                    if (!empName) return;
+                    if (!trashOffByDate[date]) trashOffByDate[date] = new Set();
+                    trashOffByDate[date].add(empName);
+                });
+            console.log("清運近期次數 (排序):", Object.entries(trashCountMap).sort((a,b) => a[1]-b[1]).map(([n,c]) => `${n}:${c}`).join(", "));
 
             // ── 二次確認（技術債修復 2026-07-26）：顯示實際即將刪除的筆數/月份/樓層，並在真的動手前自動匯出 JSON 快照 ──
             if (toDelete.length > 0) {
@@ -953,6 +996,7 @@ const App = () => {
             // Generate schedule — 每天 3 位值日生，樓層按累計次數公平分配
             const daysInMonth = new Date(year, month, 0).getDate();
             const newDuties = {};
+            const newTrashDuties = {}; // newTrashDuties[dateStr] = empName（清運值日新補的人，2026-08-02 新增）
             const lastAssigned = new Set();
             const weeklyAssigned = {}; // weeklyAssigned[name] = Set of week numbers
 
@@ -1000,6 +1044,36 @@ const App = () => {
 
                 // 禁休日不排值日生（全員打掃）
                 if (noRest[dateStr]) continue;
+
+                // ── 清運值日自動補位（2026-08-02 新增，獨立於樓層值日邏輯，不影響下方樓層排班）──
+                // Joan 拍板四條規則：①週三/週日不排 ②週六僅承攬同仁可排 ③當天排休/特休/請假跳過
+                // ④已有紀錄（trashByDate，含手動/歷史保留）的日子不補。
+                // 額外技術性排除（非第 5 條業務規則，是尊重既有伺服器端硬規則）：見紅休名單
+                // （張瓊安/沈郁雯/呂鴻墀/陳勁豪，2026-08-02 Joan 更正為四位）在週末/國定假日一律不可被排「值日」類型，Cloudflare Worker
+                // createLeave 會直接 400 拒絕（2026-07-26 三度誤排事故後加的安全閘），清運紀錄類型
+                // 同樣是「值日」，若排到見紅休的人會導致整批寫入中途失敗，故必須排除，理由詳見
+                // 排班表_規格書.md § 已知問題「一次性資料操作繞過見紅休檢查」。
+                const trashDow = new Date(year, month - 1, day).getDay();
+                if (SC.isTrashCollectionDay(year, month, day) && !(trashByDate[dateStr] && trashByDate[dateStr].length > 0)) {
+                    const isTrashSaturday = trashDow === 6;
+                    const trashOffToday = trashOffByDate[dateStr] || new Set();
+                    const trashCandidates = allEmployees
+                        .filter(e => !trashOffToday.has(e.name)) // ③當天排休/特休/請假跳過
+                        .filter(e => !isTrashSaturday || e.hire === "承攬") // ②週六僅承攬同仁可排
+                        .filter(e => !SC.isGovRestFor(e.name, year, month, day)) // 見紅休日不可排（伺服器端硬擋，見上方註解）
+                        .map(e => ({ name: e.name, count: trashCountMap[e.name] || 0, last: trashLastDateMap[e.name] || "" }))
+                        .sort((a, b) => (a.count - b.count) || SC._cmpDateStr(a.last || "0000/00/00", b.last || "0000/00/00"));
+                    if (trashCandidates.length > 0) {
+                        const pick = trashCandidates[0].name;
+                        newTrashDuties[dateStr] = pick;
+                        trashCountMap[pick] = (trashCountMap[pick] || 0) + 1;
+                        trashLastDateMap[pick] = dateStr;
+                        // 併入 trashByDate，讓下方樓層排班的「當天清運的人不重複排樓層」判斷（第 1099 行附近）
+                        // 也涵蓋這筆新補的清運，維持既有「清運與樓層不同天/不重複」的設計一致
+                        if (!trashByDate[dateStr]) trashByDate[dateStr] = [];
+                        trashByDate[dateStr].push(pick);
+                    }
+                }
 
                 // 尊重手動值日：跳過已被手動佔用的樓層與人員
                 const todayManual = manualByDate[dateStr] || [];
@@ -1137,6 +1211,7 @@ const App = () => {
                 const names = arr.map(a => a.empName);
                 return names.includes("張忠豪") || names.includes("蕭頤臻");
             }).length);
+            console.log("清運值日新補天數:", Object.keys(newTrashDuties).length, "－", Object.entries(newTrashDuties).map(([d,n]) => `${d}:${n}`).join(", ") || "無");
 
             // 逐筆寫入值日紀錄
             setProgress({ text: "寫入值日紀錄...", current: 0, total: 0 });
@@ -1157,6 +1232,20 @@ const App = () => {
                     batchMeta.push({ dateStr, empName, floor });
                 }
             }
+            // 清運值日新補紀錄（2026-08-02 新增；沿用樓層值日同一批次寫入，備註/部門格式對齊既有人工排班慣例）
+            for (const [dateStr, empName] of Object.entries(newTrashDuties)) {
+                batchRecords.push({
+                    [CONFIG.F_LEAVE.EMP]: empName,
+                    [CONFIG.F_LEAVE.DATE]: dateStr,
+                    [CONFIG.F_LEAVE.YEAR]: String(year),
+                    [CONFIG.F_LEAVE.MONTH]: String(month),
+                    [CONFIG.F_LEAVE.TYPE]: "值日",
+                    [CONFIG.F_LEAVE.NOTE]: SC.TRASH_DUTY_NOTE_DEFAULT,
+                    [CONFIG.F_LEAVE.IS_AUTO]: "Yes",
+                    [CONFIG.F_LEAVE.DEPT]: "系統預排"
+                });
+                batchMeta.push({ dateStr, empName, floor: "", isTrash: true });
+            }
             const batchRes = await apiBatchCreate(batchRecords, (cur, tot) => {
                 setProgress({ text: "寫入值日紀錄...", current: cur, total: tot });
             });
@@ -1172,15 +1261,18 @@ const App = () => {
                 const manual = (arr||[]).filter(d => d.isAuto === "No");
                 if (manual.length) dmap[dateStr] = manual;
             });
-            results.forEach(({ dateStr, empName, floor, ragicId }) => {
+            results.forEach(({ dateStr, empName, floor, ragicId, isTrash }) => {
                 if (!dmap[dateStr]) dmap[dateStr] = [];
-                dmap[dateStr].push({ ragicId, empName, isAuto: "Yes", note: floor, floor });
+                dmap[dateStr].push(isTrash
+                    ? { ragicId, empName, isAuto: "Yes", note: SC.TRASH_DUTY_NOTE_DEFAULT, floor: "", isTrash: true }
+                    : { ragicId, empName, isAuto: "Yes", note: floor, floor });
             });
             setDuties(dmap);
             // 更新本地員工樓層次數
             setAllEmployees(prev => prev.map(e => changedEmps.has(e.name) ? {...e, fc: {...fcMap[e.name]}} : e));
             const totalRecords = Object.values(newDuties).reduce((s, a) => s + a.length, 0);
-            showToast(`已完成自動預排 ${Object.keys(newDuties).length} 天，共 ${totalRecords} 筆（平日 3 樓、週五 4 樓）`);
+            const trashAddedCount = Object.keys(newTrashDuties).length;
+            showToast(`已完成自動預排 ${Object.keys(newDuties).length} 天，共 ${totalRecords} 筆（平日 3 樓、週五 4 樓）${trashAddedCount > 0 ? `；另新補清運值日 ${trashAddedCount} 筆` : ""}`);
         } catch(e) {
             console.error(e);
             showToast("自動預排失敗: " + e.message, false);
