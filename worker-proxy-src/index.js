@@ -1689,7 +1689,10 @@ const TENANT_FIELDS_WHITELIST = new Set([
 // （前端該擋自 2026-03-23 commit 5c7f7185 起就存在且從未失效，問題出在不經前端的腳本寫入）。
 // 此處補上 Worker 端伺服器驗證，不管呼叫方是不是瀏覽器都擋得住。
 // 與 schedule-common.js 的 SC.GOV_REST_NAMES / SC.HOLIDAYS_2026 保持同步，異動需同時改兩邊。
-const GOV_REST_NAMES = new Set(['張瓊安', '沈郁雯', '呂鴻墀']);
+// 2026-08-02 Joan 更正為四位，補上陳勁豪（原本漏列）。
+// ⚠️ 此檔（wuohome-ragic/worker-proxy-src/index.js）是舊複製、非部署來源，改這裡不會生效；
+// 真正生效的是 wuohome-ragic-proxy 這個獨立 repo 的 src/index.js，兩邊都要改。
+const GOV_REST_NAMES = new Set(['張瓊安', '沈郁雯', '呂鴻墀', '陳勁豪']);
 const GOV_HOLIDAYS_2026 = new Set([
   '2026/01/01','2026/02/16','2026/02/17','2026/02/18','2026/02/19','2026/02/20',
   '2026/02/27','2026/04/03','2026/04/06','2026/05/01','2026/06/19','2026/09/25',
