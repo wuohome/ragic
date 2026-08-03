@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>零用金現況（Ragic 實撈）</title>
+<style>
+:root{--ink:#1d2530;--main:#3F5262;--sub:#5c6775;--line:#dfe4ea;--bg:#f6f7f9;
+--coral:#DD6650;--amber:#B39C00;--green:#5B8A5A;--card:#fff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",system-ui,sans-serif}
+header{background:var(--main);color:#fff;padding:20px}
+h1{margin:0 0 3px;font-size:20px}
+.sub{font-size:13px;opacity:.85}
+.wrap{max-width:1100px;margin:0 auto;padding:18px 18px 60px}
+.hero{background:var(--card);border:1px solid var(--line);border-radius:14px;
+padding:22px;margin-bottom:16px;text-align:center}
+.hero .lab{font-size:14px;color:var(--sub)}
+.hero .big{font-size:52px;font-weight:700;color:var(--main);line-height:1.15;margin:6px 0}
+.hero .note{font-size:13px;color:var(--sub);line-height:1.6}
+.warn{background:#FDF6D0;border:1px solid var(--amber);color:#5c4b00;
+border-radius:12px;padding:13px 16px;margin-bottom:16px;font-size:14px;line-height:1.65}
+.risk{background:#FDECE8;border:1px solid var(--coral);color:#8c3a28;
+border-radius:12px;padding:13px 16px;margin-bottom:16px;font-size:14px;line-height:1.65}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+gap:12px;margin-bottom:22px}
+.c{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.c h3{margin:0 0 4px;font-size:14.5px;color:var(--main)}
+.c .n{font-size:26px;font-weight:700}
+.c .d{font-size:12.5px;color:var(--sub);line-height:1.55;margin-top:4px}
+h2{font-size:17px;margin:26px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--line)}
+h2 small{font-weight:400;font-size:13px;color:var(--sub)}
+.tw{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{background:#eef1f4;color:var(--sub);text-align:left;padding:9px 11px;
+font-weight:600;white-space:nowrap}
+td{padding:9px 11px;border-top:1px solid var(--line);vertical-align:top}
+td .num{font-variant-numeric:tabular-nums;font-weight:600}
+.muted{color:#a3abb4}
+ul{line-height:1.75;font-size:14px;padding-left:20px}
+footer{margin-top:30px;font-size:12px;color:var(--sub);line-height:1.7}
+@media(max-width:640px){.hero .big{font-size:40px}}
+</style></head><body>
+<header><h1>零用金現況</h1>
+<div class="sub">直接從 Ragic 撈的真實資料，2026-08-03</div></header>
+<div class="wrap">
+
+<div class="hero">
+  <div class="lab">珊珊帳面上現在應該有的現金</div>
+  <div class="big">NT$ 1,437</div>
+  <div class="note">算法：她那本帳的存入 1,596,197 減掉支出 1,604,873，再加上開帳前就有的結轉 10,113。<br>
+  這個數字跟 Ragic 自己算的月結結餘<b>完全一致</b>，兩邊對得起來。</div>
+</div>
+
+<div class="warn">
+  <b>先跟珊珊確認再填。</b> 她那本帳最後一筆是 2026/07/29，到今天已經 5 天沒有新紀錄，8 月的月結也還沒開。
+  7/29 之後如果有現金進出還沒登記，1,437 就不是當下真實數字。
+</div>
+
+<div class="risk">
+  <b>同一筆錢可能被記兩次。</b> 採購請款單裡有 <b>17 筆</b>付款方式寫「零用金」（{'最早': '2026/02/05', '最新': '2026/07/14'}，合計 NT$ 73,250），
+  但那張表跟珊珊、小吳哥兩本帳<b>沒有任何共同欄位可以自動比對</b>，無法確認有沒有重複入帳。
+  要查只能拿日期加金額人工核對。新系統上線後這個問題會消失，因為每一筆都會有請款編號。
+</div>
+
+<div class="cards">
+  <div class="c"><h3>珊珊專用零用金</h3><div class="n">{'主表record數（月份）': 19, '子表交易record數（實際流水）': 1033} 筆</div>
+    <div class="d">月結 19 個月，交易明細 1,034 筆<br>{'主表最早月份': '2025/01/01', '主表最新月份': '2026/07/01', '子表最早交易日期': '2025/01/01', '子表最新交易日期': '2026/07/29'}<br><b>正在用的就是這本</b></div></div>
+  <div class="c"><h3>零星支出（小吳哥）</h3><div class="n">23 筆</div>
+    <div class="d">{'子表最早交易日期': '2025/12/24', '子表最新交易日期(含疑似異常值)': '2026/12/31', '子表最新交易日期(排除疑似異常值2026/12/31)': '2026/05/12'}<br><b style="color:#8c3a28">最後更新 2026/05/12，已經快 3 個月沒人記</b></div></div>
+  <div class="c"><h3>零用金請款（新系統）</h3><div class="n">0 筆</div>
+    <div class="d">同仁送單用的新表，已建好、已上線<br>還沒有人送過單</div></div>
+  <div class="c"><h3>零用金現金帳（新系統）</h3><div class="n">0 筆</div>
+    <div class="d">記珊珊身上現金進出<br>等她按一次「設定期初現金」就會有第一筆</div></div>
+</div>
+
+<h2>珊珊那本，最近 15 筆 <small>共 1,034 筆，這裡只列最近的</small></h2>
+<div class='tw'><table><thead><tr><th>日期</th><th>收據編號</th><th>項目</th><th>存入金額</th><th>支出金額</th><th>簽收人</th></tr></thead><tbody><tr><td>2026/07/21</td><td><span class="muted">—</span></td><td>退林口遠雄未來家-部分油漆差價佣金8000-6000/2=1000</td><td><span class="muted">—</span></td><td><span class="num">1,000</span></td><td>勁豪
+</td></tr><tr><td>2026/07/21</td><td><span class="muted">—</span></td><td>郵資-寄發票凌群&amp;精準</td><td><span class="muted">—</span></td><td><span class="num">56</span></td><td>小炫</td></tr><tr><td>2026/07/21</td><td><span class="muted">—</span></td><td>中華路-結清租客電費</td><td><span class="muted">—</span></td><td><span class="num">1,381</span></td><td>小炫</td></tr><tr><td>2026/07/21</td><td><span class="muted">—</span></td><td>天晴92號3樓-結清電費</td><td><span class="muted">—</span></td><td><span class="num">338</span></td><td>小炫</td></tr><tr><td>2026/07/22</td><td><span class="muted">—</span></td><td>購買公司清潔用品-馬桶刷*3</td><td><span class="muted">—</span></td><td><span class="num">507</span></td><td>馬丁</td></tr><tr><td>2026/07/22</td><td><span class="muted">—</span></td><td>保和街1樓-購買消防器材+水龍頭修繕費用</td><td><span class="muted">—</span></td><td><span class="num">2,350</span></td><td>馬丁</td></tr><tr><td>2026/07/24</td><td><span class="muted">—</span></td><td>郵資-寄文件(圓璽&amp;郭雯馨)</td><td><span class="muted">—</span></td><td><span class="num">64</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/07/28</td><td><span class="muted">—</span></td><td>退板橋實踐-6樓防水差價佣金51000-47000/2=2000</td><td><span class="muted">—</span></td><td><span class="num">2,000</span></td><td>則泓</td></tr><tr><td>2026/07/29</td><td><span class="muted">—</span></td><td>福樂街-專用垃圾袋*1</td><td><span class="muted">—</span></td><td><span class="num">180</span></td><td>小碩</td></tr><tr><td>2026/07/29</td><td><span class="muted">—</span></td><td>福樂街-一般垃圾袋</td><td><span class="muted">—</span></td><td><span class="num">89</span></td><td>小碩</td></tr><tr><td>2026/07/29</td><td><span class="muted">—</span></td><td>福樂-7/25續約代收垃圾*8次</td><td><span class="muted">—</span></td><td><span class="num">1,080</span></td><td>小碩</td></tr><tr><td>2026/07/29</td><td><span class="muted">—</span></td><td>文化南路-201室地毯清洗</td><td><span class="muted">—</span></td><td><span class="num">400</span></td><td>小碩</td></tr><tr><td>2026/07/29</td><td><span class="muted">—</span></td><td>文化南路-專用垃圾袋*2</td><td><span class="muted">—</span></td><td><span class="num">360</span></td><td>小碩</td></tr><tr><td>2026/07/29</td><td><span class="muted">—</span></td><td>自立街-7/21續約代收垃圾*8次</td><td><span class="muted">—</span></td><td><span class="num">1,080</span></td><td>小碩</td></tr><tr><td>2026/07/29</td><td><span class="muted">—</span></td><td>大智街-結清電費</td><td><span class="muted">—</span></td><td><span class="num">-504</span></td><td>恩廷</td></tr></tbody></table></div>
+
+<h2>小吳哥那本，全部 23 筆 <small>2025/12 ~ 2026/05，之後沒再記</small></h2>
+<div class='tw'><table><thead><tr><th>日期</th><th>項目</th><th>廠商</th><th>支出金額</th><th>銀行</th></tr></thead><tbody><tr><td>2025/12/24</td><td>垃圾代收)自立街(1/3~3/21) 共12次</td><td>元威商行（懶人殿堂）</td><td><span class="num">2,217</span></td><td>(822) 中國信託</td></tr><tr><td>2025/12/29</td><td>垃圾代收)福樂街(1/3~3/21) 共12次</td><td>元威商行（懶人殿堂）</td><td><span class="num">2,217</span></td><td>(822) 中國信託</td></tr><tr><td>2026/01/11</td><td>591儲值</td><td><span class="muted">—</span></td><td><span class="num">6,000</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/01/15</td><td>591儲值</td><td><span class="muted">—</span></td><td><span class="num">8,000</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/01/26</td><td>591儲值</td><td><span class="muted">—</span></td><td><span class="num">8,000</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/01/28</td><td>瓊安bni 華都更</td><td><span class="muted">—</span></td><td><span class="num">39,800</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/01/30</td><td>自強投資案 - 白宗翰 登記費續約</td><td><span class="muted">—</span></td><td><span class="num">18,000</span></td><td>(822) 中國信託</td></tr><tr><td>2026/01/30</td><td>訂閱課程 - 知識衛星
+</td><td><span class="muted">—</span></td><td><span class="num">15,360</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/01/30</td><td>訂閱課程 - 知識衛星
+</td><td><span class="muted">—</span></td><td><span class="num">16,760</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/01/30</td><td>訂閱課程 - 知識衛星
+</td><td><span class="muted">—</span></td><td><span class="num">15,760</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/01/30</td><td>吳淡如 課程</td><td><span class="muted">—</span></td><td><span class="num">3,800</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/01/30</td><td>google one</td><td><span class="muted">—</span></td><td><span class="num">6,500</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/01/30</td><td><span class="muted">—</span></td><td><span class="muted">—</span></td><td><span class="muted">—</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/02/09</td><td>591儲值</td><td><span class="muted">—</span></td><td><span class="num">8,000</span></td><td>(822) 中國信託</td></tr><tr><td>2026/02/24</td><td>民族路 衣架訂購</td><td><span class="muted">—</span></td><td><span class="num">1,499</span></td><td>(822) 中國信託</td></tr><tr><td>2026/03/04</td><td>591點數</td><td><span class="muted">—</span></td><td><span class="num">8,000</span></td><td>(822) 中國信託</td></tr><tr><td>2026/03/08</td><td>591點數</td><td><span class="muted">—</span></td><td><span class="num">10,000</span></td><td>(822) 中國信託</td></tr><tr><td>2026/03/08</td><td>電話、網路</td><td><span class="muted">—</span></td><td><span class="num">2,400</span></td><td>(822) 中國信託</td></tr><tr><td>2026/03/19</td><td>591點數</td><td><span class="muted">—</span></td><td><span class="num">8,000</span></td><td>(822) 中國信託</td></tr><tr><td>2026/04/20</td><td>591</td><td><span class="muted">—</span></td><td><span class="num">8,000</span></td><td>(822) 中國信託</td></tr><tr><td>2026/05/07</td><td>591儲值</td><td><span class="muted">—</span></td><td><span class="num">8,000</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/05/12</td><td>591儲值</td><td><span class="muted">—</span></td><td><span class="num">10,000</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/12/31</td><td>591充值</td><td><span class="muted">—</span></td><td><span class="num">5,000</span></td><td>(822) 中國信託</td></tr></tbody></table></div>
+
+<h2>採購請款單裡付款方式寫「零用金」的 17 筆 <small>可能與上面兩本重複</small></h2>
+<div class='tw'><table><thead><tr><th>採購日期</th><th>採購單編號</th><th>採購主旨</th><th>承辦人</th><th>項目金額合計</th><th>已匯款金額</th><th>付款對象</th></tr></thead><tbody><tr><td>2026/02/05</td><td>PO-20260205-002</td><td>文化南路/廚具安裝</td><td>韓珊珊</td><td><span class="num">0</span></td><td><span class="num">3,500</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/02/05</td><td>PO-20260205-001</td><td>文化南/搬工</td><td>韓珊珊</td><td><span class="num">0</span></td><td><span class="num">5,400</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/02/09</td><td>PO-20260209-001</td><td>希望之河/水電材料</td><td>韓珊珊</td><td><span class="num">0</span></td><td><span class="num">1,580</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/03/04</td><td>PO-20260304-001</td><td>三陽路53號10樓/代墊電費及接電費</td><td>韓珊珊</td><td><span class="num">0</span></td><td><span class="num">599</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/03/13</td><td>PO-20260313-001</td><td>文化南路/搬工&amp;工具材料</td><td>韓珊珊</td><td><span class="num">5,340</span></td><td><span class="num">5,340</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/04/08</td><td>PO-20260409-001</td><td>包租公講座推廣影片剪輯</td><td>張瓊安</td><td><span class="num">1,200</span></td><td><span class="num">1,200</span></td><td>唐和君（剪輯師Jerry）</td></tr><tr><td>2026/04/20</td><td>PO-20260420-005</td><td>壁掛架安裝費用</td><td>呂鴻墀</td><td><span class="num">3,000</span></td><td><span class="num">3,000</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/04/20</td><td>PO-20260420-004</td><td>清潔費</td><td>呂鴻墀</td><td><span class="num">6,600</span></td><td><span class="num">6,600</span></td><td>國際福星管委會</td></tr><tr><td>2026/05/15</td><td>PO-20260515-001</td><td>國王新都&amp;平安街</td><td>韓珊珊</td><td><span class="num">27,623</span></td><td><span class="num">27,623</span></td><td><span class="muted">—</span></td></tr><tr><td>2026/07/14</td><td>PO-20260714-010</td><td>公司 - 裝潢公司補充保費115/6月平安街</td><td>韓珊珊</td><td><span class="num">591</span></td><td><span class="num">591</span></td><td>衛生福利部中央健康保險署</td></tr><tr><td>2026/07/14</td><td>PO-20260714-009</td><td>公司 - 租金所得扣繳稅款-7月份平安街</td><td>韓珊珊</td><td><span class="num">2,800</span></td><td><span class="num">2,800</span></td><td>財政部北區國稅局</td></tr><tr><td>2026/07/14</td><td>PO-20260714-008</td><td>公司 - 租金所得扣繳稅款(6月)-平安街</td><td>韓珊珊</td><td><span class="num">2,800</span></td><td><span class="num">2,800</span></td><td>財政部北區國稅局</td></tr><tr><td>2026/07/14</td><td>PO-20260714-007</td><td>公司 - 裝潢公司補充保費115/7月-平安街</td><td>韓珊珊</td><td><span class="num">591</span></td><td><span class="num">591</span></td><td>衛生福利部中央健康保險署</td></tr><tr><td>2026/07/14</td><td>PO-20260714-006</td><td>公司 - 裝潢公司健保費115/7月-國王新都</td><td>韓珊珊</td><td><span class="num">1,013</span></td><td><span class="num">1,013</span></td><td>衛生福利部中央健康保險署</td></tr><tr><td>2026/07/14</td><td>PO-20260714-005</td><td>公司 - 裝潢公司補充保費115/6月-國王新都</td><td>韓珊珊</td><td><span class="num">1,013</span></td><td><span class="num">1,013</span></td><td>衛生福利部中央健康保險署</td></tr><tr><td>2026/07/14</td><td>PO-20260714-004</td><td>租賃所得扣繳稅款-7月份國王新都</td><td>韓珊珊</td><td><span class="num">4,800</span></td><td><span class="num">4,800</span></td><td>財政部北區國稅局</td></tr><tr><td>2026/07/14</td><td>PO-20260714-003</td><td>租金所得扣繳稅款-6月份國王新都</td><td>韓珊珊</td><td><span class="num">4,800</span></td><td><span class="num">4,800</span></td><td>財政部北區國稅局</td></tr></tbody></table></div>
+
+<h2>撈資料時發現的異常</h2>
+<ul>
+<li>珊珊那本有 1 筆支出是負數（大智街結清電費 −504 元），性質是退費沖銷，已照面值計入。</li><li>珊珊那本有 1 筆存入與支出同時有值（小吳付春酒餐費＋酒水，各 57,900），是過帳沖銷，對餘額沒有影響。</li><li>小吳哥那本有 1 筆日期疑似打錯（591 充值填 2026/12/31，同批其他筆都是 2025/12，應為 2025/12/31）。</li><li>小吳哥那本有 1 筆只有附件、沒填金額，沒有計入加總。</li><li>採購請款單那 17 筆裡，有 3 筆「合計金額」是 0 但「已匯款金額」有值；用已匯款金額加總是 73,250 元。</li><li>兩本手工帳都沒有測試資料，數字欄也沒有混入文字。</li>
+</ul>
+
+<footer>
+內部財務資料，請勿轉傳。此頁為 2026-08-03 的快照，不會自動更新。<br>
+資料來源：Ragic `shanshans/1`、`finance2/7`、`finance2/14`、`finance2/15`、`finance2/5`（唯讀撈取，未做任何寫入）。
+</footer>
+</div></body></html>
