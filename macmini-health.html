@@ -121,7 +121,8 @@ footer{margin-top:64px; padding-top:20px; border-top:1px solid var(--line);
   <div class="stat ok"><div class="n">5.6%</div><div class="l">Claude 額度用量</div></div>
 </div>
 
-<p>整體結論：<b>機器本身很健康</b>——記憶體剩 3.5GB、沒動用虛擬記憶體、Claude 訂閱額度只用 5.6%、所有對話機器人的網路埠零衝突。真正的問題不在效能，在<b>三件會讓你「以為它在跑、其實早就死了」的事</b>，其中一件今天早上剛發生。</p>
+<p>整體結論：<b>機器本身很健康</b>——記憶體剩 3.5GB、沒動用虛擬記憶體、Claude 訂閱額度只用 5.6%、所有對話機器人的網路埠零衝突、業務排程（Ragic 同步、地址轉換、FB 權杖、104、Supabase 備份）今天全部正常執行。</p>
+<p>真正的問題不在效能，在<b>五件「畫面上看起來在跑、實際上是斷的」的事</b>：今天早上你的 TODO 推播沒送出、整台機器沒有任何備份、剛驗收完的查帳備援 Bot 六天收不到訊息、Doctor 身上還帶著今天才修好的誤殺 bug、有物製所的備份沒人驗證過能不能還原。<b>五件加起來約 2 小時可以全部補完。</b></p>
 
 <h2><span class="num">1</span>19 個排程被 macOS 擋掉，你今天早上的 TODO 提醒沒送出</h2>
 <p class="h2sub">最高優先 · 修好只要幾分鐘 · 目前完全沒有告警會通知你</p>
@@ -148,21 +149,23 @@ todo-sentinel.log 最後一筆：
     <tr><td>TODO 完成偵測</td><td>抓做完沒劃掉的項目</td><td class="dead">7/26 起</td></tr>
   </table></div>
 
-  <p><b>還沒被觸發、但下次執行一定會死的 14 個</b>，裡面有兩個要特別注意：</p>
+  <p><b>還沒被觸發、但下次執行會賠掉一次的 14 個</b>，裡面有兩個要特別注意：</p>
   <ul>
-    <li><b>每月自動重開機</b>（每月 1 號 04:00）——這支死了代表機器再也不會自己重啟，長期會累積記憶體碎片</li>
+    <li><b>每月自動重開機</b>（每月 1 號 04:00）——賠掉就是整整一個月不會自我維護</li>
     <li><b>Plaud 週報</b>（每週五 17:30）、<b>BNI 鎖定／合併／解鎖</b>三支、<b>斡旋金週檢</b>、<b>Claude 隔離環境 24 小時檢查</b></li>
     <li>其餘 7 支是早就過期的一次性提醒（5 月、6 月、7 月的），本來就該清掉</li>
   </ul>
 
+  <p class="note"><b>好消息：系統會自己修，但要付一次代價。</b>已經觀察到兩支被殺的排程（觀測性檢查、BNI 主題卡）在賠掉一次之後自行恢復正常——macOS 會在殺掉之後重新認一次簽章。問題是<b>每支排程都要先賠一次</b>：每 30 分鐘跑的早就自己好了，每天跑的賠一天，<b>每週跑的賠一整週，每月跑的賠一個月</b>。目前卡住的全是這種低頻的。</p>
+
   <div class="fix">
     <b>怎麼修</b>
-    對這 19 個排程做一次「卸載再重新載入」，讓系統重新認一次新版 Python 的簽章。指令層面是 <code>launchctl bootout</code> 加 <code>bootstrap</code>，一支約 2 秒，全部跑完不到 1 分鐘，過程中不會中斷任何正在跑的機器人。<br>
+    不要等它自己好。對這 19 個排程做一次「卸載再重新載入」，讓系統立刻重認簽章，不用賠那一次。指令層面是 <code>launchctl bootout</code> 加 <code>bootstrap</code>，一支約 2 秒，全部跑完不到 1 分鐘，過程中不會中斷任何正在跑的機器人。<br>
     <b>順帶處理：</b>把 7 支過期的一次性提醒直接退役，不用再修。
   </div>
 
   <div class="meta">
-    <span>影響：<b>你每天早上的提醒 + 每月自動維護</b></span>
+    <span>影響：<b>週報整整賠一週、月度維護賠一個月</b></span>
     <span>工時：<b>約 10 分鐘</b></span>
     <span>風險：<b>低（可逆、不影響運行中服務）</b></span>
   </div>
@@ -193,7 +196,13 @@ $ grep rsync|restic|borg 全部排程  →  零命中</div>
     <tr><td>104 招募的登入狀態與設定</td><td class="n">2.3GB</td><td>要重新登入、重設整套流程</td></tr>
     <tr><td>Plaud 錄音處理系統</td><td class="n">5.8GB</td><td>轉錄流程重建</td></tr>
   </table></div>
-  <p>已經有備份的部分：Obsidian 筆記（Obsidian Sync）、Ragic 前端頁面（GitHub）、Supabase 資料庫（每日加密備份，8/3 04:00 剛跑過，正常）。</p>
+  <p>已經有備份的部分：Obsidian 筆記（Obsidian Sync）、Ragic 前端頁面（GitHub）、窩的家 Supabase 資料庫（每日加密備份，8/3 04:00 剛跑過，正常）。</p>
+
+  <p><b>但有物製所的備份，「能不能還原」目前是未知的。</b>每週一 04:00 有一支腳本會試著把備份還原到本機驗證，今天 04:00 這支<b>失敗了</b>：</p>
+  <div class="evi">ERROR: role "authenticated" does not exist
+2026-08-03 04:00:05 FAILED: 還原失敗：SQL 執行有錯誤
+（備份檔本身在，失敗的是「還原測試」這一步）</div>
+  <p>原因是備份裡帶著 Supabase 雲端專有的權限設定，本機測試環境沒有那個角色，一執行就中斷。<b>備份檔可能是好的，但沒有人驗證過它真的能還原</b>——而備份的價值完全取決於這件事。修法是在測試腳本裡先建那個角色，約 20 分鐘。</p>
 
   <div class="fix">
     <b>兩層做法，建議都做</b>
@@ -234,7 +243,24 @@ Doctor  server.mjs:78   單層掃描 ✗ 未修
   <div class="meta"><span>影響：<b>Doctor 的自動修復能力</b></span><span>工時：<b>約 30 分鐘（含測試）</b></span><span>風險：<b>低</b></span></div>
 </div>
 
-<h2><span class="num">4</span>資源浪費：能回收 30GB 硬碟、n8n 資料庫可以瘦 4/5</h2>
+<h2><span class="num">4</span>兩支機器人一直連不上 Telegram，其中一支 6 天沒收到過訊息</h2>
+<p class="h2sub">程式活著、埠開著，但每一次去 Telegram 拿訊息都失敗</p>
+
+<div class="card amber">
+  <h3><span class="tag amber">要確認</span>查帳備援 Bot：6 天內 5,865 次輪詢失敗，只成功處理過 1 筆</h3>
+  <div class="evi">telegram-purchase-bot/bot.log 全檔事件統計：
+poll_error       5,865   ← 每 80 秒失敗一次，中間沒有成功的
+update_processed     1   ← 成功處理的訊息，全檔只有這 1 筆
+bot_started          4
+
+最新一筆：{"time":"2026-08-03T08:41:24Z","event":"poll_error","code":"TypeError"}</div>
+  <p>這支就是 7/29 剛驗收完（32 項測試全過）的查帳備援機器人。<b>驗收測的是程式本身，沒測到「它能不能從 Telegram 收到訊息」這一段。</b>從 7/28 起，每 80 秒一次的輪詢連續失敗到現在，中間沒有一次成功——代表這段期間如果有人傳訊息給它，它收不到。</p>
+  <p>FB 發文機器人也有同樣的症狀，每天約 3,000 筆同樣的連線錯誤（累計 21,866 筆），但它的心跳訊號正常、功能有在運作，比較像是「連線超時被記成錯誤」的噪音。</p>
+  <p class="note">兩支的錯誤型態一樣（連線層失敗），但影響不同。<b>要確定影響，最快的方法是傳一則訊息給查帳備援 Bot 看它有沒有回</b>——我沒有替你測，因為那會送出真實訊息。你說一聲我就測。</p>
+  <div class="meta"><span>影響：<b>查帳備援功能可能形同關閉</b></span><span>工時：<b>診斷 30 分鐘</b></span></div>
+</div>
+
+<h2><span class="num">5</span>資源浪費：能回收 30GB 硬碟、n8n 資料庫可以瘦 4/5</h2>
 <p class="h2sub">不急，但做了機器會輕很多</p>
 
 <div class="card">
@@ -273,7 +299,7 @@ Doctor  server.mjs:78   單層掃描 ✗ 未修
   <div class="meta"><span>工時：<b>約 30 分鐘（一次設定，全機通用）</b></span></div>
 </div>
 
-<h2><span class="num">5</span>兩支機器人幾乎沒人用，一支從來沒收過訊息</h2>
+<h2><span class="num">6</span>兩支機器人幾乎沒人用，一支從來沒收過訊息</h2>
 <p class="h2sub">留著不貴，但值得你決定要不要繼續養</p>
 
 <div class="card">
@@ -293,7 +319,7 @@ POLL_IDLE: offset=0 (getUpdates ok, no messages ever, polling active)
   <p class="note">這不是壞掉，是沒被使用。要留（等之後用）還是關掉（省資源），由你決定——我不會自己動它。</p>
 </div>
 
-<h2><span class="num">6</span>組態品質：現在沒事，但少了安全網</h2>
+<h2><span class="num">7</span>組態品質：現在沒事，但少了安全網</h2>
 <p class="h2sub">115 個排程共用同一套預設值，沒有任何一個設了保護參數</p>
 
 <div class="card">
@@ -316,7 +342,7 @@ POLL_IDLE: offset=0 (getUpdates ok, no messages ever, polling active)
   <div class="meta"><span>工時：<b>約 40 分鐘</b></span></div>
 </div>
 
-<h2><span class="num">7</span>順手發現的雜項</h2>
+<h2><span class="num">8</span>順手發現的雜項</h2>
 
 <div class="card">
   <ul>
@@ -327,18 +353,20 @@ POLL_IDLE: offset=0 (getUpdates ok, no messages ever, polling active)
   </ul>
 </div>
 
-<h2><span class="num">8</span>建議的執行順序</h2>
+<h2><span class="num">9</span>建議的執行順序</h2>
 
 <div class="card green">
   <div class="tblwrap"><table>
     <tr><th class="n">順序</th><th>做什麼</th><th class="n">工時</th><th>為什麼是這個順序</th></tr>
-    <tr><td class="n">1</td><td><b>修 19 個被擋下的排程</b></td><td class="n">10 分</td><td>你每天早上的提醒現在是斷的</td></tr>
+    <tr><td class="n">1</td><td><b>修 19 個被擋下的排程</b></td><td class="n">10 分</td><td>週報再拖就賠掉一整週</td></tr>
     <tr><td class="n">2</td><td><b>9 個機器人專案推上 GitHub</b></td><td class="n">30 分</td><td>唯一「發生就無法補救」的風險</td></tr>
-    <tr><td class="n">3</td><td><b>補 Doctor 的誤殺 bug</b></td><td class="n">30 分</td><td>Doctor 是出事時的最後一道防線</td></tr>
-    <tr><td class="n">4</td><td>加簽章每日自動檢查</td><td class="n">1 小時</td><td>讓第 1 點以後自己浮出來</td></tr>
-    <tr><td class="n">5</td><td>n8n 瘦身 + 清 31GB 快取 + log 輪替</td><td class="n">1.5 小時</td><td>純資源，不影響功能</td></tr>
+    <tr><td class="n">3</td><td><b>查帳備援 Bot 為何連不上 Telegram</b></td><td class="n">30 分</td><td>剛驗收完就形同關閉，要弄清楚</td></tr>
+    <tr><td class="n">4</td><td><b>補 Doctor 的誤殺 bug</b></td><td class="n">30 分</td><td>Doctor 是出事時的最後一道防線</td></tr>
+    <tr><td class="n">5</td><td><b>修有物製所備份的還原測試</b></td><td class="n">20 分</td><td>沒驗過能還原的備份不算備份</td></tr>
   </table></div>
-  <p style="margin-top:16px;margin-bottom:0">前三項合計 <b>約 70 分鐘</b>，把三個「現在是壞的但你看不到」的洞補起來。後兩項可以另外找時間。<b>簡家財務機器人要不要關掉</b>是唯一需要你決定的事，其他我可以直接做。</p>
+  <p style="margin-top:16px">以上五項合計 <b>約 2 小時</b>，全部是「現在是壞的、但你從畫面上看不出來」的洞。</p>
+  <p style="margin-bottom:0">之後再找時間做的：加一支<b>每日簽章自動檢查</b>（1 小時，讓第 1 類問題以後自己浮出來）、<b>n8n 瘦身 + 清 31GB 快取 + log 輪替</b>（1.5 小時，純資源）、<b>組態安全網補齊</b>（2 小時）。<br>
+  <b>唯一需要你決定的是：簡家財務機器人要留還是關掉。</b>其餘我可以直接做。</p>
 </div>
 
 <footer>

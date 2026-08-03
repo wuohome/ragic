@@ -16,3 +16,4 @@ perf-sa-key.json
 js/ragic-key.js
 *.bak
 *.bak-*
+*.local.html

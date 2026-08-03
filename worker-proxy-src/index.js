@@ -1,48 +1,3 @@
-// wuohome-ragic-proxy v48 — 零用金請款片段 B：珊珊審核頁 + 零用金現金帳（Group X 擴充，2026-08-03）：
-// 新增 3 個 action，全部 finance 身分（同仁 token 打一律同型 404，沿用既有 PC_FINANCE_ACTIONS
-// gate 手法）：
-//  - pettyCashReview：approve/reject 審核一筆請款。approve 寫審核狀態=已通過＋審核人（token
-//    反查，不讀前端姓名）＋審核時間；reject 寫審核狀態=已退回＋退回原因（五選一白名單，不符
-//    400 invalid_reason）＋退回備註（選填 ≤500 字）＋審核人＋審核時間。已是已通過/已退回的單
-//    再打一次 → 409 already_reviewed。寫入後讀回確認狀態真的變了才回成功，沒變回
-//    write_unverified（比照 pettyCashMarkPaid 既有手法）。
-//  - pettyCashLedgerAdd：記一筆期初或補充零用金現金（finance2/15），記錄人由 token 反查，寫入
-//    後讀回驗證。
-//  - pettyCashBalance：回目前零用金現金餘額（finance2/15 金額欄加總）＋依類型分類的 breakdown。
-// 讀寫新欄位：finance2/14 新增 5 欄（審核狀態 1003272／退回原因 1003273／退回備註 1003274／
-// 審核人 1003275／審核時間 1003276，2026-08-03 已建並驗證持久化）＋ 全新 finance2/15 零用金
-// 現金帳表（日期/類型/金額/對應請款編號/記錄人/備註，1003277-1003282）。金額符號慣例：期初/
-// 補充為正、付款為負，加總即餘額（見 財務_零用金現金帳.md § 金額符號慣例）。
-// 改動既有 3 個 action（只加不減，回傳既有 key 一個不少）：
-//  - pettyCashCreate：建單時額外寫入 1003272=待審核（Ragic 端雖已設 dv 預設值，仍顯式寫入以防
-//    API 建單不吃 dv 預設）。
-//  - pettyCashMarkPaid：加前置檢查——只有審核狀態=已通過的單能勾已付款，否則 409 not_approved
-//    （檢查僅套用在 isPaid=true 的請求，取消勾選不受此限）。勾 true 成功後，若 finance2/15
-//    尚無該單的「付款」紀錄（idempotent 防重覆寫），自動補一筆：類型=付款、金額=該單金額的
-//    負值、對應請款編號=claimNo、記錄人=token 反查。取消勾選（isPaid=false）時，**刪除**
-//    finance2/15 內對應該單的「付款」紀錄（DELETE，非另開一筆沖銷分錄）——spec 外決定，理由是
-//    刪除比沖銷分錄更不會在帳上留下永遠成對的虛增列，且餘額計算單純加總即可，見交付摘要。
-//    ledger 寫入失敗不回滾主表已寫入的付款狀態（主表是財務流程的權威狀態），改回一個獨立錯誤
-//    碼 ledger_write_failed 讓財務知道要人工補記，spec 外決定。
-//  - pettyCashListAll/pettyCashListMine：單筆 claim 物件（pettyCashPublicRecord）加回
-//    reviewStatus/rejectReason/rejectNote/reviewer/reviewedAt 5 個 key；pettyCashListAll 的
-//    summary 再加 pendingReviewCount（本次查詢結果內待審核筆數，跟 unpaidCount 等既有欄位同一
-//    語意——「針對本次查詢結果」）與 balance（現金帳全表加總，不受本次查詢篩選影響，是獨立的
-//    「珊珊身上還有多少現金」數字）。
-// 退回原因五選一文字採用規格書「2026-08-01 Joan 確認」完整版本（含括號與後半句），與
-// finance2/14 Ragic 端已存的選項值逐字一致。既有 81 個 action 一行未動（additive only）。
-// wuohome-ragic-proxy v46 — earnest/payment-receipt token 收尾加嚴（2026-07-30）：
-// getEarnest / verifyEarnestToken（定金 token 1002558）、getPaymentReceipt /
-// verifyPaymentReceiptToken（收款憑單 token 1003029）、getPaymentSource / submitPaymentSource
-// （同用 1003029 做 gate）、以及 submitEarnest/submitEarnestAsync/submitPaymentReceipt 共用的
-// processMultipart() token 欄位解析，全部從純 validUuid() regex 換成 v38 refund 就已存在的
-// validHardenedToken()（UUID regex + 非 nil-UUID + hex 唯一字元數 ≥5），與 refund 三條路徑同級。
-// 只動 token 格式驗證這一層，查詢欄位/白名單/錯誤碼慣例一律不變（格式不合格仍 400
-// invalid_token；查無記錄仍 404 record_not_found；缺參數仍 400 missing_param）。
-// 版號更正說明：原任務指示寫「升 v39」，但實際 git HEAD 已到 v41、且本機工作區另有尚未
-// commit 但**已部署上線**的 v42/v42.1(portal)／v43(listStaff 白名單)／v44(listEmployees 白名單)／
-// v45(pettyCash) —— 開發時 stash 隔離、寫完後已用 git apply --reject 合併回同一份檔案，故本次
-// 用 v46（見 2026-07-30 交付摘要「spec 外決定」）。既有 84 個 action 一行未動（hardening only）。
 // wuohome-ragic-proxy v45 — 零用金請款開發批次 2（Group X，2026-07-28）：新增 5 個 action
 // pettyCashIdentity / pettyCashCreate / pettyCashListMine / pettyCashListAll /
 // pettyCashMarkPaid，讀寫 finance2/14（批次 1 已建表，主表 19 欄 + 發票號碼 noDup 唯一索引）。
@@ -323,10 +278,6 @@ const ALLOWED_ACTIONS = {
   pettyCashListMine:     { method: 'GET' },
   pettyCashListAll:      { method: 'GET' },
   pettyCashMarkPaid:     { method: 'POST' },
-  // 片段 B（珊珊審核頁 + 零用金現金帳，2026-08-03）。三支皆 finance 身分。
-  pettyCashReview:       { method: 'POST' },
-  pettyCashLedgerAdd:    { method: 'POST' },
-  pettyCashBalance:      { method: 'GET' },
 };
 
 const REPAIR_INTERNAL_ACTIONS = new Set([
@@ -905,49 +856,16 @@ const PC = Object.freeze({
   invoiceType: '1003202', invoiceNumber: '1003203', invoiceDate: '1003204',
   sellerTaxId: '1003205', store: '1003206', amountExTax: '1003207', taxAmount: '1003208',
   amount: '1003209', photo: '1003210', source: '1003211', isPaid: '1003212', paidAt: '1003213',
-  // 片段 B（珊珊審核頁，2026-08-03 建）
-  reviewStatus: '1003272', rejectReason: '1003273', rejectNote: '1003274',
-  reviewer: '1003275', reviewedAt: '1003276',
 });
 const PC_CATEGORIES = new Set(['交通', '餐費', '五金', '耗材', '規費', '其他']);
 const PC_INVOICE_TYPES = new Set(['電子發票', '手開發票', '收據', '免用統一發票']);
 const PC_SOURCES = new Set(['qr', 'manual']);
 // spec 僅寫「一般 2000 字，短欄位自己訂合理值」，未給精確數字，以下為 spec-外決定的保守上限
 const PC_TEXT_MAX = { item: 200, site: 100, note: 2000, invoiceNumber: 30, sellerTaxId: 20, store: 100 };
-// 零用金上限：金額（含稅）>= 3000 要改走請款單（需吳彥廷簽名），不走本系統。
-// 規則來源：韓珊珊 2026-07-29 口頭、Joan 當日轉述（非書面規定，日後有爭議回頭找珊珊確認）。
-// 前端 petty-cash 頁也擋一次，這裡是防 F12 繞過前端的第二層。
-// 見 窩的家/系統部/規格書/零用金請款_規格書.md § 片段 A
-const PC_AMOUNT_LIMIT = 3000;
 const PC_MAX_FILE_BYTES = 5 * 1024 * 1024; // 比照既有 size guard
-// 退回原因五選一，逐字照抄規格書 § P0-5「2026-08-01 Joan 確認」版本，與 finance2/14
-// 1003273 選項清單一致，不得改字（見零用金請款_規格書.md § P0-5 第 3 點）。
-const PC_REJECT_REASONS = new Set([
-  '零用金不足（改天原張再送）',
-  '憑證看不清楚，請重拍',
-  '金額或發票資料對不上',
-  '這筆要走請款單，不走零用金',
-  '其他',
-]);
-const PC_REJECT_NOTE_MAX = 500; // 派工指示明講「≤500 字」
 const PC_STAFF_ACTIONS = new Set(['pettyCashIdentity', 'pettyCashCreate', 'pettyCashListMine']);
-const PC_FINANCE_ACTIONS = new Set([
-  'pettyCashListAll', 'pettyCashMarkPaid',
-  'pettyCashReview', 'pettyCashLedgerAdd', 'pettyCashBalance', // 片段 B，2026-08-03
-]);
+const PC_FINANCE_ACTIONS = new Set(['pettyCashListAll', 'pettyCashMarkPaid']);
 const PETTY_CASH_ACTIONS = new Set([...PC_STAFF_ACTIONS, ...PC_FINANCE_ACTIONS]);
-
-// 零用金現金帳（finance2/15，片段 B 2026-08-03 全新建表）。金額符號慣例：期初/補充為正、
-// 付款為負，全表加總即目前餘額（見 財務_零用金現金帳.md § 金額符號慣例）。
-const PETTY_CASH_LEDGER_SHEET = 'finance2/15';
-const PCL = Object.freeze({
-  date: '1003277', type: '1003278', amount: '1003279',
-  claimNo: '1003280', recorder: '1003281', note: '1003282',
-});
-const PCL_ALL_TYPES = new Set(['期初', '補充', '付款']);
-// pettyCashLedgerAdd 只接受這兩種人工輸入；「付款」一律由 pettyCashMarkPaid 系統自動寫入，
-// 不開放前端直接記一筆「付款」（會繞過請款單勾稽）。
-const PCL_MANUAL_TYPES = new Set(['期初', '補充']);
 
 function pcClean(v) { return typeof v === 'string' ? v.trim() : ''; }
 function pcVal(v) { return typeof v === 'string' ? v : (v == null ? '' : String(v)); }
@@ -1005,12 +923,6 @@ function pettyCashPublicRecord(rid, rec) {
     photoUrls, // spec 外決定：憑證照片是多檔欄位，額外提供完整陣列，photoUrl 仍保留供契約相容
     isPaid: pcVal(rec[PC.isPaid]) === 'Yes',
     paidAt: pcVal(rec[PC.paidAt]) || null,
-    // 片段 B（2026-08-03）新增，既有 key 一個未動，純 additive
-    reviewStatus: pcVal(rec[PC.reviewStatus]) || '待審核',
-    rejectReason: pcVal(rec[PC.rejectReason]) || null,
-    rejectNote: pcVal(rec[PC.rejectNote]) || null,
-    reviewer: pcVal(rec[PC.reviewer]) || null,
-    reviewedAt: pcVal(rec[PC.reviewedAt]) || null,
   };
 }
 
@@ -1036,60 +948,6 @@ function pettyCashDuplicateResponse(found, invoiceNumber, origin) {
       claimedAt: createdAt ? createdAt.split(' ')[0] : undefined,
     },
   }, 409, origin);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 零用金現金帳（finance2/15，片段 B）helper。加總／查詢/寫入都走這裡，pettyCashBalance、
-// pettyCashLedgerAdd、pettyCashMarkPaid 三處共用，不各自組一份查詢邏輯。
-// ─────────────────────────────────────────────────────────────────────────────
-
-// 全表加總算餘額＋分類 breakdown。表目前量體小（現金流水帳），一次全撈不分頁。
-async function pettyCashLedgerSum(env) {
-  const { upstream, data } = await getFromRagic(env, PETTY_CASH_LEDGER_SHEET, 'naming=EID&limit=0,2000');
-  if (!upstream.ok || !data) return null;
-  const entries = Object.entries(data).filter(([k]) => /^\d+$/.test(k));
-  const breakdown = { 期初: 0, 補充: 0, 付款: 0 };
-  let balance = 0;
-  for (const [, rec] of entries) {
-    const type = pcClean(rec[PCL.type]);
-    const amt = pcNum(rec[PCL.amount]) || 0;
-    balance += amt;
-    if (Object.prototype.hasOwnProperty.call(breakdown, type)) breakdown[type] += amt;
-  }
-  return { balance, breakdown };
-}
-
-// 查某請款編號目前是否已有「付款」分錄（markPaid 用來防重覆寫 + 決定取消勾選時要刪哪幾筆）。
-async function findPettyCashLedgerPaymentEntries(env, claimNo) {
-  const qs = `naming=EID&limit=0,50&where=${PCL.claimNo},eq,${encodeURIComponent(claimNo)}&where=${PCL.type},eq,${encodeURIComponent('付款')}`;
-  const { upstream, data } = await getFromRagic(env, PETTY_CASH_LEDGER_SHEET, qs);
-  if (!upstream.ok || !data) return [];
-  return Object.entries(data).filter(([k]) => /^\d+$/.test(k));
-}
-
-// 寫一筆現金帳分錄，寫入後讀回驗證（比照 pettyCashCreate「防謊報成功」手法）。
-// 回傳 { rid, rec } 或 { error }（error 是可直接吐給前端的物件，含 error key）。
-async function writePettyCashLedgerEntry(env, { type, amount, claimNo, recorder, note }) {
-  const params = new URLSearchParams();
-  params.append(PCL.date, nowTaipeiDateTime());
-  params.append(PCL.type, type);
-  params.append(PCL.amount, String(amount));
-  if (claimNo) params.append(PCL.claimNo, claimNo);
-  params.append(PCL.recorder, recorder);
-  if (note) params.append(PCL.note, note);
-  const { upstream, data } = await postUrlEncodedToRagic(env, PETTY_CASH_LEDGER_SHEET, params.toString());
-  const fail = detectUpstreamFailure(upstream, data);
-  if (fail) {
-    console.error('[pettyCashLedger] write_failed', { ragicCode: fail.code, ragicMsg: fail.msg });
-    return { error: { error: 'write_failed', ...fail } };
-  }
-  const newRid = data?.ragicId;
-  if (!newRid) return { error: { error: 'no_rid_returned' } };
-  const { upstream: ru, data: rd } = await getFromRagic(env, `${PETTY_CASH_LEDGER_SHEET}/${newRid}`, 'naming=EID');
-  if (!ru.ok || !rd) return { error: { error: 'write_unverified', ragicId: newRid } };
-  const rec = rd[String(newRid)] || Object.values(rd)[0];
-  if (!rec || pcVal(rec[PCL.amount]) === '') return { error: { error: 'write_unverified', ragicId: newRid } };
-  return { rid: String(newRid), rec };
 }
 
 // A：同仁身分，`?token=` 反查人事表。失敗（不存在／格式錯／離職／非在職試用狀態）一律回 null，
@@ -1195,7 +1053,6 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     if (taxAmount !== null && (!Number.isFinite(taxAmount) || taxAmount < 0)) return jsonResp({ error: 'invalid_taxAmount' }, 400, origin);
     const amount = Number(amountRaw);
     if (!Number.isFinite(amount) || amount <= 0) return jsonResp({ error: 'invalid_amount' }, 400, origin);
-    if (amount >= PC_AMOUNT_LIMIT) return jsonResp({ error: 'amount_over_limit', limit: PC_AMOUNT_LIMIT }, 400, origin);
     if (!PC_SOURCES.has(source)) return jsonResp({ error: 'invalid_source' }, 400, origin);
     if (photos.length === 0) return jsonResp({ error: 'photo_required' }, 400, origin);
     for (const f of photos) {
@@ -1224,7 +1081,6 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     writeForm.append(PC.amount, String(amount));
     writeForm.append(PC.source, source);
     writeForm.append(PC.isPaid, 'No');
-    writeForm.append(PC.reviewStatus, '待審核'); // 片段 B：建單時同時進入審核佇列
     for (const f of photos) writeForm.append(PC.photo, f, f.name || 'receipt.jpg');
 
     const upstream = await ragicFetch(`${env.RAGIC_BASE}/${PETTY_CASH_SHEET}?api&v=3`, {
@@ -1327,13 +1183,8 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
       s.total += 1;
       if (c.isPaid) { s.paidCount += 1; s.paidAmount += c.amount || 0; }
       else { s.unpaidCount += 1; s.unpaidAmount += c.amount || 0; }
-      if (c.reviewStatus === '待審核') s.pendingReviewCount += 1; // 片段 B：本次查詢結果內待審核筆數
       return s;
-    }, { total: 0, unpaidCount: 0, unpaidAmount: 0, paidCount: 0, paidAmount: 0, pendingReviewCount: 0 });
-    // 片段 B：balance 是「珊珊身上還有多少現金」這個獨立數字，不受本次查詢篩選（paid/claimant/
-    // 日期）影響——永遠是 finance2/15 全表加總。查不到就給 null，不讓整支 action 502。
-    const ledgerSum = await pettyCashLedgerSum(env);
-    summary.balance = ledgerSum ? ledgerSum.balance : null;
+    }, { total: 0, unpaidCount: 0, unpaidAmount: 0, paidCount: 0, paidAmount: 0 });
     return jsonResp({ ok: true, claims, summary, viewer: { name: identity.name, role: 'finance' } }, 200, origin);
   }
 
@@ -1352,13 +1203,6 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     const existingRec = cd[rid] || Object.values(cd)[0];
     if (!existingRec) return jsonResp({ error: 'not_found' }, 404, origin);
 
-    // 片段 B 前置檢查：只有審核狀態＝已通過的單才能勾已付款。只套用在「勾起來」這個方向，
-    // 取消勾選（isPaid=false）不受此限——會走到這裡的單本來就是已通過才勾得起來。
-    if (isPaid) {
-      const currentReviewStatus = pcVal(existingRec[PC.reviewStatus]) || '待審核';
-      if (currentReviewStatus !== '已通過') return jsonResp({ error: 'not_approved' }, 409, origin);
-    }
-
     const params = new URLSearchParams();
     params.append(PC.isPaid, isPaid ? 'Yes' : 'No');
     params.append(PC.paidAt, isPaid ? nowTaipeiDateTime() : ''); // 取消誤勾要能清空，財務一定會誤勾
@@ -1373,117 +1217,7 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     const actualPaid = rec ? pcVal(rec[PC.isPaid]) === 'Yes' : null;
     if (actualPaid !== isPaid) return jsonResp({ error: 'write_unverified' }, 502, origin);
 
-    // 片段 B：現金帳連動。勾 true → 補一筆「付款」負數分錄（idempotent，已有就不重寫）；
-    // 取消勾選 → 刪除對應的付款分錄，讓餘額正確回復（spec 外決定：刪除而非另開沖銷分錄，
-    // 理由見檔頭 v48 版本註解與交付摘要）。
-    const claimNo = pcVal(rec[PC.claimNo]);
-    const claimAmount = pcNum(rec[PC.amount]) || 0;
-    if (isPaid) {
-      const already = await findPettyCashLedgerPaymentEntries(env, claimNo);
-      if (already.length === 0) {
-        const ledgerResult = await writePettyCashLedgerEntry(env, {
-          type: '付款', amount: -claimAmount, claimNo, recorder: identity.name, note: '',
-        });
-        if (ledgerResult.error) {
-          console.error('[pettyCashMarkPaid] ledger_write_failed', ledgerResult.error);
-          // 主表已成功勾已付款（財務流程的權威狀態），現金帳沒補上不回滾主表，改用獨立錯誤碼
-          // 讓財務知道現金帳要人工補記一筆，同時仍附上已更新的 claim 給前端渲染。
-          return jsonResp({ error: 'ledger_write_failed', claim: pettyCashPublicRecord(rid, rec) }, 502, origin);
-        }
-      }
-    } else {
-      const existing = await findPettyCashLedgerPaymentEntries(env, claimNo);
-      for (const [ledgerRid] of existing) {
-        await deleteFromRagic(env, `${PETTY_CASH_LEDGER_SHEET}/${ledgerRid}`);
-      }
-    }
-
     return jsonResp({ ok: true, claim: pettyCashPublicRecord(rid, rec) }, 200, origin);
-  }
-
-  if (action === 'pettyCashReview') {
-    let body;
-    try { body = await request.json(); } catch { return jsonResp({ error: 'bad_json' }, 400, origin); }
-    const ridRaw = body?.rid;
-    if (typeof ridRaw !== 'string' && typeof ridRaw !== 'number') return jsonResp({ error: 'invalid_rid' }, 400, origin);
-    const rid = String(ridRaw);
-    if (!/^\d{1,12}$/.test(rid)) return jsonResp({ error: 'invalid_rid' }, 400, origin);
-    const decision = pcClean(body?.decision);
-    if (decision !== 'approve' && decision !== 'reject') return jsonResp({ error: 'invalid_decision' }, 400, origin);
-
-    const { upstream: cu, data: cd } = await getFromRagic(env, `${PETTY_CASH_SHEET}/${rid}`, 'naming=EID');
-    if (!cu.ok || !cd || Object.keys(cd).length === 0) return jsonResp({ error: 'not_found' }, 404, origin);
-    const existingRec = cd[rid] || Object.values(cd)[0];
-    if (!existingRec) return jsonResp({ error: 'not_found' }, 404, origin);
-
-    const currentReviewStatus = pcVal(existingRec[PC.reviewStatus]) || '待審核';
-    if (currentReviewStatus === '已通過' || currentReviewStatus === '已退回') {
-      return jsonResp({ error: 'already_reviewed' }, 409, origin);
-    }
-
-    const reviewedAt = nowTaipeiDateTime();
-    const params = new URLSearchParams();
-    params.append(PC.reviewer, identity.name); // token 反查，不讀前端傳來的姓名
-    params.append(PC.reviewedAt, reviewedAt);
-    if (decision === 'approve') {
-      params.append(PC.reviewStatus, '已通過');
-    } else {
-      const reason = pcClean(body?.reason);
-      if (!PC_REJECT_REASONS.has(reason)) return jsonResp({ error: 'invalid_reason' }, 400, origin);
-      const note = pcClean(body?.note);
-      if (note.length > PC_REJECT_NOTE_MAX) return jsonResp({ error: 'invalid_note' }, 400, origin);
-      params.append(PC.reviewStatus, '已退回');
-      params.append(PC.rejectReason, reason);
-      if (note) params.append(PC.rejectNote, note);
-    }
-
-    const { upstream, data } = await postUrlEncodedToRagic(env, `${PETTY_CASH_SHEET}/${rid}`, params.toString());
-    const fail = detectUpstreamFailure(upstream, data);
-    if (fail) return jsonResp({ error: 'write_failed', ...fail }, 502, origin);
-
-    // 讀回確認狀態真的變了，比照 pettyCashMarkPaid 既有手法
-    const { upstream: ru, data: rd } = await getFromRagic(env, `${PETTY_CASH_SHEET}/${rid}`, 'naming=EID');
-    if (!ru.ok || !rd) return jsonResp({ error: 'write_unverified' }, 502, origin);
-    const rec = rd[rid] || Object.values(rd)[0];
-    const expectedStatus = decision === 'approve' ? '已通過' : '已退回';
-    const actualStatus = rec ? pcVal(rec[PC.reviewStatus]) : '';
-    if (actualStatus !== expectedStatus) return jsonResp({ error: 'write_unverified' }, 502, origin);
-
-    return jsonResp({ ok: true, claim: pettyCashPublicRecord(rid, rec) }, 200, origin);
-  }
-
-  if (action === 'pettyCashLedgerAdd') {
-    let body;
-    try { body = await request.json(); } catch { return jsonResp({ error: 'bad_json' }, 400, origin); }
-    const type = pcClean(body?.type);
-    if (!PCL_MANUAL_TYPES.has(type)) return jsonResp({ error: 'invalid_type' }, 400, origin);
-    const amount = Number(body?.amount);
-    if (!Number.isFinite(amount) || amount <= 0) return jsonResp({ error: 'invalid_amount' }, 400, origin);
-    const note = pcClean(body?.note);
-    if (note.length > PC_TEXT_MAX.note) return jsonResp({ error: 'invalid_note' }, 400, origin);
-
-    const result = await writePettyCashLedgerEntry(env, {
-      type, amount, claimNo: '', recorder: identity.name, note,
-    });
-    if (result.error) return jsonResp(result.error, 502, origin);
-
-    return jsonResp({
-      ok: true,
-      entry: {
-        rid: result.rid,
-        date: pcVal(result.rec[PCL.date]),
-        type,
-        amount,
-        recorder: identity.name,
-        note: note || null,
-      },
-    }, 200, origin);
-  }
-
-  if (action === 'pettyCashBalance') {
-    const sum = await pettyCashLedgerSum(env);
-    if (!sum) return jsonResp({ error: 'upstream_error' }, 502, origin);
-    return jsonResp({ ok: true, balance: sum.balance, breakdown: sum.breakdown }, 200, origin);
   }
 
   return null;
@@ -1937,8 +1671,7 @@ const TENANT_FIELDS_WHITELIST = new Set([
 // （前端該擋自 2026-03-23 commit 5c7f7185 起就存在且從未失效，問題出在不經前端的腳本寫入）。
 // 此處補上 Worker 端伺服器驗證，不管呼叫方是不是瀏覽器都擋得住。
 // 與 schedule-common.js 的 SC.GOV_REST_NAMES / SC.HOLIDAYS_2026 保持同步，異動需同時改兩邊。
-// 2026-08-02 Joan 更正為四位，補上陳勁豪（原本漏列）。
-const GOV_REST_NAMES = new Set(['張瓊安', '沈郁雯', '呂鴻墀', '陳勁豪']);
+const GOV_REST_NAMES = new Set(['張瓊安', '沈郁雯', '呂鴻墀']);
 const GOV_HOLIDAYS_2026 = new Set([
   '2026/01/01','2026/02/16','2026/02/17','2026/02/18','2026/02/19','2026/02/20',
   '2026/02/27','2026/04/03','2026/04/06','2026/05/01','2026/06/19','2026/09/25',
@@ -2739,8 +2472,7 @@ async function processMultipart(request, allowedOrigin, whitelist, signatureFiel
     if (key === 'token') {
       // Not written to Ragic — consumed by caller (submitEarnest/submitEarnestAsync) to
       // cross-validate against the target record's 1002558 before allowing the write.
-      // v43: hardened from plain validUuid() — same class of credential as refund token.
-      if (typeof value !== 'string' || !validHardenedToken(value)) {
+      if (typeof value !== 'string' || !validUuid(value)) {
         return { error: jsonResp({ error: 'invalid_token' }, 400, allowedOrigin) };
       }
       token = value;
@@ -2769,8 +2501,7 @@ async function processMultipart(request, allowedOrigin, whitelist, signatureFiel
 // token, mismatch, upstream error) — callers must map false to a uniform 404, never
 // distinguish reasons, to avoid leaking which rid/token pairs exist (enumeration guard).
 async function verifyEarnestToken(env, rid, token) {
-  // v43: hardened from plain validUuid() — same class of credential as refund token.
-  if (!rid || !token || !validHardenedToken(token)) return false;
+  if (!rid || !token || !validUuid(token)) return false;
   try {
     const { upstream, data } = await getFromRagic(env, `payments/1/${rid}`, 'naming=EID');
     if (!upstream.ok || !data || Object.keys(data).length === 0) return false;
@@ -2792,8 +2523,7 @@ async function verifyEarnestToken(env, rid, token) {
 // Same uniform-failure contract as verifyEarnestToken above — never distinguish WHY it
 // failed, always let callers map to a single record_not_found 404 (enumeration guard).
 async function verifyPaymentReceiptToken(env, rid, token) {
-  // v43: hardened from plain validUuid() — same class of credential as refund token.
-  if (!rid || !token || !validHardenedToken(token)) return false;
+  if (!rid || !token || !validUuid(token)) return false;
   try {
     const { upstream, data } = await getFromRagic(env, `payments/2/${rid}`, 'naming=EID');
     if (!upstream.ok || !data || Object.keys(data).length === 0) return false;
@@ -3812,7 +3542,7 @@ export default {
 
         // Branch 1: pure token lookup — no code/rid supplied
         if (tokenParam && !codeParam && !ridParam) {
-          if (!validHardenedToken(tokenParam)) return jsonResp({ error: 'invalid_token' }, 400, allowedOrigin); // v43 hardened
+          if (!validUuid(tokenParam)) return jsonResp({ error: 'invalid_token' }, 400, allowedOrigin);
           const tokenQs = `naming=EID&where=1002558,eq,${encodeURIComponent(tokenParam)}&limit=0,1`;
           const { upstream: tu, data: td } = await getFromRagic(env, 'payments/1', tokenQs);
           if (!tu.ok) return jsonResp({ error: 'upstream_error', code: tu.status }, 502, allowedOrigin);
@@ -3822,7 +3552,7 @@ export default {
 
         // Branch 2: code or rid supplied (legacy format) — MUST also carry a matching token
         if (codeParam || ridParam) {
-          if (!tokenParam || !validHardenedToken(tokenParam)) { // v43 hardened
+          if (!tokenParam || !validUuid(tokenParam)) {
             return jsonResp({ error: 'record_not_found' }, 404, allowedOrigin); // uniform 404, don't hint "you're missing a token"
           }
 
@@ -3903,7 +3633,7 @@ export default {
 
         // Branch 1: pure token lookup — no rid/code supplied
         if (tokenParam && !ridOrCodeParam) {
-          if (!validHardenedToken(tokenParam)) return jsonResp({ error: 'invalid_token' }, 400, allowedOrigin); // v43 hardened
+          if (!validUuid(tokenParam)) return jsonResp({ error: 'invalid_token' }, 400, allowedOrigin);
           const tokenQs = `naming=EID&where=1003029,eq,${encodeURIComponent(tokenParam)}&limit=0,1`;
           const { upstream: tu, data: td } = await getFromRagic(env, 'payments/2', tokenQs);
           if (!tu.ok) return jsonResp({ error: 'upstream_error', code: tu.status }, 502, allowedOrigin);
@@ -3913,7 +3643,7 @@ export default {
 
         // Branch 2: rid or code supplied (legacy format) — MUST also carry a matching token
         if (ridOrCodeParam) {
-          if (!tokenParam || !validHardenedToken(tokenParam)) { // v43 hardened
+          if (!tokenParam || !validUuid(tokenParam)) {
             return jsonResp({ error: 'record_not_found' }, 404, allowedOrigin); // uniform 404, don't hint "you're missing a token"
           }
 
@@ -3972,7 +3702,7 @@ export default {
         const sheetKey = url.searchParams.get('sheet');
         const sheetPath = PAYMENT_SOURCE_SHEETS[sheetKey];
         if (!sheetPath) return jsonResp({ error: 'invalid_sheet' }, 400, allowedOrigin);
-        if (!tokenParam || !validHardenedToken(tokenParam)) return jsonResp({ error: 'record_not_found' }, 404, allowedOrigin); // v43 hardened
+        if (!tokenParam || !validUuid(tokenParam)) return jsonResp({ error: 'record_not_found' }, 404, allowedOrigin);
 
         const tokenQs = `naming=EID&where=1003029,eq,${encodeURIComponent(tokenParam)}&limit=0,1`;
         const { upstream: tu, data: td } = await getFromRagic(env, 'payments/2', tokenQs);
@@ -4147,7 +3877,7 @@ export default {
         const tokenParam = form.get('_token');
         const sheetPath = PAYMENT_SOURCE_SHEETS[sheetKey];
         if (!sheetPath) return jsonResp({ error: 'invalid_sheet' }, 400, allowedOrigin);
-        if (typeof tokenParam !== 'string' || !validHardenedToken(tokenParam)) return jsonResp({ error: 'record_not_found' }, 404, allowedOrigin); // v43 hardened
+        if (typeof tokenParam !== 'string' || !validUuid(tokenParam)) return jsonResp({ error: 'record_not_found' }, 404, allowedOrigin);
 
         const tokenQs = `naming=EID&where=1003029,eq,${encodeURIComponent(tokenParam)}&limit=0,1`;
         const { upstream: tu, data: td } = await getFromRagic(env, 'payments/2', tokenQs);
