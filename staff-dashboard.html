@@ -1392,10 +1392,25 @@ function renderGoalPanel(raw) {
     return m === ym || m.startsWith(ym);
   });
 
-  // 已填目標者姓名集合（含合併筆「張忠豪&蕭頤臻」＝兩人皆已填）
-  const filledNames = new Set(
-    recs.map(r => normalizeName((r['員工姓名'] || r['_index_title_'] || '').trim())).filter(Boolean)
-  );
+  // 已填目標者姓名集合（含合併筆「張忠豪&蕭頤臻」＝兩人皆已填，須拆開分別標記）
+  const filledNames = new Set();
+  recs.forEach(r => {
+    const raw = (r['員工姓名'] || r['_index_title_'] || '').trim();
+    if (!raw) return;
+    const norm = normalizeName(raw);
+    filledNames.add(norm);
+    // 合併筆用 & 拆開，raw／norm 兩邊都拆：涵蓋「本就寫合併名」與「寫舊名/單名被 alias 成合併名」兩種情況，
+    // 確保 ACTIVE_STAFF 不論存的是合併鍵還是拆開的個別姓名都比得到
+    [raw, norm].forEach(s => {
+      if (!s.includes('&')) return;
+      s.split('&').forEach(part => {
+        const p = part.trim();
+        if (!p) return;
+        filledNames.add(p);
+        filledNames.add(normalizeName(p));
+      });
+    });
+  });
   renderGoalUnfilled(filledNames, monthNum);
 
   if (recs.length === 0) {
