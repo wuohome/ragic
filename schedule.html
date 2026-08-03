@@ -883,6 +883,7 @@ const App = () => {
                     const y = parseInt(parts[0]), m = parseInt(parts[1]);
                     if (y !== year || m !== month) return;
                     const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
+                    const dept = f[CONFIG.F_LEAVE.DEPT] || "";
                     const noteRaw = f[CONFIG.F_LEAVE.NOTE] || "";
                     // 清運值日（🗑️）既有紀錄一律保留不刪（不管來源是手動還是先前自動預排），並記下當天清運的人；
                     // 沒有紀錄的日子改由下面新增的清運自動補位邏輯處理（2026-08-02 新增，見 newTrashDuties）
@@ -892,7 +893,18 @@ const App = () => {
                         if (tEmp) trashByDate[date].push(tEmp);
                         return;
                     }
-                    if (isAuto === "No") {
+                    // 防呆②（2026-08-03）：原本只看 isAuto==="No" 判斷「是否為手動排班、免被刪除」，
+                    // 但 1000966（是否計入8天）是一欄多語義（Yes/No/未掃/未值班），手動紀錄若為了計入
+                    // 公平帳而設 Yes（如 Kelly 案補位 5478-5481、5484）就會失去保護，7/9 87 筆誤重排即
+                    // 因此發生。改用 1002026（部門）判斷排班來源＝「這筆是不是系統自動產生的」，因為
+                    // handleClick（手動點格）與這裡的自動排班寫入，兩個現行程式碼路徑永遠成對正確寫入
+                    // (No,手動變更/4F手動排班) 或 (Yes,系統預排)，不會有語意混淆。
+                    // 用 OR 合併新舊兩個條件（isAuto==="No" 或 dept!=="系統預排"，任一成立就保護），
+                    // 保護範圍只會比單看任一條件更大、不會更小：除了修掉「手動紀錄設 Yes 就失去保護」
+                    // 的主要漏洞，也同時保住 2 筆歷史資料（5426/5429，7/1 一次性補位腳本把 dept 誤標成
+                    // 系統預排、但 isAuto 正確寫了 No）。真正「系統自動排、日後被標記未掃」的紀錄
+                    // （isAuto="未掃" 且 dept="系統預排"）兩個條件都不成立，維持原行為照常可被刪除重排。
+                    if (isAuto === "No" || dept !== "系統預排") {
                         const empName = f[CONFIG.F_LEAVE.EMP] || "";
                         const note = f[CONFIG.F_LEAVE.NOTE] || "";
                         const floor = /^(1F|2F|3F|4F)$/.test(note) ? note : "";
