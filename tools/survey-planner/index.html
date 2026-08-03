@@ -1,114 +1,30 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>場勘規劃書產生器 · 窩的家</title>
-<style>
-  :root{
-    --navy:#3F5262; --navy2:#556A7C; --line:#6B7F91;
-    --gold:#F2CF00; --red:#DD6650; --blue:#556A7C;
-    --ink:#26323C; --bg:#F8FAFC;
-  }
-  *{box-sizing:border-box;font-family:"Microsoft JhengHei","微軟正黑體","PingFang TC","Noto Sans TC",sans-serif;-webkit-tap-highlight-color:transparent;}
-  html{-webkit-text-size-adjust:100%;}
-  body{margin:0;background:var(--bg);color:var(--ink);}
-  header{background:var(--navy);color:#fff;padding:14px 22px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;box-shadow:0 2px 8px rgba(0,0,0,.2)}
-  header h1{font-size:19px;margin:0;font-weight:700;letter-spacing:1px}
-  header .sp{flex:1}
-  header button{background:var(--gold);color:var(--navy);border:0;font-weight:800;padding:13px 20px;border-radius:10px;cursor:pointer;font-size:16px;min-height:48px}
-  header button:active{filter:brightness(.95)}
-  .wrap{display:flex;max-width:1180px;margin:18px auto;gap:18px;padding:0 16px}
-  /* 步驟導覽：桌面左側欄 */
-  nav.steps{width:210px;flex-shrink:0}
-  nav.steps div{padding:14px 14px;border-radius:11px;cursor:pointer;margin-bottom:7px;font-weight:600;color:#5a6b86;background:#fff;border:1px solid #e2e7f0;min-height:52px}
-  nav.steps div.on{background:var(--navy);color:#fff;border-color:var(--navy)}
-  nav.steps div small{display:block;font-weight:400;font-size:11px;opacity:.7}
-  main{flex:1;background:#fff;border-radius:14px;padding:24px 26px;box-shadow:0 4px 18px rgba(30,50,80,.08);min-height:520px}
-  h2.sec{margin:0 0 4px;color:var(--navy);font-size:22px}
-  p.hint{margin:0 0 18px;color:#7a879e;font-size:14px;line-height:1.5}
-  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px 20px}
-  .grid.one{grid-template-columns:1fr}
-  .blk{border:1px solid #e6eaf2;border-radius:11px;padding:16px 16px;margin-bottom:16px}
-  .blk h3{margin:0 0 14px;color:var(--blue);font-size:16px;display:flex;align-items:center;gap:7px}
-  .blk h3:before{content:"";width:5px;height:17px;background:var(--gold);border-radius:2px}
-  label.f{display:block;font-size:14px;color:#54627c;margin-bottom:6px;font-weight:600}
-  input,select,textarea{width:100%;padding:12px 13px;border:1px solid #cfd7e6;border-radius:9px;font-size:16px;background:#fbfcfe;min-height:48px;-webkit-appearance:none}
-  /* 上面的 -webkit-appearance:none 會讓勾選框畫不出勾勾，checkbox/radio 要還原原生外觀 */
-  input[type=checkbox],input[type=radio]{width:auto;min-height:auto;padding:0;border:0;background:none;flex:none;-webkit-appearance:auto;appearance:auto;accent-color:#3F5262;transform:scale(1.3);margin:0 2px}
-  select{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%235a6b86' d='M1 1l5 5 5-5'/></svg>");background-repeat:no-repeat;background-position:right 14px center;padding-right:34px}
-  input:focus,select:focus,textarea:focus{outline:2px solid var(--gold);border-color:var(--gold)}
-  textarea{resize:vertical;min-height:80px}
-  .addrow{display:flex;gap:8px}
-  .addrow select{flex:1}
-  .mini{background:var(--navy);color:#fff;border:0;border-radius:9px;padding:0 16px;cursor:pointer;font-size:15px;white-space:nowrap;min-height:48px;font-weight:600}
-  .mini.gold{background:var(--gold);color:var(--navy);font-weight:800}
-  .mini.ghost{background:#fff;color:var(--navy);border:1px solid var(--navy)}
-  .mini.red{background:var(--red)}
-  .mini:active{filter:brightness(.95)}
-  .field{margin-bottom:2px}
-  .sub{font-size:13px;color:#94a0b6;margin-top:6px;line-height:1.5}
-  /* construction pages */
-  .cpage{border:1px solid #dfe5f0;border-radius:12px;padding:16px;margin-bottom:18px}
-  .cpage .head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
-  .cpage .head b{color:var(--navy);font-size:17px}
-  .toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;padding:10px;background:#f4f6fb;border-radius:10px}
-  .toolbar button{border:1px solid #cfd7e6;background:#fff;border-radius:9px;padding:11px 14px;cursor:pointer;font-size:15px;font-weight:600;color:#445;min-height:48px}
-  .toolbar button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
-  .toolbar .swatch{width:18px;height:18px;border-radius:4px;border:1px solid #ccc;display:inline-block;vertical-align:middle;margin-right:4px}
-  .canvas-wrap{position:relative;background:#0c1424;border-radius:8px;overflow:hidden;display:block;max-width:100%;width:100%}
-  canvas{display:block;max-width:100%;width:100%;cursor:crosshair;touch-action:none;-webkit-user-select:none;user-select:none}
-  .drop{border:2px dashed #b9c4d8;border-radius:12px;padding:48px 20px;text-align:center;color:#8593aa;cursor:pointer;background:#fafbfe;font-size:17px}
-  .notes-list .nrow,.bom-list .nrow{display:flex;gap:10px;margin-bottom:10px;align-items:flex-start}
-  .notes-list .nrow input{flex:1}
-  .chk{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--red);font-weight:700;white-space:nowrap;padding-top:13px}
-  .chk input{min-height:auto}
-  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-  .pill{display:inline-block;background:#eaf0fb;color:var(--navy);border-radius:20px;padding:4px 12px;font-size:13px;margin:2px}
-  .foot{display:flex;justify-content:space-between;gap:12px;margin-top:24px;padding-top:18px;border-top:1px solid #eef1f6}
-  .foot button{padding:14px 22px;border-radius:10px;border:0;font-weight:700;cursor:pointer;font-size:16px;min-height:52px;flex:1;max-width:220px}
-  .foot .prev{background:#eef1f6;color:#54627c}
-  .foot .next{background:var(--navy);color:#fff}
-  .tag{font-size:11px;background:var(--gold);color:var(--navy);padding:2px 8px;border-radius:10px;font-weight:800;margin-left:6px}
-  .empty{color:#9aa6bc;font-size:14px;padding:10px 0}
-
-  /* ============ 平板 / 窄螢幕（iPad 直/橫向）============ */
-  @media (max-width:1100px){
-    .wrap{flex-direction:column;margin:12px auto;padding:0 12px;gap:12px}
-    /* 步驟列改成上方橫向捲動 */
-    nav.steps{width:100%;display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;position:sticky;top:76px;background:var(--bg);z-index:40}
-    nav.steps div{margin-bottom:0;flex:0 0 auto;min-width:130px;scroll-snap-align:start;padding:11px 14px;min-height:auto}
-    nav.steps div small{font-size:11px}
-    main{padding:18px 16px;border-radius:12px}
-    .grid{grid-template-columns:1fr;gap:14px}
-    .twocol{grid-template-columns:1fr;gap:14px}
-    .foot button{max-width:none}
-    header h1{font-size:17px}
-    header button{padding:12px 16px;font-size:15px}
-  }
-  @media (max-width:680px){
-    header .tag{display:none}
-    header h1{font-size:16px}
-    .toolbar button{flex:1 1 44%;justify-content:center;text-align:center}
-  }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta name="robots" content="noindex, nofollow">
+  <title>場勘規劃書產生器 · 窩的家</title>
+  <!--
+    2026-08-03：場勘規劃書搬到 https://wuohome-survey-planner.vercel.app/（Joan 拍板）。
+    原因：雲端草稿要寫進窩的家自己的 Supabase，而 GitHub Pages 是純靜態、
+    放不了持金鑰的後端；走 Vercel 的 serverless function 就不必動
+    Cloudflare Worker（同期有其他工作在改那一支）。
+    這一支只留自動跳轉——本頁 2026-08-03 曾短暫上線，依規則不讓網址死掉。
+  -->
+  <script>location.replace('https://wuohome-survey-planner.vercel.app/');</script>
+  <style>
+    body{font-family:"Microsoft JhengHei","微軟正黑體","PingFang TC","Noto Sans TC",sans-serif;
+      background:#F8FAFC;color:#26323C;display:flex;align-items:center;justify-content:center;
+      min-height:100vh;margin:0;text-align:center;line-height:1.7}
+    a{color:#3F5262;font-weight:700}
+  </style>
 </head>
 <body>
-<header>
-  <h1>🏠 場勘規劃書產生器</h1>
-  <span class="tag">窩的家</span>
-  <span class="sp"></span>
-  <button onclick="genPPT()">⬇ 產生規劃書 PPT</button>
-</header>
-
-<div class="wrap">
-  <nav class="steps" id="nav"></nav>
-  <main id="main"></main>
-</div>
-
-<script src="regions.js"></script>
-<script src="logo-data.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-<script src="app.js"></script>
+  <div>
+    <p>場勘規劃書已搬家，正在帶你過去⋯⋯</p>
+    <p>沒有自動跳轉的話請點這裡 👉 <a href="https://wuohome-survey-planner.vercel.app/">場勘規劃書產生器</a></p>
+  </div>
 </body>
 </html>
