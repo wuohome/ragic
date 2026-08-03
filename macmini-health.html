@@ -1,0 +1,350 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Mac Mini 機器人健檢報告</title>
+<style>
+:root{
+  --bg:#f7f7f5; --card:#fff; --ink:#1c1c1a; --ink2:#5a5a55; --ink3:#8a8a82;
+  --line:#e3e3de; --accent:#b45309;
+  --red:#c0392b; --redbg:#fdf0ee; --redline:#f0c8c1;
+  --amber:#a16207; --amberbg:#fdf6e3; --amberline:#ecdcb0;
+  --green:#15803d; --greenbg:#eef7f0; --greenline:#c8e2d0;
+  --blue:#1d4ed8; --bluebg:#eef2fd;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#16161a; --card:#1e1e23; --ink:#eceae5; --ink2:#a8a69f; --ink3:#77746d;
+    --line:#32323a; --accent:#f0a04b;
+    --red:#f08a7a; --redbg:#2a1a18; --redline:#4d2b26;
+    --amber:#e8bf6a; --amberbg:#282017; --amberline:#4d3d20;
+    --green:#7fc99a; --greenbg:#182420; --greenline:#2b4536;
+    --blue:#8ab0f5; --bluebg:#1a1f2e;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16161a; --card:#1e1e23; --ink:#eceae5; --ink2:#a8a69f; --ink3:#77746d;
+  --line:#32323a; --accent:#f0a04b;
+  --red:#f08a7a; --redbg:#2a1a18; --redline:#4d2b26;
+  --amber:#e8bf6a; --amberbg:#282017; --amberline:#4d3d20;
+  --green:#7fc99a; --greenbg:#182420; --greenline:#2b4536;
+  --blue:#8ab0f5; --bluebg:#1a1f2e;
+}
+:root[data-theme="light"]{
+  --bg:#f7f7f5; --card:#fff; --ink:#1c1c1a; --ink2:#5a5a55; --ink3:#8a8a82;
+  --line:#e3e3de; --accent:#b45309;
+  --red:#c0392b; --redbg:#fdf0ee; --redline:#f0c8c1;
+  --amber:#a16207; --amberbg:#fdf6e3; --amberline:#ecdcb0;
+  --green:#15803d; --greenbg:#eef7f0; --greenline:#c8e2d0;
+  --blue:#1d4ed8; --bluebg:#eef2fd;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",system-ui,-apple-system,"Segoe UI",sans-serif;
+  line-height:1.75; font-size:16px; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:940px; margin:0 auto; padding:32px 20px 96px}
+header{padding:8px 0 28px; border-bottom:2px solid var(--ink); margin-bottom:32px}
+h1{font-size:1.85rem; margin:0 0 8px; letter-spacing:-.02em; line-height:1.3}
+.sub{color:var(--ink2); font-size:.9rem; margin:0}
+h2{font-size:1.3rem; margin:56px 0 6px; letter-spacing:-.01em; padding-top:8px}
+h2:first-of-type{margin-top:36px}
+h2 .num{color:var(--ink3); font-weight:400; margin-right:8px}
+.h2sub{color:var(--ink2); font-size:.9rem; margin:0 0 20px}
+h3{font-size:1.05rem; margin:0 0 10px; line-height:1.5}
+p{margin:0 0 14px}
+.card{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px 22px; margin-bottom:16px}
+.card.red{background:var(--redbg); border-color:var(--redline)}
+.card.amber{background:var(--amberbg); border-color:var(--amberline)}
+.card.green{background:var(--greenbg); border-color:var(--greenline)}
+.tag{display:inline-block; font-size:.72rem; font-weight:700; letter-spacing:.06em;
+  padding:3px 9px; border-radius:20px; vertical-align:middle; margin-right:10px; white-space:nowrap}
+.tag.red{background:var(--red); color:var(--bg)}
+.tag.amber{background:var(--amber); color:var(--bg)}
+.tag.green{background:var(--green); color:var(--bg)}
+.tag.gray{background:var(--ink3); color:var(--bg)}
+.meta{display:flex; flex-wrap:wrap; gap:8px 22px; margin:14px 0 0; padding-top:14px;
+  border-top:1px dashed var(--line); font-size:.85rem; color:var(--ink2)}
+.meta b{color:var(--ink); font-weight:600}
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin:0 0 28px}
+.stat{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px}
+.stat .n{font-size:1.6rem; font-weight:700; line-height:1.2; letter-spacing:-.02em}
+.stat .l{font-size:.8rem; color:var(--ink2); margin-top:2px}
+.stat.warn .n{color:var(--red)}
+.stat.ok .n{color:var(--green)}
+ul,ol{margin:0 0 14px; padding-left:22px}
+li{margin-bottom:7px}
+li:last-child{margin-bottom:0}
+code{font-family:"SF Mono",Menlo,Consolas,monospace; font-size:.85em;
+  background:var(--bluebg); color:var(--blue); padding:1px 6px; border-radius:4px; word-break:break-all}
+.tblwrap{overflow-x:auto; -webkit-overflow-scrolling:touch; margin:0 0 16px;
+  border:1px solid var(--line); border-radius:10px; background:var(--card)}
+table{border-collapse:collapse; width:100%; font-size:.88rem; min-width:520px}
+th,td{text-align:left; padding:10px 14px; border-bottom:1px solid var(--line); vertical-align:top}
+th{font-weight:600; color:var(--ink2); font-size:.8rem; letter-spacing:.03em; white-space:nowrap;
+  background:var(--bg); position:sticky; top:0}
+tr:last-child td{border-bottom:none}
+td.n{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap}
+.dead{color:var(--red); font-weight:600}
+.alive{color:var(--green)}
+.evi{background:var(--bg); border-left:3px solid var(--ink3); border-radius:0 6px 6px 0;
+  padding:10px 14px; margin:12px 0; font-family:"SF Mono",Menlo,Consolas,monospace;
+  font-size:.78rem; line-height:1.6; color:var(--ink2); overflow-x:auto; white-space:pre}
+.note{font-size:.85rem; color:var(--ink2); border-left:3px solid var(--accent);
+  padding:2px 0 2px 14px; margin:14px 0}
+.fix{background:var(--bg); border:1px dashed var(--line); border-radius:8px; padding:12px 16px; margin:14px 0 0}
+.fix b{font-size:.8rem; letter-spacing:.05em; color:var(--ink2); display:block; margin-bottom:6px}
+footer{margin-top:64px; padding-top:20px; border-top:1px solid var(--line);
+  font-size:.82rem; color:var(--ink3)}
+@media(max-width:600px){
+  .wrap{padding:20px 14px 64px}
+  h1{font-size:1.45rem}
+  h2{font-size:1.15rem; margin-top:44px}
+  .card{padding:16px}
+  body{font-size:15px}
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <h1>Mac Mini 機器人健檢報告</h1>
+  <p class="sub">2026-08-03 全機實測 · 115 個自動工作 · 8 支對話機器人 · 全程唯讀未更動任何設定</p>
+</header>
+
+<div class="stats">
+  <div class="stat warn"><div class="n">19</div><div class="l">被系統擋下的排程</div></div>
+  <div class="stat warn"><div class="n">0</div><div class="l">整機備份</div></div>
+  <div class="stat"><div class="n">115</div><div class="l">自動工作總數</div></div>
+  <div class="stat"><div class="n">69%</div><div class="l">硬碟已用</div></div>
+  <div class="stat ok"><div class="n">2.0<span style="font-size:1rem">GB</span></div><div class="l">機器人吃的記憶體</div></div>
+  <div class="stat ok"><div class="n">5.6%</div><div class="l">Claude 額度用量</div></div>
+</div>
+
+<p>整體結論：<b>機器本身很健康</b>——記憶體剩 3.5GB、沒動用虛擬記憶體、Claude 訂閱額度只用 5.6%、所有對話機器人的網路埠零衝突。真正的問題不在效能，在<b>三件會讓你「以為它在跑、其實早就死了」的事</b>，其中一件今天早上剛發生。</p>
+
+<h2><span class="num">1</span>19 個排程被 macOS 擋掉，你今天早上的 TODO 提醒沒送出</h2>
+<p class="h2sub">最高優先 · 修好只要幾分鐘 · 目前完全沒有告警會通知你</p>
+
+<div class="card red">
+  <h3><span class="tag red">現在就修</span>系統把這些排程當成「來路不明的程式」直接殺掉</h3>
+  <p>Homebrew 的 Python 在 <b>8/2 下午 16:52</b> 自動升級到 3.14.6。macOS 的排程系統記著舊版的簽章指紋，新版對不上，於是從那一刻起，凡是用這支 Python 的排程<b>一啟動就被系統當場砍掉</b>——不是跑失敗、是根本沒開始跑，而且不會留任何錯誤訊息。</p>
+
+  <div class="evi">com.9m.todo-sentinel     last exit reason = OS_REASON_CODESIGNING
+                         properties = needs LWCR update
+
+todo-sentinel.log 最後一筆：
+[2026-08-02 08:30:01] sending telegram message (806 chars)
+[2026-08-02 08:30:02] done
+（8/3 08:30 應該要有一筆，沒有）</div>
+
+  <p><b>已經死掉的 5 個：</b></p>
+  <div class="tblwrap"><table>
+    <tr><th>排程</th><th>它平常在做什麼</th><th>死掉多久</th></tr>
+    <tr><td>TODO 晨間哨兵</td><td>每天 08:30 推 TODO 提醒給你</td><td class="dead">今天早上</td></tr>
+    <tr><td>Vault 週報</td><td>每週整理筆記庫狀態</td><td class="dead">7/26 起</td></tr>
+    <tr><td>有物製所週報</td><td>youwu 每週報表</td><td class="dead">7/27 起</td></tr>
+    <tr><td>機器人設定檔稽核</td><td>檢查排程有沒有漏設定</td><td class="dead">7/27 起</td></tr>
+    <tr><td>TODO 完成偵測</td><td>抓做完沒劃掉的項目</td><td class="dead">7/26 起</td></tr>
+  </table></div>
+
+  <p><b>還沒被觸發、但下次執行一定會死的 14 個</b>，裡面有兩個要特別注意：</p>
+  <ul>
+    <li><b>每月自動重開機</b>（每月 1 號 04:00）——這支死了代表機器再也不會自己重啟，長期會累積記憶體碎片</li>
+    <li><b>Plaud 週報</b>（每週五 17:30）、<b>BNI 鎖定／合併／解鎖</b>三支、<b>斡旋金週檢</b>、<b>Claude 隔離環境 24 小時檢查</b></li>
+    <li>其餘 7 支是早就過期的一次性提醒（5 月、6 月、7 月的），本來就該清掉</li>
+  </ul>
+
+  <div class="fix">
+    <b>怎麼修</b>
+    對這 19 個排程做一次「卸載再重新載入」，讓系統重新認一次新版 Python 的簽章。指令層面是 <code>launchctl bootout</code> 加 <code>bootstrap</code>，一支約 2 秒，全部跑完不到 1 分鐘，過程中不會中斷任何正在跑的機器人。<br>
+    <b>順帶處理：</b>把 7 支過期的一次性提醒直接退役，不用再修。
+  </div>
+
+  <div class="meta">
+    <span>影響：<b>你每天早上的提醒 + 每月自動維護</b></span>
+    <span>工時：<b>約 10 分鐘</b></span>
+    <span>風險：<b>低（可逆、不影響運行中服務）</b></span>
+  </div>
+</div>
+
+<div class="card amber">
+  <h3><span class="tag amber">併著做</span>同一件事還會再發生</h3>
+  <p>這次是 Python 升級觸發的。只要 Homebrew 再升級一次 Python、Node 或任何被排程直接呼叫的工具，同一批排程就會再死一次，而且一樣不會有人通知你。</p>
+  <p>建議加一支<b>每日簽章檢查</b>：掃描全部排程有沒有出現 <code>needs LWCR update</code> 這個標記，有就自動修復並推 Telegram 告訴你。這個標記是精準的預警訊號——今天死掉的 5 支和還沒死的 14 支，全部都有它，而正常的 8 支都沒有。</p>
+  <div class="meta"><span>工時：<b>約 1 小時</b></span><span>價值：<b>這類靜默失效以後會自己浮出來</b></span></div>
+</div>
+
+<h2><span class="num">2</span>整台機器沒有任何備份</h2>
+<p class="h2sub">硬碟壞掉 = 全部消失 · 這是唯一一件「發生了就無法補救」的事</p>
+
+<div class="card red">
+  <h3><span class="tag red">現在就修</span>Time Machine 沒設定，也沒有其他備份機制</h3>
+  <div class="evi">$ tmutil destinationinfo
+tmutil: No destinations configured.
+
+$ df -h        →  無任何外接磁碟
+$ grep rsync|restic|borg 全部排程  →  零命中</div>
+  <p>目前這台機器上「只存在這裡、別的地方沒有」的東西：</p>
+  <div class="tblwrap"><table>
+    <tr><th>東西</th><th>大小</th><th>掉了會怎樣</th></tr>
+    <tr><td>9 個機器人專案的程式碼<br><span style="font-size:.85em;color:var(--ink2)">小特助、Doctor、秘書、財務、LINE 採購、查帳備援等</span></td><td class="n">約 700MB</td><td>全部機器人要重寫</td></tr>
+    <tr><td>n8n 的 17 條自動化流程</td><td class="n">2GB</td><td>LINE 匯總、Plaud、Ragic 同步全停</td></tr>
+    <tr><td>104 招募的登入狀態與設定</td><td class="n">2.3GB</td><td>要重新登入、重設整套流程</td></tr>
+    <tr><td>Plaud 錄音處理系統</td><td class="n">5.8GB</td><td>轉錄流程重建</td></tr>
+  </table></div>
+  <p>已經有備份的部分：Obsidian 筆記（Obsidian Sync）、Ragic 前端頁面（GitHub）、Supabase 資料庫（每日加密備份，8/3 04:00 剛跑過，正常）。</p>
+
+  <div class="fix">
+    <b>兩層做法，建議都做</b>
+    <b style="font-weight:400;color:var(--ink);display:inline">第一層（今天，30 分鐘）：</b>把那 9 個沒有雲端備份的機器人專案推上 GitHub 私有庫。零成本、立刻生效。<br>
+    <b style="font-weight:400;color:var(--ink);display:inline;margin-top:6px">第二層（要買東西）：</b>接一顆外接硬碟開 Time Machine。1TB SSD 約 <b>2,000–3,000 元</b>，插上去設定 10 分鐘，之後全自動。這是唯一能救「整台機器掛掉」的方法。
+  </div>
+  <div class="meta">
+    <span>影響：<b>全部系統</b></span>
+    <span>工時：<b>30 分鐘 + 買硬碟</b></span>
+    <span>風險：<b>不做的風險遠大於做</b></span>
+  </div>
+</div>
+
+<div class="card amber">
+  <h3><span class="tag amber">順手做</span>程式碼改了三個月沒存檔</h3>
+  <p>秘書機器人和財務機器人的主程式，自 <b>5/13</b> 起累積了 900 多行改動<b>從來沒有存進版本控制</b>。104 招募專案有 78 個檔案沒存，其中 <code>lib/session.js</code> 已經被刪除但還沒記錄下來。Doctor 機器人的熔斷器程式（防止它失控的保險絲）整支檔案沒納入版控。</p>
+  <p>意思是：如果誰不小心改壞了，<b>沒有任何一個版本可以回去</b>。</p>
+  <div class="meta"><span>工時：<b>約 40 分鐘</b></span><span>風險：<b>低</b></span></div>
+</div>
+
+<h2><span class="num">3</span>Doctor 機器人身上還帶著已知的誤殺 bug</h2>
+<p class="h2sub">8/3 修好的問題只補在小特助身上，Doctor 沒補到</p>
+
+<div class="card red">
+  <h3><span class="tag red">現在就修</span>Doctor 派出小幫手就會被自己的看門狗殺掉</h3>
+  <p>今天早上修的那個 bug——看門狗只看主程式有沒有動靜，看不到小幫手（subagent）在忙，於是主程式一派工就被當成當機殺掉、訊息直接丟棄——<b>只補在小特助（channel）身上</b>。</p>
+  <div class="evi">小特助  server.mjs:124  遞迴掃描 ✓ 已修（有 SUBAGENTFIX 註解）
+Doctor  server.mjs:78   單層掃描 ✗ 未修
+秘書    server.mjs:197  單層掃描 ✗ 未修
+財務    server.mjs:67   單層掃描 ✗ 未修
+
+實際已產生小幫手的機器人：小特助 21 次、Doctor 1 次</div>
+  <p>Doctor <b>已經派過小幫手</b>，代表它踩得到這個 bug；秘書和財務目前沒派過，暫時不會觸發，但同樣該補。Doctor 的職責就是在別的機器人出事時自動修復——它自己在關鍵時刻被殺掉最麻煩。</p>
+  <div class="fix">
+    <b>怎麼修</b>
+    把小特助那段已驗證過的遞迴掃描程式碼，複製到 Doctor、秘書、財務三支。改動很小、已有可對照的正確版本。
+  </div>
+  <div class="meta"><span>影響：<b>Doctor 的自動修復能力</b></span><span>工時：<b>約 30 分鐘（含測試）</b></span><span>風險：<b>低</b></span></div>
+</div>
+
+<h2><span class="num">4</span>資源浪費：能回收 30GB 硬碟、n8n 資料庫可以瘦 4/5</h2>
+<p class="h2sub">不急，但做了機器會輕很多</p>
+
+<div class="card">
+  <h3><span class="tag amber">之後做</span>n8n 資料庫 2GB，其中 1.6GB 是同一條流程產生的</h3>
+  <p>「SEC－LINE 每小時匯總」這一條流程，14 天跑了 335 次，<b>每次留下 4.75MB 的執行紀錄</b>，光它一條就佔掉整個資料庫的 <b>78%</b>。</p>
+  <div class="tblwrap"><table>
+    <tr><th>流程</th><th class="n">14 天執行次數</th><th class="n">佔用</th></tr>
+    <tr><td><b>SEC－LINE 每小時匯總</b></td><td class="n">335</td><td class="n"><b>1,592 MB</b></td></tr>
+    <tr><td>LINE 訊息每日歸檔</td><td class="n">14</td><td class="n">66 MB</td></tr>
+    <tr><td>LINE collector</td><td class="n">2,443</td><td class="n">31 MB</td></tr>
+    <tr><td>Ragic 同步 ap15→ap16</td><td class="n">251</td><td class="n">8 MB</td></tr>
+    <tr><td>plaud-pipe</td><td class="n">4,038</td><td class="n">7 MB</td></tr>
+  </table></div>
+  <p class="note">舊資料清理其實有在運作（只留 14 天），問題是這一條流程單次產生的資料量太大。把它改成「成功時不保留完整內容、只留失敗紀錄」，資料庫立刻從 2GB 降到約 <b>400MB</b>。</p>
+  <p>另外還有 <b>2.4GB 的過期資料庫備份</b>躺著（6/30 的 1.5GB、5/21 的 884MB），可以直接刪。</p>
+  <div class="meta"><span>工時：<b>約 40 分鐘</b></span><span>回收：<b>約 4GB</b></span></div>
+</div>
+
+<div class="card">
+  <h3><span class="tag amber">之後做</span>硬碟 141GB 裡有 30GB 是純快取</h3>
+  <div class="tblwrap"><table>
+    <tr><th>項目</th><th class="n">大小</th><th>能不能清</th></tr>
+    <tr><td>Python 套件快取（uv）</td><td class="n">24 GB</td><td class="alive">可以，清了只是下次安裝慢一點</td></tr>
+    <tr><td>npm 套件快取</td><td class="n">4.9 GB</td><td class="alive">可以</td></tr>
+    <tr><td>n8n 舊資料庫備份</td><td class="n">2.4 GB</td><td class="alive">可以</td></tr>
+    <tr><td>AI 模型快取（huggingface）</td><td class="n">7.4 GB</td><td>先確認語音轉錄還需不需要</td></tr>
+  </table></div>
+  <p>清掉前三項 = <b>回收約 31GB</b>，硬碟從 69% 降到 <b>56%</b>。目前還剩 63GB 不算緊，但 Plaud 錄音會持續長大，早點清比較安心。</p>
+  <div class="meta"><span>工時：<b>約 15 分鐘</b></span><span>回收：<b>約 31GB</b></span></div>
+</div>
+
+<div class="card">
+  <h3><span class="tag amber">之後做</span>紀錄檔沒有自動輪替，會一路長到滿</h3>
+  <p>Ragic 下架同步的紀錄檔已經 <b>20MB</b>、地址轉換 4.6MB、額度監控 4MB（每 3 分鐘寫一行，永遠不清）、記憶體守衛每分鐘寫一行。效能監控每天生一個新檔，已累積 <b>55 個</b>沒人看的舊檔。</p>
+  <p>單獨看都不大，但這是「永遠只增不減」的類型。建議統一套用輪替規則：單檔超過 10MB 就切、只留最近 7 天。</p>
+  <div class="meta"><span>工時：<b>約 30 分鐘（一次設定，全機通用）</b></span></div>
+</div>
+
+<h2><span class="num">5</span>兩支機器人幾乎沒人用，一支從來沒收過訊息</h2>
+<p class="h2sub">留著不貴，但值得你決定要不要繼續養</p>
+
+<div class="card">
+  <div class="tblwrap"><table>
+    <tr><th>機器人</th><th class="n">近 7 天訊息</th><th class="n">吃的記憶體</th><th>狀況</th></tr>
+    <tr><td>LINE 採購請款</td><td class="n">30</td><td class="n">391 MB</td><td class="alive">主力，正常</td></tr>
+    <tr><td>LINE 系統醫生</td><td class="n">11</td><td class="n">—</td><td class="alive">正常</td></tr>
+    <tr><td>Doctor</td><td class="n">6</td><td class="n">230 MB</td><td class="alive">正常（但有第 3 點的 bug）</td></tr>
+    <tr><td>小特助 CC</td><td class="n">0</td><td class="n">245 MB</td><td>近 7 天無對話</td></tr>
+    <tr><td>秘書</td><td class="n">0</td><td class="n">342 MB</td><td>近 7 天無對話</td></tr>
+    <tr><td><b>簡家財務</b></td><td class="n">0</td><td class="n">148 MB</td><td class="dead">從開機到現在<b>從未收過任何訊息</b></td></tr>
+  </table></div>
+  <div class="evi">claude-telegram-wealth debug.log：
+POLL_IDLE: offset=0 (getUpdates ok, no messages ever, polling active)
+.claude-isolated/projects 目錄不存在（從未產生過對話紀錄）</div>
+  <p>簡家財務機器人的連線是通的、程式是活的，只是<b>沒有人跟它說過話</b>。它每 6 小時自我重啟一次，佔 148MB 記憶體。</p>
+  <p class="note">這不是壞掉，是沒被使用。要留（等之後用）還是關掉（省資源），由你決定——我不會自己動它。</p>
+</div>
+
+<h2><span class="num">6</span>組態品質：現在沒事，但少了安全網</h2>
+<p class="h2sub">115 個排程共用同一套預設值，沒有任何一個設了保護參數</p>
+
+<div class="card">
+  <div class="tblwrap"><table>
+    <tr><th>保護設定</th><th class="n">有設的</th><th>沒設會怎樣</th></tr>
+    <tr><td>執行逾時保護</td><td class="n">1 / 121</td><td>長時間工作跑到一半被強制中斷</td></tr>
+    <tr><td>降低優先權</td><td class="n">0 / 121</td><td>背景維護工作跟你操作電腦搶資源</td></tr>
+    <tr><td>重試間隔限制</td><td class="n">19 / 121</td><td>服務壞掉時可能瘋狂重啟</td></tr>
+    <tr><td>紀錄檔路徑</td><td class="n">113 / 121</td><td>出事查不到原因</td></tr>
+  </table></div>
+  <p>其中一個具體後果：<b>每月自動重開機那支完全沒有紀錄檔</b>——它要是失敗了，沒有任何地方會留下痕跡（而它現在正好在第 1 點的死亡名單裡）。</p>
+  <p><b>排程尖峰：</b>每天早上 09:00 有 <b>9 支</b>排程同時啟動，09:30 再 5 支、04:00 再 5 支。目前機器扛得住（負載 1.8，8 核心），但這是不必要的擠壓，錯開幾分鐘就好。</p>
+  <div class="meta"><span>工時：<b>約 2 小時（一次做完，長期受益）</b></span><span>急迫性：<b>低</b></span></div>
+</div>
+
+<div class="card amber">
+  <h3><span class="tag amber">要提醒</span>兩處密碼是明文放著的</h3>
+  <p>n8n 的設定檔裡有一把 API 金鑰是明文寫死的；LINE 採購機器人啟動時把搜尋服務的權杖<b>寫在指令列參數上</b>——這代表這台機器上任何程式跑一行指令就看得到。</p>
+  <p>你已經有 1Password 在管憑證，這兩處應該改成從 1Password 讀取。實際外洩風險不高（機器只有你和 Tailscale 內網能進），但既然規則已經訂了，這兩處是漏網的。</p>
+  <div class="meta"><span>工時：<b>約 40 分鐘</b></span></div>
+</div>
+
+<h2><span class="num">7</span>順手發現的雜項</h2>
+
+<div class="card">
+  <ul>
+    <li><b>開機腳本每次浪費 5 分鐘等一個不存在的東西</b>——它在找 Docker，但 Docker 早就從這台機器移除了。每次開機都會卡 5 分鐘然後報錯，7/1 起已經失敗 3 次。刪掉那段即可。</li>
+    <li><b>44 個舊設定檔殘留</b>——退役、備份、停用的檔案堆在排程目錄裡，其中 21 個是 6/5 同一次改動留下的。清掉能讓以後看這個目錄不用一直分辨哪些是活的。</li>
+    <li><b>2 個排程設定檔的 XML 格式是壞的</b>——但 8/1 月度重啟已經實測過，macOS 的解析器容忍這兩種瑕疵，服務正常載入。<b>之前擔心的「重開機起不來」不成立</b>，順手修一下即可，不急。</li>
+    <li><b>小紅書轉錄積壓已在清理中</b>，Ragic 同步、地址轉換、FB 權杖監控、Supabase 備份、104 排程今天都正常執行。</li>
+  </ul>
+</div>
+
+<h2><span class="num">8</span>建議的執行順序</h2>
+
+<div class="card green">
+  <div class="tblwrap"><table>
+    <tr><th class="n">順序</th><th>做什麼</th><th class="n">工時</th><th>為什麼是這個順序</th></tr>
+    <tr><td class="n">1</td><td><b>修 19 個被擋下的排程</b></td><td class="n">10 分</td><td>你每天早上的提醒現在是斷的</td></tr>
+    <tr><td class="n">2</td><td><b>9 個機器人專案推上 GitHub</b></td><td class="n">30 分</td><td>唯一「發生就無法補救」的風險</td></tr>
+    <tr><td class="n">3</td><td><b>補 Doctor 的誤殺 bug</b></td><td class="n">30 分</td><td>Doctor 是出事時的最後一道防線</td></tr>
+    <tr><td class="n">4</td><td>加簽章每日自動檢查</td><td class="n">1 小時</td><td>讓第 1 點以後自己浮出來</td></tr>
+    <tr><td class="n">5</td><td>n8n 瘦身 + 清 31GB 快取 + log 輪替</td><td class="n">1.5 小時</td><td>純資源，不影響功能</td></tr>
+  </table></div>
+  <p style="margin-top:16px;margin-bottom:0">前三項合計 <b>約 70 分鐘</b>，把三個「現在是壞的但你看不到」的洞補起來。後兩項可以另外找時間。<b>簡家財務機器人要不要關掉</b>是唯一需要你決定的事，其他我可以直接做。</p>
+</div>
+
+<footer>
+  健檢時間 2026-08-03 16:00–17:00 · 主機 Mac Mini（Tailscale 內網）· 開機 2 天 12 小時<br>
+  全程唯讀：未載入／卸載任何服務、未重啟任何機器人、未修改任何檔案。所有結論皆有實機指令輸出佐證。<br>
+  未取得證據而略過的項目：各服務個別 CPU 佔用、huggingface 模型是否仍被語音轉錄使用、<code>boot-check</code> 未載入的確切原因。
+</footer>
+
+</div>
