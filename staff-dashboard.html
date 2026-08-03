@@ -92,6 +92,11 @@
         <div id="goalPanelEmptyMsg" class="text-amber-900 font-semibold"></div>
         <div class="text-amber-700 text-sm mt-1">請至 LINE 填報當月目標</div>
       </div>
+      <!-- 尚未填目標名單（2026-08-03 新增，解決「看不出誰沒填」） -->
+      <div id="goalUnfilledSection" class="mt-4 pt-4 border-t border-amber-200">
+        <div id="goalUnfilledTitle" class="text-sm font-bold text-orange-700 mb-2"></div>
+        <div id="goalUnfilledList" class="flex flex-wrap gap-2"></div>
+      </div>
     </div>
   </details>
 
@@ -1387,6 +1392,12 @@ function renderGoalPanel(raw) {
     return m === ym || m.startsWith(ym);
   });
 
+  // 已填目標者姓名集合（含合併筆「張忠豪&蕭頤臻」＝兩人皆已填）
+  const filledNames = new Set(
+    recs.map(r => normalizeName((r['員工姓名'] || r['_index_title_'] || '').trim())).filter(Boolean)
+  );
+  renderGoalUnfilled(filledNames, monthNum);
+
   if (recs.length === 0) {
     // 無資料：隱藏表格，顯示提示；重設全域目標為未填報
     CURRENT_MONTH_GOAL = { perfWan: 0, cases: 0, filled: false };
@@ -1435,6 +1446,28 @@ function renderGoalPanel(raw) {
 
   // 寫入全域，讓 renderPerfIntake 全店達成區塊讀取
   CURRENT_MONTH_GOAL = { perfWan: totalPerfSum, cases: totalCasesSum, filled: true };
+}
+
+// 「尚未填目標」名單：ACTIVE_STAFF（在職員工）扣掉當月已填目標者
+// 合併筆「張忠豪&蕭頤臻」在 ACTIVE_STAFF 中本就只算一個 entry，已填視為兩人都填
+function renderGoalUnfilled(filledNames, monthNum) {
+  const titleEl = document.getElementById('goalUnfilledTitle');
+  const listEl  = document.getElementById('goalUnfilledList');
+  if (!titleEl || !listEl) return;
+
+  const unfilled = [...ACTIVE_STAFF].filter(n => !filledNames.has(n)).sort();
+
+  if (unfilled.length === 0) {
+    titleEl.className = 'text-sm font-bold text-emerald-700 mb-2';
+    titleEl.textContent = `✅ 全員已填寫${monthNum}月目標`;
+    listEl.innerHTML = '';
+  } else {
+    titleEl.className = 'text-sm font-bold text-orange-700 mb-2';
+    titleEl.textContent = `⚠️ 尚未填寫 ${monthNum}月目標（${unfilled.length} 人）`;
+    listEl.innerHTML = unfilled
+      .map(n => `<span class="px-2.5 py-1 bg-orange-100 text-orange-800 text-xs font-semibold rounded-full">${esc(n)}</span>`)
+      .join('');
+  }
 }
 
 
@@ -1560,7 +1593,6 @@ function rankHtmlIntakeRank(items){
 
 // ── 子分頁 2「委託達成率」：進度條寬度 = 達成率（capped 100%），語意三色 ──
 function rankHtmlIntakeGoal(items){
-  if(!items.length) return '<div class="text-center text-slate-400 py-8">此區間無資料</div>';
   // 取當月個人委託目標（來源：listGoals rawGoals）
   const nowYm = (()=>{ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
   const goalMap = {}; // { name: cases }
@@ -1570,9 +1602,16 @@ function rankHtmlIntakeGoal(items){
     const nm = normalizeName((r['員工姓名']||r['_index_title_']||'').trim());
     if (nm) goalMap[nm] = (goalMap[nm] || 0) + (parseFloat(r['新進案件量(間)']) || 0);
   });
+  // 補進：有填目標但當月無委託件（items 裡不存在）的人，以 0 值 union 進來，避免消失於榜上
+  const itemNames = new Set(items.map(([name])=>name));
+  const unionedItems = items.slice();
+  Object.keys(goalMap).forEach(name => { if (!itemNames.has(name)) unionedItems.push([name, 0]); });
+
+  if(!unionedItems.length) return '<div class="text-center text-slate-400 py-8">此區間無資料</div>';
+
   // 分成：有目標（照達成率排序）、無目標（排最後灰字）
-  const withTarget = items.filter(([name])=> goalMap[name] > 0);
-  const noTarget   = items.filter(([name])=> !goalMap[name] || goalMap[name] === 0);
+  const withTarget = unionedItems.filter(([name])=> goalMap[name] > 0);
+  const noTarget   = unionedItems.filter(([name])=> !goalMap[name] || goalMap[name] === 0);
   // 有目標者依達成率排序
   withTarget.sort(([na,a],[nb,b])=>{
     const ra = a / goalMap[na];
@@ -1643,7 +1682,6 @@ function rankHtmlPerfRank(items){
 
 // ── 子分頁 2「業績達成率」：進度條寬度 = 達成率（capped 100%），語意三色 ──
 function rankHtmlPerfGoal(items){
-  if(!items.length) return '<div class="text-center text-slate-400 py-8">此區間無資料</div>';
   const fmtWan = v => (v / 10000).toFixed(1).replace(/\.0$/,'') + ' 萬';
   // 取當月個人業績目標（來源：listGoals rawGoals）
   const nowYm = (()=>{ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
@@ -1654,8 +1692,15 @@ function rankHtmlPerfGoal(items){
     const nm = normalizeName((r['員工姓名']||r['_index_title_']||'').trim());
     if (nm) goalMap[nm] = (goalMap[nm] || 0) + (parseFloat(r['業績目標(萬)']) || 0);
   });
-  const withTarget = items.filter(([name])=> goalMap[name] > 0);
-  const noTarget   = items.filter(([name])=> !goalMap[name] || goalMap[name] === 0);
+  // 補進：有填目標但當月業績為 0（items 裡不存在）的人，以 0 值 union 進來，避免消失於榜上
+  const itemNames = new Set(items.map(([name])=>name));
+  const unionedItems = items.slice();
+  Object.keys(goalMap).forEach(name => { if (!itemNames.has(name)) unionedItems.push([name, 0]); });
+
+  if(!unionedItems.length) return '<div class="text-center text-slate-400 py-8">此區間無資料</div>';
+
+  const withTarget = unionedItems.filter(([name])=> goalMap[name] > 0);
+  const noTarget   = unionedItems.filter(([name])=> !goalMap[name] || goalMap[name] === 0);
   withTarget.sort(([na,a],[nb,b])=>{
     const ra = a / (goalMap[na] * 10000);
     const rb = b / (goalMap[nb] * 10000);
@@ -2390,7 +2435,9 @@ function renderPerfIntake(){
   intakeEl.innerHTML = intakeItems.length
     ? (_rankTabState.intake === 'rank' ? rankHtmlIntakeRank(intakeItems) : rankHtmlIntakeGoal(intakeItems))
     : '<div class="text-center text-slate-400 py-4">此區間無進案</div>';
-  perfEl.innerHTML = perfItems.length
+  // showTarget（當月在選取區間內）時即使 perfItems 是空的，也要交給 rankHtmlPerfGoal
+  // 判斷是否有人有填目標（0 業績但有目標的人才補得進榜）
+  perfEl.innerHTML = (perfItems.length || showTarget)
     ? (_rankTabState.perf === 'rank' ? rankHtmlPerfRank(perfItems) : rankHtmlPerfGoal(perfItems))
     : '<div class="text-center text-slate-400 py-4">此區間無業績</div>';
 
