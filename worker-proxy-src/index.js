@@ -1,3 +1,22 @@
+// wuohome-ragic-proxy v49 — 零用金請款 Google 登入架構修正（Group X 擴充，2026-08-03）：
+// Joan 當場指正上一版架構：「為什麼你認為需要 TOKEN 你直接用 GOOGLE 帳號就好了阿」。
+// 上一版是 Vercel server route 驗 Google ID token → 查 Supabase pettycash_allowed_users →
+// 取出該人的 Ragic token → 拿那把 token 打本 Worker，問題是 31 人的 token 被複製到第二個
+// 地方（人員異動要同步兩處）、且 Supabase 表一人只存一把 token，財務角色（張瓊安/韓珊珊）
+// 因此存不下「同時也是同仁」這件事，本人反而不能用同仁身分請款。
+// 新增 authenticatePettyCashGoogle()：Worker 自己驗 Google ID token（tokeninfo + aud +
+// email_verified），直接用 email 反查人事表 ragicforms4/20004（3000976）決定「是不是在職/
+// 試用同仁」；新 secret PETTY_CASH_FINANCE_EMAILS（JSON email 陣列）決定「這個 email 是否
+// 也有財務資格」——兩種資格互不排斥，同一人可以兩者皆是，不再是存在別處的單一 role 欄位。
+// 8 個既有 pettyCash* action 全部改雙軌：有 `Authorization: Bearer <id_token>` 就走 Google
+// 這條，沒有才 fallback 舊 `?token=` 路徑（A 同仁反查人事表 token / B 財務比對
+// PETTY_CASH_FINANCE_TOKENS_JSON，兩條完全不動，TODO: Google 登入穩定後移除）。Google 路徑
+// 驗證本身失敗（憑證造假/過期/audience 不符/email 未驗證/不在白名單）回對應的 401/403，不
+// 套用舊路徑「同型 404 防列舉」的慣例——這是刻意的：帶了 Google 憑證就該由 Google 這條路的
+// 結果論成敗，不該悄悄退回舊路徑製造「哪個身分生效」的混淆；角色不符（如 staff 打 finance
+// action）維持既有同型 404，這條慣例不變。tokeninfo 是外部 HTTP call，加了記憶體內短期快取
+// （key＝id_token 的 sha256，TTL＝min(token 剩餘效期,5分鐘)）。Vercel 中介層／Supabase 白名單
+// 表同批停用，Worker 是唯一驗證點。既有 87 個 action 一行未動（additive only）。
 // wuohome-ragic-proxy v48 — 零用金請款片段 B：珊珊審核頁 + 零用金現金帳（Group X 擴充，2026-08-03）：
 // 新增 3 個 action，全部 finance 身分（同仁 token 打一律同型 404，沿用既有 PC_FINANCE_ACTIONS
 // gate 手法）：
@@ -1135,11 +1154,98 @@ function authenticatePettyCashFinance(url, env) {
 }
 
 // 同一支 gate：先試 A（同仁）再試 B（財務）。呼叫端再檢查 role 是否符合該 action 需求，
-// 不符也回同型 404（見路由段落）。
+// 不符也回同型 404（見路由段落）。**TODO: Google 登入穩定後移除**（見下方 C，2026-08-03
+// 起這條只在請求沒帶 Authorization header 時才會被呼叫，是 fallback 路徑，本身不動）。
 async function authenticatePettyCash(url, env) {
   const staff = await authenticatePettyCashStaff(url, env);
   if (staff) return staff;
   return authenticatePettyCashFinance(url, env);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// C：Google 身分驗證（2026-08-03 架構修正）。Joan 原話：「為什麼你認為需要 TOKEN 你直接用
+// GOOGLE 帳號就好了阿」——上一版讓 Vercel 中介層驗 Google token 再查 Supabase 白名單表取出
+// Ragic token 打這支 Worker，問題是 Supabase 表一人只存一把 token，財務角色（張瓊安/韓珊珊）
+// 因此存不下「同時也是同仁」這件事，本人反而不能用同仁身分請款。改成 Worker 自己驗 Google
+// ID token、直接用 email 反查人事表決定身分：只要是在職/試用同仁就能用同仁 action，email
+// 同時在 PETTY_CASH_FINANCE_EMAILS 名單內就也能用財務 action——兩種資格互不排斥，不再是
+// 存在 Supabase 裡的單一 role 欄位。Supabase 白名單表就此停用（見
+// supabase/pettycash_allowed_users_schema.sql 檔頭停用註記）。
+// 呼叫慣例：有 `Authorization: Bearer <id_token>` 才走這條；完全沒帶回 null，讓呼叫端
+// fallback 舊 `?token=` 路徑（A/B，同仁舊連結還在用，這兩條完全不動）。帶了 Authorization
+// 但驗證失敗，回 `{ __authError }` 讓呼叫端直接回應該錯誤，不 fallback——送出 Google 憑證
+// 就該由 Google 這條路的結果論成敗，悄悄退回舊路徑只會讓「哪個身分生效」變得無法診斷。
+// ─────────────────────────────────────────────────────────────────────────────
+const PC_GOOGLE_CLIENT_ID = '18499630691-mi617tp07ptq943nlkhslf7bfu27j6cn.apps.googleusercontent.com';
+const PC_STAFF_EMAIL_FIELD = '3000976';
+// tokeninfo 是外部 HTTP call，同一顆 id_token 在效期內會被同一使用者反覆帶來打不同 action，
+// 記憶體內做短期快取避免每個請求都外呼一次；key 用 token 的 sha256（不存明碼）。TTL 取
+// min(token 剩餘有效期, 5 分鐘)。Worker isolate 重啟即清空可接受（最差多打一次 tokeninfo，
+// 不影響正確性）——沿用既有 Map 手法，不為此引入 KV 或新依賴。
+const pcGoogleAuthCache = new Map(); // sha256(idToken) → { expiresAt, identity }
+
+async function pcSha256Hex(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// PETTY_CASH_FINANCE_EMAILS：新 Worker secret，JSON 陣列（email 字串，小寫比對）。取代
+// PETTY_CASH_FINANCE_TOKENS_JSON 在 Google 路徑上決定「finance」資格——舊 secret 仍保留給
+// 上面 B 的舊 token 路徑用，兩者並存到 Joan 確認 Google 登入穩定為止。
+function parsePettyCashFinanceEmails(env) {
+  let list;
+  try { list = JSON.parse(env.PETTY_CASH_FINANCE_EMAILS || '[]'); } catch { return new Set(); }
+  if (!Array.isArray(list)) return new Set();
+  return new Set(list.filter((e) => typeof e === 'string').map((e) => e.trim().toLowerCase()));
+}
+
+// 成功回傳 `{ name, department, email, isFinance }`（isFinance 是「這個人的 email 也在財務
+// 名單內」，不是單一角色——呼叫端依當前 action 需要的角色決定要不要認這個資格）。
+// 失敗回 `{ __authError: Response }`；完全沒帶 Authorization header 回 `null`。
+async function authenticatePettyCashGoogle(request, env, origin) {
+  const authHeader = request.headers.get('Authorization') || '';
+  const m = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
+  const idToken = m ? m[1].trim() : '';
+  if (!idToken) return null; // 沒帶 Authorization → 呼叫端 fallback 舊 `?token=` 路徑
+
+  const fail = (status, error) => ({ __authError: jsonResp({ error }, status, origin) });
+
+  const cacheKey = await pcSha256Hex(idToken);
+  const cached = pcGoogleAuthCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.identity;
+
+  let info;
+  try {
+    const res = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken));
+    if (!res.ok) return fail(401, 'invalid_session');
+    info = await res.json();
+  } catch {
+    return fail(401, 'invalid_session');
+  }
+  if (!info || info.aud !== PC_GOOGLE_CLIENT_ID) return fail(401, 'wrong_audience');
+  if (info.email_verified === 'false') return fail(403, 'email_unverified');
+
+  const email = pcClean(info.email).toLowerCase();
+  if (!email) return fail(401, 'invalid_session');
+
+  // email 反查人事表決定是否在職——大小寫不敏感、去前後空白，本地過濾（不依賴 Ragic where=
+  // 的大小寫比對行為）；表僅 40 餘筆，一次撈全表成本可忽略，且結果會被上面的快取罩住。
+  const { upstream, data } = await getFromRagic(env, PETTY_CASH_STAFF_SHEET, 'naming=EID&limit=200');
+  if (!upstream.ok || !data) return fail(403, 'not_whitelisted');
+  const records = Object.values(data).filter((r) => r && typeof r === 'object');
+  const rec = records.find((r) => pcClean(r[PC_STAFF_EMAIL_FIELD]).toLowerCase() === email);
+  const status = rec ? pcClean(rec[PC_STAFF_STATUS_FIELD]) : '';
+  const name = rec ? pcClean(rec[PC_STAFF_NAME_FIELD]) : '';
+  if (!rec || !PC_ACTIVE_STATUSES.has(status) || !name) return fail(403, 'not_whitelisted');
+
+  const isFinance = parsePettyCashFinanceEmails(env).has(email);
+  const identity = { name, department: pcClean(rec[PC_STAFF_DEPT_FIELD]), email, isFinance };
+
+  const expSeconds = Number(info.exp);
+  const remainingMs = Number.isFinite(expSeconds) ? (expSeconds * 1000 - Date.now()) : 0;
+  const ttlMs = Math.max(0, Math.min(5 * 60 * 1000, remainingMs));
+  pcGoogleAuthCache.set(cacheKey, { expiresAt: Date.now() + ttlMs, identity });
+  return identity;
 }
 
 async function handlePettyCashAction(action, request, env, identity, origin) {
@@ -3474,15 +3580,28 @@ export default {
       if (!worklogIdentity) return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
     }
 
-    // Group X: 零用金請款 — 兩種身分 token gate（同仁 token 反查人事表 / 財務 token 比對
-    // PETTY_CASH_FINANCE_TOKENS_JSON，同一支 gate 函式先試 A 再試 B）。角色不符該 action 所需
-    // 角色一律同型 404（不回 403，避免洩漏 token 有效性），比照上方 v29/v30/P5/Group T/U 手法。
+    // Group X: 零用金請款 — 雙軌身分驗證（2026-08-03 架構修正）。先試 Google（帶
+    // Authorization header 就走這條，見上方 C），沒帶才 fallback 舊 `?token=` 路徑（A 同仁
+    // 反查人事表 / B 財務比對 PETTY_CASH_FINANCE_TOKENS_JSON，TODO: Google 登入穩定後移除）。
+    // 角色不符該 action 所需角色一律同型 404（不回 403，避免洩漏 token/白名單有效性），比照
+    // 上方 v29/v30/P5/Group T/U 手法；Google 路徑上驗證本身失敗（invalid_session 等）例外，
+    // 回該錯誤本身的 401/403，不套用同型 404（見 C 段落開頭說明為何不 fallback）。
     let pettyCashIdentity = null;
     if (PETTY_CASH_ACTIONS.has(action)) {
-      pettyCashIdentity = await authenticatePettyCash(url, env);
       const requiredRole = PC_STAFF_ACTIONS.has(action) ? 'staff' : 'finance';
-      if (!pettyCashIdentity || pettyCashIdentity.role !== requiredRole) {
-        return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
+      const google = await authenticatePettyCashGoogle(request, env, allowedOrigin);
+      if (google && google.__authError) return google.__authError;
+      if (google) {
+        if (requiredRole === 'finance' && !google.isFinance) {
+          return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
+        }
+        pettyCashIdentity = { role: requiredRole, name: google.name, department: google.department, email: google.email };
+      } else {
+        // TODO: Google 登入穩定後移除（舊 `?token=` 路徑，A 同仁／B 財務完全不動）
+        pettyCashIdentity = await authenticatePettyCash(url, env);
+        if (!pettyCashIdentity || pettyCashIdentity.role !== requiredRole) {
+          return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
+        }
       }
     }
 
