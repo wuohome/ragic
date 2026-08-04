@@ -129,6 +129,11 @@ footer{margin-top:64px; padding-top:20px; border-top:1px solid var(--line);
 <h2><span class="num">1</span>19 個排程被 macOS 擋掉，你今天早上的 TODO 提醒沒送出</h2>
 <p class="h2sub">最高優先 · 修好只要幾分鐘 · 目前完全沒有告警會通知你</p>
 
+<div class="card green">
+  <h3><span class="tag green">✅ 已修復</span>2026-08-04 全部完成</h3>
+  <p>偵測到 18 支帶 <code>needs LWCR update</code> 旗標（TODO 哨兵已於 8/3→8/4 自癒、今早 08:30 正常送出，故非報告當時的 19 支）。<b>11 支活躍排程</b>已卸載重載、旗標全清（含<b>每月自動重開機</b>、TODO 完成偵測、Plaud／有物／Vault 週報、BNI 三支、隔離環境檢查）；<b>6 支過期一次性提醒</b>退役到 <code>_retired/</code>。重跑偵測確認全機僅剩 <b>1 支</b>——斡旋金週檢，它的排程其實是「每年 5/22」非每週、與描述不符，退役不可逆故保留交你決定要修還是清。</p>
+</div>
+
 <div class="card red">
   <h3><span class="tag red">現在就修</span>系統把這些排程當成「來路不明的程式」直接殺掉</h3>
   <p>Homebrew 的 Python 在 <b>8/2 下午 16:52</b> 自動升級到 3.14.6。macOS 的排程系統記著舊版的簽章指紋，新版對不上，於是從那一刻起，凡是用這支 Python 的排程<b>一啟動就被系統當場砍掉</b>——不是跑失敗、是根本沒開始跑，而且不會留任何錯誤訊息。</p>
@@ -183,6 +188,12 @@ todo-sentinel.log 最後一筆：
 <h2><span class="num">2</span>整台機器沒有任何備份</h2>
 <p class="h2sub">硬碟壞掉 = 全部消失 · 這是唯一一件「發生了就無法補救」的事</p>
 
+<div class="card green">
+  <h3><span class="tag green">✅ 已修復（部分）</span>2026-08-04</h3>
+  <p><b>程式碼推 GitHub：</b>6 個已推上私有庫並確認在線（查帳備援、Ragic proxy ×2、Doctor、LINE 小特助、104 招募的 sprint 分支）。<b>4 個擋下未推</b>（小特助 channel、秘書、財務、LINE 採購）——它們的程式碼歷史裡有<b>明文 Telegram／LINE 金鑰</b>，推上去等於把金鑰外洩，改為本機存檔保住（秘書 +871 行、財務 +442 行不再會被誤改遺失）。這 4 個需你決定：<b>換金鑰＋改讀環境變數後再推</b>，或洗掉歷史再推。</p>
+  <p><b>有物製所還原測試：</b>已修好並實跑驗證 <b>PASS</b>——還原前先補建 Supabase 專有角色與 <code>auth.uid()</code>，5 個核心表筆數與 production 全一致（products 141、sales_orders 1110、items 2173、purchase_orders 100、inventory_ledger 873），FAILED 旗標已消失。<b>備份確認可還原。</b></p>
+</div>
+
 <div class="card red">
   <h3><span class="tag red">現在就修</span>Time Machine 沒設定，也沒有其他備份機制</h3>
   <div class="evi">$ tmutil destinationinfo
@@ -228,6 +239,11 @@ $ grep rsync|restic|borg 全部排程  →  零命中</div>
 <h2><span class="num">3</span>Doctor 機器人身上還帶著已知的誤殺 bug</h2>
 <p class="h2sub">8/3 修好的問題只補在小特助身上，Doctor 沒補到</p>
 
+<div class="card green">
+  <h3><span class="tag green">✅ 已修復</span>2026-08-04</h3>
+  <p>已把小特助那段驗證過的遞迴掃描補到 Doctor、秘書、財務三支（各自備份 <code>.bak-20260804</code>）。三支已重啟（tmux kill-session 讓 launchd 重拉），health port 18803／18805／18807 全部重新上線、回 <code>ok</code>、無 crash-loop，確認載入的是含遞迴掃描的新版。Doctor 的自動修復能力不會再在派小幫手時被自己誤殺。</p>
+</div>
+
 <div class="card red">
   <h3><span class="tag red">現在就修</span>Doctor 派出小幫手就會被自己的看門狗殺掉</h3>
   <p>今天早上修的那個 bug——看門狗只看主程式有沒有動靜，看不到小幫手（subagent）在忙，於是主程式一派工就被當成當機殺掉、訊息直接丟棄——<b>只補在小特助（channel）身上</b>。</p>
@@ -247,6 +263,13 @@ Doctor  server.mjs:78   單層掃描 ✗ 未修
 
 <h2><span class="num">4</span>兩支機器人一直連不上 Telegram，其中一支 6 天沒收到過訊息</h2>
 <p class="h2sub">程式活著、埠開著，但每一次去 Telegram 拿訊息都失敗</p>
+
+<div class="card green">
+  <h3><span class="tag green">✅ 已診斷並修復</span>2026-08-04（差最後一步端對端確認）</h3>
+  <p><b>真正原因找到了：</b>這台機器連 Telegram 的 <b>IPv6 線路是斷的</b>（IPv4 正常），但 Telegram 每次同時給 IPv6＋IPv4 兩條路。這支 bot 的長輪詢一次掛著 25 秒，偶爾會去試那條斷掉的 IPv6、卡到逾時 → 記成 <code>fetch failed / ETIMEDOUT</code>。短請求（如 <code>getMe</code>）幾乎都成功，所以 7/29 那 32 項驗收沒測出來——驗收測的是程式本身，沒測到長輪詢的連線。</p>
+  <p><b>修法：</b>在 bot 程式強制只走 IPv4、關掉雙線路競速（原始檔已備份 <code>.bak-20260804</code>）。<b>驗證：</b>修好重啟後連續觀察 3 分鐘、約 7 個輪詢週期<b>零失敗</b>（先前是持續／間歇失敗）；受控壓測 IPv4-only 連續 8/8 成功。</p>
+  <p class="note">還差最後一步：<b>請你在 Telegram 傳一則訊息給這支查帳備援 Bot、確認它真的收得到並回覆。</b>這步我沒替你做（會送出真實訊息）。你方便時傳一則、跟我說一聲即可。</p>
+</div>
 
 <div class="card amber">
   <h3><span class="tag amber">要確認</span>查帳備援 Bot：6 天內 5,865 次輪詢失敗，只成功處理過 1 筆</h3>
