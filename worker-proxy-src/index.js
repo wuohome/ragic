@@ -1,3 +1,29 @@
+// wuohome-ragic-proxy v50 — 零用金請款：唯讀角色 + 軟刪除（Group X 擴充，2026-08-05）：
+// Joan 拍板「小吳哥（吳彥廷）只能看，不能改」+「留一個能留下 log 的刪除方式」。
+// 1) 身分模型從單一 role 字串改成三個互不排斥的布林 isStaff/isFinance/isViewer，同一人可以
+//    多重身分（沿用 v49 已有的 isFinance 互不排斥設計，本次補上 isViewer）。新 Worker secret
+//    PETTY_CASH_VIEWER_EMAILS（JSON email 陣列，小寫比對，格式同 PETTY_CASH_FINANCE_EMAILS）
+//    決定 Google 路徑上的 viewer 資格；舊 `?token=` fallback 路徑沒有 viewer 概念（該路徑本來
+//    就標記 TODO 移除，只映射 isStaff/isFinance 兩者之一為 true，isViewer 恆 false）。
+//    Action 需求從「單一 requiredRole」拆成三組：PC_STAFF_ACTIONS（原樣）／
+//    PC_FINANCE_ONLY_ACTIONS（viewer 不可執行，含新 pettyCashSoftDelete）／
+//    PC_VIEWABLE_ACTIONS（finance 或 viewer 皆可，pettyCashListAll／pettyCashBalance）。角色不
+//    符一律沿用既有同型 404（不分因由防列舉），這條慣例不變。
+// 2) 軟刪除：finance2/14 新增 4 欄（已刪除 1003302／刪除人 1003303／刪除時間 1003304／刪除原因
+//    1003305，2026-08-05 已建並驗證持久化，見 財務_零用金請款.md）。新增 finance 專用 action
+//    pettyCashSoftDelete：`deleted=true` 寫 1003302=Yes＋刪除人(token 反查，不讀前端)＋刪除時間
+//    ＋刪除原因（選填 ≤500 字）；`deleted=false` 明確寫回 1003302=No（已實測 PUT
+//    doDefaultValue=true 對空字串欄位不會自動補 dv，不能只靠預設值取消刪除，見上述筆記
+//    § 2026-08-05）。寫入後讀回確認狀態真的變了才回成功，沒變回 write_unverified（比照既有
+//    pettyCashMarkPaid／pettyCashReview 手法）；已經是該狀態再打一次 → 409 already_in_state。
+// 3) pettyCashListAll／pettyCashListMine 預設排除已刪除（JS 端過濾 1003302 !== 'Yes'，兼容舊
+//    記錄空字串視為未刪除，不用 Ragic where= 做否定比對——Ragic where 只支援
+//    eq/gte/lte/gt/lt/like，沒有 ne）；pettyCashListAll 新增 `includeDeleted=1` 參數，帶了才
+//    不套用排除、且每筆回傳物件加回 deleted/deletedBy/deletedAt/deleteReason 4 個 key（純
+//    additive，不影響既有欄位）。pettyCashCreate 建單時額外顯式寫入 1003302=No（Ragic 端雖已
+//    設 dv 預設值，仍顯式寫入以防 API 建單不吃 dv 預設，比照既有 1003272 審核狀態手法）。
+// 既有 84 個 action 一行未動，新增 1 個 pettyCashSoftDelete（additive only；84 是 action 註冊表
+// 實測計數 `grep -cE "^\s+\w+:\s*\{ method:" src/index.js`，非估算）。
 // wuohome-ragic-proxy v49 — 零用金請款 Google 登入架構修正（Group X 擴充，2026-08-03）：
 // Joan 當場指正上一版架構：「為什麼你認為需要 TOKEN 你直接用 GOOGLE 帳號就好了阿」。
 // 上一版是 Vercel server route 驗 Google ID token → 查 Supabase pettycash_allowed_users →
@@ -346,6 +372,8 @@ const ALLOWED_ACTIONS = {
   pettyCashReview:       { method: 'POST' },
   pettyCashLedgerAdd:    { method: 'POST' },
   pettyCashBalance:      { method: 'GET' },
+  // 唯讀角色 + 軟刪除（2026-08-05）。pettyCashSoftDelete 為 finance 專用（viewer 一律 404）。
+  pettyCashSoftDelete:   { method: 'POST' },
 };
 
 const REPAIR_INTERNAL_ACTIONS = new Set([
@@ -927,6 +955,8 @@ const PC = Object.freeze({
   // 片段 B（珊珊審核頁，2026-08-03 建）
   reviewStatus: '1003272', rejectReason: '1003273', rejectNote: '1003274',
   reviewer: '1003275', reviewedAt: '1003276',
+  // 軟刪除（2026-08-05 建，見 財務_零用金請款.md § 2026-08-05 新增欄位）
+  deleted: '1003302', deletedBy: '1003303', deletedAt: '1003304', deleteReason: '1003305',
 });
 const PC_CATEGORIES = new Set(['交通', '餐費', '五金', '耗材', '規費', '其他']);
 const PC_INVOICE_TYPES = new Set(['電子發票', '手開發票', '收據', '免用統一發票']);
@@ -949,11 +979,16 @@ const PC_REJECT_REASONS = new Set([
   '其他',
 ]);
 const PC_REJECT_NOTE_MAX = 500; // 派工指示明講「≤500 字」
+const PC_DELETE_REASON_MAX = 500; // 派工指示明講「≤500 字」，同 PC_REJECT_NOTE_MAX 慣例
 const PC_STAFF_ACTIONS = new Set(['pettyCashIdentity', 'pettyCashCreate', 'pettyCashListMine']);
-const PC_FINANCE_ACTIONS = new Set([
-  'pettyCashListAll', 'pettyCashMarkPaid',
-  'pettyCashReview', 'pettyCashLedgerAdd', 'pettyCashBalance', // 片段 B，2026-08-03
+// finance 專用：唯讀角色（viewer）不可執行，角色不符一律同型 404（見下方 § C 與 dispatch 段落）
+const PC_FINANCE_ONLY_ACTIONS = new Set([
+  'pettyCashMarkPaid', 'pettyCashReview', 'pettyCashLedgerAdd', // 片段 B，2026-08-03
+  'pettyCashSoftDelete', // 唯讀角色 + 軟刪除，2026-08-05
 ]);
+// finance 或 viewer 皆可（唯讀角色的「能看」範圍）
+const PC_VIEWABLE_ACTIONS = new Set(['pettyCashListAll', 'pettyCashBalance']);
+const PC_FINANCE_ACTIONS = new Set([...PC_FINANCE_ONLY_ACTIONS, ...PC_VIEWABLE_ACTIONS]);
 const PETTY_CASH_ACTIONS = new Set([...PC_STAFF_ACTIONS, ...PC_FINANCE_ACTIONS]);
 
 // 零用金現金帳（finance2/15，片段 B 2026-08-03 全新建表）。金額符號慣例：期初/補充為正、
@@ -1000,9 +1035,12 @@ function pettyCashPhotoUrls(raw) {
     .map((t) => `https://ap15.ragic.com/sims/file.jsp?a=wuohome&f=${encodeURIComponent(t)}`);
 }
 
-function pettyCashPublicRecord(rid, rec) {
+// `includeDeleteInfo`：只有 pettyCashListAll 帶 `includeDeleted=1` 時才傳 true，加回
+// deleted/deletedBy/deletedAt/deleteReason 4 個 key（純 additive，見派工指示 §3）。
+// pettyCashListMine／pettyCashListAll 預設（未帶 includeDeleted）不加，維持既有 key 集合不變。
+function pettyCashPublicRecord(rid, rec, includeDeleteInfo = false) {
   const photoUrls = pettyCashPhotoUrls(rec[PC.photo]);
-  return {
+  const base = {
     rid: String(rid),
     claimNo: pcVal(rec[PC.claimNo]),
     createdAt: pcVal(rec[PC.createdAt]),
@@ -1030,6 +1068,14 @@ function pettyCashPublicRecord(rid, rec) {
     rejectNote: pcVal(rec[PC.rejectNote]) || null,
     reviewer: pcVal(rec[PC.reviewer]) || null,
     reviewedAt: pcVal(rec[PC.reviewedAt]) || null,
+  };
+  if (!includeDeleteInfo) return base;
+  return {
+    ...base,
+    deleted: pcVal(rec[PC.deleted]) === 'Yes',
+    deletedBy: pcVal(rec[PC.deletedBy]) || null,
+    deletedAt: pcVal(rec[PC.deletedAt]) || null,
+    deleteReason: pcVal(rec[PC.deleteReason]) || null,
   };
 }
 
@@ -1199,8 +1245,19 @@ function parsePettyCashFinanceEmails(env) {
   return new Set(list.filter((e) => typeof e === 'string').map((e) => e.trim().toLowerCase()));
 }
 
-// 成功回傳 `{ name, department, email, isFinance }`（isFinance 是「這個人的 email 也在財務
-// 名單內」，不是單一角色——呼叫端依當前 action 需要的角色決定要不要認這個資格）。
+// PETTY_CASH_VIEWER_EMAILS：新 Worker secret（2026-08-05，唯讀角色），JSON 陣列（email 字串，
+// 小寫比對），格式與用法比照 PETTY_CASH_FINANCE_EMAILS，只是決定「viewer」資格而非「finance」。
+// 與 isFinance 互不排斥——同一人可以同時是 staff/finance/viewer。
+function parsePettyCashViewerEmails(env) {
+  let list;
+  try { list = JSON.parse(env.PETTY_CASH_VIEWER_EMAILS || '[]'); } catch { return new Set(); }
+  if (!Array.isArray(list)) return new Set();
+  return new Set(list.filter((e) => typeof e === 'string').map((e) => e.trim().toLowerCase()));
+}
+
+// 成功回傳 `{ name, department, email, isFinance, isViewer }`（isFinance/isViewer 是「這個人的
+// email 也在財務／唯讀名單內」，不是單一角色——呼叫端依當前 action 需要的角色決定要不要認這個
+// 資格，兩者互不排斥）。
 // 失敗回 `{ __authError: Response }`；完全沒帶 Authorization header 回 `null`。
 async function authenticatePettyCashGoogle(request, env, origin) {
   const authHeader = request.headers.get('Authorization') || '';
@@ -1239,7 +1296,8 @@ async function authenticatePettyCashGoogle(request, env, origin) {
   if (!rec || !PC_ACTIVE_STATUSES.has(status) || !name) return fail(403, 'not_whitelisted');
 
   const isFinance = parsePettyCashFinanceEmails(env).has(email);
-  const identity = { name, department: pcClean(rec[PC_STAFF_DEPT_FIELD]), email, isFinance };
+  const isViewer = parsePettyCashViewerEmails(env).has(email);
+  const identity = { name, department: pcClean(rec[PC_STAFF_DEPT_FIELD]), email, isFinance, isViewer };
 
   const expSeconds = Number(info.exp);
   const remainingMs = Number.isFinite(expSeconds) ? (expSeconds * 1000 - Date.now()) : 0;
@@ -1331,6 +1389,7 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     writeForm.append(PC.source, source);
     writeForm.append(PC.isPaid, 'No');
     writeForm.append(PC.reviewStatus, '待審核'); // 片段 B：建單時同時進入審核佇列
+    writeForm.append(PC.deleted, 'No'); // 唯讀角色+軟刪除：Ragic 端雖已設 dv 預設值，仍顯式寫入以防 API 建單不吃 dv 預設
     for (const f of photos) writeForm.append(PC.photo, f, f.name || 'receipt.jpg');
 
     const upstream = await ragicFetch(`${env.RAGIC_BASE}/${PETTY_CASH_SHEET}?api&v=3`, {
@@ -1392,12 +1451,19 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     if (fail) return jsonResp(fail, 502, origin);
     const claims = Object.entries(data || {})
       .filter(([k]) => /^\d+$/.test(k))
+      // 唯讀角色+軟刪除（2026-08-05）：預設排除已刪除。JS 端過濾（非 Ragic where=）是刻意的
+      // ——Ragic where 只支援 eq/gte/lte/gt/lt/like 沒有 ne，用 eq,No 會漏掉舊記錄空字串的情況；
+      // pettyCashCreate 已顯式寫入 1003302=No，此處仍用「!== 'Yes'」兼容任何非 Yes 的值。
+      .filter(([, rec]) => pcVal(rec[PC.deleted]) !== 'Yes')
       .map(([rid, rec]) => pettyCashPublicRecord(rid, rec))
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     return jsonResp({ ok: true, claims, viewer: { name: identity.name, role: 'staff' } }, 200, origin);
   }
 
   if (action === 'pettyCashListAll') {
+    // 唯讀角色+軟刪除（2026-08-05）：帶了 includeDeleted=1 才回傳已刪除的（總表「顯示已刪除」
+    // 開關用），此時每筆額外帶回 deleted/deletedBy/deletedAt/deleteReason 4 個 key。
+    const includeDeleted = url.searchParams.get('includeDeleted') === '1';
     const paid = url.searchParams.get('paid') || 'all';
     if (!['all', 'unpaid', 'paid'].includes(paid)) return jsonResp({ error: 'invalid_paid' }, 400, origin);
     const claimantFilter = pcClean(url.searchParams.get('claimant'));
@@ -1427,7 +1493,9 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     if (fail) return jsonResp(fail, 502, origin);
     const claims = Object.entries(data || {})
       .filter(([k]) => /^\d+$/.test(k))
-      .map(([rid, rec]) => pettyCashPublicRecord(rid, rec))
+      // includeDeleted=1 才不套用排除（見上方 pettyCashListMine 同款過濾說明，JS 端過濾理由相同）
+      .filter(([, rec]) => includeDeleted || pcVal(rec[PC.deleted]) !== 'Yes')
+      .map(([rid, rec]) => pettyCashPublicRecord(rid, rec, includeDeleted))
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     const summary = claims.reduce((s, c) => {
       s.total += 1;
@@ -1440,7 +1508,10 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     // 日期）影響——永遠是 finance2/15 全表加總。查不到就給 null，不讓整支 action 502。
     const ledgerSum = await pettyCashLedgerSum(env);
     summary.balance = ledgerSum ? ledgerSum.balance : null;
-    return jsonResp({ ok: true, claims, summary, viewer: { name: identity.name, role: 'finance' } }, 200, origin);
+    // spec 外決定：role 依實際資格回傳 'finance' 或 'viewer'（唯讀），不再寫死 'finance'——
+    // 既有兩位財務（張瓊安/韓珊珊）isFinance 恆 true，行為不變；只有純 viewer（吳彥廷）會拿到
+    // 新值 'viewer'，目前無前端消費這個值，不算破壞既有契約。
+    return jsonResp({ ok: true, claims, summary, viewer: { name: identity.name, role: identity.isFinance ? 'finance' : 'viewer' } }, 200, origin);
   }
 
   if (action === 'pettyCashMarkPaid') {
@@ -1590,6 +1661,55 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     const sum = await pettyCashLedgerSum(env);
     if (!sum) return jsonResp({ error: 'upstream_error' }, 502, origin);
     return jsonResp({ ok: true, balance: sum.balance, breakdown: sum.breakdown }, 200, origin);
+  }
+
+  if (action === 'pettyCashSoftDelete') {
+    let body;
+    try { body = await request.json(); } catch { return jsonResp({ error: 'bad_json' }, 400, origin); }
+    const ridRaw = body?.rid;
+    if (typeof ridRaw !== 'string' && typeof ridRaw !== 'number') return jsonResp({ error: 'invalid_rid' }, 400, origin);
+    const rid = String(ridRaw);
+    if (!/^\d{1,12}$/.test(rid)) return jsonResp({ error: 'invalid_rid' }, 400, origin);
+    if (typeof body?.deleted !== 'boolean') return jsonResp({ error: 'invalid_deleted' }, 400, origin);
+    const wantDeleted = body.deleted;
+    const reason = pcClean(body?.reason);
+    if (reason.length > PC_DELETE_REASON_MAX) return jsonResp({ error: 'invalid_delete_reason' }, 400, origin);
+
+    const { upstream: cu, data: cd } = await getFromRagic(env, `${PETTY_CASH_SHEET}/${rid}`, 'naming=EID');
+    if (!cu.ok || !cd || Object.keys(cd).length === 0) return jsonResp({ error: 'not_found' }, 404, origin);
+    const existingRec = cd[rid] || Object.values(cd)[0];
+    if (!existingRec) return jsonResp({ error: 'not_found' }, 404, origin);
+
+    const currentlyDeleted = pcVal(existingRec[PC.deleted]) === 'Yes';
+    if (currentlyDeleted === wantDeleted) return jsonResp({ error: 'already_in_state' }, 409, origin);
+
+    const params = new URLSearchParams();
+    if (wantDeleted) {
+      params.append(PC.deleted, 'Yes');
+      params.append(PC.deletedBy, identity.name); // token 反查，不讀前端傳來的姓名
+      params.append(PC.deletedAt, nowTaipeiDateTime());
+      if (reason) params.append(PC.deleteReason, reason);
+    } else {
+      // 取消刪除：只明確寫回 1003302=No（已實測 PUT doDefaultValue=true 對空字串欄位不會自動
+      // 補 No，不能靠預設值，見 財務_零用金請款.md § 2026-08-05 新增欄位）。刪除人/時間/原因
+      // 三欄保留不動，當作上一次刪除的紀錄——Joan 要的是「留一個能留下 log 的刪除方式」，取消
+      // 刪除不等於抹掉 log（spec 外決定，見交付摘要）。
+      params.append(PC.deleted, 'No');
+    }
+    const { upstream, data } = await postUrlEncodedToRagic(env, `${PETTY_CASH_SHEET}/${rid}`, params.toString());
+    const fail = detectUpstreamFailure(upstream, data);
+    if (fail) return jsonResp({ error: 'write_failed', ...fail }, 502, origin);
+
+    // 讀回確認狀態真的變了，比照 pettyCashMarkPaid/pettyCashReview 既有手法
+    const { upstream: ru, data: rd } = await getFromRagic(env, `${PETTY_CASH_SHEET}/${rid}`, 'naming=EID');
+    if (!ru.ok || !rd) return jsonResp({ error: 'write_unverified' }, 502, origin);
+    const rec = rd[rid] || Object.values(rd)[0];
+    const actualDeleted = rec ? pcVal(rec[PC.deleted]) === 'Yes' : null;
+    if (actualDeleted !== wantDeleted) return jsonResp({ error: 'write_unverified' }, 502, origin);
+
+    // spec 外決定：回傳的 claim 直接帶 deleted/deletedBy/deletedAt/deleteReason 4 個 key（比照
+    // pettyCashListAll includeDeleted=1 的形狀），前端不用再打一次 listAll 才能拿到最新刪除狀態。
+    return jsonResp({ ok: true, claim: pettyCashPublicRecord(rid, rec, true) }, 200, origin);
   }
 
   return null;
@@ -3580,29 +3700,40 @@ export default {
       if (!worklogIdentity) return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
     }
 
-    // Group X: 零用金請款 — 雙軌身分驗證（2026-08-03 架構修正）。先試 Google（帶
-    // Authorization header 就走這條，見上方 C），沒帶才 fallback 舊 `?token=` 路徑（A 同仁
-    // 反查人事表 / B 財務比對 PETTY_CASH_FINANCE_TOKENS_JSON，TODO: Google 登入穩定後移除）。
-    // 角色不符該 action 所需角色一律同型 404（不回 403，避免洩漏 token/白名單有效性），比照
-    // 上方 v29/v30/P5/Group T/U 手法；Google 路徑上驗證本身失敗（invalid_session 等）例外，
-    // 回該錯誤本身的 401/403，不套用同型 404（見 C 段落開頭說明為何不 fallback）。
+    // Group X: 零用金請款 — 三軌身分模型（isStaff/isFinance/isViewer，2026-08-05 唯讀角色
+    // 擴充）。先試 Google（帶 Authorization header 就走這條，見上方 C），沒帶才 fallback 舊
+    // `?token=` 路徑（A 同仁反查人事表 / B 財務比對 PETTY_CASH_FINANCE_TOKENS_JSON，TODO:
+    // Google 登入穩定後移除；該路徑沒有 viewer 概念，isViewer 恆 false）。三個布林互不排斥，
+    // 同一人可以同時是多重身分。角色不符該 action 所需角色一律同型 404（不回 403，避免洩漏
+    // token/白名單有效性），比照上方 v29/v30/P5/Group T/U 手法；Google 路徑上驗證本身失敗
+    // （invalid_session 等）例外，回該錯誤本身的 401/403，不套用同型 404（見 C 段落開頭說明
+    // 為何不 fallback）。
     let pettyCashIdentity = null;
     if (PETTY_CASH_ACTIONS.has(action)) {
-      const requiredRole = PC_STAFF_ACTIONS.has(action) ? 'staff' : 'finance';
       const google = await authenticatePettyCashGoogle(request, env, allowedOrigin);
       if (google && google.__authError) return google.__authError;
+      let candidate;
       if (google) {
-        if (requiredRole === 'finance' && !google.isFinance) {
-          return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
-        }
-        pettyCashIdentity = { role: requiredRole, name: google.name, department: google.department, email: google.email };
+        // Google 驗證本身已要求是在職/試用同仁才會成功（見 authenticatePettyCashGoogle），
+        // 走到這裡 isStaff 恆為 true；isFinance/isViewer 是額外資格，互不排斥。
+        candidate = {
+          isStaff: true, isFinance: google.isFinance, isViewer: google.isViewer,
+          name: google.name, department: google.department, email: google.email,
+        };
       } else {
-        // TODO: Google 登入穩定後移除（舊 `?token=` 路徑，A 同仁／B 財務完全不動）
-        pettyCashIdentity = await authenticatePettyCash(url, env);
-        if (!pettyCashIdentity || pettyCashIdentity.role !== requiredRole) {
-          return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
-        }
+        // TODO: Google 登入穩定後移除（舊 `?token=` 路徑，A 同仁／B 財務完全不動，無 viewer 概念）
+        const legacy = await authenticatePettyCash(url, env);
+        if (!legacy) return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
+        candidate = {
+          isStaff: legacy.role === 'staff', isFinance: legacy.role === 'finance', isViewer: false,
+          name: legacy.name, department: legacy.department,
+        };
       }
+      const roleOk = PC_STAFF_ACTIONS.has(action) ? candidate.isStaff
+        : PC_VIEWABLE_ACTIONS.has(action) ? (candidate.isFinance || candidate.isViewer)
+        : candidate.isFinance; // PC_FINANCE_ONLY_ACTIONS：viewer 一律不可執行
+      if (!roleOk) return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
+      pettyCashIdentity = candidate;
     }
 
     try {
