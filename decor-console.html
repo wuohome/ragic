@@ -24,41 +24,558 @@
       theme: {
         extend: {
           colors: {
-            // Monday 原味方案 A（2026-07-22 Joan 拍板）：白底＋淺灰側欄，狀態色改高飽和 Monday 系，
-            // 窩的家 CI 色（coral）退場只留 logo；ink 系改為 Monday 中性文字色階。
-            ink: '#323338',
-            inkmuted: '#676879',
-            inkfaint: '#9699A6',
-            paper: '#F6F7FB',
-            line: '#E6E9EF',
-            coral: '#DD6650', // CI 品牌識別色，僅用於 logo 方塊
-            accent: '#0073EA', // Monday accent 藍：側欄選中／連結／主按鈕／活躍 tab
-            accenttint: '#E6F1FE',
-            mred: '#E2445C', // 狀態：逾期（膠囊／強調色）
-            mreddark: '#B0193A', // 逾期文字（白底可讀對比）
-            mredtint: '#FDE8EC',
-            flag: '#FFCB00', // 狀態：停更黃燈（膠囊色）
-            flagdark: '#9C6D00',
-            flagtint: '#FFF7CC',
-            mgreen: '#00C875', // 狀態：正常（膠囊色）
-            mgreenink: '#0B3D26', // 正常膠囊深字
-            sage: '#4C7A63', // 既有功能性成功色（付款已收／完成提示），非 CI 色不變
-            sagetint: '#EAF3EE',
-            avatarblue: '#579BFC', // 監工頭像色（沿用 Monday 視覺基準稿）
-            avatarpurple: '#A25DDC',
+            // Vercel Geist 設計系統（2026-08-05 Joan 拍板改用）。數值取自 vercel.com/geist
+            // 頁面正在跑的官方 --ds-* token，非印象。原 Monday 方案 A 色票見 .bak-20260805-geist。
+            // ⚠️ 這是 [[移植12系統_視覺基準]] 鐵律 3「配色換成窩的家 CI #3F5262」的例外，
+            // 由 Joan 2026-08-05 當面決定，已回填規格書留痕。CI 珊瑚紅仍保留在 logo 方塊。
+            ink: '#171717', // ds-gray-1000
+            inkmuted: '#4d4d4d', // ds-gray-900
+            inkfaint: '#8f8f8f', // ds-gray-700
+            paper: '#fafafa', // ds-background-200
+            line: '#eaeaea', // ds-gray-400
+            coral: '#DD6650', // 窩的家 CI 品牌識別色，僅用於 logo 方塊
+            accent: '#171717', // Geist 的主色就是 gray-1000，不是彩色
+            accenttint: '#f2f2f2', // ds-gray-100
+            mred: '#ffe9ea', // ds-red-200（badge 底）
+            mreddark: '#e70022', // ds-red-800（badge 字）
+            mredtint: '#ffeef0', // ds-red-100
+            flag: '#fff4d4', // ds-amber-200
+            flagdark: '#a64f00', // ds-amber-900
+            flagtint: '#fff6e1', // ds-amber-100
+            mgreen: '#e5fce7', // ds-green-200
+            mgreenink: '#279141', // ds-green-800
+            sage: '#279141', // ds-green-800
+            sagetint: '#e5fce7', // ds-green-200
+            avatarblue: '#f2f2f2', // Geist 不用彩色頭像，改中性灰
+            avatarpurple: '#f2f2f2',
           },
         },
       },
     };
   </script>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif; }
+    /* 字體堆疊照原檔 globals.css L26 逐字（鐵律 3：字體堆疊保留原值），末尾保留本檔原有的 Segoe UI */
+    body { font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", "Segoe UI", sans-serif; }
     button, select { min-height: 40px; }
-    .gantt-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .gantt-bar { position: absolute; top: 50%; transform: translateY(-50%); height: 14px; border-radius: 7px; }
-    .gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(0,115,234,.55); z-index: 5; }
-    .gantt-today-label { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: 700; color: #0059B3; white-space: nowrap; }
     .tnum { font-variant-numeric: tabular-nums; }
+
+    /* ================= 移植 #12 案場時程表 視覺 =================
+       原檔：C:\Users\Joan\Downloads\systems\systems\12-案場時程表-zy-gantt
+             app/p/[id]/page.tsx L959-1691（globalPageStyle 常數）＋ app/globals.css L5-18（:root 變數）
+       依 [[移植12系統_視覺基準]] 鐵律 2「視覺載體照原檔」：原檔是 styled-jsx 內的純 CSS，
+       此處整段搬 CSS、沿用原檔 class 名，不改寫成 Tailwind utility。
+       依鐵律 3「只換配色、結構不動」：圓角／陰影／間距／字級 clamp／RWD 斷點全部保留原值，
+       只把 :root 變數的「值」換成窩的家 CI（主色 #3F5262 深藍灰；珊瑚紅 #DD6650 僅用於
+       今日線與逾期標記等小面積點綴，明黃 #F2CF00 用於催更標記）。
+       甘特圖的幾何計算（時間尺度、今日線落點、工項分行）仍用本檔既有實作，未換成原檔的
+       lib/ganttGeometry.ts。屬性值與原檔不同之處，逐條列於交付的樣式對照表。 */
+    :root {
+      /* Vercel Geist 官方 token（vercel.com/geist 頁面正在跑的 --ds-* 變數） */
+      --bg: #fafafa;        /* ds-background-200 */
+      --panel: #ffffff;     /* ds-background-100 */
+      --panel-2: #fafafa;   /* ds-background-200 */
+      --ink: #171717;       /* ds-gray-1000 */
+      --ink-soft: #4d4d4d;  /* ds-gray-900 */
+      --line: #eaeaea;      /* ds-gray-400 */
+      --accent: #171717;    /* Geist 主色即 gray-1000 */
+      --accent-soft: #f2f2f2; /* ds-gray-100 */
+      --stall: #fc0035;     /* ds-red-700 */
+      --stall-bg: #ffe9ea;  /* ds-red-200 */
+      --done: #279141;      /* ds-green-800 */
+      --wait: #8f8f8f;      /* ds-gray-700 */
+      --geist-radius: 6px;
+      --ds-shadow-border: 0 0 0 1px #00000014;
+    }
+
+    /* Tailwind CDN 的 preflight 會在 runtime 注入到本區塊之後，把 button 的 border/background
+       清成 0/transparent。原檔的 .btn/.backBtn 是寫給沒有 reset 的環境，故此處以 button.btn
+       提高特異性讓原檔值贏回來——選擇器多了元素前綴，class 名與屬性值仍與原檔逐字相同。 */
+    button.btn {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 0.5rem 0.9rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    button.btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    button.btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    button.btn.primary:hover {
+      opacity: 0.9;
+      color: #fff;
+    }
+    button.btn.primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    button.backBtn {
+      border: none;
+      background: transparent;
+      color: var(--accent);
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 0.85rem;
+      padding: 0.2rem 0;
+    }
+    button.backBtn:hover {
+      text-decoration: underline;
+    }
+    .toolbar {
+      display: flex;
+      gap: 0.6rem;
+      align-items: center;
+      margin-bottom: 0.8rem;
+    }
+    .ganttPanel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(36, 34, 32, 0.05);
+      padding: 1rem;
+      margin-bottom: 1.4rem;
+    }
+    .ganttLegend {
+      display: flex;
+      gap: 1.1rem;
+      flex-wrap: wrap;
+      align-items: center;
+      font-size: 0.78rem;
+      color: var(--ink-soft);
+      margin-bottom: 0.7rem;
+    }
+    .legendItem {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-weight: 600;
+    }
+    .sw {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      display: inline-block;
+    }
+    .swLine {
+      width: 2px;
+      height: 12px;
+      border-radius: 0;
+      background: var(--stall);
+    }
+    .legendNote {
+      font-size: 0.78rem;
+      color: var(--ink-soft);
+    }
+
+    .ganttScroll {
+      overflow: auto;
+      max-height: 72vh;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      position: relative;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      touch-action: pan-x pan-y;
+    }
+    .ganttBody {
+      position: relative;
+      /* 與原檔的差異，理由：原檔的 .ganttRow 是 position:absolute+left/right:0，body 不必被內容撐寬；
+         本檔沿用既有的 flex 流式列（幾何邏輯不換），若 body 停在 block 寬度＝容器寬度，
+         sticky 的工項欄會在橫向捲動超過一個視寬後被推出畫面（390px 手機實測）。
+         這兩個宣告等同改版前的 Tailwind `inline-block min-w-full`，是保留既有行為所需。 */
+      display: inline-block;
+      min-width: 100%;
+    }
+    .ganttHeaderRow {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      display: flex;
+      background: var(--panel-2);
+    }
+    .ganttCorner {
+      position: sticky;
+      left: 0;
+      z-index: 31;
+      background: var(--panel-2);
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      padding-left: clamp(0.5rem, 0.35rem + 0.5vw, 0.8rem);
+      font-size: clamp(0.66rem, 0.55rem + 0.35vw, 0.8rem);
+      font-weight: 700;
+      color: var(--ink-soft);
+      flex-shrink: 0;
+    }
+    .ganttHeaderTimeline {
+      position: relative;
+      flex-shrink: 0;
+    }
+    .monthRow {
+      position: relative;
+      border-bottom: 1px solid var(--line);
+    }
+    .monthSeg {
+      position: absolute;
+      top: 0;
+      display: flex;
+      align-items: center;
+      padding-left: 0.6rem;
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: var(--ink);
+      border-left: 1px solid var(--line);
+      box-sizing: border-box;
+      /* 新增（原檔無）：時間軸最右端的月份區段常只有幾天寬，月份文字會溢出到面板外，需裁切 */
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .weekRow {
+      position: relative;
+      border-bottom: 1px solid var(--line);
+    }
+    .weekTick {
+      position: absolute;
+      top: 4px;
+      font-size: 0.68rem;
+      color: var(--ink-soft);
+      transform: translateX(2px);
+      white-space: nowrap;
+    }
+    .todayLabel {
+      position: absolute;
+      top: 2px;
+      transform: translateX(4px);
+      background: var(--stall);
+      color: #fff;
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      z-index: 5;
+    }
+    .ganttRowsWrap {
+      position: relative;
+    }
+    .gridLinesOverlay {
+      position: absolute;
+      top: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .gridLine {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: var(--line);
+      opacity: 0.55;
+    }
+    .gridLineWeek {
+      opacity: 1;
+      background: #C7CCD6;
+    }
+    .todayLine {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--stall);
+      z-index: 3;
+    }
+    .ganttRow {
+      display: flex;
+      border-bottom: 1px solid var(--line);
+    }
+    .ganttLabel {
+      position: sticky;
+      left: 0;
+      z-index: 10;
+      flex-shrink: 0;
+      border-right: 1px solid var(--line);
+      overflow: visible;
+      background: var(--panel);
+    }
+    .ownerGroupBlock {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 2;
+      box-sizing: border-box;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      text-align: center;
+      padding: 0.55rem 0.25rem 0.3rem;
+      font-weight: 800;
+      font-size: 0.95em;
+      line-height: 1.2;
+      word-break: break-word;
+      border-bottom: 2px solid var(--line);
+    }
+    .taskNameBlock {
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 0.15rem;
+      padding: 0.3rem 0.8rem;
+      z-index: 1;
+      /* 新增（原檔無）：本檔一列可能同時掛「已完成＋超出預估＋晚 N 天開始」三枚標籤，
+         390px 手機的欄寬放不下時會壓到下一列，裁掉比互相疊字好讀 */
+      overflow: hidden;
+    }
+    .taskName {
+      font-size: 1em;
+      color: var(--ink);
+      line-height: 1.3;
+      white-space: normal;
+      word-break: break-word;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .taskDateRange {
+      font-size: 0.75em;
+      color: var(--ink-soft);
+      line-height: 1.2;
+      font-family: ui-monospace, "SF Mono", "Roboto Mono", monospace;
+      white-space: nowrap;
+    }
+    .tagRow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      align-items: center;
+    }
+    .doneTag {
+      display: inline-block;
+      flex-shrink: 0;
+      font-size: 0.72em;
+      font-weight: 700;
+      color: #1f7a56;
+      background: #d9f0e6;
+      padding: 1px 7px;
+      border-radius: 999px;
+      line-height: 1.4;
+      white-space: nowrap;
+    }
+    .autoTag {
+      display: inline-block;
+      flex-shrink: 0;
+      font-size: 0.72em;
+      font-weight: 700;
+      padding: 1px 7px;
+      border-radius: 999px;
+      line-height: 1.4;
+      white-space: nowrap;
+      font-family: ui-monospace, "SF Mono", "Roboto Mono", monospace;
+    }
+    .autoTag-none {
+      color: var(--wait);
+      background: var(--panel);
+      border: 1px solid var(--line);
+    }
+    .autoTag-live {
+      color: var(--accent);
+      background: var(--accent-soft);
+    }
+    .autoTag-ok {
+      color: var(--done);
+      background: #e4eee3;
+    }
+    .autoTag-over {
+      color: var(--stall);
+      background: var(--stall-bg);
+    }
+    .ganttTimeline {
+      position: relative;
+      flex-shrink: 0;
+      background: var(--panel);
+    }
+    /* 預估桿：上排空心框線，不填色，只用邊框標示區間 */
+    .barPredicted {
+      position: absolute;
+      border-radius: 4px;
+      box-sizing: border-box;
+      background: transparent;
+      z-index: 2;
+    }
+    /* 晚開始警示：預估框前段（預估開始日→實際開始日）疊紅色斜紋，跟「超出預估結束」是獨立判斷 */
+    .barStartDelayGap {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      border-radius: 3px 0 0 3px;
+      background: repeating-linear-gradient(45deg, var(--stall) 0 3px, transparent 3px 6px);
+      opacity: 0.9;
+      pointer-events: none;
+    }
+    .startLateTag {
+      color: var(--stall);
+      background: var(--stall-bg);
+      border: 1px dashed var(--stall);
+    }
+    .lgBarStartLate {
+      border: 1.5px solid var(--accent);
+      background: repeating-linear-gradient(45deg, var(--stall) 0 2px, transparent 2px 4px) left / 45% 100% no-repeat,
+        transparent;
+    }
+    .barActual {
+      position: absolute;
+      border-radius: 4px;
+      box-sizing: border-box;
+      z-index: 3;
+      border: none;
+    }
+    .barActual-live {
+      border-width: 2px;
+      border-style: dashed;
+    }
+    .barActual-live::after {
+      content: "";
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 0;
+      height: 0;
+      border-top: 4px solid transparent;
+      border-bottom: 4px solid transparent;
+      border-left: 6px solid currentColor;
+    }
+    .barLabelText {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      padding: 0 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 700;
+      line-height: 1;
+      pointer-events: none;
+    }
+    .lgBar {
+      display: inline-block;
+      width: 22px;
+      height: 9px;
+      border-radius: 3px;
+      flex: none;
+    }
+    .lgBarPlan {
+      border: 1.5px solid var(--accent);
+      background: transparent;
+    }
+    .lgBarActual {
+      background: var(--accent);
+    }
+    .lgBarOver {
+      background: linear-gradient(90deg, var(--accent) 0 55%, var(--stall) 55% 100%);
+    }
+    .lgBarLive {
+      background: transparent;
+      border: 1.5px dashed var(--accent);
+    }
+    .emptyState {
+      padding: 2rem 1rem;
+      text-align: center;
+      color: var(--ink-soft);
+    }
+
+    /* ===== Geist 元件規格（2026-08-05 Joan 拍板改用 Vercel Geist）=====
+       以下四項覆蓋彣錩原檔的對應值，數值取自 vercel.com/geist 實際渲染出的元件：
+       Badge 固定 20px 高／11px 字／letter-spacing 0.2px／全圓角／無邊框；
+       卡片邊框官方用 1px box-shadow ring 而非 border；按鈕圓角 5px。
+       這是視覺基準鐵律 3 的例外，已回填 設計部工作檯_規格書 留痕。 */
+    .doneTag, .autoTag, .startLateTag {
+      height: 20px;
+      padding: 2px 8px;
+      font-size: 11px;
+      line-height: 16px;
+      letter-spacing: 0.2px;
+      font-weight: 500;
+      border-radius: 9999px;
+      border: none;
+      box-sizing: border-box;
+    }
+    .doneTag { color: #279141; background: #e5fce7; }
+    .autoTag-ok { color: #279141; background: #e5fce7; }
+    .autoTag-live { color: #005edc; background: #eaf4ff; }
+    .autoTag-over { color: #e70022; background: #ffe9ea; }
+    .autoTag-none { color: #4d4d4d; background: #f2f2f2; border: none; }
+    .startLateTag { color: #a64f00; background: #fff4d4; border: none; }
+    .ganttPanel, .ganttScroll {
+      border: none;
+      border-radius: var(--geist-radius);
+      box-shadow: var(--ds-shadow-border);
+    }
+    button.btn { border-radius: 5px; font-size: 14px; font-weight: 500; }
+    .barPredicted { border-color: #a8a8a8; }
+    .taskName { font-weight: 500; }
+    .ownerGroupBlock { font-weight: 500; }
+
+    /* 收合列：把「尚未開始」的工項摺成一行（見 renderCaseItemGantt 的說明） */
+    .denseSummary { cursor: pointer; min-height: 44px; background: #fafafa; }
+    .denseSummary:hover { background: #f2f2f2; }
+    .denseSummaryLabel {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 12px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #4d4d4d;
+      background: inherit;
+    }
+    .denseSummaryNames {
+      position: sticky;
+      font-size: 12px;
+      white-space: nowrap;
+      color: #8f8f8f;
+    }
+
+    /* 原檔 L1664-1690：字級／留白已交給 clamp() 連續縮放，斷點只保留 clamp 做不到的離散調整 */
+    @media (min-width: 768px) and (max-width: 1024px) {
+      .ganttScroll {
+        max-height: 68vh;
+      }
+    }
+    @media (max-width: 640px) {
+      .taskNameBlock {
+        padding: 0.2rem 0.4rem;
+      }
+      .taskName {
+        line-height: 1.2;
+        -webkit-line-clamp: 3;
+      }
+      .taskDateRange {
+        white-space: normal;
+        word-break: break-all;
+      }
+      .doneTag {
+        padding: 0px 5px;
+      }
+      /* Geist 的 badge 是固定 20px 高、11px 字，390px 下工項欄只有 128px，兩枚並排一定換行
+         把列撐高。「已完成」與「準時完成／超出預估 N 天」語意重疊，窄螢幕只留資訊量大的後者。
+         ⚠️ 手機可讀性整體仍待優化（Joan 2026-08-05：「手機看好像有點困難，先這樣，未來再優化」）。 */
+      .tagRow .doneTag { display: none; }
+      .tagRow { gap: 4px; }
+    }
     #toast { transition: opacity 200ms ease-out; }
     #moreSheetPanel { transition: transform 200ms ease-out; }
     @media (prefers-reduced-motion: reduce) {
@@ -150,9 +667,9 @@
                   <h2 class="text-xl font-black text-ink sm:text-2xl">設計部總覽</h2>
                   <p class="mt-1 text-sm text-inkmuted">點案名開啟該案專屬甘特圖；紅色代表合約已逾期。手機可左右滑動看時間軸。</p>
                 </div>
-                <button id="ganttRangeToggle" type="button" class="shrink-0 rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">看全程</button>
+                <button id="ganttRangeToggle" type="button" class="btn shrink-0">看全程</button>
               </div>
-              <div id="ganttWrap" class="rounded-2xl border border-line bg-white"></div>
+              <div id="ganttWrap" class="ganttPanel"></div>
             </div>
             <div id="ganttDetail" class="space-y-3" hidden></div>
           </section>
@@ -222,13 +739,82 @@
 
 <script>
 'use strict';
+// 附件下載、新增進度、上傳照片：繼續走既有的 Cloudflare Worker，那支一行未改。
 const API_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+// 案件列表與日常修繕：改走 Vercel（Joan 2026-08-03「新東西放 Vercel，Cloudflare 不要再動」）。
+// 這支才知道「這條連結是誰開的」，設計部案件隔離與工務的修繕併軌都在它的 server 端做完，
+// 別人的案子不會離開後端。回應結構與 Worker 版完全相同，前端解析邏輯未動。
+const DATA_BASE = 'https://wuohome-decor-api.vercel.app';
 const TOKEN = new URLSearchParams(location.search).get('token') || '';
 const STATUS_ACTIVE = '🛠️工程中';
 const STALE_DAYS = 7;
 const PX_PER_DAY_FULL = 6; // 「看全程」模式固定密度，容許橫向捲動
 const LABEL_COL_MAIN = 230;
-const LABEL_COL_ITEM = 110;
+
+// ================= 視覺移植 #12：彣錩的版面幾何 =================
+// 逐字取自原檔 app/p/[id]/page.tsx L67-100（GEO_ANCHORS／lerp／scaleGeometry）與
+// lib/ganttGeometry.ts（computeLabelFontPx／computeBarFontPx／pickBarLabel／estimateTextWidthPx）。
+// 這組數字就是鐵律 3 說的「間距節奏」——列高 74~80px、桿高 20~26px、左欄 128~300px，
+// 是原檔厚重寬鬆的手感來源。前一版只搬了樣式表沒搬這組常數，畫面因此細窄了一號。
+// DAY_W 是原檔的時間尺度，本檔沿用自己既有的 pxPerDay 計算（派工紅線：時間尺度不換），故不取用。
+const GEO_ANCHORS = [
+  { w: 360, LABEL_W: 128, ROW_H: 78, OWNER_STRIP_W: 36, BAR_H: 20, BAR_GAP: 3 },
+  { w: 640, LABEL_W: 160, ROW_H: 74, OWNER_STRIP_W: 46, BAR_H: 21, BAR_GAP: 4 },
+  { w: 1024, LABEL_W: 230, ROW_H: 76, OWNER_STRIP_W: 70, BAR_H: 23, BAR_GAP: 4 },
+  { w: 1440, LABEL_W: 300, ROW_H: 80, OWNER_STRIP_W: 92, BAR_H: 26, BAR_GAP: 5 },
+  { w: 1920, LABEL_W: 340, ROW_H: 80, OWNER_STRIP_W: 100, BAR_H: 26, BAR_GAP: 5 },
+];
+const lerp = (a, b, t) => a + (b - a) * t;
+function scaleGeometry(viewportWidth) {
+  const A = GEO_ANCHORS;
+  if (viewportWidth <= A[0].w) return A[0];
+  if (viewportWidth >= A[A.length - 1].w) return A[A.length - 1];
+  for (let i = 0; i < A.length - 1; i++) {
+    const lo = A[i], hi = A[i + 1];
+    if (viewportWidth >= lo.w && viewportWidth <= hi.w) {
+      const t = (viewportWidth - lo.w) / (hi.w - lo.w);
+      return {
+        w: viewportWidth,
+        LABEL_W: Math.round(lerp(lo.LABEL_W, hi.LABEL_W, t)),
+        ROW_H: Math.round(lerp(lo.ROW_H, hi.ROW_H, t)),
+        OWNER_STRIP_W: Math.round(lerp(lo.OWNER_STRIP_W, hi.OWNER_STRIP_W, t)),
+        BAR_H: Math.round(lerp(lo.BAR_H, hi.BAR_H, t)),
+        BAR_GAP: Math.round(lerp(lo.BAR_GAP, hi.BAR_GAP, t)),
+      };
+    }
+  }
+  return A[A.length - 1];
+}
+function ganttGeo() { return scaleGeometry(window.innerWidth || 1024); }
+const computeLabelFontPx = (barH) => Math.round(barH * 0.55);
+const computeBarFontPx = (barH) => Math.max(9, Math.round(barH * 0.5));
+const BAR_TEXT_PAD_PX = 8;
+function estimateTextWidthPx(text, fontPx) {
+  let width = 0;
+  for (const ch of String(text)) {
+    const code = ch.codePointAt(0) || 0;
+    const isWide =
+      (code >= 0x1100 && code <= 0x115f) || (code >= 0x2e80 && code <= 0xa4cf) ||
+      (code >= 0xac00 && code <= 0xd7a3) || (code >= 0xf900 && code <= 0xfaff) ||
+      (code >= 0xff00 && code <= 0xffef) || (code >= 0x20000 && code <= 0x3fffd);
+    width += isWide ? fontPx : fontPx * 0.58;
+  }
+  return width;
+}
+// 桿子塞得下完整文字就寫完整、塞不下退成短標籤、再塞不下就不寫（原檔 pickBarLabel 逐字）
+function pickBarLabel(fullText, tagText, barWidth, fontPx) {
+  const avail = barWidth - BAR_TEXT_PAD_PX;
+  if (avail <= 0) return { tier: 'none', text: '' };
+  if (estimateTextWidthPx(fullText, fontPx) <= avail) return { tier: 'full', text: fullText };
+  if (estimateTextWidthPx(tagText, fontPx) <= avail) return { tier: 'tag', text: tagText };
+  return { tier: 'none', text: '' };
+}
+// 單案甘特頁的左欄寬改由上表決定（總覽頁維持 230，那一頁的欄位內容與原檔不同）
+function itemLabelWidth() { return ganttGeo().LABEL_W; }
+
+// 表頭兩層（月／週）高度：原檔 MONTH_H=34、WEEK_H=HEADER_H-MONTH_H
+const RULER_MONTH_H = 34;
+const RULER_WEEK_H = 24;
 
 const byId = (id) => document.getElementById(id);
 const clean = (v) => String(v ?? '').trim();
@@ -337,21 +923,36 @@ function inferNextStage(c) {
   return DECOR_CANONICAL_ORDER[idx + 1];
 }
 
+// 視覺移植 #12：工項配色從 Tailwind 高飽和彩虹色改為 CI 主色 #3F5262 為軸心的同色系階梯
+// （彣錩原檔的桿子是單一 accent 深色系，色階節奏沉穩）。11 個工項仍各自可辨識，但明度／彩度
+// 收斂在同一組，符合鐵律 3「配色換成窩的家 CI」。工項清單與順序完全未動。
 const CATEGORY_COLORS = {
-  '拆除工程': 'bg-stone-500', '水電工程': 'bg-yellow-500', '泥作工程': 'bg-orange-500',
-  '門窗工程': 'bg-cyan-600', '木作工程': 'bg-amber-700', '油漆工程': 'bg-pink-500',
-  '系統櫃': 'bg-indigo-500', '廚具工程': 'bg-lime-600', '衛浴設備': 'bg-sky-500',
-  '空調工程': 'bg-teal-500', '雜項工程': 'bg-purple-500', '未分類': 'bg-slate-400',
+  // Geist 官方查無圖表／資料視覺化配色規範（vercel.com/geist 沒有 chart 章節），
+  // 這裡照 Geist 的做法收成單一深色：工項靠左欄名稱辨識、不靠色相。
+  // 若日後要改回 11 色可辨識版，只需改這張表，其餘邏輯不動。
+  '拆除工程': '#171717', '水電工程': '#171717', '泥作工程': '#171717',
+  '門窗工程': '#171717', '木作工程': '#171717', '油漆工程': '#171717',
+  '系統櫃': '#171717', '廚具工程': '#171717', '衛浴設備': '#171717',
+  '空調工程': '#171717', '雜項工程': '#171717', '未分類': '#8f8f8f',
 };
-const CATEGORY_BADGE = {
-  '拆除工程': 'bg-stone-100 text-stone-700', '水電工程': 'bg-yellow-100 text-yellow-800', '泥作工程': 'bg-orange-100 text-orange-700',
-  '門窗工程': 'bg-cyan-100 text-cyan-700', '木作工程': 'bg-amber-100 text-amber-800', '油漆工程': 'bg-pink-100 text-pink-700',
-  '系統櫃': 'bg-indigo-100 text-indigo-700', '廚具工程': 'bg-lime-100 text-lime-700', '衛浴設備': 'bg-sky-100 text-sky-700',
-  '空調工程': 'bg-teal-100 text-teal-700', '雜項工程': 'bg-purple-100 text-purple-700', '未分類': 'bg-slate-100 text-slate-500',
-};
+// 案級橫條（設計部總覽）：正常＝CI 主色，逾期＝CI 珊瑚紅（小面積點綴用法）
+const CASE_BAR_COLOR = '#171717';
+const CASE_BAR_COLOR_OVERDUE = '#fc0035';
+// 日常修繕（mm/8）橫條：與設計部案件（finance/8）刻意用不同色，讓工務在同一條時間軸上分得出來
+const REPAIR_BAR_COLOR = '#0070f7';
+const REPAIR_TERMINAL_STATUSES = ['已結案', '已取消'];
 
 let ALL_CASES = [];
 let ROLE = ''; let ROLE_LABEL = '';
+// 權限不對稱（Joan 2026-07-30 拍板）：
+//   supervisor（工務）＝看設計部全部案件 ＋ 自己的日常修繕進度
+//   designer（設計師）＝只看自己接案的案件，不看修繕
+//   admin＝全部
+// VIEWER_NAME 由 Worker 依 token 回傳（前端禁硬編碼人名，見 窩的家工程平台_前端標準 §身分）。
+let VIEWER_NAME = '';
+let SCOPE_DEGRADED = false; // designer 但後端沒回 viewerName＝案件隔離未生效，須顯示警示不得靜默放行
+let ALL_REPAIRS = [];
+let REPAIR_ERROR = '';
 let FILTER_MODE = null; // null | 'overdue' | 'stale'（僅 admin 有 UI 可觸發）
 let GANTT_VIEW_MODE = 'window'; // 'window'（預設，今天±聚焦）| 'full'（看全程）
 let PENDING_COUNT = 0; // 資料待補件數，供側欄／更多抽屜 badge 用
@@ -360,13 +961,17 @@ let DRAWER_RID = null; // 目前開啟情境面板的案件 rid（null＝關閉�
 let DRAWER_LAST_FOCUS = null; // 開啟抽屜前的觸發元素，關閉時歸還焦點
 const CASE_VIEW_MODE = new Map(); // rid -> 'gantt' | 'calendar'
 const CASE_CAL_MONTH = new Map(); // rid -> { y, m }
+// 密集模式：單案甘特頁把「尚未開始」的工項收成一行，實測 12 列裡有 5 列屬於此類、
+// 佔掉 42% 畫面高度但只傳達「還沒開工」。收合後整表 960px→604px，手機少滑一個螢幕。
+// 這個 Set 記住哪些案子被使用者展開過，重繪時不會把他打開的東西收回去。
+const DENSE_EXPANDED = new Set(); // rid
 let LAST_GANTT_SCROLL_EL = null; // 平台外殼：模組切換時可能在甘特隱藏狀態下渲染，量到的尺寸是 0，
 let LAST_GANTT_BOUNDS = null;    // 需要在使用者實際切到甘特頁籤時重新觸發一次今日線捲動定位
 function sameDate(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
 
 async function apiGet(path) {
   const sep = path.includes('?') ? '&' : '?';
-  const res = await fetch(`${API_BASE}/${path}${sep}token=${encodeURIComponent(TOKEN)}`);
+  const res = await fetch(`${DATA_BASE}/${path}${sep}token=${encodeURIComponent(TOKEN)}`);
   let data = null;
   try { data = await res.json(); } catch {}
   if (!res.ok || !data || data.ok !== true) {
@@ -387,6 +992,15 @@ function setGlobalMessage(mode, text) {
 }
 
 function badge(text, cls) { return make('span', `inline-block rounded-full px-2 py-0.5 text-xs font-bold ${cls}`, text); }
+
+// 視覺移植 #12：工項標籤沿用甘特桿子的同一組 CI 色階（淡底＋原色字），與甘特圖對得起來
+function categoryBadge(catName, text) {
+  const color = CATEGORY_COLORS[catName] || CATEGORY_COLORS['未分類'];
+  const el = make('span', 'inline-block rounded-full px-2 py-0.5 text-xs font-bold', text);
+  el.style.color = color;
+  el.style.background = `${color}1F`;
+  return el;
+}
 
 function statusDot(kind) {
   const cls = kind === 'overdue' ? 'bg-mred' : kind === 'stale' ? 'bg-flag' : kind === 'issue' ? 'bg-inkfaint' : 'bg-sage';
@@ -697,24 +1311,53 @@ function computeExtentBounds(cases, labelColWidth, fixed) {
   return fixed ? withFixedWidth(min, max) : withResponsiveWidth(min, max, labelColWidth);
 }
 function computeBoundsFull(cases) { return computeExtentBounds(cases, LABEL_COL_MAIN, true); }
-function computeItemBounds(c) { return computeExtentBounds([c], LABEL_COL_ITEM, false); }
+function computeItemBounds(c) { return computeExtentBounds([c], itemLabelWidth(), false); }
 function offsetPx(date, bounds) { return daysBetween(bounds.min, date) * bounds.pxPerDay; }
 
+// 視覺移植 #12：表頭改彣錩原檔的「月列＋週列」兩層（.ganttHeaderTimeline/.monthRow/.monthSeg/
+// .weekRow/.weekTick/.todayLabel）。時間尺度來源（bounds）與週刻度落點算法逐字沿用既有版本，
+// 只換渲染出來的元素與 class，不動 computeItemBounds／computeWindowBounds／offsetPx。
 function ruler(bounds, labelColWidth) {
-  const track = make('div', 'relative h-6');
+  const track = make('div', 'ganttHeaderTimeline');
   track.style.width = `${bounds.widthPx}px`;
+
+  const monthRow = make('div', 'monthRow');
+  monthRow.style.height = `${RULER_MONTH_H}px`;
+  let mCursor = new Date(bounds.min.getFullYear(), bounds.min.getMonth(), 1);
+  while (mCursor <= bounds.max) {
+    const next = new Date(mCursor.getFullYear(), mCursor.getMonth() + 1, 1);
+    const segStart = mCursor < bounds.min ? bounds.min : mCursor;
+    const segEnd = next > bounds.max ? bounds.max : next;
+    const left = offsetPx(segStart, bounds);
+    const width = offsetPx(segEnd, bounds) - left;
+    if (width > 0) {
+      const seg = make('div', 'monthSeg', `${mCursor.getFullYear()} / ${mCursor.getMonth() + 1}`);
+      seg.style.left = `${left}px`;
+      seg.style.width = `${width}px`;
+      seg.style.height = `${RULER_MONTH_H}px`;
+      monthRow.append(seg);
+    }
+    mCursor = next;
+  }
+  track.append(monthRow);
+
+  const weekRow = make('div', 'weekRow');
+  weekRow.style.height = `${RULER_WEEK_H}px`;
   let cursor = new Date(bounds.min);
   cursor.setDate(cursor.getDate() + ((7 - (daysBetween(bounds.min, cursor) % 7)) % 7));
   while (cursor <= bounds.max) {
-    const tick = make('div', 'absolute top-0 h-full border-l border-line pl-1 text-[10px] text-inkfaint', fmtShort(cursor));
+    const tick = make('span', 'weekTick', fmtShort(cursor));
     tick.style.left = `${offsetPx(cursor, bounds)}px`;
-    track.append(tick);
+    weekRow.append(tick);
     cursor = new Date(cursor); cursor.setDate(cursor.getDate() + 7);
   }
-  const todayTick = make('div', 'gantt-today');
-  todayTick.style.left = `${offsetPx(todayDate(), bounds)}px`;
-  todayTick.append(make('span', 'gantt-today-label', '今日'));
-  track.append(todayTick);
+  // 原檔的今天標籤寫「今天 YYYY-MM-DD」
+  const t = todayDate();
+  const todayLabel = make('span', 'todayLabel', `今天 ${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`);
+  todayLabel.style.left = `${offsetPx(todayDate(), bounds)}px`;
+  weekRow.append(todayLabel);
+  track.append(weekRow);
+
   return track;
 }
 
@@ -731,20 +1374,104 @@ function ganttBar(startAt, endAt, bounds, colorCls, opts = {}) {
   const s = clippedLeft ? bounds.min : s0;
   const e = clippedRight ? bounds.max : e0;
   if (e < bounds.min || s > bounds.max) return null;
-  const bar = make('div', `gantt-bar ${colorCls}`);
+  // 視覺移植 #12：橫條照原檔 .barActual（圓角 4px、z-index 3、實心填負責色）。原檔的桿高來自
+  // GEO_ANCHORS（20~26px 隨螢幕），桿內用 .barLabelText 寫「實際·階段名稱」，寫不下才退成短標籤。
+  const geo = ganttGeo();
+  const barH = opts.height || geo.BAR_H;
+  const bar = make('div', `barActual${opts.live ? ' barActual-live' : ''}`);
   const left = offsetPx(s, bounds);
   const width = Math.max(offsetPx(e, bounds) - left, 6);
   bar.style.left = `${left}px`;
   bar.style.width = `${width}px`;
+  bar.style.height = `${barH}px`;
+  if (opts.top === undefined) { bar.style.top = '50%'; bar.style.transform = 'translateY(-50%)'; }
+  else bar.style.top = typeof opts.top === 'number' ? `${opts.top}px` : opts.top;
+  bar.style.color = colorCls;
+  // 進行中（無結束日）＝原檔 barActual-live：淡底＋虛線框＋右端箭頭，與已完成的實心桿分得開
+  bar.style.background = opts.live ? `${colorCls}29` : colorCls;
+  if (opts.live) bar.style.borderColor = colorCls;
+  if (opts.label) {
+    const fontPx = computeBarFontPx(barH);
+    const picked = pickBarLabel(opts.label, opts.labelShort || opts.label, width, fontPx);
+    if (picked.tier !== 'none') {
+      const t = make('span', 'barLabelText', picked.text);
+      t.style.fontSize = `${fontPx}px`;
+      t.style.color = opts.live ? colorCls : '#fff';
+      if (!opts.live) t.style.textShadow = '0 1px 2px rgba(0,0,0,.4)';
+      bar.append(t);
+    }
+  }
   if (clippedLeft) bar.append(make('span', 'absolute -left-1 top-1/2 -translate-y-1/2 text-[9px] font-bold leading-none text-white', '‹'));
   if (clippedRight) bar.append(make('span', 'absolute -right-1 top-1/2 -translate-y-1/2 text-[9px] font-bold leading-none text-white', '›'));
   return bar;
 }
 
+// 視覺移植 #12：原檔的「上排空心預估框」（.barPredicted）。單一工項只有一組日期畫不出預估，
+// 但案級列有——合約工期＝預估，工項實際涵蓋範圍＝實際，正好是原檔那組上下雙桿的語意。
+function predictedBar(startAt, endAt, bounds, color, opts = {}) {
+  const s0 = parseDateOnly(startAt), e0 = parseDateOnly(endAt);
+  if (!s0 || !e0 || e0 < s0) return null;
+  if (e0 < bounds.min || s0 > bounds.max) return null;
+  const s = s0 < bounds.min ? bounds.min : s0;
+  const e = e0 > bounds.max ? bounds.max : e0;
+  const geo = ganttGeo();
+  const barH = opts.height || geo.BAR_H;
+  const bar = make('div', 'barPredicted');
+  const left = offsetPx(s, bounds);
+  const width = Math.max(offsetPx(e, bounds) - left, 6);
+  bar.style.left = `${left}px`;
+  bar.style.width = `${width}px`;
+  bar.style.height = `${barH}px`;
+  bar.style.top = typeof opts.top === 'string' ? opts.top : `${opts.top || 0}px`;
+  // 原檔：還沒開始的預估框畫虛線，已開始畫實線
+  bar.style.border = `2px ${opts.dashed ? 'dashed' : 'solid'} ${color}`;
+  // 原檔 .barStartDelayGap：晚開始時，預估框前段（預估開始→實際開始）疊紅色斜紋
+  if (opts.delayDays > 0 && opts.pxPerDay) {
+    const gap = make('div', 'barStartDelayGap');
+    gap.style.width = `${Math.max(0, Math.min(opts.delayDays * opts.pxPerDay, width))}px`;
+    bar.append(gap);
+  }
+  if (opts.label) {
+    const fontPx = computeBarFontPx(barH);
+    const picked = pickBarLabel(opts.label, opts.labelShort || opts.label, width, fontPx);
+    if (picked.tier !== 'none') {
+      const t = make('span', 'barLabelText', picked.text);
+      t.style.fontSize = `${fontPx}px`;
+      t.style.color = color;
+      bar.append(t);
+    }
+  }
+  return bar;
+}
+
+// 視覺移植 #12：軌道改用原檔 .ganttTimeline，並補上原檔的週格線圖層
+// （.gridLinesOverlay/.gridLine.gridLineWeek）與今日線（.todayLine）。格線落點＝表頭週刻度落點，
+// 同一支算法，未新增任何時間尺度邏輯。
 function trackWrap(bounds) {
-  const wrap = make('div', 'relative flex-none');
+  const wrap = make('div', 'ganttTimeline');
   wrap.style.width = `${bounds.widthPx}px`;
-  const todayLine = make('div', 'gantt-today');
+  const overlay = make('div', 'gridLinesOverlay');
+  overlay.style.left = '0';
+  overlay.style.right = '0';
+  overlay.style.bottom = '0';
+  // 原檔是每天一條淡線、每週起點一條深線。本檔多一個「看全程」模式，那時每天只有幾 px、
+  // 逐日畫會糊成一片，故密度不足 8px/天就只畫週線（原檔沒有這個模式，是本檔既有功能）。
+  const daily = bounds.pxPerDay >= 8;
+  const weekStart = new Date(bounds.min);
+  weekStart.setDate(weekStart.getDate() + ((7 - (daysBetween(bounds.min, weekStart) % 7)) % 7));
+  const weekKeys = new Set();
+  let wk = new Date(weekStart);
+  while (wk <= bounds.max) { weekKeys.add(daysBetween(bounds.min, wk)); wk = new Date(wk); wk.setDate(wk.getDate() + 7); }
+  const totalDays = daysBetween(bounds.min, bounds.max);
+  for (let d = 0; d <= totalDays; d++) {
+    const isWeek = weekKeys.has(d);
+    if (!daily && !isWeek) continue;
+    const line = make('div', `gridLine${isWeek ? ' gridLineWeek' : ''}`);
+    line.style.left = `${d * bounds.pxPerDay}px`;
+    overlay.append(line);
+  }
+  wrap.append(overlay);
+  const todayLine = make('div', 'todayLine');
   todayLine.style.left = `${offsetPx(todayDate(), bounds)}px`;
   wrap.append(todayLine);
   return wrap;
@@ -782,7 +1509,7 @@ function progressLine(p, c) {
   const catName = resolveCategory(p);
   top.append(
     make('span', 'tnum shrink-0 text-xs font-bold text-inkfaint', dateText),
-    badge(clean(p.category) || `${catName}（推測）`, CATEGORY_BADGE[catName] || 'bg-line text-inkmuted'),
+    categoryBadge(catName, clean(p.category) || `${catName}（推測）`),
     make('span', 'text-ink', clean(p.content) || '（未填工程內容）')
   );
   row.append(top);
@@ -1016,40 +1743,105 @@ byId('caseDrawerClose').addEventListener('click', closeCaseDrawer);
 byId('caseDrawerBackdrop').addEventListener('click', closeCaseDrawer);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !byId('caseDrawer').hidden) closeCaseDrawer(); });
 
+// 案子的「實際」區間＝所有工項進度涵蓋的範圍。最後一筆沒填結束日＝還在進行中，畫到今天為止
+// （沿用 ganttBar 既有的 openEnded 行為，未新增時間邏輯）。
+function caseActualSpan(c) {
+  const items = (c.progress || []).filter((p) => parseDateOnly(p.startAt));
+  if (!items.length) return null;
+  let min = null, max = null, live = false;
+  items.forEach((p) => {
+    const s = parseDateOnly(p.startAt);
+    const e = parseDateOnly(p.endAt);
+    if (!e) live = true;
+    if (s && (!min || s < min)) min = s;
+    const tail = e || todayDate();
+    if (tail && (!max || tail > max)) max = tail;
+  });
+  if (!min) return null;
+  const fmt = (d) => `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+  return { start: fmt(min), end: live ? '' : fmt(max || min), live };
+}
+
+// 視覺移植 #12：總覽案級列一併對齊單案頁的骨架（.ganttRow/.ganttLabel/.taskNameBlock）。
+// 案名／監工／工期／最新工項／逾期催更標記／詳情鈕等資訊層排版逐字保留，只換外框 class。
 function renderCaseBlock(c, bounds) {
   const overdue = isOverdue(c);
   const stale = isStale(c);
-  const wrapper = make('div', `border-b border-line last:border-b-0 ${overdue ? 'bg-mredtint/40' : ''}`);
+  const wrapper = make('div', '');
 
-  const row = make('div', 'flex w-full cursor-pointer items-stretch text-left transition-colors hover:bg-paper/70');
+  const row = make('div', 'ganttRow cursor-pointer text-left transition-colors hover:bg-paper/70');
   row.setAttribute('role', 'button');
   row.setAttribute('tabindex', '0');
   row.setAttribute('aria-label', `開啟「${c.name}」專屬甘特圖`);
-  const label = make('div', `sticky left-0 z-10 border-r border-line bg-white p-3 ${overdue ? 'bg-mredtint' : ''}`);
+  const label = make('div', 'ganttLabel');
   label.style.width = `${LABEL_COL_MAIN}px`;
+  label.style.fontSize = '12px';
+  if (overdue) label.style.background = 'var(--stall-bg)';
+  const nameBlock = make('div', 'taskNameBlock');
+  nameBlock.style.alignItems = 'stretch';
+  nameBlock.style.padding = '0.65rem 0.8rem';
   const nameRow = make('div', 'flex items-start gap-1.5');
   nameRow.append(statusDot(overdue ? 'overdue' : stale ? 'stale' : 'normal'));
   nameRow.append(make('p', 'truncate text-sm font-extrabold text-ink', c.name));
-  label.append(nameRow);
-  label.append(make('p', 'mt-0.5 truncate text-xs text-inkmuted', `監工 ${c.supervisor || '—'}・接案 ${c.assignee || '—'}`));
-  label.append(make('p', 'tnum mt-0.5 text-xs text-inkmuted', `${c.startAt || '—'} ~ ${c.endAt || '—'}・已繳 ${pct(c.paidRatio)}`));
+  nameBlock.append(nameRow);
+  nameBlock.append(make('p', 'mt-0.5 truncate text-xs text-inkmuted', `監工 ${c.supervisor || '—'}・接案 ${c.assignee || '—'}`));
+  nameBlock.append(make('p', 'taskDateRange mt-0.5', `${c.startAt || '—'} ~ ${c.endAt || '—'}・已繳 ${pct(c.paidRatio)}`));
   const lastWorkItemLine = make('p', 'mt-0.5 truncate text-xs font-semibold text-inkmuted', `最新工項：${clean(c.lastWorkItem) || '—'}`);
   lastWorkItemLine.title = clean(c.lastWorkItem) || '—';
-  label.append(lastWorkItemLine);
-  const badgeRow = make('div', 'mt-1 flex flex-wrap gap-1');
+  nameBlock.append(lastWorkItemLine);
+  const badgeRow = make('div', 'tagRow mt-1');
   if (overdue) badgeRow.append(badge('逾期', 'bg-mredtint text-mreddark'));
   if (stale) badgeRow.append(badge('催更', 'bg-flagtint text-flagdark'));
-  if (badgeRow.childElementCount) label.append(badgeRow);
+  if (badgeRow.childElementCount) nameBlock.append(badgeRow);
   const detailBtn = make('button', 'mt-1.5 inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-[11px] font-bold text-ink hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', '詳情 →');
   detailBtn.type = 'button';
   detailBtn.addEventListener('click', (e) => { e.stopPropagation(); openCaseDrawer(c, detailBtn); });
-  label.append(detailBtn);
+  nameBlock.append(detailBtn);
+  label.append(nameBlock);
   row.append(label);
 
+  // 視覺移植 #12：案級列改成原檔那組「上排空心預估框＋下排實心實際桿」。
+  // 案級才有兩組日期可以對照——合約工期＝預估，工項實際涵蓋範圍＝實際；實際超出合約的那一段
+  // 依原檔 barActual-over 的做法用漸層轉成珊瑚紅，一眼看得出落後多少。
+  const geo = ganttGeo();
   const track = trackWrap(bounds);
-  const bar = ganttBar(c.startAt, c.endAt, bounds, overdue ? 'bg-mred' : 'bg-ink');
-  if (bar) track.append(bar);
-  else {
+  // 案級列高由左欄的資訊量撐出來，渲染當下量不到，所以雙桿的垂直位置交給 CSS calc 以列高的
+  // 中線為基準推算（原檔是固定 ROW_H 直接算 px；本檔的列高不固定，改用等價的 calc 寫法）
+  const stackH = geo.BAR_H * 2 + geo.BAR_GAP;
+  const barsTop = `calc(50% - ${stackH / 2}px)`;
+  const actualTop = `calc(50% - ${stackH / 2}px + ${geo.BAR_H + geo.BAR_GAP}px)`;
+  const baseColor = overdue ? CASE_BAR_COLOR_OVERDUE : CASE_BAR_COLOR;
+
+  const pred = predictedBar(c.startAt, c.endAt, bounds, baseColor, {
+    top: barsTop, height: geo.BAR_H, label: '預估', labelShort: '預估',
+  });
+  if (pred) track.append(pred);
+
+  const actual = caseActualSpan(c);
+  let drewActual = false;
+  if (actual) {
+    const bar = ganttBar(actual.start, actual.end, bounds, baseColor, {
+      openEnded: true,
+      live: actual.live,
+      top: actualTop,
+      height: geo.BAR_H,
+      label: `實際·${clean(c.lastWorkItem) || c.name}`,
+      labelShort: '實際',
+    });
+    if (bar) {
+      // 實際結束超出合約結束：超出的那一段轉成警示色（原檔 barActual-over 的漸層手法）
+      const contractEnd = parseDateOnly(c.endAt);
+      const actualEnd = parseDateOnly(actual.end);
+      if (!actual.live && contractEnd && actualEnd && actualEnd > contractEnd) {
+        const barLeft = parseFloat(bar.style.left) || 0;
+        const okWidth = Math.max(offsetPx(contractEnd, bounds) - barLeft, 0);
+        bar.style.background = `linear-gradient(90deg, ${baseColor} 0px, ${baseColor} ${okWidth}px, var(--stall) ${okWidth}px, var(--stall) 100%)`;
+      }
+      track.append(bar);
+      drewActual = true;
+    }
+  }
+  if (!pred && !drewActual) {
     const note = make('div', 'absolute left-2 top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] font-bold text-inkfaint', '不在目前檢視範圍・點「看全程」查看');
     track.append(note);
   }
@@ -1065,44 +1857,265 @@ function renderCaseBlock(c, bounds) {
 }
 
 // ---------- P2：圖一式甘特（展開單案）----------
+// 視覺移植 #12：外框改原檔 .ganttScroll/.ganttBody/.ganttHeaderRow/.ganttCorner/.ganttRowsWrap/
+// .ganttRow/.ganttLabel/.taskNameBlock/.taskName/.taskDateRange。11 個工項分行、分組歸類、
+// 多筆錯位、minHeight 計算全部逐字保留，只換外層元素的 class。
+function itemSpanText(items) {
+  let min = null, max = null;
+  items.forEach((p) => {
+    const s = parseDateOnly(p.startAt);
+    const e = parseDateOnly(p.endAt) || s;
+    if (s && (!min || s < min)) min = s;
+    if (e && (!max || e > max)) max = e;
+  });
+  if (!min) return '';
+  return `${fmtShort(min)}~${fmtShort(max || min)}`;
+}
+
+// ===== 視覺移植 #12：預估 vs 實際的判定（逐字取自原檔 lib/ganttGeometry.ts 與 lib/date.ts）=====
+// Joan 2026-08-04 拍板要原檔那種雙排桿，Ragic 工項子表因此新增「預估開始日／預估天數」兩欄。
+// 這一組函式是原檔判斷「超出幾天／提前／晚幾天開始」的原始邏輯，只把日期格式從 ISO 換成
+// 本檔既有的 YYYY/MM/DD（同樣可字串比較），判定條件與防呆註解逐字保留。
+function safeDuration(duration) {
+  const n = Number(duration);
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.trunc(n);
+}
+function addDaysStr(s, n) {
+  const d = parseDateOnly(s);
+  if (!d) return '';
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+}
+// 預估結束日＝預估開始日 + (天數-1)
+function computeEndDate(start, duration) {
+  if (!parseDateOnly(start)) return '';
+  return addDaysStr(start, safeDuration(duration) - 1);
+}
+function diffDaysStr(a, b) {
+  const da = parseDateOnly(a), db = parseDateOnly(b);
+  if (!da || !db) return 0;
+  return Math.round((db.getTime() - da.getTime()) / 86400000);
+}
+function computeActualStatus(actualStart, actualEnd, predictedEnd) {
+  if (!parseDateOnly(actualStart)) return { status: 'none', overDays: 0, early: false };
+  if (!parseDateOnly(actualEnd)) return { status: 'live', overDays: 0, early: false };
+  // 預估結束日算不出來（預估開始空／壞）就無從判斷超不超期，一律當「準時完成」不誤報紅字。
+  // 注意：不能省這道——字串比較裡任何日期都 > ""，會讓每一列都亮成「超出預估·0天」。
+  if (!parseDateOnly(predictedEnd)) return { status: 'ok', overDays: 0, early: false };
+  if (actualEnd > predictedEnd) return { status: 'over', overDays: diffDaysStr(predictedEnd, actualEnd), early: false };
+  return { status: 'ok', overDays: 0, early: actualEnd < predictedEnd };
+}
+function computeStartDelay(actualStart, predictedStart) {
+  // 兩邊都要是合法日期才比得出「晚開始」；predictedStart 空字串時任何日期都 > ""，
+  // 不擋會讓每一列都誤標「晚 0 天開始」的紅色斜紋。
+  if (!parseDateOnly(actualStart) || !parseDateOnly(predictedStart)) return { late: false, delayDays: 0 };
+  if (actualStart > predictedStart) return { late: true, delayDays: diffDaysStr(predictedStart, actualStart) };
+  return { late: false, delayDays: 0 };
+}
+// 原檔 ACTUAL_TAG_LABEL 逐字
+const ACTUAL_TAG_LABEL = {
+  none: () => '尚未開始',
+  live: () => '進行中',
+  ok: (_o, early) => (early ? '提前完成' : '準時完成'),
+  over: (overDays) => `超出預估·${overDays}天`,
+};
+// 一列（一個工項）的整體狀態：取該工項底下所有進度裡最嚴重的那個，供左欄標籤用
+function itemStatus(items) {
+  if (!items.length) return 'none';
+  const order = { over: 3, live: 2, ok: 1, none: 0 };
+  let best = 'none';
+  items.forEach((p) => {
+    const st = computeActualStatus(p.startAt, p.endAt, computeEndDate(p.planStart, p.planDays)).status;
+    if (order[st] > order[best]) best = st;
+  });
+  return best;
+}
+
 function renderCaseItemGantt(c) {
   const bounds = computeItemBounds(c);
-  const scroll = make('div', 'gantt-scroll rounded-xl border border-line bg-white');
-  const inner = make('div', 'inline-block min-w-full');
-  const rulerRow = make('div', 'flex items-stretch border-b border-line bg-paper');
-  const rulerLabel = make('div', 'sticky left-0 z-10 flex-none border-r border-line bg-paper p-2 text-xs font-bold text-inkmuted', '工項');
-  rulerLabel.style.width = `${LABEL_COL_ITEM}px`;
+  const geo = ganttGeo();
+  const LABEL_W = geo.LABEL_W;
+  const labelFontPx = computeLabelFontPx(geo.BAR_H);
+
+  const scroll = make('div', 'ganttScroll');
+  const inner = make('div', 'ganttBody');
+  const rulerRow = make('div', 'ganttHeaderRow');
+  // 原檔的角落寫「負責方 / 階段名稱」——本檔的分組是工項，第二層是該工項的施工內容
+  const rulerLabel = make('div', 'ganttCorner', '工項 / 施工內容');
+  rulerLabel.style.width = `${LABEL_W}px`;
+  rulerLabel.style.height = `${RULER_MONTH_H + RULER_WEEK_H}px`;
   rulerRow.append(rulerLabel);
-  rulerRow.append(ruler(bounds, LABEL_COL_ITEM));
+  rulerRow.append(ruler(bounds, LABEL_W));
   inner.append(rulerRow);
 
   const grouped = {};
   GANTT_ROWS.forEach((name) => { grouped[name] = []; });
   (c.progress || []).forEach((p) => { grouped[resolveCategory(p)].push(p); });
 
+  const rowsWrap = make('div', 'ganttRowsWrap');
+  const expanded = DENSE_EXPANDED.has(c.rid);
+  const collapsedRows = [];   // 尚未開始的列，收合時不進畫面
+  const collapsedNames = [];
   GANTT_ROWS.forEach((name) => {
     const items = grouped[name];
-    const rowEl = make('div', 'flex items-stretch border-b border-line/60 last:border-b-0');
-    const label = make('div', `sticky left-0 z-10 flex-none border-r border-line bg-white p-2 text-xs font-bold ${name === '未分類' ? 'text-inkfaint' : 'text-inkmuted'}`, name);
-    label.style.width = `${LABEL_COL_ITEM}px`;
+    const color = CATEGORY_COLORS[name] || CATEGORY_COLORS['未分類'];
+    const status = itemStatus(items);
+    // 原檔一列＝一組雙桿（上排預估空心框、下排實際實心桿，中間 BAR_GAP）。
+    // 本檔一個工項底下可能有多筆進度，每筆各畫一組雙桿往下堆，列高跟著長。
+    const pairH = geo.BAR_H * 2 + geo.BAR_GAP;
+    const n = Math.max(1, items.length);
+    const stackH = n * pairH + (n - 1) * geo.BAR_GAP;
+    const rowH = Math.max(geo.ROW_H, stackH + 16);
+    const barsTop = Math.round((rowH - stackH) / 2);
+
+    const rowEl = make('div', 'ganttRow');
+    rowEl.style.height = `${rowH}px`;
+
+    const label = make('div', 'ganttLabel');
+    label.style.width = `${LABEL_W}px`;
+    label.style.fontSize = `${labelFontPx}px`; // 原檔用 inline fontSize 讓底下的 em 值等比縮放
+
+    // 原檔 .ownerGroupBlock：分組色塊（淡底＋5px 粗左邊框＋分組名）。原檔分的是負責方，
+    // 本檔分的是 Joan 2026-07-20 核定的 11 個工項，色票沿用工項色。
+    const strip = make('div', 'ownerGroupBlock');
+    strip.style.width = `${geo.OWNER_STRIP_W}px`;
+    strip.style.height = `${rowH}px`;
+    strip.style.background = `${color}26`;
+    strip.style.borderLeft = `5px solid ${color}`;
+    const stripText = make('span', '', name);
+    stripText.style.color = color;
+    strip.append(stripText);
+    label.append(strip);
+
+    const nameBlock = make('div', 'taskNameBlock');
+    nameBlock.style.marginLeft = `${geo.OWNER_STRIP_W}px`;
+    nameBlock.style.height = `${rowH}px`;
+    nameBlock.style.background = `${color}12`;
+    const headline = items.length
+      ? (clean(items[0].content) || '（未填施工內容）') + (items.length > 1 ? `（共 ${items.length} 筆）` : '')
+      : '尚未排定';
+    const nameEl = make('div', 'taskName', headline);
+    if (!items.length) nameEl.style.color = 'var(--wait)';
+    nameBlock.append(nameEl);
+    const span = itemSpanText(items);
+    if (span) nameBlock.append(make('div', 'taskDateRange', span));
+
+    // 標籤列照原檔：已完成掛 .doneTag，狀態掛 .autoTag-{none|live|ok|over}，晚開始另外掛一枚
+    const tagRow = make('div', 'tagRow');
+    const worst = items.length
+      ? items.map((p) => computeActualStatus(p.startAt, p.endAt, computeEndDate(p.planStart, p.planDays)))
+             .sort((a, b) => ({ over: 3, live: 2, ok: 1, none: 0 })[b.status] - ({ over: 3, live: 2, ok: 1, none: 0 })[a.status])[0]
+      : { status: 'none', overDays: 0, early: false };
+    if (status === 'ok' || status === 'over') tagRow.append(make('span', 'doneTag', '已完成'));
+    tagRow.append(make('span', `autoTag autoTag-${status}`, ACTUAL_TAG_LABEL[status](worst.overDays, worst.early)));
+    const anyLate = items.map((p) => computeStartDelay(p.startAt, clean(p.planStart)))
+                         .filter((d) => d.late).sort((a, b) => b.delayDays - a.delayDays)[0];
+    if (anyLate) tagRow.append(make('span', 'autoTag startLateTag', `晚${anyLate.delayDays}天開始`));
+    nameBlock.append(tagRow);
+    label.append(nameBlock);
     rowEl.append(label);
+
     const track = trackWrap(bounds);
-    if (!items.length) {
-      track.style.minHeight = '30px';
-    } else {
-      items.forEach((p, i) => {
-        const bar = ganttBar(p.startAt, p.endAt, bounds, CATEGORY_COLORS[name] || 'bg-slate-400', { openEnded: true });
-        if (!bar) return;
-        if (items.length > 1) { bar.style.top = `${6 + i * 18}px`; bar.style.transform = 'none'; }
-        track.append(bar);
-      });
-      track.style.minHeight = `${Math.max(30, items.length * 18 + 8)}px`;
-    }
+    track.style.height = `${rowH}px`;
+    items.forEach((p, i) => {
+      const pairTop = barsTop + i * (pairH + geo.BAR_GAP);
+      const planStart = clean(p.planStart);
+      const predictedEnd = computeEndDate(planStart, p.planDays);
+      const actual = computeActualStatus(p.startAt, p.endAt, predictedEnd);
+      const delay = computeStartDelay(p.startAt, planStart);
+
+      // 上排：預估空心框。還沒開始＝虛線框（原檔 isTodo 判定）；晚開始的前段疊紅色斜紋
+      if (planStart && predictedEnd) {
+        const pred = predictedBar(planStart, predictedEnd, bounds, color, {
+          top: pairTop, height: geo.BAR_H, label: '預估', labelShort: '預估',
+          dashed: actual.status === 'none',
+          delayDays: delay.late ? delay.delayDays : 0,
+          pxPerDay: bounds.pxPerDay,
+        });
+        if (pred) track.append(pred);
+      }
+
+      // 下排：實際實心桿。超出預估的那一段轉成警示色（原檔 barActual-over 的漸層手法）
+      if (actual.status !== 'none') {
+        const bar = ganttBar(p.startAt, p.endAt, bounds, color, {
+          openEnded: true,
+          live: actual.status === 'live',
+          top: pairTop + geo.BAR_H + geo.BAR_GAP,
+          height: geo.BAR_H,
+          label: `實際·${clean(p.content) || name}`,
+          labelShort: '實際',
+        });
+        if (bar) {
+          if (actual.status === 'over') {
+            const barLeft = parseFloat(bar.style.left) || 0;
+            const okWidth = Math.max(offsetPx(parseDateOnly(predictedEnd), bounds) - barLeft, 0);
+            bar.style.background = `linear-gradient(90deg, ${color} 0px, ${color} ${okWidth}px, var(--stall) ${okWidth}px, var(--stall) 100%)`;
+          }
+          track.append(bar);
+        }
+      }
+    });
     rowEl.append(track);
-    inner.append(rowEl);
+    // 「尚未開始」＝這個工項底下一筆實際進度都沒有。收合時整列不進畫面，改由摘要列代表。
+    if (status === 'none') { collapsedRows.push(rowEl); collapsedNames.push(name); }
+    else rowsWrap.append(rowEl);
   });
+
+  // 只有一項就不必收（收了反而多一行）
+  if (collapsedRows.length < 2 || expanded) {
+    collapsedRows.forEach((r) => rowsWrap.append(r));
+  }
+  if (collapsedRows.length >= 2) {
+    rowsWrap.append(denseSummaryRow(c, collapsedNames, LABEL_W, expanded));
+  }
+  inner.append(rowsWrap);
   scroll.append(inner);
   return scroll;
+}
+
+// 收合列：寫出是哪幾項、點一下展開。資訊不減，只是預設不佔畫面。
+function denseSummaryRow(c, names, labelWidth, expanded) {
+  const row = make('div', 'ganttRow denseSummary');
+  row.setAttribute('role', 'button');
+  row.setAttribute('tabindex', '0');
+  const label = make('div', 'ganttLabel denseSummaryLabel');
+  label.style.width = `${labelWidth}px`;
+  const head = make('div', '', expanded ? `尚未開始 ${names.length} 項・收合` : `尚未開始 ${names.length} 項`);
+  head.style.display = 'flex';
+  head.style.alignItems = 'center';
+  head.style.gap = '6px';
+  head.style.width = '100%';
+  const caret = make('span', '', expanded ? '▴' : '▾');
+  caret.style.marginLeft = 'auto';
+  caret.style.opacity = '.6';
+  head.append(caret);
+  label.append(head);
+  row.append(label);
+  // 工項名稱放 label 的第二行與 title：放在時間軸那一側會被左側 sticky 欄蓋掉，
+  // 而且橫向捲動時位置飄移，不如收在固定欄裡穩定。點開就看得到完整的列。
+  label.style.flexDirection = 'column';
+  label.style.alignItems = 'flex-start';
+  label.style.justifyContent = 'center';
+  label.style.gap = '2px';
+  const namesEl = make('div', 'denseSummaryNames', names.join('、'));
+  namesEl.style.position = 'static';
+  namesEl.style.overflow = 'hidden';
+  namesEl.style.textOverflow = 'ellipsis';
+  namesEl.style.maxWidth = '100%';
+  label.append(namesEl);
+  label.title = names.join('、');
+  const track = make('div', 'ganttTimeline');
+  track.style.background = 'inherit';
+  row.append(track);
+  const toggle = () => {
+    if (DENSE_EXPANDED.has(c.rid)) DENSE_EXPANDED.delete(c.rid);
+    else DENSE_EXPANDED.add(c.rid);
+    renderGanttRoute();
+  };
+  row.addEventListener('click', toggle);
+  row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+  return row;
 }
 
 // ---------- P2：月曆視圖（展開單案）----------
@@ -1146,7 +2159,9 @@ function renderCaseCalendar(c) {
       if (e < s) return;
       if (cellDate >= s && cellDate <= e) {
         const cat = resolveCategory(p);
-        dots.append(make('span', `inline-block h-2 w-2 rounded-full ${CATEGORY_COLORS[cat] || 'bg-slate-400'}`));
+        const dot = make('span', 'inline-block h-2 w-2 rounded-full');
+        dot.style.background = CATEGORY_COLORS[cat] || CATEGORY_COLORS['未分類'];
+        dots.append(dot);
       }
     });
     if (dots.childElementCount) cell.append(dots);
@@ -1156,12 +2171,14 @@ function renderCaseCalendar(c) {
   return wrap;
 }
 
+// 視覺移植 #12：切換鈕改用原檔 .toolbar/.btn/.btn.primary（選中＝primary）。切換行為與狀態
+// 來源（CASE_VIEW_MODE）逐字保留。
 function viewToggle(c) {
   const mode = CASE_VIEW_MODE.get(c.rid) || 'gantt';
-  const row = make('div', 'flex gap-2');
-  const ganttBtn = make('button', `rounded-lg px-3 py-1 text-xs font-bold ${mode === 'gantt' ? 'bg-accent text-white' : 'border border-line text-inkmuted'}`, '圖一式甘特');
+  const row = make('div', 'toolbar');
+  const ganttBtn = make('button', `btn${mode === 'gantt' ? ' primary' : ''}`, '圖一式甘特');
   ganttBtn.type = 'button';
-  const calBtn = make('button', `rounded-lg px-3 py-1 text-xs font-bold ${mode === 'calendar' ? 'bg-accent text-white' : 'border border-line text-inkmuted'}`, '月曆');
+  const calBtn = make('button', `btn${mode === 'calendar' ? ' primary' : ''}`, '月曆');
   calBtn.type = 'button';
   ganttBtn.addEventListener('click', (e) => { e.stopPropagation(); CASE_VIEW_MODE.set(c.rid, 'gantt'); renderLists(); });
   calBtn.addEventListener('click', (e) => { e.stopPropagation(); CASE_VIEW_MODE.set(c.rid, 'calendar'); renderLists(); });
@@ -1180,11 +2197,11 @@ function ganttDetailHeader(c) {
   const wrap = make('div', 'mb-4 space-y-3');
 
   const topRow = make('div', 'flex flex-wrap items-center justify-between gap-2');
-  const backBtn = make('button', 'inline-flex items-center gap-1 rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', '← 回到設計部總覽');
+  const backBtn = make('button', 'backBtn', '← 回到設計部總覽');
   backBtn.type = 'button';
   backBtn.addEventListener('click', () => { location.hash = 'gantt'; });
   topRow.append(backBtn);
-  const openDrawerBtn = make('button', 'inline-flex items-center gap-1 rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', '查看詳情・新增進度 →');
+  const openDrawerBtn = make('button', 'btn', '查看詳情・新增進度 →');
   openDrawerBtn.type = 'button';
   openDrawerBtn.addEventListener('click', () => openCaseDrawer(c, openDrawerBtn));
   topRow.append(openDrawerBtn);
@@ -1213,7 +2230,7 @@ function ganttDetailHeader(c) {
 
 function ganttDetailNotFoundBox() {
   const wrap = make('div', 'space-y-3');
-  const backBtn = make('button', 'inline-flex items-center gap-1 rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', '← 回到設計部總覽');
+  const backBtn = make('button', 'backBtn', '← 回到設計部總覽');
   backBtn.type = 'button';
   backBtn.addEventListener('click', () => { location.hash = 'gantt'; });
   wrap.append(backBtn, emptyNote('找不到這個案件，或資料尚未載入完成，請稍候或按「重新整理」。'));
@@ -1227,25 +2244,57 @@ function scrollItemGanttToToday(scrollEl, bounds) {
   requestAnimationFrame(() => requestAnimationFrame(() => {
     const maxScroll = scrollEl.scrollWidth - scrollEl.clientWidth;
     if (maxScroll <= 0) return;
-    const visibleTrackWidth = Math.max(scrollEl.clientWidth - LABEL_COL_ITEM, 0);
+    const visibleTrackWidth = Math.max(scrollEl.clientWidth - itemLabelWidth(), 0);
     const target = offsetPx(todayDate(), bounds) - visibleTrackWidth / 3;
     scrollEl.scrollLeft = Math.max(0, Math.min(maxScroll, target));
   }));
+}
+
+// 視覺移植 #12：圖例列（.ganttLegend/.legendItem/.swLine/.lgBar.lgBarActual/.legendNote）
+// 視覺移植 #12：圖例照原檔 L728-760 的組成與文案結構
+function ganttLegend(mode) {
+  const row = make('div', 'ganttLegend');
+  const item = (cls, text) => {
+    const el = make('div', 'legendItem');
+    el.append(make('span', cls), make('span', '', text));
+    return el;
+  };
+  row.append(item('sw swLine', '今天'));
+  if (mode === 'overview') {
+    row.append(item('lgBar lgBarPlan', '合約工期'));
+    row.append(item('lgBar lgBarActual', '實際進度'));
+    row.append(item('lgBar lgBarOver', '超出合約'));
+    row.append(item('lgBar lgBarLive', '進行中'));
+    row.append(make('span', 'legendNote', '上排空框＝合約工期　下排實心＝工項實際進度　未完工的畫到今天'));
+  } else {
+    row.append(item('lgBar lgBarPlan', '預估區間'));
+    row.append(item('lgBar lgBarActual', '實際·準時'));
+    row.append(item('lgBar lgBarOver', '超出預估'));
+    row.append(item('lgBar lgBarLive', '進行中'));
+    row.append(item('lgBar lgBarStartLate', '晚開始（斜紋警示）'));
+    row.append(make('span', 'legendNote', '虛線框＝尚未開始（上排）　下排實心桿＝實際進度'));
+  }
+  return row;
 }
 
 function renderGanttDetail(c) {
   const wrap = byId('ganttDetail');
   wrap.replaceChildren();
   wrap.append(ganttDetailHeader(c));
-  wrap.append(viewToggle(c));
+
+  const panel = make('div', 'ganttPanel');
+  panel.append(viewToggle(c));
 
   const mode = CASE_VIEW_MODE.get(c.rid) || 'gantt';
   if (mode === 'calendar') {
-    wrap.append(renderCaseCalendar(c));
+    panel.append(renderCaseCalendar(c));
+    wrap.append(panel);
   } else {
+    panel.append(ganttLegend('item'));
     const bounds = computeItemBounds(c);
     const scrollEl = renderCaseItemGantt(c);
-    wrap.append(scrollEl);
+    panel.append(scrollEl);
+    wrap.append(panel);
     scrollItemGanttToToday(scrollEl, bounds);
   }
 }
@@ -1298,28 +2347,115 @@ function scheduleGanttTodayScroll() {
   }));
 }
 
+// ---------- 工務雙資料源：mm/8 日常修繕併進同一條時間軸 ----------
+// Joan 2026-07-30 原話「工務要看到設計部的(因為他要監工設計部的案子) + 他自己的修繕進度」。
+// mm/8 沒有合約工期欄位，起日取「預約施工時間」→缺則「報修時間」；訖日取「完工時間」→缺則
+// 視為進行中畫到今天（沿用 ganttBar 既有 openEnded 行為，未新增時間邏輯）。
+// 「只看自己的」由後端依 token 比對負責人後才回傳，前端不持有人名。
+function repairSpan(r) {
+  return { start: clean(r.scheduledAt) || clean(r.reportedAt), end: clean(r.finishedAt) };
+}
+
+function renderRepairBlock(r, bounds) {
+  const { start, end } = repairSpan(r);
+  const geo = ganttGeo();
+  const row = make('div', 'ganttRow');
+  row.style.minHeight = `${Math.round(geo.ROW_H * 0.72)}px`;
+  const label = make('div', 'ganttLabel');
+  label.style.width = `${LABEL_COL_MAIN}px`;
+  label.style.fontSize = `${computeLabelFontPx(geo.BAR_H)}px`;
+  // 與案件列一樣的分組色塊，讓工務一眼分得出「這一段是修繕不是設計部案子」
+  const strip = make('div', 'ownerGroupBlock');
+  strip.style.width = `${Math.round(geo.OWNER_STRIP_W * 0.5)}px`;
+  strip.style.height = '100%';
+  strip.style.background = `${REPAIR_BAR_COLOR}26`;
+  strip.style.borderLeft = `5px solid ${REPAIR_BAR_COLOR}`;
+  label.append(strip);
+  const nameBlock = make('div', 'taskNameBlock');
+  nameBlock.style.marginLeft = `${Math.round(geo.OWNER_STRIP_W * 0.5)}px`;
+  nameBlock.style.alignItems = 'stretch';
+  nameBlock.style.padding = '0.5rem 0.8rem';
+  nameBlock.style.background = `${REPAIR_BAR_COLOR}12`;
+  const title = [clean(r.address), clean(r.room)].filter(Boolean).join(' ') || clean(r.ticketNo) || '（未填地址）';
+  const titleEl = make('p', 'truncate text-sm font-extrabold text-ink', title);
+  titleEl.title = title;
+  nameBlock.append(titleEl);
+  nameBlock.append(make('p', 'mt-0.5 truncate text-xs text-inkmuted', `${clean(r.category) || '未分類'}・${clean(r.status) || '—'}`));
+  nameBlock.append(make('p', 'taskDateRange mt-0.5', `${start || '—'} ~ ${end || '進行中'}`));
+  label.append(nameBlock);
+  row.append(label);
+  const track = trackWrap(bounds);
+  const bar = ganttBar(start, end, bounds, REPAIR_BAR_COLOR, {
+    openEnded: true,
+    live: Boolean(start) && !end,
+    height: geo.BAR_H,
+    label: `${clean(r.category) || '修繕'}·${clean(r.status) || ''}`,
+    labelShort: clean(r.category) || '修繕',
+  });
+  if (bar) track.append(bar);
+  else {
+    track.append(make('div', 'absolute left-2 top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] font-bold text-inkfaint', '不在目前檢視範圍・點「看全程」查看'));
+    track.style.minHeight = '30px';
+  }
+  row.append(track);
+  return row;
+}
+
+function renderRepairSection(rowsWrap, bounds) {
+  if (ROLE !== 'supervisor') return;
+  const open = ALL_REPAIRS.filter((r) => !REPAIR_TERMINAL_STATUSES.includes(clean(r.status)));
+  const headRow = make('div', 'ganttRow');
+  const headLabel = make('div', 'ganttCorner', REPAIR_ERROR ? '日常修繕（讀取失敗）' : `日常修繕（${open.length} 件進行中）`);
+  headLabel.style.width = `${LABEL_COL_MAIN}px`;
+  headRow.append(headLabel);
+  const headTrack = make('div', 'ganttTimeline');
+  headTrack.style.width = `${bounds.widthPx}px`;
+  headTrack.style.background = 'var(--panel-2)';
+  headTrack.style.minHeight = '28px';
+  if (REPAIR_ERROR) headTrack.append(make('div', 'absolute left-2 top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] font-bold text-inkfaint', REPAIR_ERROR));
+  headRow.append(headTrack);
+  rowsWrap.append(headRow);
+  if (!REPAIR_ERROR && !open.length) {
+    const emptyRow = make('div', 'ganttRow');
+    const emptyLabel = make('div', 'ganttLabel');
+    emptyLabel.style.width = `${LABEL_COL_MAIN}px`;
+    emptyLabel.append(make('div', 'taskNameBlock', '目前沒有進行中的修繕'));
+    emptyRow.append(emptyLabel);
+    const emptyTrack = trackWrap(bounds);
+    emptyTrack.style.minHeight = '30px';
+    emptyRow.append(emptyTrack);
+    rowsWrap.append(emptyRow);
+    return;
+  }
+  open.forEach((r) => rowsWrap.append(renderRepairBlock(r, bounds)));
+}
+
 function renderGantt(cases) {
   const wrap = byId('ganttWrap');
   wrap.replaceChildren();
   byId('ganttRangeToggle').textContent = GANTT_VIEW_MODE === 'full' ? '回到本週視窗' : '看全程';
   if (!cases.length) {
-    wrap.append(make('div', 'p-8 text-center text-sm text-inkmuted', '目前沒有工程中案件'));
+    wrap.append(make('div', 'emptyState', '目前沒有工程中案件'));
     LAST_GANTT_SCROLL_EL = null; LAST_GANTT_BOUNDS = null;
     return;
   }
   const bounds = GANTT_VIEW_MODE === 'full' ? computeBoundsFull(cases) : computeWindowBounds();
-  const scroll = make('div', 'gantt-scroll');
-  const inner = make('div', 'inline-block min-w-full');
+  const scroll = make('div', 'ganttScroll');
+  const inner = make('div', 'ganttBody');
 
-  const rulerRow = make('div', 'flex items-stretch border-b border-line bg-paper');
-  const rulerLabel = make('div', 'sticky left-0 z-10 flex-none border-r border-line bg-paper p-2 text-xs font-bold text-inkmuted', '案件 / 時間軸');
+  const rulerRow = make('div', 'ganttHeaderRow');
+  const rulerLabel = make('div', 'ganttCorner', '案件 / 時間軸');
   rulerLabel.style.width = `${LABEL_COL_MAIN}px`;
   rulerRow.append(rulerLabel);
   rulerRow.append(ruler(bounds, LABEL_COL_MAIN));
   inner.append(rulerRow);
 
-  cases.forEach((c) => inner.append(renderCaseBlock(c, bounds)));
+  const rowsWrap = make('div', 'ganttRowsWrap');
+  cases.forEach((c) => rowsWrap.append(renderCaseBlock(c, bounds)));
+  renderRepairSection(rowsWrap, bounds);
+  inner.append(rowsWrap);
   scroll.append(inner);
+  wrap.append(ganttLegend('overview'));
   wrap.append(scroll);
 
   // bugfix 2026-07-22：聚焦視窗模式下把橫向捲動初始位置移到「今日線約在可視寬度 1/3 處」，
@@ -1420,6 +2556,8 @@ function renderHeader() {
   const label = ROLE_LABEL || ROLE || '使用者';
   byId('roleBadge').textContent = label;
   byId('sidebarSubtitle').textContent = `設計部・${label}`;
+  // 角色載入後重繪側欄：設計師要把「日常修繕」卡位收掉，工務要把它變成可點的導覽
+  renderSidebarNav();
 }
 
 // ================= 平台外殼：導覽、路由、抽屜、Toast =================
@@ -1499,12 +2637,20 @@ function sidebarNavButton(item) {
   btn.addEventListener('click', () => { location.hash = item.id; });
   return btn;
 }
+// 權限不對稱：設計師（designer）不看修繕，連「規劃中」卡位都不出現；工務（supervisor）的
+// 修繕已在甘特總覽併軌顯示，點了直接帶到甘特圖，不再是佔位提示。
+function visiblePlannedItems() {
+  return PLANNED_ITEMS.filter((item) => !(item.id === 'repair' && ROLE === 'designer'));
+}
+function repairIsLive(item) { return item.id === 'repair' && ROLE === 'supervisor'; }
+
 function plannedButton(item) {
-  const btn = make('button', 'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-inkfaint hover:bg-ink/5 hover:text-inkmuted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent');
+  const live = repairIsLive(item);
+  const btn = make('button', `flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${live ? 'text-ink hover:bg-ink/5' : 'text-inkfaint hover:bg-ink/5 hover:text-inkmuted'}`);
   btn.type = 'button';
   const ic = make('span', 'h-5 w-5 shrink-0'); ic.innerHTML = icon(item.icon);
-  btn.append(ic, make('span', 'flex-1 text-left', `${item.label}（規劃中）`));
-  btn.addEventListener('click', () => showToast(item.note));
+  btn.append(ic, make('span', 'flex-1 text-left', live ? item.label : `${item.label}（規劃中）`));
+  btn.addEventListener('click', () => { if (live) { location.hash = 'gantt'; return; } showToast(item.note); });
   return btn;
 }
 function renderSidebarNav() {
@@ -1513,7 +2659,7 @@ function renderSidebarNav() {
   NAV_ITEMS.forEach((item) => nav.append(sidebarNavButton(item)));
   const planned = byId('sidebarPlanned');
   planned.replaceChildren();
-  PLANNED_ITEMS.forEach((item) => planned.append(plannedButton(item)));
+  visiblePlannedItems().forEach((item) => planned.append(plannedButton(item)));
 }
 
 function renderBottomTabs() {
@@ -1556,12 +2702,13 @@ function openMoreSheet() {
   quoteBuilderBtn.append(quoteIcon, make('span', '', '修繕報價單'));
   quoteBuilderBtn.addEventListener('click', () => { closeMoreSheet(); location.hash = 'quote-builder'; });
   list.append(quoteBuilderBtn);
-  PLANNED_ITEMS.forEach((item) => {
-    const btn = make('button', 'flex w-full items-center gap-2.5 rounded-xl px-3 py-3 text-sm font-bold text-inkfaint hover:bg-paper');
+  visiblePlannedItems().forEach((item) => {
+    const live = repairIsLive(item);
+    const btn = make('button', `flex w-full items-center gap-2.5 rounded-xl px-3 py-3 text-sm font-bold ${live ? 'text-ink hover:bg-paper' : 'text-inkfaint hover:bg-paper'}`);
     btn.type = 'button';
     const ic2 = make('span', 'h-5 w-5'); ic2.innerHTML = icon(item.icon);
-    btn.append(ic2, make('span', '', `${item.label}（規劃中）`));
-    btn.addEventListener('click', () => showToast(item.note));
+    btn.append(ic2, make('span', '', live ? item.label : `${item.label}（規劃中）`));
+    btn.addEventListener('click', () => { if (live) { closeMoreSheet(); location.hash = 'gantt'; return; } showToast(item.note); });
     list.append(btn);
   });
   byId('moreSheet').hidden = false;
@@ -1609,16 +2756,41 @@ function applyRoute() {
 }
 window.addEventListener('hashchange', applyRoute);
 
+// 設計部案件隔離：designer 只留下自己接案（assignee）的案子。比對用的人名由後端依 token 回傳，
+// 前端不持有任何人名常數。後端尚未提供 viewerName 時不靜默放行全部，改標記 SCOPE_DEGRADED 出警示。
+function scopeCases(cases) {
+  SCOPE_DEGRADED = false;
+  if (ROLE !== 'designer') return cases;
+  if (!VIEWER_NAME) { SCOPE_DEGRADED = true; return cases; }
+  return cases.filter((c) => clean(c.assignee) === VIEWER_NAME);
+}
+
+// 工務雙資料源：supervisor 才讀 mm/8（日常修繕）。修繕載入失敗不影響 finance/8 主畫面，
+// 只在甘特總覽的修繕區塊顯示錯誤說明。
+async function loadRepairs() {
+  ALL_REPAIRS = []; REPAIR_ERROR = '';
+  if (ROLE !== 'supervisor') return;
+  try {
+    const data = await apiGet('decorRepairList');
+    ALL_REPAIRS = Array.isArray(data.repairs) ? data.repairs : [];
+  } catch (error) {
+    REPAIR_ERROR = error.status === 404 ? '後端尚未開放日常修繕資料（decorRepairList）' : `修繕資料載入失敗：${error.message}`;
+  }
+}
+
 async function loadAll() {
   setGlobalMessage('loading', '載入中…');
   try {
     const data = await apiGet('decorListAll');
-    ALL_CASES = Array.isArray(data.cases) ? data.cases : [];
     ROLE = data.role || ''; ROLE_LABEL = data.label || '';
+    VIEWER_NAME = clean(data.viewerName);
+    ALL_CASES = scopeCases(Array.isArray(data.cases) ? data.cases : []);
+    await loadRepairs();
     renderHeader();
     renderStats(data.stats);
     renderLists();
-    setGlobalMessage(null);
+    setGlobalMessage(SCOPE_DEGRADED ? 'error' : null,
+      SCOPE_DEGRADED ? '案件隔離尚未生效：後端未回傳身分姓名，目前顯示的是全部案件。請聯絡管理員升級 Worker。' : '');
     byId('updatedAt').textContent = `更新：${new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`;
   } catch (error) {
     if (error.status === 404) { showInvalid(); return; }
