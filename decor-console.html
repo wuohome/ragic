@@ -2799,13 +2799,17 @@ function applyRoute() {
 }
 window.addEventListener('hashchange', applyRoute);
 
-// 設計部案件隔離：designer 只留下自己接案（assignee）的案子。比對用的人名由後端依 token 回傳，
-// 前端不持有任何人名常數。後端尚未提供 viewerName 時不靜默放行全部，改標記 SCOPE_DEGRADED 出警示。
+// 設計部案件隔離：**過濾在後端做完**（見 wuohome-decor-api 的 decorListAll），前端不再重複過濾。
+//
+// 2026-08-05 bugfix：這裡原本會再用 `assignee === VIEWER_NAME` 篩一次。後端在同日改成
+// 「接案是我 OR 監工是我」之後，前端這層舊規則就變成第二道更嚴的篩子——沈郁雯後端回 17 筆
+// （工程中 8 筆），前端只留下 2 筆，她畫面上大半案子憑空消失。上線當天只驗了後端 API 的筆數、
+// 沒驗前端實際渲染出幾筆，所以漏掉。
+// 現在這支只負責一件事：後端沒回 viewerName（代表資料層還沒升級）時標記 SCOPE_DEGRADED 出警示，
+// 不做任何過濾——後端是唯一權威，前端再篩一次只會製造這種不一致。
 function scopeCases(cases) {
-  SCOPE_DEGRADED = false;
-  if (ROLE !== 'designer') return cases;
-  if (!VIEWER_NAME) { SCOPE_DEGRADED = true; return cases; }
-  return cases.filter((c) => clean(c.assignee) === VIEWER_NAME);
+  SCOPE_DEGRADED = ROLE === 'designer' && !VIEWER_NAME;
+  return cases;
 }
 
 // 工務雙資料源：supervisor 才讀 mm/8（日常修繕）。修繕載入失敗不影響 finance/8 主畫面，
