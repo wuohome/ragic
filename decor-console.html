@@ -739,7 +739,9 @@
 
 <script>
 'use strict';
-// 附件下載、新增進度、上傳照片：繼續走既有的 Cloudflare Worker，那支一行未改。
+// 只剩「新增進度（含照片上傳）」還走既有的 Cloudflare Worker——那支吃得下 40MB，
+// Vercel 的 request body 上限只有 4.5MB。Worker 一行未改。
+// 附件下載已於 2026-08-05 改走 Vercel，因為 Worker 那條只驗 token、不驗案子是不是你的。
 const API_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
 // 案件列表與日常修繕：改走 Vercel（Joan 2026-08-03「新東西放 Vercel，Cloudflare 不要再動」）。
 // 這支才知道「這條連結是誰開的」，設計部案件隔離與工務的修繕併軌都在它的 server 端做完，
@@ -1527,7 +1529,8 @@ function progressLine(p, c) {
   if (count > 0) {
     const thumbs = make('div', 'mt-1.5 flex flex-wrap gap-1.5');
     for (let i = 0; i < count; i++) {
-      const url = `${API_BASE}/decorProgressPhoto?rid=${encodeURIComponent(c.rid)}&row=${encodeURIComponent(p.rowId)}&idx=${i}&token=${encodeURIComponent(TOKEN)}`;
+      // 走 Vercel：那支會先確認這個案子是不是你的（Worker 那條只驗 token 不驗歸屬）
+      const url = `${DATA_BASE}/decorFile?kind=photo&rid=${encodeURIComponent(c.rid)}&row=${encodeURIComponent(p.rowId)}&idx=${i}&token=${encodeURIComponent(TOKEN)}`;
       const link = make('a');
       link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
       const img = document.createElement('img');
@@ -1733,14 +1736,14 @@ function detailPanel(c) {
     const list = make('div', 'flex flex-wrap gap-2');
     for (let i = 0; i < contractCount; i++) {
       const link = make('a', 'inline-block rounded-xl bg-accent px-3 py-2 text-xs font-bold text-white hover:bg-accent/90', `合約附件 ${i + 1}`);
-      link.href = `${API_BASE}/decorContractFile?rid=${encodeURIComponent(c.rid)}&idx=${i}&token=${encodeURIComponent(TOKEN)}`;
+      link.href = `${DATA_BASE}/decorFile?kind=contract&rid=${encodeURIComponent(c.rid)}&idx=${i}&token=${encodeURIComponent(TOKEN)}`;
       link.target = '_blank'; link.rel = 'noopener noreferrer';
       list.append(link);
     }
     fileBox.append(list);
   } else if (contractCount === 1) {
     const link = make('a', 'inline-block rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent/90', '開啟合約附件');
-    link.href = `${API_BASE}/decorFile/${encodeURIComponent(c.rid)}?token=${encodeURIComponent(TOKEN)}`;
+    link.href = `${DATA_BASE}/decorFile?kind=contract&rid=${encodeURIComponent(c.rid)}&idx=0&token=${encodeURIComponent(TOKEN)}`;
     link.target = '_blank'; link.rel = 'noopener noreferrer';
     fileBox.append(link);
   } else {
