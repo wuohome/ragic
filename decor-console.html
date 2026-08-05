@@ -18,6 +18,7 @@
     }
   })();
   </script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -727,12 +728,19 @@
     </div>
   </div>
 
+  <!-- 登入畫面三態（照 Google登入_標準接法 § 三態畫面）：未登入／不在名單／連結無效 -->
   <div id="invalidScreen" hidden>
     <div class="flex min-h-screen items-center justify-center p-6">
-      <div class="w-full max-w-md rounded-2xl border border-line bg-white p-8 text-center shadow-sm">
-        <div class="mb-3 text-4xl" aria-hidden="true">🔒</div>
-        <h1 class="text-xl font-bold text-ink">連結無效</h1>
-        <p class="mt-2 text-sm text-inkmuted">請使用管理員提供的設計部工作檯專屬連結，或聯絡管理員確認連結是否仍然有效。</p>
+      <div class="w-full max-w-md rounded-2xl bg-white p-8 text-center" style="box-shadow: var(--ds-shadow-border, 0 0 0 1px #00000014)">
+        <div class="mb-4 flex items-center justify-center gap-2.5">
+          <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-coral text-sm font-black text-white" aria-hidden="true">窩</span>
+          <span class="text-base font-black text-ink">窩的家工程平台</span>
+        </div>
+        <h1 id="gateTitle" class="text-lg font-bold text-ink">設計部工作檯</h1>
+        <p id="gateMsg" class="mt-2 text-sm text-inkmuted">本系統僅供窩的家同仁使用，請用公司登記的 Google 帳號登入。</p>
+        <div id="gsiBtn" class="mt-5 flex justify-center"></div>
+        <button id="gateSignOut" type="button" hidden class="mt-4 text-xs font-bold text-inkmuted underline">登出，換帳號再試</button>
+        <p id="gateHint" class="mt-4 text-xs text-inkfaint"></p>
       </div>
     </div>
   </div>
@@ -748,6 +756,18 @@ const API_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
 // 別人的案子不會離開後端。回應結構與 Worker 版完全相同，前端解析邏輯未動。
 const DATA_BASE = 'https://wuohome-decor-api.vercel.app';
 const TOKEN = new URLSearchParams(location.search).get('token') || '';
+// Google 登入（2026-08-05，Joan：「我希望大家都用 google 登入」）。
+// 做法照 [[Google登入_標準接法]]：ID token flow，只要 Client ID（Google 官方定義為非機密），
+// 白名單查詢一律在伺服器做，前端只知道自己過不過、拿不到全公司名冊。
+// 過渡期：舊的 ?token= 固定連結照舊能用，三個人都登入成功後再關。
+const GOOGLE_CLIENT_ID = '18499630691-mi617tp07ptq943nlkhslf7bfu27j6cn.apps.googleusercontent.com';
+let ID_TOKEN = null;        // 只存記憶體不落地，關掉分頁就要重登
+let VIEWER_EMAIL = '';
+// 有 token 走舊路，沒有就走 Google 登入
+const AUTH_MODE = TOKEN ? 'token' : 'google';
+function authHeaders() {
+  return ID_TOKEN ? { Authorization: 'Bearer ' + ID_TOKEN } : {};
+}
 const STATUS_ACTIVE = '🛠️工程中';
 const STALE_DAYS = 7;
 const PX_PER_DAY_FULL = 6; // 「看全程」模式固定密度，容許橫向捲動
@@ -975,14 +995,58 @@ let LAST_GANTT_SCROLL_EL = null; // 平台外殼：模組切換時可能在甘�
 let LAST_GANTT_BOUNDS = null;    // 需要在使用者實際切到甘特頁籤時重新觸發一次今日線捲動定位
 function sameDate(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
 
-async function apiGet(path) {
+
+// 附件在兩種登入方式下的取得方式不同：
+//   token 模式 → 網址本身就帶憑證，<a href> 直接開
+//   Google 模式 → 憑證在標頭裡，<a href> 帶不了，只能點了之後用 fetch 取回再開
+function attachmentUrl(path) {
+  return AUTH_MODE === 'google' ? `${DATA_BASE}/${path}` : `${DATA_BASE}/${path}&token=${encodeURIComponent(TOKEN)}`;
+}
+function bindAttachment(link, path) {
+  const url = attachmentUrl(path);
+  if (AUTH_MODE !== 'google') { link.href = url; return; }
+  link.href = '#';
+  link.addEventListener('click', async (e) => {
+    e.preventDefault();
+    const original = link.textContent;
+    link.textContent = '開啟中…';
+    try {
+      const res = await fetch(url, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const obj = URL.createObjectURL(blob);
+      window.open(obj, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(obj), 60000);
+    } catch (err) {
+      showToast('打不開這個檔案：' + err.message);
+    } finally {
+      link.textContent = original;
+    }
+  });
+}
+// 照片同理：Google 模式要先抓回來才顯示得出來
+async function loadPhotoInto(imgEl, url) {
+  if (AUTH_MODE !== 'google') { imgEl.src = url; return; }
+  try {
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) return;
+    imgEl.src = URL.createObjectURL(await res.blob());
+  } catch {}
+}
+
+function apiUrl(path) {
+  if (AUTH_MODE === 'google') return `${DATA_BASE}/${path}`;
   const sep = path.includes('?') ? '&' : '?';
-  const res = await fetch(`${DATA_BASE}/${path}${sep}token=${encodeURIComponent(TOKEN)}`);
+  return `${DATA_BASE}/${path}${sep}token=${encodeURIComponent(TOKEN)}`;
+}
+async function apiGet(path) {
+  const res = await fetch(apiUrl(path), { headers: authHeaders() });
   let data = null;
   try { data = await res.json(); } catch {}
   if (!res.ok || !data || data.ok !== true) {
     const err = new Error((data && data.error) || `HTTP ${res.status}`);
     err.status = res.status;
+    err.email = data && data.email;
     throw err;
   }
   return data;
@@ -1530,11 +1594,28 @@ function progressLine(p, c) {
     const thumbs = make('div', 'mt-1.5 flex flex-wrap gap-1.5');
     for (let i = 0; i < count; i++) {
       // 走 Vercel：那支會先確認這個案子是不是你的（Worker 那條只驗 token 不驗歸屬）
-      const url = `${DATA_BASE}/decorFile?kind=photo&rid=${encodeURIComponent(c.rid)}&row=${encodeURIComponent(p.rowId)}&idx=${i}&token=${encodeURIComponent(TOKEN)}`;
+      const url = attachmentUrl(`decorFile?kind=photo&rid=${encodeURIComponent(c.rid)}&row=${encodeURIComponent(p.rowId)}&idx=${i}`);
       const link = make('a');
-      link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+      link.target = '_blank'; link.rel = 'noopener noreferrer';
+      if (AUTH_MODE === 'google') {
+        // Google 模式：縮圖與點開都要帶憑證，不能直接用網址
+        link.href = '#';
+        link.addEventListener('click', async (e) => {
+          e.preventDefault();
+          try {
+            const res = await fetch(url, { headers: authHeaders() });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const obj = URL.createObjectURL(await res.blob());
+            window.open(obj, '_blank', 'noopener');
+            setTimeout(() => URL.revokeObjectURL(obj), 60000);
+          } catch (err) { showToast('打不開這張照片：' + err.message); }
+        });
+      } else {
+        link.href = url;
+      }
       const img = document.createElement('img');
-      img.src = url; img.loading = 'lazy'; img.alt = '進度照片';
+      img.loading = 'lazy'; img.alt = '進度照片';
+      loadPhotoInto(img, url);
       img.className = 'h-14 w-14 rounded-lg border border-line object-cover bg-paper';
       link.append(img);
       thumbs.append(link);
@@ -1736,14 +1817,14 @@ function detailPanel(c) {
     const list = make('div', 'flex flex-wrap gap-2');
     for (let i = 0; i < contractCount; i++) {
       const link = make('a', 'inline-block rounded-xl bg-accent px-3 py-2 text-xs font-bold text-white hover:bg-accent/90', `合約附件 ${i + 1}`);
-      link.href = `${DATA_BASE}/decorFile?kind=contract&rid=${encodeURIComponent(c.rid)}&idx=${i}&token=${encodeURIComponent(TOKEN)}`;
+      bindAttachment(link, `decorFile?kind=contract&rid=${encodeURIComponent(c.rid)}&idx=${i}`);
       link.target = '_blank'; link.rel = 'noopener noreferrer';
       list.append(link);
     }
     fileBox.append(list);
   } else if (contractCount === 1) {
     const link = make('a', 'inline-block rounded-xl bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent/90', '開啟合約附件');
-    link.href = `${DATA_BASE}/decorFile?kind=contract&rid=${encodeURIComponent(c.rid)}&idx=0&token=${encodeURIComponent(TOKEN)}`;
+    bindAttachment(link, `decorFile?kind=contract&rid=${encodeURIComponent(c.rid)}&idx=0`);
     link.target = '_blank'; link.rel = 'noopener noreferrer';
     fileBox.append(link);
   } else {
@@ -2640,8 +2721,15 @@ function renderClosed() {
 
 function renderHeader() {
   const label = ROLE_LABEL || ROLE || '使用者';
-  byId('roleBadge').textContent = label;
+  byId('roleBadge').textContent = VIEWER_NAME ? `${VIEWER_NAME}・${label}` : label;
   byId('sidebarSubtitle').textContent = `設計部・${label}`;
+  // Google 登入的人要看得到自己是誰、也要能換帳號
+  if (AUTH_MODE === 'google' && VIEWER_EMAIL && !byId('signOutBtn')) {
+    const btn = make('button', 'rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-inkmuted hover:bg-paper', '登出');
+    btn.id = 'signOutBtn'; btn.type = 'button'; btn.title = VIEWER_EMAIL;
+    btn.addEventListener('click', signOutGoogle);
+    byId('refreshButton').parentElement.append(btn);
+  }
   // 角色載入後重繪側欄：設計師要把「日常修繕」卡位收掉，工務要把它變成可點的導覽
   renderSidebarNav();
 }
@@ -2874,6 +2962,7 @@ async function loadAll() {
     const data = await apiGet('decorListAll');
     ROLE = data.role || ''; ROLE_LABEL = data.label || '';
     VIEWER_NAME = clean(data.viewerName);
+    VIEWER_EMAIL = clean(data.viewerEmail);
     ALL_CASES = scopeCases(Array.isArray(data.cases) ? data.cases : []);
     await loadRepairs();
     renderHeader();
@@ -2883,6 +2972,10 @@ async function loadAll() {
       SCOPE_DEGRADED ? '案件隔離尚未生效：後端未回傳身分姓名，目前顯示的是全部案件。請聯絡管理員升級 Worker。' : '');
     byId('updatedAt').textContent = `更新：${new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`;
   } catch (error) {
+    // 403＝人是真的但不在名單（重登沒用，要找管理部）
+    if (error.status === 403) { showGate('denied', error.email); return; }
+    // 401＝憑證本身無效或過期（重登可解）
+    if (error.status === 401) { ID_TOKEN = null; showGate('signin'); renderGsiButton(); return; }
     if (error.status === 404) { showInvalid(); return; }
     setGlobalMessage('error', `載入失敗：${error.message}（請按右上角「重新整理」再試一次）`);
   }
@@ -2904,9 +2997,32 @@ window.addEventListener('resize', () => {
   resizeTimer = setTimeout(() => { if (!byId('app').hidden) renderLists(); }, 150);
 });
 
-if (!TOKEN) {
-  showInvalid();
-} else {
+// ===== 登入流程 =====
+// 三態畫面照 [[Google登入_標準接法]]：未登入／不在名單／通過。
+// 有 ?token= 的舊連結完全不受影響，直接進主畫面（過渡期並存）。
+function showGate(state, email) {
+  const title = byId('gateTitle'), msg = byId('gateMsg'),
+        btn = byId('gsiBtn'), out = byId('gateSignOut'), hint = byId('gateHint');
+  byId('app').hidden = true;
+  byId('invalidScreen').hidden = false;
+  if (state === 'denied') {
+    title.textContent = '這個帳號還沒有權限';
+    msg.innerHTML = `目前登入的是 <strong>${email || '（不明帳號）'}</strong>，不在使用名單內。<br>如果你是窩的家同仁，請聯絡管理部把這個 Google 帳號加進名單。`;
+    btn.hidden = true; out.hidden = false; hint.textContent = '';
+  } else if (state === 'error') {
+    title.textContent = '暫時打不開';
+    msg.textContent = email || '連線出了狀況，請稍後再試一次。';
+    btn.hidden = true; out.hidden = false; hint.textContent = '';
+  } else {
+    title.textContent = '設計部工作檯';
+    msg.textContent = '本系統僅供窩的家同仁使用，請用公司登記的 Google 帳號登入。';
+    btn.hidden = false; out.hidden = true;
+    hint.textContent = '登入一次之後，這個瀏覽器下次會記得你。';
+  }
+}
+
+function enterApp() {
+  byId('invalidScreen').hidden = true;
   byId('app').hidden = false;
   const initHashTop = (location.hash || '').replace('#', '').split('/')[0];
   if (!VALID_VIEWS.includes(initHashTop)) {
@@ -2915,6 +3031,44 @@ if (!TOKEN) {
   applyCasesSubTabStyles();
   applyRoute();
   loadAll();
+}
+
+function signOutGoogle() {
+  ID_TOKEN = null; VIEWER_EMAIL = '';
+  try { google.accounts.id.disableAutoSelect(); } catch {}
+  showGate('signin');
+  renderGsiButton();
+}
+
+function renderGsiButton() {
+  const el = byId('gsiBtn');
+  if (!el || !window.google || !google.accounts || !google.accounts.id) return false;
+  el.replaceChildren();
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: (resp) => {
+      ID_TOKEN = resp.credential || null;
+      if (!ID_TOKEN) { showGate('error', '沒有拿到登入憑證，請再試一次。'); return; }
+      enterApp();
+    },
+  });
+  google.accounts.id.renderButton(el, {
+    theme: 'outline', size: 'large', text: 'signin_with', shape: 'pill', locale: 'zh_TW', width: 260,
+  });
+  return true;
+}
+
+byId('gateSignOut').addEventListener('click', signOutGoogle);
+
+if (TOKEN) {
+  enterApp();
+} else {
+  showGate('signin');
+  // Google 的 script 是 async 載入的，還沒到就等它
+  let tries = 0;
+  const wait = setInterval(() => {
+    if (renderGsiButton() || ++tries > 40) clearInterval(wait);
+  }, 150);
 }
 </script>
 </body>
