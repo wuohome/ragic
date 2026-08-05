@@ -1350,13 +1350,16 @@ function ruler(bounds, labelColWidth) {
 
   const weekRow = make('div', 'weekRow');
   weekRow.style.height = `${RULER_WEEK_H}px`;
+  // 刻度間隔隨密度調整：整案全覽模式下每天只有 3~5px，仍每 7 天標一次的話日期會疊成一團。
+  // 一個日期標籤約需 34px，據此決定要幾天標一次。
+  const tickDays = bounds.pxPerDay * 7 >= 34 ? 7 : (bounds.pxPerDay * 14 >= 34 ? 14 : 28);
   let cursor = new Date(bounds.min);
   cursor.setDate(cursor.getDate() + ((7 - (daysBetween(bounds.min, cursor) % 7)) % 7));
   while (cursor <= bounds.max) {
     const tick = make('span', 'weekTick', fmtShort(cursor));
     tick.style.left = `${offsetPx(cursor, bounds)}px`;
     weekRow.append(tick);
-    cursor = new Date(cursor); cursor.setDate(cursor.getDate() + 7);
+    cursor = new Date(cursor); cursor.setDate(cursor.getDate() + tickDays);
   }
   // 原檔的今天標籤寫「今天 YYYY-MM-DD」
   const t = todayDate();
