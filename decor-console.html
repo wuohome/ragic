@@ -1549,6 +1549,21 @@ function progressAddForm(c) {
   dateRow.append(startWrap, endWrap);
   form.append(dateRow);
 
+  // 2026-08-05 新增：排定工期。填了甘特圖上排那條空心框才畫得出來，也才算得出「超出預估 N 天」。
+  // 兩格都是選填——不填不影響既有流程，那一列就只會有下排的實際進度桿。
+  const planRow = make('div', 'grid grid-cols-2 gap-2');
+  const planStartWrap = make('label', 'block text-xs font-bold text-inkmuted', '原本排定開始日');
+  const planStartInput = make('input', 'mt-1 block w-full rounded-lg border border-line px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent');
+  planStartInput.type = 'date';
+  planStartWrap.append(planStartInput);
+  const planDaysWrap = make('label', 'block text-xs font-bold text-inkmuted', '原本預計做幾天');
+  const planDaysInput = make('input', 'mt-1 block w-full rounded-lg border border-line px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent');
+  planDaysInput.type = 'number'; planDaysInput.min = '1'; planDaysInput.max = '3650'; planDaysInput.placeholder = '例如 7';
+  planDaysWrap.append(planDaysInput);
+  planRow.append(planStartWrap, planDaysWrap);
+  form.append(planRow);
+  form.append(make('p', 'text-[11px] text-inkfaint', '「工程時間」是實際施工的日期；「原本排定」是當初排的工期，選填。兩組都填，甘特圖才看得出來差幾天。'));
+
   const catWrap = make('label', 'block text-xs font-bold text-inkmuted', '工項分類 *');
   const catSelect = make('select', 'mt-1 block w-full rounded-lg border border-line px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent');
   catSelect.required = true;
@@ -1601,8 +1616,36 @@ function progressAddForm(c) {
       const res = await fetch(`${API_BASE}/decorProgressAdd/${encodeURIComponent(c.rid)}?token=${encodeURIComponent(TOKEN)}`, { method: 'POST', body: fd });
       let data = null; try { data = await res.json(); } catch {}
       if (!res.ok || !data || data.ok !== true) throw new Error((data && data.error) || `HTTP ${res.status}`);
-      msg.textContent = '已新增，重新整理中…';
-      msg.className = 'text-xs font-bold text-sage';
+
+      // 排定工期是第二段寫入：照片走既有的 Worker（那支吃得下 40MB），排定日期走 Vercel
+      // （Worker 的欄位白名單沒有這兩欄，且不動 Cloudflare 是既有決策）。
+      // 第二段失敗不能靜默——進度已經存進去了，要明講「排定日期沒寫入、請重填或進 Ragic 補」。
+      let planWarning = '';
+      if (planStartInput.value || planDaysInput.value) {
+        try {
+          const pr = await fetch(`${DATA_BASE}/decorProgressPlan?token=${encodeURIComponent(TOKEN)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              rid: c.rid,
+              startAt: startInput.value,
+              content: contentInput.value.trim(),
+              planStart: planStartInput.value,
+              planDays: planDaysInput.value,
+            }),
+          });
+          let pd = null; try { pd = await pr.json(); } catch {}
+          if (!pr.ok || !pd || pd.ok !== true) planWarning = (pd && pd.error) || `HTTP ${pr.status}`;
+        } catch (e) { planWarning = e.message; }
+      }
+
+      if (planWarning) {
+        msg.textContent = `進度已存，但「原本排定」那兩格沒寫進去（${planWarning}）。請到 Ragic 補填，或重新送出一次。`;
+        msg.className = 'text-xs font-bold text-flagdark';
+      } else {
+        msg.textContent = '已新增，重新整理中…';
+        msg.className = 'text-xs font-bold text-sage';
+      }
       await loadAll();
     } catch (err) {
       msg.textContent = `送出失敗：${err.message}`;
