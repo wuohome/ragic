@@ -965,6 +965,10 @@ const CASE_CAL_MONTH = new Map(); // rid -> { y, m }
 // 佔掉 42% 畫面高度但只傳達「還沒開工」。收合後整表 960px→604px，手機少滑一個螢幕。
 // 這個 Set 記住哪些案子被使用者展開過，重繪時不會把他打開的東西收回去。
 const DENSE_EXPANDED = new Set(); // rid
+// 單案甘特頁的時間尺度：'focus'＝維持每天至少 10px（看得清楚，但長案子要左右捲），
+// 'full'＝把整個案子壓進一個畫面（每天最低 3px）。真實資料有跨 8 個月的案子，
+// 預設尺度下一個畫面只看得到 44%，要確認全貌時切 full。
+const CASE_RANGE_MODE = new Map(); // rid -> 'focus' | 'full'
 let LAST_GANTT_SCROLL_EL = null; // 平台外殼：模組切換時可能在甘特隱藏狀態下渲染，量到的尺寸是 0，
 let LAST_GANTT_BOUNDS = null;    // 需要在使用者實際切到甘特頁籤時重新觸發一次今日線捲動定位
 function sameDate(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
@@ -1276,9 +1280,9 @@ function availableTrackWidth(labelColWidth) {
   const w = main ? main.clientWidth : 900; // clientWidth 含 main 自己的左右 padding
   return Math.max(w - labelColWidth - 40, 200);
 }
-function withResponsiveWidth(min, max, labelColWidth) {
+function withResponsiveWidth(min, max, labelColWidth, minPxPerDay = 10) {
   const days = Math.max(daysBetween(min, max), 1);
-  const pxPerDay = Math.max(availableTrackWidth(labelColWidth) / days, 10);
+  const pxPerDay = Math.max(availableTrackWidth(labelColWidth) / days, minPxPerDay);
   return { min, max, pxPerDay, widthPx: Math.round(pxPerDay * days) };
 }
 function withFixedWidth(min, max) {
@@ -1292,7 +1296,7 @@ function computeWindowBounds() {
   return withResponsiveWidth(min, max, LABEL_COL_MAIN);
 }
 // 看全程／單案自適應：時間軸尺度取「合約起訖 ∪ 全工項起訖」的 min/max（規格書 §空狀態與邊界行為，邏輯不變）
-function computeExtentBounds(cases, labelColWidth, fixed) {
+function computeExtentBounds(cases, labelColWidth, fixed, minPxPerDay) {
   let min = null, max = null;
   const consider = (d) => { if (!d) return; if (!min || d < min) min = d; if (!max || d > max) max = d; };
   cases.forEach((c) => {
@@ -1308,10 +1312,13 @@ function computeExtentBounds(cases, labelColWidth, fixed) {
   if (!min || !max) { min = todayDate(); max = new Date(min); max.setDate(max.getDate() + 30); }
   min = new Date(min); min.setDate(min.getDate() - 3);
   max = new Date(max); max.setDate(max.getDate() + 3);
-  return fixed ? withFixedWidth(min, max) : withResponsiveWidth(min, max, labelColWidth);
+  return fixed ? withFixedWidth(min, max) : withResponsiveWidth(min, max, labelColWidth, minPxPerDay);
 }
 function computeBoundsFull(cases) { return computeExtentBounds(cases, LABEL_COL_MAIN, true); }
-function computeItemBounds(c) { return computeExtentBounds([c], itemLabelWidth(), false); }
+function computeItemBounds(c) {
+  const full = CASE_RANGE_MODE.get(c.rid) === 'full';
+  return computeExtentBounds([c], itemLabelWidth(), false, full ? 3 : 10);
+}
 function offsetPx(date, bounds) { return daysBetween(bounds.min, date) * bounds.pxPerDay; }
 
 // 視覺移植 #12：表頭改彣錩原檔的「月列＋週列」兩層（.ganttHeaderTimeline/.monthRow/.monthSeg/
@@ -2230,9 +2237,20 @@ function viewToggle(c) {
   ganttBtn.type = 'button';
   const calBtn = make('button', `btn${mode === 'calendar' ? ' primary' : ''}`, '月曆');
   calBtn.type = 'button';
+  // 整案全覽：把整個案子的時間跨度壓進一個畫面。真實資料有跨 8 個月的案子，
+  // 預設尺度下一個畫面只看得到四成，要一眼看完全案時切這個。
+  const full = CASE_RANGE_MODE.get(c.rid) === 'full';
+  const rangeBtn = make('button', `btn${full ? ' primary' : ''}`, full ? '回到看得清楚' : '整案全覽');
+  rangeBtn.type = 'button';
+  rangeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (full) CASE_RANGE_MODE.delete(c.rid); else CASE_RANGE_MODE.set(c.rid, 'full');
+    renderGanttRoute();
+  });
   ganttBtn.addEventListener('click', (e) => { e.stopPropagation(); CASE_VIEW_MODE.set(c.rid, 'gantt'); renderLists(); });
   calBtn.addEventListener('click', (e) => { e.stopPropagation(); CASE_VIEW_MODE.set(c.rid, 'calendar'); renderLists(); });
   row.append(ganttBtn, calBtn);
+  if (mode !== 'calendar') row.append(rangeBtn);
   return row;
 }
 
