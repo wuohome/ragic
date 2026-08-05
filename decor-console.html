@@ -2005,10 +2005,15 @@ function renderCaseItemGantt(c) {
     const color = CATEGORY_COLORS[name] || CATEGORY_COLORS['未分類'];
     const status = itemStatus(items);
     // 原檔一列＝一組雙桿（上排預估空心框、下排實際實心桿，中間 BAR_GAP）。
-    // 本檔一個工項底下可能有多筆進度，每筆各畫一組雙桿往下堆，列高跟著長。
+    // 本檔一個工項底下可能有多筆進度，每筆各畫一組往下堆。
+    // 2026-08-05 修正：高度要按「這一筆實際會畫幾根桿」算——沒填排定工期的進度只有下排實心桿，
+    // 若一律預留雙桿空間，真實資料（目前排定欄位全空）會把每列撐成兩倍高、畫面一片空白。
     const pairH = geo.BAR_H * 2 + geo.BAR_GAP;
+    const barsOf = (p) => (clean(p.planStart) && computeEndDate(clean(p.planStart), p.planDays) ? pairH : geo.BAR_H);
     const n = Math.max(1, items.length);
-    const stackH = n * pairH + (n - 1) * geo.BAR_GAP;
+    const stackH = items.length
+      ? items.reduce((sum, p) => sum + barsOf(p), 0) + (items.length - 1) * geo.BAR_GAP
+      : geo.BAR_H;
     const rowH = Math.max(geo.ROW_H, stackH + 16);
     const barsTop = Math.round((rowH - stackH) / 2);
 
@@ -2061,8 +2066,10 @@ function renderCaseItemGantt(c) {
 
     const track = trackWrap(bounds);
     track.style.height = `${rowH}px`;
+    let cursorTop = barsTop;
     items.forEach((p, i) => {
-      const pairTop = barsTop + i * (pairH + geo.BAR_GAP);
+      const pairTop = cursorTop;
+      cursorTop += barsOf(p) + geo.BAR_GAP;
       const planStart = clean(p.planStart);
       const predictedEnd = computeEndDate(planStart, p.planDays);
       const actual = computeActualStatus(p.startAt, p.endAt, predictedEnd);
@@ -2084,7 +2091,7 @@ function renderCaseItemGantt(c) {
         const bar = ganttBar(p.startAt, p.endAt, bounds, color, {
           openEnded: true,
           live: actual.status === 'live',
-          top: pairTop + geo.BAR_H + geo.BAR_GAP,
+          top: (planStart && predictedEnd) ? pairTop + geo.BAR_H + geo.BAR_GAP : pairTop,
           height: geo.BAR_H,
           label: `實際·${clean(p.content) || name}`,
           labelShort: '實際',
@@ -2282,13 +2289,25 @@ function ganttDetailNotFoundBox() {
 
 // 單案甘特頁的今日線初始捲動定位——比照總覽既有修法（見 scheduleGanttTodayScroll 上方註解），
 // 獨立實作、不動總覽那支既有函式，避免影響已驗收過的總覽今日線行為。
-function scrollItemGanttToToday(scrollEl, bounds) {
+function scrollItemGanttToToday(scrollEl, bounds, c) {
   if (!scrollEl || !bounds) return;
+  // 2026-08-05 修正：原本一律捲到今日線。真實資料裡有大量「合約已逾期 100 多天」的案子，
+  // 工項全在幾個月前，捲到今天等於停在一片空白上，打開看不到任何桿子。
+  // 改成捲到「最後一筆實際進度的結束日」與今天之間較早的那個——畫面永遠停在最近發生的事上。
+  let focus = todayDate();
+  if (c) {
+    let last = null;
+    (c.progress || []).forEach((p) => {
+      const e = parseDateOnly(p.endAt) || parseDateOnly(p.startAt);
+      if (e && (!last || e > last)) last = e;
+    });
+    if (last && last < focus) focus = last;
+  }
   requestAnimationFrame(() => requestAnimationFrame(() => {
     const maxScroll = scrollEl.scrollWidth - scrollEl.clientWidth;
     if (maxScroll <= 0) return;
     const visibleTrackWidth = Math.max(scrollEl.clientWidth - itemLabelWidth(), 0);
-    const target = offsetPx(todayDate(), bounds) - visibleTrackWidth / 3;
+    const target = offsetPx(focus, bounds) - visibleTrackWidth / 2;
     scrollEl.scrollLeft = Math.max(0, Math.min(maxScroll, target));
   }));
 }
@@ -2338,7 +2357,7 @@ function renderGanttDetail(c) {
     const scrollEl = renderCaseItemGantt(c);
     panel.append(scrollEl);
     wrap.append(panel);
-    scrollItemGanttToToday(scrollEl, bounds);
+    scrollItemGanttToToday(scrollEl, bounds, c);
   }
 }
 
