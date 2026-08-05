@@ -1,3 +1,30 @@
+// wuohome-ragic-proxy v51 — 零用金請款：明細編輯（含修改紀錄）+ 簽收簽名（Group X 擴充，2026-08-05）：
+// finance2/14 新增 5 欄（修改紀錄 1003306／最後修改人 1003307／最後修改時間 1003308／簽收簽名
+// 1003309／簽收時間 1003310，2026-08-05 已建）。新增 2 個 finance 專用 action（viewer 一律 404，
+// 沿用 PC_FINANCE_ONLY_ACTIONS gate 手法）：
+//  - pettyCashUpdate：{rid, fields:{...}} 部分更新可改欄位白名單 12 個（類別/項目/案場/備註/
+//    發票類型/發票號碼/發票日期/賣方統編/店家/未稅金額/稅額/金額，同 pettyCashCreate 的欄位
+//    集合，白名單外的 key 靜默忽略）。寫入前先 GET 現值逐欄比對，只針對真的變了的欄位產生
+//    修改紀錄行（`YYYY/MM/DD HH:mm:ss 姓名 欄位名 舊值→新值`），append 到 1003306 現有內容後
+//    （Ragic 無附加語意 API，只能整欄覆寫）同時寫 1003307/1003308；沒有任何欄位真的變 → 200
+//    但不寫入不留紀錄（避免灌水）。驗證沿用 pettyCashCreate 規則：金額改動後若跨過 3,000 →
+//    400 amount_over_limit（不能靠改金額繞過擋單）；發票號碼改動則排除自己 rid 後查全表唯一，
+//    撞號 → 409 duplicate_invoice（比照 pettyCashCreate 兩層防呆，Ragic noDup 兜底同轉譯）。
+//    寫入後讀回比對 1003306 內容真的等於預期值才回成功，沒變回 write_unverified。
+//  - pettyCashSign：{rid, signature}（base64 data URL）。只有審核狀態＝已通過的單能簽，否則
+//    409 not_approved；已簽過再簽＝允許重簽（覆蓋），但在 1003306 留一行「...簽收簽名 已重簽」
+//    同時更新 1003307/1003308（首次簽名不寫這行，只有 resign 才留痕）。簽名一般文字欄位存
+//    base64（同 payments/2 1000786/1000787 手法，非 multipart 檔案 part），2 MiB 上限（比照
+//    EARNEST_SIGNATURE_MAX_BYTES），超過 413 signature_too_large；格式不是 `data:image/...;
+//    base64,` 開頭 → 400 invalid_signature（spec 外決定，防呆）。寫入後讀回確認簽名長度
+//    > 500 才回成功，沒過回 write_unverified。
+// pettyCashPublicRecord() 加回 5 個 key（既有 key 一個不少，純 additive）：updateLog/
+// updatedBy/updatedAt/signedAt（list 與單筆皆回）＋ signed（布林，list 與單筆皆回）；signature
+// 完整 base64 只在單筆寫入回應（markPaid/review/softDelete/update/sign）帶出，pettyCashListAll/
+// pettyCashListMine 兩個列表 action 只給 signed 布林，避免清單回應被 base64 撐爆（新增
+// includeSignature 參數，預設 false，兩個列表呼叫點維持不傳＝行為不變）。findPettyCashByInvoice()
+// 加一個可選 excludeRid 參數供 update 排除自己（預設 null，pettyCashCreate 既有呼叫不受影響）。
+// 既有 9 個 pettyCash* action 一行未動（additive only）。
 // wuohome-ragic-proxy v50 — 零用金請款：唯讀角色 + 軟刪除（Group X 擴充，2026-08-05）：
 // Joan 拍板「小吳哥（吳彥廷）只能看，不能改」+「留一個能留下 log 的刪除方式」。
 // 1) 身分模型從單一 role 字串改成三個互不排斥的布林 isStaff/isFinance/isViewer，同一人可以
@@ -374,6 +401,9 @@ const ALLOWED_ACTIONS = {
   pettyCashBalance:      { method: 'GET' },
   // 唯讀角色 + 軟刪除（2026-08-05）。pettyCashSoftDelete 為 finance 專用（viewer 一律 404）。
   pettyCashSoftDelete:   { method: 'POST' },
+  // 明細編輯 + 簽收簽名（2026-08-05）。兩支皆 finance 專用（viewer 一律 404）。
+  pettyCashUpdate:       { method: 'POST' },
+  pettyCashSign:         { method: 'POST' },
 };
 
 const REPAIR_INTERNAL_ACTIONS = new Set([
@@ -957,6 +987,9 @@ const PC = Object.freeze({
   reviewer: '1003275', reviewedAt: '1003276',
   // 軟刪除（2026-08-05 建，見 財務_零用金請款.md § 2026-08-05 新增欄位）
   deleted: '1003302', deletedBy: '1003303', deletedAt: '1003304', deleteReason: '1003305',
+  // 明細編輯 + 簽收簽名（2026-08-05 建）
+  updateLog: '1003306', updatedBy: '1003307', updatedAt: '1003308',
+  signature: '1003309', signedAt: '1003310',
 });
 const PC_CATEGORIES = new Set(['交通', '餐費', '五金', '耗材', '規費', '其他']);
 const PC_INVOICE_TYPES = new Set(['電子發票', '手開發票', '收據', '免用統一發票']);
@@ -969,6 +1002,8 @@ const PC_TEXT_MAX = { item: 200, site: 100, note: 2000, invoiceNumber: 30, selle
 // 見 窩的家/系統部/規格書/零用金請款_規格書.md § 片段 A
 const PC_AMOUNT_LIMIT = 3000;
 const PC_MAX_FILE_BYTES = 5 * 1024 * 1024; // 比照既有 size guard
+// 簽收簽名 base64 data URL 上限，比照既有 EARNEST_SIGNATURE_MAX_BYTES
+const PC_SIGNATURE_MAX_BYTES = 2 * 1024 * 1024;
 // 退回原因五選一，逐字照抄規格書 § P0-5「2026-08-01 Joan 確認」版本，與 finance2/14
 // 1003273 選項清單一致，不得改字（見零用金請款_規格書.md § P0-5 第 3 點）。
 const PC_REJECT_REASONS = new Set([
@@ -985,6 +1020,7 @@ const PC_STAFF_ACTIONS = new Set(['pettyCashIdentity', 'pettyCashCreate', 'petty
 const PC_FINANCE_ONLY_ACTIONS = new Set([
   'pettyCashMarkPaid', 'pettyCashReview', 'pettyCashLedgerAdd', // 片段 B，2026-08-03
   'pettyCashSoftDelete', // 唯讀角色 + 軟刪除，2026-08-05
+  'pettyCashUpdate', 'pettyCashSign', // 明細編輯 + 簽收簽名，2026-08-05
 ]);
 // finance 或 viewer 皆可（唯讀角色的「能看」範圍）
 const PC_VIEWABLE_ACTIONS = new Set(['pettyCashListAll', 'pettyCashBalance']);
@@ -1038,8 +1074,12 @@ function pettyCashPhotoUrls(raw) {
 // `includeDeleteInfo`：只有 pettyCashListAll 帶 `includeDeleted=1` 時才傳 true，加回
 // deleted/deletedBy/deletedAt/deleteReason 4 個 key（純 additive，見派工指示 §3）。
 // pettyCashListMine／pettyCashListAll 預設（未帶 includeDeleted）不加，維持既有 key 集合不變。
-function pettyCashPublicRecord(rid, rec, includeDeleteInfo = false) {
+// `includeSignature`：只有單筆寫入回應（markPaid/review/softDelete/update/sign）傳 true，
+// 加回完整 signature base64；pettyCashListAll/pettyCashListMine 兩個列表 action 維持不傳
+// （預設 false），只給 `signed` 布林，避免清單回應被逐筆 base64 撐爆（2026-08-05，見派工指示）。
+function pettyCashPublicRecord(rid, rec, includeDeleteInfo = false, includeSignature = false) {
   const photoUrls = pettyCashPhotoUrls(rec[PC.photo]);
+  const signatureRaw = pcVal(rec[PC.signature]);
   const base = {
     rid: String(rid),
     claimNo: pcVal(rec[PC.claimNo]),
@@ -1068,7 +1108,14 @@ function pettyCashPublicRecord(rid, rec, includeDeleteInfo = false) {
     rejectNote: pcVal(rec[PC.rejectNote]) || null,
     reviewer: pcVal(rec[PC.reviewer]) || null,
     reviewedAt: pcVal(rec[PC.reviewedAt]) || null,
+    // 明細編輯 + 簽收簽名（2026-08-05）新增，既有 key 一個未動，純 additive
+    updateLog: pcVal(rec[PC.updateLog]) || null,
+    updatedBy: pcVal(rec[PC.updatedBy]) || null,
+    updatedAt: pcVal(rec[PC.updatedAt]) || null,
+    signed: !!signatureRaw,
+    signedAt: pcVal(rec[PC.signedAt]) || null,
   };
+  if (includeSignature) base.signature = signatureRaw || null;
   if (!includeDeleteInfo) return base;
   return {
     ...base,
@@ -1079,11 +1126,14 @@ function pettyCashPublicRecord(rid, rec, includeDeleteInfo = false) {
   };
 }
 
-async function findPettyCashByInvoice(env, invoiceNumber) {
-  const qs = `naming=EID&limit=0,1&where=${PC.invoiceNumber},eq,${encodeURIComponent(invoiceNumber)}`;
+// `excludeRid`：pettyCashUpdate 改發票號碼時要排除自己這筆（預設 null，pettyCashCreate 既有
+// 呼叫不傳這個參數，行為不變）。limit 從 1 放寬到 5，讓排除自己後仍找得到其他撞號的那筆
+// （noDup 唯一索引下正常只會有 0-1 筆別人的記錄，5 筆是保守餘裕，不影響既有行為）。
+async function findPettyCashByInvoice(env, invoiceNumber, excludeRid = null) {
+  const qs = `naming=EID&limit=0,5&where=${PC.invoiceNumber},eq,${encodeURIComponent(invoiceNumber)}`;
   const { upstream, data } = await getFromRagic(env, PETTY_CASH_SHEET, qs);
   if (!upstream.ok || !data) return null;
-  const entries = Object.entries(data).filter(([k]) => /^\d+$/.test(k));
+  const entries = Object.entries(data).filter(([k]) => /^\d+$/.test(k) && (!excludeRid || k !== String(excludeRid)));
   if (entries.length === 0) return null;
   const [rid, rec] = entries[0];
   return { rid, rec };
@@ -1575,7 +1625,7 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
       }
     }
 
-    return jsonResp({ ok: true, claim: pettyCashPublicRecord(rid, rec) }, 200, origin);
+    return jsonResp({ ok: true, claim: pettyCashPublicRecord(rid, rec, false, true) }, 200, origin);
   }
 
   if (action === 'pettyCashReview') {
@@ -1626,7 +1676,7 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     const actualStatus = rec ? pcVal(rec[PC.reviewStatus]) : '';
     if (actualStatus !== expectedStatus) return jsonResp({ error: 'write_unverified' }, 502, origin);
 
-    return jsonResp({ ok: true, claim: pettyCashPublicRecord(rid, rec) }, 200, origin);
+    return jsonResp({ ok: true, claim: pettyCashPublicRecord(rid, rec, false, true) }, 200, origin);
   }
 
   if (action === 'pettyCashLedgerAdd') {
@@ -1709,7 +1759,211 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
 
     // spec 外決定：回傳的 claim 直接帶 deleted/deletedBy/deletedAt/deleteReason 4 個 key（比照
     // pettyCashListAll includeDeleted=1 的形狀），前端不用再打一次 listAll 才能拿到最新刪除狀態。
-    return jsonResp({ ok: true, claim: pettyCashPublicRecord(rid, rec, true) }, 200, origin);
+    return jsonResp({ ok: true, claim: pettyCashPublicRecord(rid, rec, true, true) }, 200, origin);
+  }
+
+  if (action === 'pettyCashUpdate') {
+    let body;
+    try { body = await request.json(); } catch { return jsonResp({ error: 'bad_json' }, 400, origin); }
+    const ridRaw = body?.rid;
+    if (typeof ridRaw !== 'string' && typeof ridRaw !== 'number') return jsonResp({ error: 'invalid_rid' }, 400, origin);
+    const rid = String(ridRaw);
+    if (!/^\d{1,12}$/.test(rid)) return jsonResp({ error: 'invalid_rid' }, 400, origin);
+    const fieldsIn = (body?.fields && typeof body.fields === 'object' && !Array.isArray(body.fields)) ? body.fields : {};
+
+    const { upstream: cu, data: cd } = await getFromRagic(env, `${PETTY_CASH_SHEET}/${rid}`, 'naming=EID');
+    if (!cu.ok || !cd || Object.keys(cd).length === 0) return jsonResp({ error: 'not_found' }, 404, origin);
+    const existingRec = cd[rid] || Object.values(cd)[0];
+    if (!existingRec) return jsonResp({ error: 'not_found' }, 404, origin);
+
+    // 逐欄驗證＋只收集「真的變了」的欄位（白名單外的 key 靜默忽略，見派工指示 §1）。驗證規則
+    // 逐字比照 pettyCashCreate；amount/invoiceNumber 另有跨限額/查重的額外檢查，見下方。
+    const changes = []; // { fid, label, oldDisplay, newDisplay, writeValue }
+    let newAmount = null;
+
+    if (fieldsIn.category !== undefined) {
+      const v = pcClean(fieldsIn.category);
+      if (!PC_CATEGORIES.has(v)) return jsonResp({ error: 'invalid_category' }, 400, origin);
+      const old = pcVal(existingRec[PC.category]).trim();
+      if (old !== v) changes.push({ fid: PC.category, label: '類別', oldDisplay: old || '（空白）', newDisplay: v, writeValue: v });
+    }
+    if (fieldsIn.item !== undefined) {
+      const v = pcClean(fieldsIn.item);
+      if (!v || v.length > PC_TEXT_MAX.item) return jsonResp({ error: 'invalid_item' }, 400, origin);
+      const old = pcVal(existingRec[PC.item]).trim();
+      if (old !== v) changes.push({ fid: PC.item, label: '項目', oldDisplay: old || '（空白）', newDisplay: v, writeValue: v });
+    }
+    if (fieldsIn.site !== undefined) {
+      const v = pcClean(fieldsIn.site);
+      if (v.length > PC_TEXT_MAX.site) return jsonResp({ error: 'invalid_site' }, 400, origin);
+      const old = pcVal(existingRec[PC.site]).trim();
+      if (old !== v) changes.push({ fid: PC.site, label: '案場', oldDisplay: old || '（空白）', newDisplay: v || '（空白）', writeValue: v });
+    }
+    if (fieldsIn.note !== undefined) {
+      const v = pcClean(fieldsIn.note);
+      if (v.length > PC_TEXT_MAX.note) return jsonResp({ error: 'invalid_note' }, 400, origin);
+      const old = pcVal(existingRec[PC.note]).trim();
+      if (old !== v) changes.push({ fid: PC.note, label: '備註', oldDisplay: old || '（空白）', newDisplay: v || '（空白）', writeValue: v });
+    }
+    if (fieldsIn.invoiceType !== undefined) {
+      const v = pcClean(fieldsIn.invoiceType);
+      if (!PC_INVOICE_TYPES.has(v)) return jsonResp({ error: 'invalid_invoiceType' }, 400, origin);
+      const old = pcVal(existingRec[PC.invoiceType]).trim();
+      if (old !== v) changes.push({ fid: PC.invoiceType, label: '發票類型', oldDisplay: old || '（空白）', newDisplay: v, writeValue: v });
+    }
+    let invoiceNumberChanged = false;
+    let newInvoiceNumber = null;
+    if (fieldsIn.invoiceNumber !== undefined) {
+      const v = pcClean(fieldsIn.invoiceNumber);
+      if (!v || v.length > PC_TEXT_MAX.invoiceNumber) return jsonResp({ error: 'invalid_invoiceNumber' }, 400, origin);
+      newInvoiceNumber = v;
+      const old = pcVal(existingRec[PC.invoiceNumber]).trim();
+      if (old !== v) {
+        invoiceNumberChanged = true;
+        changes.push({ fid: PC.invoiceNumber, label: '發票號碼', oldDisplay: old || '（空白）', newDisplay: v, writeValue: v });
+      }
+    }
+    if (fieldsIn.invoiceDate !== undefined) {
+      const nd = decorNormalizeDate(fieldsIn.invoiceDate);
+      if (!nd) return jsonResp({ error: 'invalid_invoiceDate' }, 400, origin);
+      const old = pcVal(existingRec[PC.invoiceDate]).trim();
+      if (old !== nd) changes.push({ fid: PC.invoiceDate, label: '發票日期', oldDisplay: old || '（空白）', newDisplay: nd, writeValue: nd });
+    }
+    if (fieldsIn.sellerTaxId !== undefined) {
+      const v = pcClean(fieldsIn.sellerTaxId);
+      if (v.length > PC_TEXT_MAX.sellerTaxId) return jsonResp({ error: 'invalid_sellerTaxId' }, 400, origin);
+      const old = pcVal(existingRec[PC.sellerTaxId]).trim();
+      if (old !== v) changes.push({ fid: PC.sellerTaxId, label: '賣方統編', oldDisplay: old || '（空白）', newDisplay: v || '（空白）', writeValue: v });
+    }
+    if (fieldsIn.store !== undefined) {
+      const v = pcClean(fieldsIn.store);
+      if (v.length > PC_TEXT_MAX.store) return jsonResp({ error: 'invalid_store' }, 400, origin);
+      const old = pcVal(existingRec[PC.store]).trim();
+      if (old !== v) changes.push({ fid: PC.store, label: '店家', oldDisplay: old || '（空白）', newDisplay: v || '（空白）', writeValue: v });
+    }
+    if (fieldsIn.amountExTax !== undefined) {
+      const raw = fieldsIn.amountExTax;
+      const v = (raw === null || raw === '') ? null : Number(raw);
+      if (v !== null && (!Number.isFinite(v) || v < 0)) return jsonResp({ error: 'invalid_amountExTax' }, 400, origin);
+      const old = pcNum(existingRec[PC.amountExTax]);
+      if (old !== v) changes.push({ fid: PC.amountExTax, label: '未稅金額', oldDisplay: old ?? '（空白）', newDisplay: v ?? '（空白）', writeValue: v === null ? '' : String(v) });
+    }
+    if (fieldsIn.taxAmount !== undefined) {
+      const raw = fieldsIn.taxAmount;
+      const v = (raw === null || raw === '') ? null : Number(raw);
+      if (v !== null && (!Number.isFinite(v) || v < 0)) return jsonResp({ error: 'invalid_taxAmount' }, 400, origin);
+      const old = pcNum(existingRec[PC.taxAmount]);
+      if (old !== v) changes.push({ fid: PC.taxAmount, label: '稅額', oldDisplay: old ?? '（空白）', newDisplay: v ?? '（空白）', writeValue: v === null ? '' : String(v) });
+    }
+    if (fieldsIn.amount !== undefined) {
+      const v = Number(fieldsIn.amount);
+      if (!Number.isFinite(v) || v <= 0) return jsonResp({ error: 'invalid_amount' }, 400, origin);
+      newAmount = v;
+      const old = pcNum(existingRec[PC.amount]);
+      if (old !== v) changes.push({ fid: PC.amount, label: '金額', oldDisplay: old ?? '（空白）', newDisplay: v, writeValue: String(v) });
+    }
+
+    // 金額改動後若跨過 3,000 上限：不能靠改金額繞過擋單（比照 pettyCashCreate 的 >= 判斷）。
+    // 只在 fields.amount 真的有帶時檢查——現有記錄建立時已被擋在 3,000 以下，不會誤傷未動金額的更新。
+    if (newAmount !== null && newAmount >= PC_AMOUNT_LIMIT) {
+      return jsonResp({ error: 'amount_over_limit', limit: PC_AMOUNT_LIMIT }, 400, origin);
+    }
+
+    // 發票號碼改成別人用過的號碼要擋（排除自己這筆）；沒改就不用查
+    if (invoiceNumberChanged) {
+      const dup = await findPettyCashByInvoice(env, newInvoiceNumber, rid);
+      if (dup) return pettyCashDuplicateResponse(dup, newInvoiceNumber, origin);
+    }
+
+    // 沒有任何欄位真的變 → 200 但不寫入、不留紀錄（避免灌水，見派工指示 §核心行為 3）
+    if (changes.length === 0) {
+      return jsonResp({ ok: true, changed: false, claim: pettyCashPublicRecord(rid, existingRec, false, true) }, 200, origin);
+    }
+
+    const now = nowTaipeiDateTime();
+    const logLines = changes.map((c) => `${now} ${identity.name} ${c.label} ${c.oldDisplay}→${c.newDisplay}`);
+    const priorLog = pcVal(existingRec[PC.updateLog]);
+    const newLog = priorLog ? `${priorLog}\n${logLines.join('\n')}` : logLines.join('\n');
+
+    const params = new URLSearchParams();
+    for (const c of changes) params.append(c.fid, c.writeValue);
+    params.append(PC.updateLog, newLog);
+    params.append(PC.updatedBy, identity.name); // token 反查，不讀前端傳來的姓名
+    params.append(PC.updatedAt, now);
+
+    const { upstream, data } = await postUrlEncodedToRagic(env, `${PETTY_CASH_SHEET}/${rid}`, params.toString());
+    const fail = detectUpstreamFailure(upstream, data);
+    if (fail) {
+      // Ragic noDup 唯一索引兜底（第二道防線，比照 pettyCashCreate 手法），極罕見並發撞號才會走到
+      if (fail.error === 'upstream_invalid' && /發票號碼/.test(String(fail.msg || ''))) {
+        const dup2 = await findPettyCashByInvoice(env, newInvoiceNumber || '', rid);
+        return pettyCashDuplicateResponse(dup2, newInvoiceNumber || '', origin);
+      }
+      console.error('[pettyCashUpdate] write_failed', { ragicCode: fail.code, ragicMsg: fail.msg });
+      return jsonResp({ error: 'write_failed', ...fail }, 502, origin);
+    }
+
+    // 讀回驗證：1003306 內容真的等於預期值才回成功，沒變回 502（不假裝成功）
+    const { upstream: ru, data: rd } = await getFromRagic(env, `${PETTY_CASH_SHEET}/${rid}`, 'naming=EID');
+    if (!ru.ok || !rd) return jsonResp({ error: 'write_unverified' }, 502, origin);
+    const rec = rd[rid] || Object.values(rd)[0];
+    if (!rec || pcVal(rec[PC.updateLog]).trim() !== newLog.trim()) return jsonResp({ error: 'write_unverified' }, 502, origin);
+
+    return jsonResp({ ok: true, changed: true, claim: pettyCashPublicRecord(rid, rec, false, true) }, 200, origin);
+  }
+
+  if (action === 'pettyCashSign') {
+    let body;
+    try { body = await request.json(); } catch { return jsonResp({ error: 'bad_json' }, 400, origin); }
+    const ridRaw = body?.rid;
+    if (typeof ridRaw !== 'string' && typeof ridRaw !== 'number') return jsonResp({ error: 'invalid_rid' }, 400, origin);
+    const rid = String(ridRaw);
+    if (!/^\d{1,12}$/.test(rid)) return jsonResp({ error: 'invalid_rid' }, 400, origin);
+    const signature = typeof body?.signature === 'string' ? body.signature : '';
+    // spec 外決定：格式防呆（不是既有錯誤總表明列的碼，但簽名寫壞比多一個錯誤碼更貴）
+    if (!signature || !/^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(signature)) {
+      return jsonResp({ error: 'invalid_signature' }, 400, origin);
+    }
+    if (signature.length > PC_SIGNATURE_MAX_BYTES) return jsonResp({ error: 'signature_too_large' }, 413, origin);
+
+    const { upstream: cu, data: cd } = await getFromRagic(env, `${PETTY_CASH_SHEET}/${rid}`, 'naming=EID');
+    if (!cu.ok || !cd || Object.keys(cd).length === 0) return jsonResp({ error: 'not_found' }, 404, origin);
+    const existingRec = cd[rid] || Object.values(cd)[0];
+    if (!existingRec) return jsonResp({ error: 'not_found' }, 404, origin);
+
+    const reviewStatus = pcVal(existingRec[PC.reviewStatus]) || '待審核';
+    if (reviewStatus !== '已通過') return jsonResp({ error: 'not_approved' }, 409, origin);
+
+    const alreadySigned = !!pcVal(existingRec[PC.signature]).trim();
+    const now = nowTaipeiDateTime();
+    const params = new URLSearchParams();
+    params.append(PC.signature, signature);
+    params.append(PC.signedAt, now);
+    if (alreadySigned) {
+      // 已經簽過再簽＝允許重簽（覆蓋），但要在修改紀錄留一行；首次簽名不寫這行
+      const logLine = `${now} ${identity.name} 簽收簽名 已重簽`;
+      const priorLog = pcVal(existingRec[PC.updateLog]);
+      const newLog = priorLog ? `${priorLog}\n${logLine}` : logLine;
+      params.append(PC.updateLog, newLog);
+      params.append(PC.updatedBy, identity.name);
+      params.append(PC.updatedAt, now);
+    }
+
+    const { upstream, data } = await postUrlEncodedToRagic(env, `${PETTY_CASH_SHEET}/${rid}`, params.toString());
+    const fail = detectUpstreamFailure(upstream, data);
+    if (fail) {
+      console.error('[pettyCashSign] write_failed', { ragicCode: fail.code, ragicMsg: fail.msg });
+      return jsonResp({ error: 'write_failed', ...fail }, 502, origin);
+    }
+
+    // 讀回確認簽名長度 > 500，否則 502（防「回 200 但其實沒寫進去或被截斷」）
+    const { upstream: ru, data: rd } = await getFromRagic(env, `${PETTY_CASH_SHEET}/${rid}`, 'naming=EID');
+    if (!ru.ok || !rd) return jsonResp({ error: 'write_unverified' }, 502, origin);
+    const rec = rd[rid] || Object.values(rd)[0];
+    const sigLen = rec ? pcVal(rec[PC.signature]).length : 0;
+    if (sigLen <= 500) return jsonResp({ error: 'write_unverified' }, 502, origin);
+
+    return jsonResp({ ok: true, claim: pettyCashPublicRecord(rid, rec, false, true) }, 200, origin);
   }
 
   return null;
