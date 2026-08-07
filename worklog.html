@@ -134,13 +134,22 @@ const DEPARTMENTS = {
     categories: ['開發', '委託', '帶看', '簽約', '修繕', '續約', '議價', '請假', '休假', '上課', '活動', '上廣告', '退租點交', '其他'],
     repairRelated: new Set(['修繕']),
   },
+  // 2026-08-07 新增：張玉慧實為社宅部（非租賃部，Joan 指正）。項目清單與租賃部完全相同
+  // （社宅部同仁 158 筆舊紀錄實際用過的 9 種類別皆是租賃組子集），只是依她的實際使用頻率
+  // （續約92／開發34／修繕19 最常用）重新排序，聯集不會多出新選項。
+  social_housing: {
+    key: 'social_housing', label: '社宅部',
+    categories: ['續約', '開發', '修繕', '簽約', '委託', '帶看', '議價', '退租點交', '上廣告', '活動', '上課', '請假', '休假', '其他'],
+    repairRelated: new Set(['修繕']),
+  },
 };
-const DEPARTMENT_ORDER = ['construction', 'rental'];
+const DEPARTMENT_ORDER = ['construction', 'rental', 'social_housing'];
 const OTHER_CATEGORY = '其他';
-// Worker 回傳的 categoryGroup 是中文（'工務'／'租賃'／null），對應到本檔的部門 key。
+// Worker 回傳的 categoryGroup 是中文（'工務'／'租賃'／'社宅'／null），對應到本檔的部門 key。
 function deptKeyForCategoryGroup(categoryGroup) {
   if (categoryGroup === '工務') return 'construction';
   if (categoryGroup === '租賃') return 'rental';
+  if (categoryGroup === '社宅') return 'social_housing';
   return null;
 }
 function categoriesForIdentity(identity) {
