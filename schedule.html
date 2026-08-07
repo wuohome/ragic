@@ -601,6 +601,104 @@ const App = () => {
             return;
         }
 
+        if (mode === "清運") {
+            // 清運模式：一天只排一位清運值日生，不佔樓層格、不受 allowedFloors 限制（見 排班表_規格書.md § 清運值日生）
+            const trashKey = `trash|${dateStr}`;
+            if (saving[trashKey]) return;
+            const current = duties[dateStr] || [];
+            const myTrash = current.find(d => d.empName === empName && d.isTrash);
+            const otherTrash = current.find(d => d.empName !== empName && d.isTrash);
+            const trashDay = parseInt(dateStr.split("/")[2], 10);
+
+            // 週三、週日清潔隊不收垃圾：新增/換人時跳確認，標記未倒/清除不受影響
+            if (!myTrash && !SC.isTrashCollectionDay(year, month, trashDay)) {
+                const dowLabel = DAYS[new Date(year, month - 1, trashDay).getDay()];
+                const okTrashDay = await openConfirm(`${dateStr}（週${dowLabel}）清潔隊不收垃圾，仍要排清運值日嗎？`);
+                if (!okTrashDay) return;
+            }
+
+            setSaving(s => ({...s, [trashKey]: true}));
+            try {
+                if (otherTrash) {
+                    // 換人：先問，DELETE 舊筆成功才 POST 新人（原子操作，比照值班換人邏輯）
+                    const okSwitch = await openConfirm(`${dateStr} 目前清運值日是 ${otherTrash.empName}，要換成 ${empName} 嗎？`);
+                    if (!okSwitch) { setSaving(s => { const n = {...s}; delete n[trashKey]; return n; }); return; }
+                    try {
+                        await SC.proxyFetch(`deleteLeave/${otherTrash.ragicId}`, { method: "DELETE" });
+                    } catch (delErr) {
+                        await openAlert(`換清運值日失敗：舊紀錄（${otherTrash.empName}）沒刪掉。請重新整理頁面後再試。\n\n錯誤：${delErr.message}`);
+                        throw delErr;
+                    }
+                    setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => x.ragicId !== otherTrash.ragicId)}));
+                    let res;
+                    try {
+                        res = await SC.proxyFetch("createLeave", {
+                            method: "POST",
+                            headers: {"Content-Type":"application/json"},
+                            body: JSON.stringify({
+                                [CONFIG.F_LEAVE.EMP]: empName,
+                                [CONFIG.F_LEAVE.DATE]: dateStr,
+                                [CONFIG.F_LEAVE.YEAR]: String(year),
+                                [CONFIG.F_LEAVE.MONTH]: String(month),
+                                [CONFIG.F_LEAVE.TYPE]: "值日",
+                                [CONFIG.F_LEAVE.NOTE]: SC.TRASH_DUTY_NOTE_DEFAULT,
+                                [CONFIG.F_LEAVE.IS_AUTO]: "No",
+                                [CONFIG.F_LEAVE.DEPT]: "手動變更",
+                            })
+                        });
+                    } catch (postErr) {
+                        await openAlert(`換清運值日只完成一半：${otherTrash.empName} 已從 Ragic 刪除，但 ${empName} 沒寫進去。\n請重新整理頁面後再點 ${empName} 一次。\n\n錯誤：${postErr.message}`);
+                        throw postErr;
+                    }
+                    if (!res || !res.ragicId) {
+                        await openAlert(`換清運值日疑似失敗：${otherTrash.empName} 已刪、但 ${empName} 寫入沒拿到 ragicId。請重新整理確認資料狀態。`);
+                        throw new Error("POST 沒拿到 ragicId");
+                    }
+                    setDuties(d => ({...d, [dateStr]: [...(d[dateStr]||[]), {ragicId: String(res.ragicId), empName, isAuto: "No", note: SC.TRASH_DUTY_NOTE_DEFAULT, floor: "", missed: false, isTrash: true}]}));
+                    showToast(`${dateStr} 清運值日已換成 ${empName}`);
+                } else if (myTrash) {
+                    if (myTrash.missed) {
+                        // 未倒 → 再點 = 刪除
+                        await SC.proxyFetch(`deleteLeave/${myTrash.ragicId}`, { method: "DELETE" });
+                        setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => x.ragicId !== myTrash.ragicId)}));
+                        showToast(`${empName} ${dateStr} 清運值日已清除`);
+                    } else {
+                        // 正常 → 標記未倒（沿用值日「未掃」欄位語意，SC.computeFairnessLedger / computeCleaningFeePreview 靠它算 300 元）
+                        await SC.proxyFetch(`updateLeave/${myTrash.ragicId}`, {
+                            method: "POST",
+                            headers: {"Content-Type":"application/json"},
+                            body: JSON.stringify({ [CONFIG.F_LEAVE.IS_AUTO]: "未掃" })
+                        });
+                        setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).map(x => x.ragicId === myTrash.ragicId ? {...x, missed: true, isAuto: "未掃"} : x)}));
+                        showToast(`${empName} ${dateStr} 清運標記未倒 ❌`);
+                    }
+                } else {
+                    // 新增
+                    const res = await SC.proxyFetch("createLeave", {
+                        method: "POST",
+                        headers: {"Content-Type":"application/json"},
+                        body: JSON.stringify({
+                            [CONFIG.F_LEAVE.EMP]: empName,
+                            [CONFIG.F_LEAVE.DATE]: dateStr,
+                            [CONFIG.F_LEAVE.YEAR]: String(year),
+                            [CONFIG.F_LEAVE.MONTH]: String(month),
+                            [CONFIG.F_LEAVE.TYPE]: "值日",
+                            [CONFIG.F_LEAVE.NOTE]: SC.TRASH_DUTY_NOTE_DEFAULT,
+                            [CONFIG.F_LEAVE.IS_AUTO]: "No",
+                            [CONFIG.F_LEAVE.DEPT]: "手動變更",
+                        })
+                    });
+                    setDuties(d => ({...d, [dateStr]: [...(d[dateStr]||[]), {ragicId: String(res.ragicId), empName, isAuto: "No", note: SC.TRASH_DUTY_NOTE_DEFAULT, floor: "", missed: false, isTrash: true}]}));
+                    showToast(`${dateStr} 清運值日：${empName} 🗑️`);
+                }
+            } catch(e) {
+                console.error(e);
+                showToast("儲存失敗: " + e.message, false);
+            }
+            setSaving(s => { const n = {...s}; delete n[trashKey]; return n; });
+            return;
+        }
+
         // 排休/請假/值班/特休模式：每種類型獨立 toggle，可同日並存（如 排休+值班）
         const key = `${empName}|${dateStr}`;
         if (saving[key]) return;
@@ -1650,6 +1748,7 @@ const App = () => {
                     {id:"請假", color:"bg-red-500", label:"請假"},
                     {id:"值班", color:"bg-orange-500", label:"值班"},
                     {id:"值日", color:"bg-blue-500", label:"值日生"},
+                    {id:"清運", color:"bg-slate-600", label:"清運🗑️"},
                     {id:"禁休", color:"bg-rose-700", label:"禁休"},
                 ].map(m => (
                     <button key={m.id} onClick={() => setMode(m.id)}
@@ -1666,6 +1765,7 @@ const App = () => {
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#8b5cf6"}}></span> 2F</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#0891b2"}}></span> 3F</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#ea580c"}}></span> 4F</span>
+                <span className="flex items-center gap-1 text-sm">🗑️ 清運</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-gray-200 inline-block"></span> 見紅休</span>
                 <span className="flex items-center gap-1 text-sm">🚫 禁休</span>
                 {!IS_READONLY && <span className="ml-2 text-gray-400 text-sm">{mode === "禁休" ? "點左邊日期欄設定/取消禁休" : `點格子=${mode}，再點=清除`}</span>}
@@ -1786,7 +1886,7 @@ const App = () => {
                                             const myDuty = myDuties[0] || null;
                                             const hasMultiFloor = myDuties.length > 1;
                                             const isGovRest = !nrInfo && SC.isGovRestFor(emp.name, year, month, day);
-                                            const savingKey = mode === "值日" ? `duty|${dateStr}` : key;
+                                            const savingKey = mode === "值日" ? `duty|${dateStr}` : mode === "清運" ? `trash|${dateStr}` : key;
                                             const cellSaving = saving[savingKey];
                                             const floorLabel = hasMultiFloor
                                                 ? myDuties.map(d => d.floor || "值").join("+")
