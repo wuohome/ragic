@@ -1170,14 +1170,44 @@ async function ssGetEntry(env, rid) {
   return { mainRid: parsed.mainRid, mainRec, rowId: parsed.rowId, row };
 }
 
+// 2026-08-12 事故後強化（兩個缺陷都真的出過事，見 vault 零用金請款_開發紀錄 § 2026-08-12）：
+//
+// 缺陷 1「讀取失敗被當成不存在」：原本 `if (!upstream.ok || !data) return null`，讓
+//   「Ragic 這次沒回應」跟「這個月真的還沒開帳」回傳同一個 null，呼叫端 ssEnsureMonthRecord
+//   一收到 null 就開一張新月帳。結果 Ragic 慢一拍或網路抖一下，就無中生有一張空月帳。
+//   實際後果：珊珊八月帳冒出兩張空殼（rid 35、36），害餘額顯示成 -571 而不是 -2507。
+//   → 改三態回傳，只有「確定查無」才准開新帳；讀取失敗往上拋，寧可這次不做事。
+//
+// 缺陷 2「同月多筆時盲取第一筆」：原本 `limit=0,1` 直接拿第一筆，一旦同月存在多筆
+//   （空殼與真帳並存）很可能拿到空殼，餘額整個錯掉。
+//   → 改成撈同月全部，取「明細列數最多」那筆＝真正在用的帳本；同月超過一筆時寫
+//     console.error 留痕，方便日後撈出來清。
+//
+// 回傳三態：{ found: {rid, rec} } / { notFound: true } / { error: {...} }
 async function ssFindMonthRecord(env, monthStart) {
-  const qs = `naming=EID&limit=0,1&where=${SSM.monthStart},eq,${encodeURIComponent(monthStart)}`;
+  const qs = `naming=EID&where=${SSM.monthStart},eq,${encodeURIComponent(monthStart)}`;
   const { upstream, data } = await getFromRagic(env, SS_SHEET, qs);
-  if (!upstream.ok || !data) return null;
+  if (!upstream.ok || !data) {
+    console.error('[ssFindMonthRecord] read_failed', { monthStart, status: upstream?.status });
+    return { error: { error: 'month_lookup_failed', status: upstream?.status } };
+  }
   const entries = Object.entries(data).filter(([k]) => /^\d+$/.test(k));
-  if (entries.length === 0) return null;
-  const [rid, rec] = entries[0];
-  return { rid, rec };
+  if (entries.length === 0) return { notFound: true };
+
+  if (entries.length > 1) {
+    console.error('[ssFindMonthRecord] duplicate_month_records', {
+      monthStart, rids: entries.map(([rid]) => rid),
+    });
+  }
+  // 取明細最多的那筆＝真正在用的帳本；並列時取 rid 較小者（先建立的那本）
+  const scored = entries.map(([rid, rec]) => {
+    const sub = rec?.[`_subtable_${SS_SUBTABLE_KEY}`];
+    const rows = sub && typeof sub === 'object' ? Object.keys(sub).length : 0;
+    return { rid, rec, rows, ridNum: Number(rid) };
+  });
+  scored.sort((a, b) => (b.rows - a.rows) || (a.ridNum - b.ridNum));
+  const best = scored[0];
+  return { found: { rid: best.rid, rec: best.rec } };
 }
 
 // 決策1：當月主表記錄不存在時自動開一筆，不擋單，且必須 idempotent（find-or-create，先查
@@ -1190,11 +1220,14 @@ async function ssFindMonthRecord(env, monthStart) {
 // ssMonthBalance() 事後補算；找不到上月記錄（跳月或最早一筆之前）就不塞值，改標記
 // prevBalanceUncertain，讓呼叫端知道這筆結餘不可信，不靜默塞 0。
 async function ssEnsureMonthRecord(env, monthStart) {
-  const found = await ssFindMonthRecord(env, monthStart);
-  if (found) return { ...found, created: false };
+  const lookup = await ssFindMonthRecord(env, monthStart);
+  // 讀取失敗時絕不開新帳——寧可這次動作失敗，也不要無中生有一張空月帳（2026-08-12 事故）
+  if (lookup.error) return { error: lookup.error };
+  if (lookup.found) return { ...lookup.found, created: false };
 
   const prevMonthStart = ssShiftMonthStart(monthStart, -1);
-  const prevRecord = prevMonthStart ? await ssFindMonthRecord(env, prevMonthStart) : null;
+  const prevLookup = prevMonthStart ? await ssFindMonthRecord(env, prevMonthStart) : null;
+  const prevRecord = prevLookup && prevLookup.found ? prevLookup.found : null;
   const prevBalanceKnown = !!prevRecord && pcVal(prevRecord.rec[SSM.balance]) !== '';
   const prevBalanceValue = prevBalanceKnown ? pcNum(prevRecord.rec[SSM.balance]) : null;
 
@@ -1235,7 +1268,10 @@ async function ssMonthBalance(env, mainRec, monthStart) {
     };
   }
   const prevMonthStart = monthStart ? ssShiftMonthStart(monthStart, -1) : null;
-  const prevRecord = prevMonthStart ? await ssFindMonthRecord(env, prevMonthStart) : null;
+  // ssFindMonthRecord 2026-08-12 改成三態回傳（found / notFound / error），這裡跟著改。
+  // 讀取失敗與查無都當作「拿不到上月結餘」→ fallback 0，行為與改版前一致。
+  const prevLookup = prevMonthStart ? await ssFindMonthRecord(env, prevMonthStart) : null;
+  const prevRecord = prevLookup && prevLookup.found ? prevLookup.found : null;
   const fallbackPrev = prevRecord ? (pcNum(prevRecord.rec[SSM.balance]) || 0) : 0;
   return { balance: fallbackPrev + depositSum - expenseSum, prevBalance: fallbackPrev, stale: true };
 }
@@ -4228,6 +4264,130 @@ function rqGenToken() {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+// ============ 排班表：離職後排班自動檢查 — Telegram 按鈕回呼（2026-08-14 新增）============
+// 建議人選／過去或未來的判斷全部在 Mac Mini schedule-guard 算好，這裡只做兩件事：
+// (1) 安全閘門：目前掛在該筆班次上的員工必須是「離職」，否則一律拒絕（防 payload
+//     被偽造或誤用去改任意在職同仁的班）；(2) 寫入 + 復驗。不重算任何排班建議。
+const SCHEDULE_EMP_SHEET = 'ragicforms4/20004';
+const SCHEDULE_LEAVE_SHEET = 'ragicforms4/2';
+const SCHEDULE_F_EMP_NAME = '3000933';
+const SCHEDULE_F_EMP_STATUS = '3000945';
+// 排休表欄位 ID，與上方 LEAVE_FIELDS_WHITELIST / createLeave 用的是同一批（見 排班表_規格書.md）
+const SCHEDULE_F_LEAVE_EMP = '1000961';
+const SCHEDULE_F_LEAVE_DATE = '1000963';
+const SCHEDULE_F_LEAVE_TYPE = '1002025';
+const SCHEDULE_F_LEAVE_DEPT = '1002026';
+const SCHEDULE_F_LEAVE_NOTE = '1000967';
+const SCHEDULE_F_LEAVE_IS_AUTO = '1000966';
+
+// 直接 rid 路徑 GET 單筆（比照既有 wbGetInvestor/wbGetProperty 的呼叫慣例）。
+async function ragicGetOne(env, sheetPath, rid) {
+  const { upstream, data } = await getFromRagic(env, `${sheetPath}/${rid}`, 'naming=EID');
+  if (!upstream.ok || !data || Object.keys(data).length === 0) return null;
+  return data[String(rid)] || Object.values(data)[0] || null;
+}
+
+// 用姓名反查員工在職狀態（排休表 1000961 存的是姓名文字，不是連結 rid）。
+// ponytail-debt: 同名員工只取第一筆，全公司現行headcount規模小、風險低，未做撞名防呆。
+async function findEmployeeByName(env, name) {
+  const qs = `naming=EID&where=${encodeURIComponent(`${SCHEDULE_F_EMP_NAME},eq,${name}`)}&limit=0,1`;
+  const { upstream, data } = await getFromRagic(env, SCHEDULE_EMP_SHEET, qs);
+  if (!upstream.ok || !data) return null;
+  const entries = Object.entries(data).filter(([k]) => !k.startsWith('_'));
+  if (entries.length === 0) return null;
+  return entries[0][1];
+}
+
+async function handleScheduleShiftCallback(env, action, payload) {
+  if (action === 'shift') {
+    const parts = (payload || '').split(':');
+    if (parts.length !== 2) return '\n\n❌ payload 格式錯誤（預期 recordId:employeeRecordId）';
+    const [recordId, newEmpRid] = parts;
+    if (!validRid(recordId) || !validRid(newEmpRid)) return '\n\n❌ payload 格式錯誤（rid 非數字）';
+
+    const record = await ragicGetOne(env, SCHEDULE_LEAVE_SHEET, recordId);
+    if (!record) return `\n\n❌ 找不到該筆紀錄（recordId ${escapeHtml(recordId)}）`;
+
+    const currentEmpName = record[SCHEDULE_F_LEAVE_EMP];
+    if (!currentEmpName) return `\n\n❌ 該筆紀錄無員工欄位資料，無法確認安全閘門`;
+
+    const currentEmp = await findEmployeeByName(env, currentEmpName);
+    if (!currentEmp) return `\n\n❌ 查無「${escapeHtml(currentEmpName)}」的員工資料，無法確認在職狀態`;
+    if (currentEmp[SCHEDULE_F_EMP_STATUS] !== '離職') {
+      return `\n\n❌ 這筆不是離職同仁的班，不處理（${escapeHtml(currentEmpName)} 目前在職狀態：${escapeHtml(currentEmp[SCHEDULE_F_EMP_STATUS] || '未知')}）`;
+    }
+
+    const newEmp = await ragicGetOne(env, SCHEDULE_EMP_SHEET, newEmpRid);
+    if (!newEmp) return `\n\n❌ 找不到接手員工資料（employeeRecordId ${escapeHtml(newEmpRid)}）`;
+    const newEmpName = newEmp[SCHEDULE_F_EMP_NAME];
+    if (newEmp[SCHEDULE_F_EMP_STATUS] !== '在職') {
+      return `\n\n❌ 接手對象「${escapeHtml(newEmpName || newEmpRid)}」目前不是在職狀態，不處理`;
+    }
+
+    // 見紅休名單防護（比照 createLeave 既有規則，防同一類 payload 直打 Worker 繞過
+    // 前端造成的三度誤排事故重演，見 排班表_規格書.md §已知問題）
+    const typeStr = record[SCHEDULE_F_LEAVE_TYPE] || '';
+    const dateStr = record[SCHEDULE_F_LEAVE_DATE] || '';
+    if ((typeStr === '值日' || typeStr === '值班') && GOV_REST_NAMES.has(newEmpName) && isGovRestDateStr(dateStr)) {
+      const overridden = await hasNoRestOverride(env, dateStr);
+      if (!overridden) {
+        return `\n\n❌ ${escapeHtml(newEmpName)} 屬見紅休名單，${escapeHtml(dateStr)} 不可改派${escapeHtml(typeStr)}`;
+      }
+    }
+
+    const params = new URLSearchParams({ [SCHEDULE_F_LEAVE_EMP]: newEmpName, [SCHEDULE_F_LEAVE_DEPT]: '手動變更' });
+    const { upstream, data } = await postUrlEncodedToRagic(env, `${SCHEDULE_LEAVE_SHEET}/${recordId}`, params.toString());
+    const fail = detectUpstreamFailure(upstream, data);
+    if (fail) return `\n\n❌ 寫入失敗：${escapeHtml(fail.error || '')}${fail.msg ? ' — ' + escapeHtml(fail.msg) : ''}`;
+
+    const verify = await ragicGetOne(env, SCHEDULE_LEAVE_SHEET, recordId);
+    if (!verify || verify[SCHEDULE_F_LEAVE_EMP] !== newEmpName) {
+      return `\n\n❌ 已寫入但復驗失敗，請人工確認 Ragic recordId ${escapeHtml(recordId)} 的實際狀態`;
+    }
+
+    const vDate = verify[SCHEDULE_F_LEAVE_DATE] || '';
+    const vType = verify[SCHEDULE_F_LEAVE_TYPE] || '';
+    const vNote = verify[SCHEDULE_F_LEAVE_NOTE] || '';
+    return `\n\n✅ ${escapeHtml(vDate)} ${escapeHtml(vType)}${vNote ? '（' + escapeHtml(vNote) + '）' : ''} → ${escapeHtml(newEmpName)}（已寫入）`;
+  }
+
+  if (action === 'shiftmark') {
+    const recordId = payload;
+    if (!validRid(recordId)) return '\n\n❌ payload 格式錯誤（rid 非數字）';
+
+    const record = await ragicGetOne(env, SCHEDULE_LEAVE_SHEET, recordId);
+    if (!record) return `\n\n❌ 找不到該筆紀錄（recordId ${escapeHtml(recordId)}）`;
+
+    const currentEmpName = record[SCHEDULE_F_LEAVE_EMP];
+    if (!currentEmpName) return `\n\n❌ 該筆紀錄無員工欄位資料，無法確認安全閘門`;
+    const currentEmp = await findEmployeeByName(env, currentEmpName);
+    if (!currentEmp) return `\n\n❌ 查無「${escapeHtml(currentEmpName)}」的員工資料，無法確認在職狀態`;
+    if (currentEmp[SCHEDULE_F_EMP_STATUS] !== '離職') {
+      return `\n\n❌ 這筆不是離職同仁的班，不處理（${escapeHtml(currentEmpName)} 目前在職狀態：${escapeHtml(currentEmp[SCHEDULE_F_EMP_STATUS] || '未知')}）`;
+    }
+
+    const typeStr = record[SCHEDULE_F_LEAVE_TYPE] || '';
+    const markValue = typeStr === '值班' ? '未值班' : '未掃';
+    const oldNote = record[SCHEDULE_F_LEAVE_NOTE] || '';
+    const stamp = todayTaipei();
+    const newNote = `${oldNote}${oldNote ? '；' : ''}${currentEmpName}離職未到班，系統自動標記（${stamp}）`;
+
+    const params = new URLSearchParams({ [SCHEDULE_F_LEAVE_IS_AUTO]: markValue, [SCHEDULE_F_LEAVE_NOTE]: newNote });
+    const { upstream, data } = await postUrlEncodedToRagic(env, `${SCHEDULE_LEAVE_SHEET}/${recordId}`, params.toString());
+    const fail = detectUpstreamFailure(upstream, data);
+    if (fail) return `\n\n❌ 寫入失敗：${escapeHtml(fail.error || '')}${fail.msg ? ' — ' + escapeHtml(fail.msg) : ''}`;
+
+    const verify = await ragicGetOne(env, SCHEDULE_LEAVE_SHEET, recordId);
+    if (!verify || verify[SCHEDULE_F_LEAVE_IS_AUTO] !== markValue) {
+      return `\n\n❌ 已寫入但復驗失敗，請人工確認 Ragic recordId ${escapeHtml(recordId)} 的實際狀態`;
+    }
+
+    return `\n\n✅ recordId ${escapeHtml(recordId)} 已標記「${markValue}」`;
+  }
+
+  return null;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const allowedOrigin = env.ALLOWED_ORIGIN;
@@ -4257,6 +4417,17 @@ export default {
         if (colonIdx < 0) return;
         const action = callbackData.slice(0, colonIdx);
         const submissionId = callbackData.slice(colonIdx + 1);
+
+        // schedule-guard 離職後排班改派／標記 callback（2026-08-14 新增）：payload 不是
+        // UUID（shift 是兩個數字 rid 以冒號相接、shiftmark 是單一數字 rid），必須在下面的
+        // validUuid 早退檢查之前處理，否則會被靜默丟棄（見 schedule-guard/README.md）。
+        if (action === 'shift' || action === 'shiftmark') {
+          const shiftResultText = await handleScheduleShiftCallback(env, action, submissionId);
+          if (messageId && chatId && shiftResultText) {
+            await editTelegramMessage(env, chatId, messageId, originalText + shiftResultText);
+          }
+          return;
+        }
 
         if (!submissionId || !validUuid(submissionId)) return;
 
@@ -5221,9 +5392,18 @@ export default {
         if (!upstream.ok) return jsonResp({ error: 'upstream_error', code: upstream.status }, 502, allowedOrigin);
         if (!data || typeof data !== 'object') return jsonResp({ error: 'upstream_bad_json' }, 502, allowedOrigin);
 
+        // 地址不完整過濾（2026-08-14）：台灣地址只要有門牌就一定含阿拉伯數字或中文數字
+        // （如「通化街33之1號」「復興北路二段」），只到行政區層級的地址（如「臺北市大安區」）
+        // 才會完全不含數字。這種殘缺地址若座標欄仍有值（geocode 只能落在行政區中心點），前端
+        // 會照樣畫出 pin，位置可能偏離實際物件達 1+ 公里、誤導客戶。刻意保守只擋「完全無數字」，
+        // 不加「必須含『號』」之類更嚴的條件，避免誤殺巷弄/段/大樓名寫法多變的正常物件。
+        // 根因在資料源缺門牌，這裡是前端唯一能守住的最後一關（永策該筆資料本身不可動）。
+        const ALLIANCE_ADDR_HAS_DIGIT_RE = /[0-9一二三四五六七八九十百千萬零]/;
         const filtered = {};
         for (const [rid, rec] of Object.entries(data)) {
           if (typeof rec !== 'object' || rec === null) continue;
+          const addr = String(rec['1001914'] || ''); // 1001914 = ADDR，見上方 ALLIANCE_PUBLIC_FIELD_IDS
+          if (!ALLIANCE_ADDR_HAS_DIGIT_RE.test(addr)) continue;
           const clean = {};
           if (rec._ragicId !== undefined) clean._ragicId = rec._ragicId;
           for (const fid of ALLIANCE_PUBLIC_FIELD_IDS) {
