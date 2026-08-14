@@ -4272,6 +4272,12 @@ const SCHEDULE_EMP_SHEET = 'ragicforms4/20004';
 const SCHEDULE_LEAVE_SHEET = 'ragicforms4/2';
 const SCHEDULE_F_EMP_NAME = '3000933';
 const SCHEDULE_F_EMP_STATUS = '3000945';
+const SCHEDULE_F_EMP_TERMINATION_DATE = '3000944';
+// 標記（shiftmark）可回溯的天數上限：不得早於員工離職日期前 30 天。理由：離職日期
+// （3000944）常是行政生效日（可能在未來），真正停止到班的時間點沒有獨立欄位可查；
+// 30 天是本次判斷、非精確數字，用意是擋掉「舊資料被誤觸發」這類 payload（2026-08-14
+// 事故：偏移 --today 測試把 3-5 月已完成的舊班次判定成待處理，見 排班表_開發紀錄.md）。
+const SCHEDULE_MARK_LOOKBACK_DAYS = 30;
 // 排休表欄位 ID，與上方 LEAVE_FIELDS_WHITELIST / createLeave 用的是同一批（見 排班表_規格書.md）
 const SCHEDULE_F_LEAVE_EMP = '1000961';
 const SCHEDULE_F_LEAVE_DATE = '1000963';
@@ -4279,6 +4285,27 @@ const SCHEDULE_F_LEAVE_TYPE = '1002025';
 const SCHEDULE_F_LEAVE_DEPT = '1002026';
 const SCHEDULE_F_LEAVE_NOTE = '1000967';
 const SCHEDULE_F_LEAVE_IS_AUTO = '1000966';
+
+// 'YYYY/MM/DD' 字串比較（去斜線後當數字字串比，格式固定時等價於比日期）。
+function cmpDateStr(a, b) {
+  const A = String(a).replace(/\//g, '');
+  const B = String(b).replace(/\//g, '');
+  if (A < B) return -1;
+  if (A > B) return 1;
+  return 0;
+}
+
+// 'YYYY/MM/DD' 加/減天數，格式不對回 null（呼叫端一律 fail closed 處理）。
+function addDaysToDateStr(dateStr, days) {
+  const m = /^(\d{4})\/(\d{2})\/(\d{2})$/.exec(dateStr);
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const da = String(d.getDate()).padStart(2, '0');
+  return `${y}/${mo}/${da}`;
+}
 
 // 直接 rid 路徑 GET 單筆（比照既有 wbGetInvestor/wbGetProperty 的呼叫慣例）。
 async function ragicGetOne(env, sheetPath, rid) {
@@ -4315,6 +4342,20 @@ async function handleScheduleShiftCallback(env, action, payload) {
     if (!currentEmp) return `\n\n❌ 查無「${escapeHtml(currentEmpName)}」的員工資料，無法確認在職狀態`;
     if (currentEmp[SCHEDULE_F_EMP_STATUS] !== '離職') {
       return `\n\n❌ 這筆不是離職同仁的班，不處理（${escapeHtml(currentEmpName)} 目前在職狀態：${escapeHtml(currentEmp[SCHEDULE_F_EMP_STATUS] || '未知')}）`;
+    }
+
+    // 2026-08-14 補強：日期閘門。已過去的班次不得改派給任何在職同仁——那筆班若已發生
+    // 就是「原員工做了」或「沒人做」，改派給活人等於製造一筆假考勤；若真的沒人做，
+    // 該用 shiftmark 標記，不是 shift 改派。「今天」算未來（與 schedule-guard 的
+    // reassign 定義一致：date >= todayStr 才進 needsAssignment，見 src/core/run.js），
+    // 否則今天才產生的合法按鈕會被自己的閘門擋下，兩邊定義對不齊。
+    const shiftDateStr = record[SCHEDULE_F_LEAVE_DATE] || '';
+    if (!validDateStr(shiftDateStr)) {
+      return `\n\n❌ 該筆紀錄日期格式異常（${escapeHtml(shiftDateStr)}），拒絕改派`;
+    }
+    const todayForShift = todayTaipei();
+    if (cmpDateStr(shiftDateStr, todayForShift) < 0) {
+      return `\n\n❌ ${escapeHtml(shiftDateStr)} 是過去的班次，已過去且無人執行的班次不得改派給任何在職同仁（會製造假考勤）。如需標記已過去未執行，請改用「標記未做」`;
     }
 
     const newEmp = await ragicGetOne(env, SCHEDULE_EMP_SHEET, newEmpRid);
@@ -4364,6 +4405,30 @@ async function handleScheduleShiftCallback(env, action, payload) {
     if (!currentEmp) return `\n\n❌ 查無「${escapeHtml(currentEmpName)}」的員工資料，無法確認在職狀態`;
     if (currentEmp[SCHEDULE_F_EMP_STATUS] !== '離職') {
       return `\n\n❌ 這筆不是離職同仁的班，不處理（${escapeHtml(currentEmpName)} 目前在職狀態：${escapeHtml(currentEmp[SCHEDULE_F_EMP_STATUS] || '未知')}）`;
+    }
+
+    // 2026-08-14 補強：日期閘門，分兩層。
+    // 層 1：只能標記「今天或今天以前」——標記本來就是給已發生的事用的，未來班次不該被標記。
+    const markDateStr = record[SCHEDULE_F_LEAVE_DATE] || '';
+    if (!validDateStr(markDateStr)) {
+      return `\n\n❌ 該筆紀錄日期格式異常（${escapeHtml(markDateStr)}），拒絕標記`;
+    }
+    const todayForMark = todayTaipei();
+    if (cmpDateStr(markDateStr, todayForMark) > 0) {
+      return `\n\n❌ ${escapeHtml(markDateStr)} 是未來的班次，標記功能只能用在已過去或當天的班次`;
+    }
+    // 層 2：不得早於「該員工離職日期前 30 天」——防止舊資料／偽造 payload 被拿去標記
+    // 三、四個月前的歷史紀錄（2026-08-14 事故：偏移 --today 測試把 3-5 月已完成的舊
+    // 班次判定成待處理，就是這個洞；離職日期可能是未來生效的行政日期，往前抓 30 天
+    // 是本次判斷、非精確數字，見上方 SCHEDULE_MARK_LOOKBACK_DAYS 常數註解）。
+    const terminationDateStr = currentEmp[SCHEDULE_F_EMP_TERMINATION_DATE];
+    if (!validDateStr(terminationDateStr)) {
+      return `\n\n❌ 查無 ${escapeHtml(currentEmpName)} 的離職日期資料，無法確認可標記範圍，拒絕標記`;
+    }
+    const markLowerBound = addDaysToDateStr(terminationDateStr, -SCHEDULE_MARK_LOOKBACK_DAYS);
+    if (!markLowerBound || cmpDateStr(markDateStr, markLowerBound) < 0) {
+      const markMonth = (markDateStr.split('/')[1] || '?').replace(/^0/, '');
+      return `\n\n❌ 這筆是 ${escapeHtml(markMonth)} 月的舊紀錄，超出可標記範圍（僅允許離職日期前 ${SCHEDULE_MARK_LOOKBACK_DAYS} 天內，即 ${escapeHtml(markLowerBound || '?')} 之後），拒絕標記`;
     }
 
     const typeStr = record[SCHEDULE_F_LEAVE_TYPE] || '';
@@ -4423,6 +4488,9 @@ export default {
         // validUuid 早退檢查之前處理，否則會被靜默丟棄（見 schedule-guard/README.md）。
         if (action === 'shift' || action === 'shiftmark') {
           const shiftResultText = await handleScheduleShiftCallback(env, action, submissionId);
+          // wrangler tail 可觀察的診斷 log（比照既有 service-fee 三段 POST 失敗分支的
+          // console.error 慣例）。不含任何憑證，只有 action/payload/閘門判定結果。
+          console.log(`[schedule-shift] action=${action} payload=${submissionId} result=${(shiftResultText || '').replace(/\n/g, ' ')}`);
           if (messageId && chatId && shiftResultText) {
             await editTelegramMessage(env, chatId, messageId, originalText + shiftResultText);
           }
