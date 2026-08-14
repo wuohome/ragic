@@ -1665,6 +1665,9 @@ async function pcCreatePurchaseOrder(env, identity, f) {
   form.append('1000668_-1', '1');
   form.append('1000695_-1', '式');
   form.append('1000669_-1', String(f.amount));
+  // 2026-08-14：標記「線上申請」讓 Ragic 秘書簽核規則吃到，觸發「新建資料後自動開始簽核」；
+  // 手動在 Ragic UI 建的草稿單此欄位留空，不會被規則命中，維持「未送件」可續編輯。
+  form.append('1003649', '線上申請');
   for (const p of f.photos) form.append('1000663', p, p.name || 'receipt.jpg');
 
   const upstream = await ragicFetch(`${env.RAGIC_BASE}/${PC_PURCHASE_SHEET}?api&v=3&doLinkLoad=first&doFormula=true`, {
@@ -6693,6 +6696,9 @@ export default {
         orderForm.append('1000662', desc);
         orderForm.append('1000672', '0');
         orderForm.append('1000663', pdfFile, pdfFile.name || 'receipt.pdf');
+        // 2026-08-14：同上（見 pcCreatePurchaseOrder 註解）——這條也是 Worker 代寫，非 Ragic UI 手動
+        // 建單，一併標記讓簽核規則命中。
+        orderForm.append('1003649', '線上申請');
         // 子表格：本行=給付總額；扣繳稅額/二代健保以負數列示，讓 1000671(項目金額合計) 自動算出實付淨額
         orderForm.append('1000664_-1', itemName);
         orderForm.append('1000665_-1', servicePeriod);
