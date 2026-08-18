@@ -238,6 +238,7 @@
     padding: 16px;
     margin-bottom: 12px;
   }
+  .file-state { font-size: 13px; color: #666; margin-top: 6px; text-align: left; }
   .review-title { font-weight: bold; color: #007894; margin-bottom: 10px; font-size: 15px; }
   .review-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 6px 0; font-size: 14px; gap: 12px; }
   .review-row dt { color: #888; flex-shrink: 0; }
@@ -470,7 +471,7 @@
         <input type="file" id="f_photo" accept="image/*">
         <i class="fas fa-camera"></i>
         <div class="up-hint">點擊拍照或上傳</div>
-        <div class="up-sub">建議正面、清晰、無遮擋</div>
+        <div class="up-sub">建議正面、清晰、無遮擋（系統會自動縮小，直接拍即可）</div>
         <img class="preview" id="photoPreview" alt="大頭照預覽">
       </label>
     </div>
@@ -526,7 +527,7 @@
         <input type="file" id="f_passbook" accept="image/*">
         <i class="fas fa-book"></i>
         <div class="up-hint">拍攝存摺封面</div>
-        <div class="up-sub">需清楚顯示戶名與帳號</div>
+        <div class="up-sub">需清楚顯示戶名與帳號（系統會自動縮小，直接拍即可）</div>
         <img class="preview" id="passbookPreview" alt="存摺預覽">
       </label>
     </div>
@@ -588,7 +589,7 @@
     <div class="success-icon"><i class="fas fa-check"></i></div>
     <h3>資料已送出</h3>
     <p>HR 會盡快與您聯繫後續流程。<br>您可以關閉這個頁面了。</p>
-    <button onclick="location.reload()">填寫下一位</button>
+    <button onclick="try{localStorage.removeItem('wuohome_hr_v2');localStorage.removeItem('wuohome_hr_files_v2');}catch(e){};location.reload()">填寫下一位</button>
   </div>
 </div>
 
@@ -617,7 +618,7 @@ const BANKS = ['(822) 中國信託','(004) 台灣銀行','(005) 土地銀行','(
 const TOTAL = 8;
 const LS_KEY = 'wuohome_hr_v2';
 let step = 1;
-let data = { fields: {}, sub: { edu: [{}], work: [{}], em: [{}], cert: [{}] }, files: {} };
+let data = { fields: {}, sub: { edu: [{}], work: [{}], em: [{}], cert: [{}] }, files: {}, filesData: {} };
 
 // Populate bank dropdown
 (function(){ const s=document.getElementById('f_bank'); BANKS.forEach(b=>{ const o=document.createElement('option'); o.textContent=b; s.appendChild(o); }); })();
@@ -683,7 +684,17 @@ function validateStep(n) {
     const mb = (data.fields['主要手機號碼']||'').replace(/[-\s]/g,'');
     if(mb && !/^09\d{8}$|^\+886\s?9\d{8}$/.test(mb)) { mark(document.getElementById('f_mobile'), false); ok=false; flash('手機格式錯誤'); return ok; }
   }
-  if(n===8 && !document.getElementById('agree').checked) { ok=false; flash('請勾選同意聲明'); }
+  if(n===8) {
+    const noPhoto = [], noType = [];
+    data.sub.cert.forEach((r, i) => {
+      const hasPhoto = !!(r._uid && data.files[r._uid + '__file']);
+      if(r['證書類型'] && !hasPhoto) noPhoto.push(i+1);
+      if(!r['證書類型'] && hasPhoto) noType.push(i+1);
+    });
+    if(noPhoto.length) { flash('證件 #' + noPhoto.join('、#') + ' 還沒有上傳照片，已幫你跳回證件那一步'); showStep(7); return false; }
+    if(noType.length) { flash('證件 #' + noType.join('、#') + ' 還沒有選證件類型，沒選就不會送出，已幫你跳回去'); showStep(7); return false; }
+    if(!document.getElementById('agree').checked) { ok=false; flash('請勾選同意聲明'); }
+  }
   if(!ok) flash('請檢查必填欄位');
   return ok;
 }
@@ -737,18 +748,134 @@ document.getElementById('copyAddr').addEventListener('click', () => {
   flash('已複製通訊地址');
 });
 
+/* ===== 圖片壓縮 =====
+   手機原圖動輒 5-12MB，後端單檔上限 5MB，過去整包會在最後一步送出失敗。
+   一律在選檔當下縮到長邊 1600px / JPEG，確保穩定低於上限。 */
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+const MAX_DIM = 1600;
+
+function compressImage(file) {
+  return new Promise(resolve => {
+    if (!file || !/^image\//.test(file.type || '')) return resolve(file);
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.naturalWidth || img.width;
+      let h = img.naturalHeight || img.height;
+      if (!w || !h) return resolve(file);
+      const scale = Math.min(1, MAX_DIM / Math.max(w, h));
+      w = Math.max(1, Math.round(w * scale));
+      h = Math.max(1, Math.round(h * scale));
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      const name = (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg';
+      const attempt = q => {
+        cv.toBlob(blob => {
+          if (!blob) return resolve(file);
+          if (blob.size > MAX_UPLOAD_BYTES && q > 0.4) return attempt(Math.round((q - 0.15) * 100) / 100);
+          try { resolve(new File([blob], name, { type: 'image/jpeg' })); }
+          catch (e) { blob.name = name; resolve(blob); }
+        }, 'image/jpeg', q);
+      };
+      attempt(0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
+/* 壓縮 + 大小把關；不合格回 null，並已當場提示使用者 */
+async function prepareFile(raw) {
+  const out = await compressImage(raw);
+  if (out.size > MAX_UPLOAD_BYTES) {
+    flash('這張照片太大（' + (out.size / 1048576).toFixed(1) + ' MB），請用相機重拍或改選別張');
+    return null;
+  }
+  return out;
+}
+
+/* ===== 照片暫存 =====
+   照片不進主存檔（會撐爆容量連文字都存不進去），改用獨立空間。
+   手機切去拍照再回來時頁面常被系統重載，沒有這段照片會無聲消失。 */
+const LS_FILES = 'wuohome_hr_files_v2';
+
+function saveFiles() {
+  try { localStorage.setItem(LS_FILES, JSON.stringify(data.filesData)); }
+  catch (e) { flash('照片較多，暫存空間不足；請盡量一次填完再送出'); }
+}
+
+function dataUrlToFile(durl, name) {
+  const comma = durl.indexOf(',');
+  const meta = durl.slice(0, comma);
+  const bin = atob(durl.slice(comma + 1));
+  const mime = (meta.match(/:(.*?);/) || [])[1] || 'image/jpeg';
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  try { return new File([buf], name, { type: mime }); }
+  catch (e) { const b = new Blob([buf], { type: mime }); b.name = name; return b; }
+}
+
+function stashFile(key, file) {
+  return new Promise(resolve => {
+    const fr = new FileReader();
+    fr.onload = () => { data.filesData[key] = { d: fr.result, n: file.name }; saveFiles(); resolve(); };
+    fr.onerror = () => resolve();
+    fr.readAsDataURL(file);
+  });
+}
+
+function dropFile(key) {
+  delete data.files[key];
+  delete data.filesData[key];
+  saveFiles();
+}
+
+function loadFiles() {
+  try {
+    const raw = localStorage.getItem(LS_FILES);
+    if (!raw) return;
+    const obj = JSON.parse(raw);
+    Object.keys(obj).forEach(k => {
+      const rec = obj[k];
+      if (!rec || !rec.d) return;
+      data.filesData[k] = rec;
+      data.files[k] = dataUrlToFile(rec.d, rec.n || 'photo.jpg');
+    });
+  } catch (e) {}
+}
+
 // File upload with preview
+const uploadPainters = [];
+function repaintUploads() { uploadPainters.forEach(fn => fn()); }
+
 function bindUpload(inputId, previewId, zoneId, fileKey) {
   const inp = document.getElementById(inputId);
   const prv = document.getElementById(previewId);
   const zone = document.getElementById(zoneId);
-  inp.addEventListener('change', e => {
-    const f = e.target.files[0]; if(!f) return;
-    data.files[fileKey] = f;
-    prv.src = URL.createObjectURL(f);
+  const paint = () => {
+    const rec = data.filesData[fileKey];
+    if (!rec) return;
+    prv.src = rec.d;
     prv.style.display = 'block';
     zone.classList.add('has-file');
     zone.querySelector('.up-hint').textContent = '✓ 已上傳，點擊可更換';
+  };
+  uploadPainters.push(paint);
+  inp.addEventListener('change', async e => {
+    const raw = e.target.files[0]; if(!raw) return;
+    const hint = zone.querySelector('.up-hint');
+    const before = hint.textContent;
+    hint.textContent = '處理中…';
+    const f = await prepareFile(raw);
+    if (!f) { inp.value = ''; hint.textContent = before; return; }
+    data.files[fileKey] = f;
+    await stashFile(fileKey, f);
+    paint();
   });
 }
 bindUpload('f_photo', 'photoPreview', 'photoZone', '照片');
@@ -782,9 +909,17 @@ const SUB_TPL = {
   cert: { title:'證件', icon:'📋', fields:[
     {k:'證書類型', label:'證件類型', type:'select', options:['身分證','不動產經紀營業員證明','租賃住宅管理人員證書'], req:true},
     {k:'繳交日期', label:'繳交日期', type:'date'},
-    {k:'_file', label:'證件照片', type:'file', hint:'📷 可以直接拍照，也可以從相簿選取'}
+    {k:'_file', label:'證件照片', type:'file', hint:'📷 可以直接拍照，也可以從相簿選取；系統會自動縮小，不用擔心檔案太大'}
   ]}
 };
+
+/* 每張子表卡片配一個永久編號，檔案跟著編號走而不是跟著陣列位置走。
+   舊版用位置當鍵，刪掉中間一張卡片後照片就會對到別人身上。 */
+let uidSeq = 0;
+function rowKey(kind, row) {
+  if (!row._uid) row._uid = kind + '_' + (++uidSeq) + '_' + Math.random().toString(36).slice(2, 7);
+  return row._uid + '__file';
+}
 
 function renderSubtables() {
   ['edu','work','em','cert'].forEach(kind => {
@@ -810,7 +945,12 @@ function buildCard(kind, row, idx) {
     rm.type = 'button';
     rm.className = 'member-remove';
     rm.innerHTML = '<i class="fas fa-trash"></i> 移除';
-    rm.onclick = () => { data.sub[kind].splice(idx,1); renderSubtables(); save(); };
+    rm.onclick = () => {
+      const gone = data.sub[kind][idx];
+      if (gone && gone._uid) dropFile(gone._uid + '__file');
+      data.sub[kind].splice(idx,1);
+      renderSubtables(); save();
+    };
     title.appendChild(rm);
   }
   card.appendChild(title);
@@ -834,6 +974,28 @@ function buildCard(kind, row, idx) {
       el = document.createElement('input');
       el.type = 'file';
       el.accept = 'image/*';
+      const fkey = rowKey(kind, row);
+      const st = document.createElement('div');
+      st.className = 'file-state';
+      st.textContent = data.filesData[fkey] ? '✓ 已上傳（' + (data.filesData[fkey].n || '照片') + '）' : '尚未上傳';
+      el.addEventListener('change', async () => {
+        const raw = el.files[0]; if(!raw) return;
+        st.textContent = '處理中…';
+        const done = await prepareFile(raw);
+        if (!done) { el.value = ''; st.textContent = data.filesData[fkey] ? '✓ 已上傳' : '尚未上傳'; return; }
+        data.files[fkey] = done;
+        await stashFile(fkey, done);
+        st.textContent = '✓ 已上傳（' + done.name + '）';
+      });
+      card.appendChild(el);
+      card.appendChild(st);
+      if(f.hint) {
+        const hint2 = document.createElement('p');
+        hint2.className = 'field-hint';
+        hint2.textContent = f.hint;
+        card.appendChild(hint2);
+      }
+      return;
     } else {
       el = document.createElement('input');
       el.type = f.type;
@@ -887,6 +1049,7 @@ function renderReview() {
     <div class="review-row"><dt>工作經歷</dt><dd>${data.sub.work.filter(r=>r['公司名稱']).length} 筆</dd></div>
     <div class="review-row"><dt>緊急聯絡人</dt><dd>${data.sub.em.filter(r=>r['姓名']).length} 筆</dd></div>
     <div class="review-row"><dt>證件</dt><dd>${data.sub.cert.filter(r=>r['證書類型']).length} 筆</dd></div>
+    ${data.sub.cert.filter(r=>r['證書類型']).map((r,i) => `<div class="review-row"><dt>　證件 #${i+1} ${esc(r['證書類型'])}照片</dt><dd>${(r._uid && data.files[r._uid+'__file']) ? '✓ 已上傳' : '— 未上傳'}</dd></div>`).join('')}
     <div class="review-row"><dt>大頭照</dt><dd>${data.files['照片'] ? '✓ 已上傳' : '— 未上傳'}</dd></div>
     <div class="review-row"><dt>存摺照</dt><dd>${data.files['存摺上傳'] ? '✓ 已上傳' : '— 未上傳'}</dd></div>`;
   area.appendChild(sd);
@@ -941,28 +1104,46 @@ async function submit() {
     pushSub('em',   data.sub.em.filter(r=>r['姓名']));
     const certs = data.sub.cert.filter(r=>r['證書類型']);
     pushSub('cert', certs);
-    certs.forEach((_, i) => {
-      const cf = data.files[`cert_${i}__file`];
+    certs.forEach((row, i) => {
+      const cf = row._uid ? data.files[row._uid + '__file'] : null;
       if(cf) fd.append(`1000925_${i}`, cf, cf.name);
     });
 
     const res = await fetch(WORKER_API, { method: 'POST', body: fd });
     const json = await res.json().catch(() => ({}));
     if (!res.ok || !json.ok) {
-      const msg = json.error || ('HTTP ' + res.status);
-      flash('送出失敗：' + msg);
+      flash('送出失敗，' + errText(json, res.status));
       btn.disabled = false;
       btn.textContent = '✓ 確認送出';
       return;
     }
 
     localStorage.removeItem(LS_KEY);
+    localStorage.removeItem(LS_FILES);
     document.getElementById('successModal').classList.add('show');
   } catch(e) {
-    flash('送出失敗，請檢查網路');
+    flash('送出失敗，請確認網路連線後再試一次');
     btn.disabled = false;
     btn.textContent = '✓ 確認送出';
   }
+}
+
+/* 後端回的是英文代碼，這裡翻成同仁看得懂的話 */
+function errText(json, status) {
+  const code = (json && json.error) || '';
+  const map = {
+    file_too_large: '有照片超過大小上限，請重新拍一次那張照片',
+    invalid_field: '表單有欄位對不上，請聯絡人資',
+    value_too_long: '有欄位輸入太長，請縮短後再送出',
+    empty_fields: '沒有讀到任何資料，請重新整理頁面再填一次',
+    bad_multipart: '資料傳送格式有誤，請重新整理頁面再試',
+    expect_multipart: '資料傳送格式有誤，請重新整理頁面再試',
+    upstream_error: '系統忙碌中，請稍等一下再送出一次'
+  };
+  if (map[code]) return map[code];
+  if (status === 413) return '照片檔案太大，請重新拍一次';
+  if (status >= 500) return '系統暫時無法接收，請稍等一下再送出一次';
+  return '請稍後再試，若持續發生請聯絡人資';
 }
 
 /* ===== Welcome screen ===== */
@@ -974,6 +1155,8 @@ function startForm() {
 
 /* ===== Init ===== */
 load();
+loadFiles();
+repaintUploads();
 restoreFields();
 renderSubtables();
 // 有存檔（非第一次）→ 跳過歡迎畫面直接顯示表單
