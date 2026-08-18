@@ -1128,9 +1128,14 @@ async function submit() {
   }
 }
 
-/* 後端回的是英文代碼，這裡翻成同仁看得懂的話 */
+/* 後端回的是英文代碼，這裡翻成同仁看得懂的話。
+   Ragic 退件時會附中文原因（例如「欄位 性別 為必填」），那個比任何通用訊息都有用，優先顯示。 */
 function errText(json, status) {
   const code = (json && json.error) || '';
+  const raw = (json && json.msg) || '';
+  if (raw && /[一-鿿]/.test(raw)) {
+    return raw.replace(/為必填欄位\s+/g, '為必填、').replace(/\s+/g, ' ').trim().slice(0, 120);
+  }
   const map = {
     file_too_large: '有照片超過大小上限，請重新拍一次那張照片',
     invalid_field: '表單有欄位對不上，請聯絡人資',
