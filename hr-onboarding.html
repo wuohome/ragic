@@ -508,10 +508,10 @@
     <!-- STEP 3: 銀行帳戶 -->
     <div class="step-content" data-step="3">
       <h2>💰 薪轉帳戶</h2>
-      <p class="desc">薪資將匯入這個帳戶，請與存摺資訊一致</p>
+      <p class="desc">薪資將匯入這個帳戶，請與存摺資訊一致。<strong>還沒開戶可以先跳過</strong>，之後再告知人資</p>
       <p class="field-hint" style="text-align:center; margin-bottom:16px;">💳 建議選擇中國信託，可省去 $15 轉帳手續費</p>
 
-      <p class="question-label req">銀行</p>
+      <p class="question-label">銀行</p>
       <select id="f_bank" data-key="銀行" style="text-align-last:center">
         <option value="">請選擇銀行</option>
       </select>
@@ -519,7 +519,7 @@
       <p class="question-label">分行</p>
       <input type="text" id="f_branch" data-key="分行" placeholder="例：信義分行">
 
-      <p class="question-label req">銀行帳號</p>
+      <p class="question-label">銀行帳號</p>
       <input type="text" id="f_acct" data-key="銀行帳號" inputmode="numeric" placeholder="僅輸入數字">
 
       <p class="question-label">存摺照片</p>
@@ -662,7 +662,7 @@ function validateStep(n) {
   const req = {
     1: ['姓名','身分證字號','出生日期'],
     2: ['主要手機號碼','Email','通訊地址','戶籍地址'],
-    3: ['銀行','銀行帳號']
+    3: []  // 薪轉帳戶改選填——新人入職當下可能還沒開戶（Joan 2026-08-18）
   };
   if(req[n]) {
     for(const k of req[n]) {
