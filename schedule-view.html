@@ -70,7 +70,8 @@ const DEPT_COLORS = {
   '設計部':          { bg:'#d1fae5', border:'#6ee7b7', text:'#065f46', header:'#10b981' },
   '社宅部':          { bg:'#e0f2fe', border:'#7dd3fc', text:'#0c4a6e', header:'#0ea5e9' },
   '租賃部':          { bg:'#ffedd5', border:'#fdba74', text:'#9a3412', header:'#f97316' },
-  '社宅部 / 設計部': { bg:'#f0f9ff', border:'#93c5fd', text:'#1e40af', header:'#3b82f6' },
+  '行銷部':          { bg:'#fce7f3', border:'#f9a8d4', text:'#9d174d', header:'#ec4899' },
+  '社宅部 / 設計部 / 行銷部': { bg:'#f0f9ff', border:'#93c5fd', text:'#1e40af', header:'#3b82f6' },
 };
 function getDeptColor(dept) {
   return DEPT_COLORS[dept] || { bg:'#f1f5f9', border:'#cbd5e1', text:'#475569', header:'#64748b' };
@@ -124,6 +125,7 @@ function getOrder(emp) {
   if (emp.name === '張瓊安') return 11;
   if (dept === '社宅部') return 20;
   if (dept === '設計部') return 21;
+  if (dept === '行銷部') return 22;
   return 5;
 }
 
@@ -143,6 +145,7 @@ async function loadEmployees() {
       if (name === '韓珊珊') return true;
       if (dept === '設計部') return true;
       if (dept === '社宅部') return true;
+      if (dept === '行銷部') return true; // 2026-08-24 新增，與 schedule.html 人員範圍一致
       if (name === '張瓊安') return true;
       return false;
     })
@@ -514,12 +517,12 @@ function NameSelect({ emps, onSelect, onBack }) {
     for (const e of emps) {
       let groupKey = e.dept;
       if (e.name === '韓珊珊' || e.name === '張瓊安') groupKey = '管理部';
-      else if (e.dept === '社宅部' || e.dept === '設計部') groupKey = '社宅部 / 設計部';
+      else if (e.dept === '社宅部' || e.dept === '設計部' || e.dept === '行銷部') groupKey = '社宅部 / 設計部 / 行銷部';
       if (!m[groupKey]) m[groupKey] = [];
       m[groupKey].push(e);
     }
     // 排序：租賃部 → 管理部 → 社宅/設計
-    const order = { '租賃部': 0, '管理部': 1, '社宅部 / 設計部': 2 };
+    const order = { '租賃部': 0, '管理部': 1, '社宅部 / 設計部 / 行銷部': 2 };
     return Object.fromEntries(
       Object.entries(m).sort(([a], [b]) => (order[a] ?? 9) - (order[b] ?? 9))
     );
