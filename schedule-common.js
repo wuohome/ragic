@@ -34,8 +34,14 @@ const SC = {
         IS_AUTO: "1000966",
     },
 
-    // ── 見紅休人員（固定姓名清單，2026-08-02 Joan 更正為四位，補上陳勁豪）──
-    GOV_REST_NAMES: ["張瓊安", "沈郁雯", "呂鴻墀", "陳勁豪"],
+    // ── 見紅休人員（固定姓名清單，2026-08-24 陳勁豪轉租賃部承攬移除、王芳瑜（行銷部）加入）──
+    GOV_REST_NAMES: ["張瓊安", "沈郁雯", "呂鴻墀", "王芳瑜"],
+
+    // ── 見紅休改制分界（2026-08-24 Joan 拍板）──
+    // 此月份（含）起，見紅休從「即時計算、格子不可點」改為「月初一鍵預排成真實紀錄，之後可自由編輯」；
+    // 之前的月份維持舊制即時計算＋格子不可點，不補資料、不改行為。
+    // 比較用字串排序需同格式 YYYY/MM，呼叫端請用 `${year}/${String(month).padStart(2,"0")}` 組字串再比。
+    PRESCHEDULED_REST_START: "2026/09",
 
     // ── 2026 台灣國定假日 ──
     HOLIDAYS_2026: {
@@ -62,6 +68,7 @@ const SC = {
         "管理部/秘書": "#8b5cf6",
         "管理部/特助": "#8b5cf6",
         "設計部": "#10b981",
+        "行銷部": "#ec4899",
         "租賃部": "#f97316",
         "社宅部": "#0ea5e9",
     },
@@ -71,8 +78,9 @@ const SC = {
         "管理部/秘書": 0,
         "管理部/特助": 1,
         "設計部": 2,
-        "租賃部": 3,
-        "社宅部": 4,
+        "行銷部": 3,
+        "租賃部": 4,
+        "社宅部": 5,
     },
 
     // ── 樓層設定 ──
@@ -121,6 +129,13 @@ SC.isGovRestDay = (year, month, day) => {
     return SC.isGovHoliday(SC.fmtDate(year, month, day), dow === 0 || dow === 6);
 };
 SC.isGovRestFor = (name, year, month, day) => SC.GOV_REST_NAMES.includes(name) && SC.isGovRestDay(year, month, day);
+
+// ── 見紅休新舊制分界判斷（2026-08-24 新增）──
+// true = 該年月已適用「預排成真實紀錄」新制（PRESCHEDULED_REST_START 起）；
+// false = 該年月維持舊制「即時計算＋格子不可點」。
+// schedule.html 與 schedule-view.html 皆呼叫本函式決定要走哪條分支，不要各自重算字串比較。
+SC.isPrescheduledRestMonth = (year, month) =>
+    `${year}/${String(month).padStart(2, "0")}` >= SC.PRESCHEDULED_REST_START;
 
 // ── 月休上限：當月有三節（春節/端午/中秋）→ 9 天，否則 8 天 ──
 SC.MAJOR_FESTIVAL_NAMES = ["春節", "除夕", "端午", "中秋"];
