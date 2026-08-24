@@ -240,6 +240,7 @@ const App = () => {
     const [toast, setToast] = React.useState(null);
     const [autoScheduling, setAutoScheduling] = React.useState(false);
     const [autoZhiban, setAutoZhiban] = React.useState(false);
+    const [autoGovRest, setAutoGovRest] = React.useState(false);
     const [showRules, setShowRules] = React.useState(false);
     const [progress, setProgress] = React.useState(null); // { text, current, total }
     const [mode, setMode] = React.useState("排休");
@@ -333,16 +334,17 @@ const App = () => {
                 .filter(e => e.status === "在職" && e.dept !== "經營階層");
             setAllEmployees(allEmps.filter(e => e.hire !== "兼職").sort((a,b) => a.dept.localeCompare(b.dept) || a.hireDate.localeCompare(b.hireDate)));
 
-            // 排休用：只有承攬 + 韓珊珊 + 設計部 + 瓊安
+            // 排休用：只有承攬 + 韓珊珊 + 設計部 + 行銷部 + 瓊安 + 社宅部
             const getDeptOrder = (dept) => {
                 if (dept.startsWith("管理部")) return 0;
                 if (dept === "設計部") return 1;
-                if (dept === "租賃部") return 2;
-                if (dept === "社宅部") return 3;
-                return 4;
+                if (dept === "行銷部") return 2;
+                if (dept === "租賃部") return 3;
+                if (dept === "社宅部") return 4;
+                return 5;
             };
             const emps = allEmps
-                .filter(e => e.hire === "承攬" || e.name === "韓珊珊" || e.dept === "設計部" || e.name === "張瓊安" || e.dept === "社宅部")
+                .filter(e => e.hire === "承攬" || e.name === "韓珊珊" || e.dept === "設計部" || e.dept === "行銷部" || e.name === "張瓊安" || e.dept === "社宅部")
                 .map(e => e.name === "韓珊珊" ? {...e, dept: "管理部/秘書"} : e.name === "張瓊安" ? {...e, dept: "管理部/特助"} : e)
                 .sort((a,b) => getDeptOrder(a.dept) - getDeptOrder(b.dept) || a.hireDate.localeCompare(b.hireDate));
             setEmployees(emps);
@@ -1159,7 +1161,7 @@ const App = () => {
                 // Joan 拍板四條規則：①週三/週日不排 ②週六僅承攬同仁可排 ③當天排休/特休/請假跳過
                 // ④已有紀錄（trashByDate，含手動/歷史保留）的日子不補。
                 // 額外技術性排除（非第 5 條業務規則，是尊重既有伺服器端硬規則）：見紅休名單
-                // （張瓊安/沈郁雯/呂鴻墀/陳勁豪，2026-08-02 Joan 更正為四位）在週末/國定假日一律不可被排「值日」類型，Cloudflare Worker
+                // （張瓊安/沈郁雯/呂鴻墀/王芳瑜，2026-08-24 陳勁豪轉承攬移除、王芳瑜加入）在週末/國定假日一律不可被排「值日」類型，Cloudflare Worker
                 // createLeave 會直接 400 拒絕（2026-07-26 三度誤排事故後加的安全閘），清運紀錄類型
                 // 同樣是「值日」，若排到見紅休的人會導致整批寫入中途失敗，故必須排除，理由詳見
                 // 排班表_規格書.md § 已知問題「一次性資料操作繞過見紅休檢查」。
@@ -1546,6 +1548,149 @@ const App = () => {
         setAutoZhiban(false);
     };
 
+    // ── 一鍵預排休假（見紅休新制，2026-08-24 新增，Joan 拍板自 2026/09 起生效）──
+    // 把「見紅休」從即時計算改為月初一鍵預排成真實紀錄，之後可比照排休自由編輯（可取消/可補休）。
+    // 骨架比照 handleAutoZhiban：二次確認 → 刪除前快照 → 進度條 → 逐筆寫入間 sleep(200)。
+    // 型別決策：TYPE 寫 "見紅休"（獨立型別，不寫 "排休"），理由見交付摘要 § 型別決策。
+    const handleAutoGovRest = async () => {
+        if (!SC.isPrescheduledRestMonth(year, month)) {
+            showToast("新制自 2026 年 9 月起適用，8 月以前維持原本自動判斷、不可預排", false);
+            return;
+        }
+        const okAutoGovRest = await openConfirm(
+            `確定要一鍵預排 ${year} 年 ${month} 月的見紅休？\n` +
+            `會對見紅休名單（${SC.GOV_REST_NAMES.join("、")}）在本月每個週末/國定假日各排一筆休假紀錄（禁休日除外）。\n` +
+            `重跑時只會清除「系統預排」產生的舊紀錄再重建，手動改過（例如取消某天去當助教、或補休調到平日）的紀錄不會被動到。`
+        );
+        if (!okAutoGovRest) return;
+        setAutoGovRest(true);
+        try {
+            setProgress({ text: "載入資料...", current: 0, total: 0 });
+            const totalDays = new Date(year, month, 0).getDate();
+            const targetDates = [];
+            for (let day = 1; day <= totalDays; day++) {
+                const dateStr = SC.fmtDate(year, month, day);
+                if (noRest[dateStr]) continue; // 禁休日排除，全員上班
+                if (SC.isGovRestDay(year, month, day)) targetDates.push(dateStr);
+            }
+            if (targetDates.length === 0) { showToast("本月沒有可預排的見紅休日期", false); setAutoGovRest(false); return; }
+
+            const allLeaveJson = await SC.proxyFetch("listLeaves" + SC.leaveQuery(year, month, year, month));
+
+            // 只刪「系統預排見紅休」產生的舊紀錄，手動改過的（dept !== "系統預排見紅休"）一律保留
+            const toDelete = Object.entries(allLeaveJson)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .filter(([id, f]) => {
+                    const type = f[CONFIG.F_LEAVE.TYPE] || "";
+                    if (type !== "見紅休") return false;
+                    const dept = f[CONFIG.F_LEAVE.DEPT] || "";
+                    if (dept !== "系統預排見紅休") return false; // 手動改過的保留
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    const p = date.replace(/\//g,"-").split("-");
+                    return parseInt(p[0]) === year && parseInt(p[1]) === month;
+                });
+
+            if (toDelete.length > 0) {
+                const affectedDates = [...new Set(toDelete.map(([, f]) => f[CONFIG.F_LEAVE.DATE] || ""))].filter(Boolean).sort();
+                const okFinalGovRest = await openConfirm(
+                    `⚠️ 最終確認：即將「刪除」${toDelete.length} 筆系統預排的見紅休紀錄並重新產生\n\n` +
+                    `影響月份：${year}-${String(month).padStart(2, "0")}（共 ${affectedDates.length} 天）\n` +
+                    `手動改過的見紅休紀錄不受影響、會保留。\n\n` +
+                    `按「確定」會先自動下載一份 JSON 備份到你的電腦，再執行刪除＋重建。\n` +
+                    `此動作無法在頁面內復原，請確認是本人操作、且真的要重排整月。`
+                );
+                if (!okFinalGovRest) {
+                    showToast("已取消，未做任何變更");
+                    setProgress(null);
+                    setAutoGovRest(false);
+                    return;
+                }
+                try {
+                    exportScheduleSnapshot("見紅休", year, month, toDelete);
+                } catch (snapErr) {
+                    console.error("快照匯出失敗", snapErr);
+                    await openAlert("快照匯出失敗，為安全起見已中止本次預排（尚未刪除任何紀錄）：\n" + snapErr.message);
+                    setProgress(null);
+                    setAutoGovRest(false);
+                    return;
+                }
+            }
+
+            for (let di = 0; di < toDelete.length; di++) {
+                setProgress({ text: "清除舊見紅休紀錄", current: di + 1, total: toDelete.length });
+                await SC.proxyFetch(`deleteLeave/${toDelete[di][0]}`, { method: "DELETE" });
+                await sleep(200);
+            }
+
+            // 已存在的紀錄（含保留下來的手動紀錄）不重複寫入：同一人同一天已有見紅休紀錄就跳過
+            const existingKeys = new Set(
+                Object.entries(allLeaveJson)
+                    .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                    .filter(([id, f]) => (f[CONFIG.F_LEAVE.TYPE] || "") === "見紅休" && !toDelete.some(([tid]) => tid === id))
+                    .map(([id, f]) => `${f[CONFIG.F_LEAVE.EMP] || ""}|${f[CONFIG.F_LEAVE.DATE] || ""}`)
+            );
+
+            setProgress({ text: "寫入見紅休紀錄...", current: 0, total: 0 });
+            const grBatchRecords = [];
+            const grBatchMeta = [];
+            targetDates.forEach(dateStr => {
+                SC.GOV_REST_NAMES.forEach(empName => {
+                    const k = `${empName}|${dateStr}`;
+                    if (existingKeys.has(k)) return; // 手動保留的紀錄已存在，不重複寫
+                    grBatchRecords.push({
+                        [CONFIG.F_LEAVE.EMP]: empName,
+                        [CONFIG.F_LEAVE.DATE]: dateStr,
+                        [CONFIG.F_LEAVE.YEAR]: String(year),
+                        [CONFIG.F_LEAVE.MONTH]: String(month),
+                        [CONFIG.F_LEAVE.TYPE]: "見紅休",
+                        [CONFIG.F_LEAVE.DEPT]: "系統預排見紅休",
+                    });
+                    grBatchMeta.push({ empName, dateStr });
+                });
+            });
+
+            if (grBatchRecords.length === 0) {
+                showToast("本月見紅休紀錄已是最新，沒有需要新增的");
+                setProgress(null);
+                setAutoGovRest(false);
+                return;
+            }
+
+            const grResults = [];
+            for (let i = 0; i < grBatchRecords.length; i++) {
+                setProgress({ text: "寫入見紅休紀錄...", current: i + 1, total: grBatchRecords.length });
+                const res = await SC.proxyFetch("createLeave", {
+                    method: "POST",
+                    headers: {"Content-Type":"application/json"},
+                    body: JSON.stringify(grBatchRecords[i])
+                });
+                grResults.push({ ragicId: String(res.ragicId || "") });
+                await sleep(200);
+            }
+
+            const deletedIds = new Set(toDelete.map(([id]) => id));
+            setLeaves(prev => {
+                const next = {};
+                for (const [k, arr] of Object.entries(prev)) {
+                    const filtered = (arr || []).filter(e => !deletedIds.has(e.ragicId));
+                    if (filtered.length > 0) next[k] = filtered;
+                }
+                grBatchMeta.forEach((m, i) => {
+                    const key = `${m.empName}|${m.dateStr}`;
+                    if (!next[key]) next[key] = [];
+                    next[key].push({ ragicId: grResults[i]?.ragicId || "", type: "見紅休" });
+                });
+                return next;
+            });
+            showToast(`已完成一鍵預排見紅休，共 ${targetDates.length} 天、新增 ${grBatchRecords.length} 筆`);
+        } catch(e) {
+            console.error(e);
+            showToast("一鍵預排見紅休失敗: " + e.message, false);
+        }
+        setProgress(null);
+        setAutoGovRest(false);
+    };
+
     const daysInMonth = new Date(year, month, 0).getDate();
     const dates = Array.from({length: daysInMonth}, (_, i) => {
         const d = new Date(year, month-1, i+1);
@@ -1562,7 +1707,7 @@ const App = () => {
     };
 
     const getStats = (empName) => {
-        let paixiu = 0, texiu = 0, qingjia = 0, zhiban = 0, zhibanMissed = 0, f1 = 0, f2 = 0, f3 = 0, f4 = 0, dutyOther = 0;
+        let paixiu = 0, texiu = 0, qingjia = 0, zhiban = 0, zhibanMissed = 0, f1 = 0, f2 = 0, f3 = 0, f4 = 0, dutyOther = 0, govRestDays = 0;
         Object.entries(leaves).forEach(([k, arr]) => {
             if (!k.startsWith(empName + "|") || !Array.isArray(arr)) return;
             arr.forEach(v => {
@@ -1572,6 +1717,7 @@ const App = () => {
                     if (v.isAuto === "未值班") zhibanMissed++;
                     else zhiban++;
                 }
+                else if (v.type === "見紅休") govRestDays++; // 新制真實紀錄，獨立計數，不算進請假
                 else qingjia++;
             });
         });
@@ -1587,14 +1733,17 @@ const App = () => {
                 else dutyOther++;
             });
         });
-        // 計算見紅休天數（該月的週末+國定假日，扣除禁休日）
-        let govRestDays = 0;
-        if (GOV_REST_EMPLOYEES.has(empName)) {
-            const dim = new Date(year, month, 0).getDate();
-            for (let d = 1; d <= dim; d++) {
-                const ds = SC.fmtDate(year, month, d);
-                if (noRest[ds]) continue; // 禁休日不算
-                if (SC.isGovRestDay(year, month, d)) govRestDays++;
+        // 見紅休天數：9 月起（新制）數上面 leaves 迴圈算出的真實紀錄 govRestDays；
+        // 8 月以前（舊制）維持即時計算（該月週末+國定假日，扣除禁休日）
+        if (!SC.isPrescheduledRestMonth(year, month)) {
+            govRestDays = 0;
+            if (GOV_REST_EMPLOYEES.has(empName)) {
+                const dim = new Date(year, month, 0).getDate();
+                for (let d = 1; d <= dim; d++) {
+                    const ds = SC.fmtDate(year, month, d);
+                    if (noRest[ds]) continue; // 禁休日不算
+                    if (SC.isGovRestDay(year, month, d)) govRestDays++;
+                }
             }
         }
         const totalRest = paixiu + texiu + qingjia + govRestDays;
@@ -1641,6 +1790,13 @@ const App = () => {
                         className="px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
                         {autoZhiban ? "預排中..." : "一鍵排值班"}
                     </button>}
+                    {!IS_READONLY && <button
+                        onClick={handleAutoGovRest}
+                        disabled={autoGovRest || loading || !SC.isPrescheduledRestMonth(year, month)}
+                        title={SC.isPrescheduledRestMonth(year, month) ? "" : "新制自 2026 年 9 月起適用"}
+                        className="px-3 py-1.5 bg-pink-50 text-pink-600 rounded-lg hover:bg-pink-100 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                        {autoGovRest ? "預排中..." : "一鍵預排休假"}
+                    </button>}
                     <button
                         onClick={() => setShowRules(true)}
                         className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700 text-sm font-bold flex items-center justify-center"
@@ -1665,7 +1821,7 @@ const App = () => {
                                         <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-red-100 text-red-700">請假</span></td><td>事假/病假</td></tr>
                                         <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-orange-100 text-orange-700">值班</span></td><td>19:00-20:00 多留 1 小時</td></tr>
                                         <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-blue-100 text-blue-700">值日</span></td><td>打掃（1F/2F/3F 每天各 1 人，4F 只在週五）</td></tr>
-                                        <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-gray-100 text-gray-500">休假</span></td><td>見紅休（設計部＋瓊安，週末/國定假日自動標記）</td></tr>
+                                        <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-gray-100 text-gray-500">休假</span></td><td>見紅休（{SC.GOV_REST_NAMES.join("、")}，週末/國定假日{SC.isPrescheduledRestMonth(year, month) ? "，月初一鍵預排，可自由編輯（不計入月休上限）" : "自動標記，不可編輯"}）</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -1678,6 +1834,19 @@ const App = () => {
                                     <li>每天 1 人，月內次數差距 ≤ 1</li>
                                     <li>不連續排同一人，排除當天休假者</li>
                                     <li>新人入池不用補前人的值班次數</li>
+                                </ul>
+                            </div>
+                            <hr className="border-gray-200" />
+                            <div>
+                                <h3 className="font-bold text-base mb-1">🌸 一鍵預排休假（見紅休新制，2026/09 起）</h3>
+                                <ul className="list-disc pl-4 space-y-1">
+                                    <li><b>對象</b>：{SC.GOV_REST_NAMES.join("、")}</li>
+                                    <li>對每個週末/國定假日各排一筆休假紀錄（禁休日除外）</li>
+                                    <li><b>排好之後就是一般紀錄</b>：跟排休一樣可自由點格取消/新增，不會被強制鎖住</li>
+                                    <li>常見情境：小吳哥課程排在六日、內勤要去當助教 → 先把該天見紅休取消，平日再補休一天</li>
+                                    <li>見紅休不佔 {SC.monthLeaveLimit(year, month)} 天月休上限，獨立計算</li>
+                                    <li>重跑只清除系統預排的舊紀錄，手動改過的（例如已取消的那天）不會被覆蓋</li>
+                                    <li>2026/08 以前的月份維持舊制，即時判斷、格子不可點</li>
                                 </ul>
                             </div>
                             <hr className="border-gray-200" />
@@ -1749,6 +1918,8 @@ const App = () => {
                     {id:"值班", color:"bg-orange-500", label:"值班"},
                     {id:"值日", color:"bg-blue-500", label:"值日生"},
                     {id:"清運", color:"bg-slate-600", label:"清運🗑️"},
+                    // 見紅休手動模式：9 月起（新制）才顯示，8 月以前見紅休仍是即時計算、手動點無意義
+                    ...(SC.isPrescheduledRestMonth(year, month) ? [{id:"見紅休", color:"bg-gray-500", label:"見紅休"}] : []),
                     {id:"禁休", color:"bg-rose-700", label:"禁休"},
                 ].map(m => (
                     <button key={m.id} onClick={() => setMode(m.id)}
@@ -1885,7 +2056,15 @@ const App = () => {
                                             const myDuties = dutyList.filter(d => d.empName === emp.name);
                                             const myDuty = myDuties[0] || null;
                                             const hasMultiFloor = myDuties.length > 1;
-                                            const isGovRest = !nrInfo && SC.isGovRestFor(emp.name, year, month, day);
+                                            // 見紅休新制分界（2026-08-24，PRESCHEDULED_REST_START 起）：
+                                            // 9 月起見紅休是月初預排出來的真實紀錄（type==="見紅休"，含在 leaveList 裡），
+                                            // 不再即時計算、格子也恢復可點擊（isGovRestClickBlock 決定要不要 gate）；
+                                            // 8 月以前維持舊制：即時算 + 格子不可點。
+                                            const isNewRestMonth = SC.isPrescheduledRestMonth(year, month);
+                                            const isGovRest = isNewRestMonth
+                                                ? leaveList.some(l => l.type === "見紅休")
+                                                : !nrInfo && SC.isGovRestFor(emp.name, year, month, day);
+                                            const isGovRestClickBlock = !isNewRestMonth && isGovRest;
                                             const savingKey = mode === "值日" ? `duty|${dateStr}` : mode === "清運" ? `trash|${dateStr}` : key;
                                             const cellSaving = saving[savingKey];
                                             const floorLabel = hasMultiFloor
@@ -1897,7 +2076,10 @@ const App = () => {
                                             const segments = [];
 
                                             // leave 類型段（值班支援未值班）
+                                            // 見紅休（type==="見紅休"）不進這裡組 segment：它由上方 isGovRest 分支
+                                            // 獨立顯示灰底「休」字，跟其他假別混色會蓋掉原本「休」的清楚辨識度。
                                             leaveList.forEach(l => {
+                                                if (l.type === "見紅休") return;
                                                 if (l.type === "值班") {
                                                     if (l.isAuto === "未值班") {
                                                         segments.push({ color: MISSED_BG, label: "值班", short: "班", missed: true });
@@ -1965,8 +2147,8 @@ const App = () => {
 
                                             return (
                                                 <td key={key}
-                                                    onClick={() => !IS_READONLY && !isGovRest && mode !== "禁休" && handleClick(emp.name, dateStr)}
-                                                    className={`emp-cell p-0 text-center transition-colors select-none ${isGovRest ? "cursor-default" : mode === "禁休" ? "cursor-default" : "cursor-pointer hover:bg-gray-100"} ${cellSaving ? "opacity-50" : ""}`}
+                                                    onClick={() => !IS_READONLY && !isGovRestClickBlock && mode !== "禁休" && handleClick(emp.name, dateStr)}
+                                                    className={`emp-cell p-0 text-center transition-colors select-none ${isGovRestClickBlock ? "cursor-default" : mode === "禁休" ? "cursor-default" : "cursor-pointer hover:bg-gray-100"} ${cellSaving ? "opacity-50" : ""}`}
                                                     style={{...(nrInfo && nSeg === 0 && !isGovRest ? {background:"#fff1f2"} : undefined), ...birthdayStyle, ...missedBorderStyle}}
                                                     title={titleText}>
                                                     {cellSaving ? (
