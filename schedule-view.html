@@ -278,6 +278,8 @@ function getCellStatuses(emp, y, m, d, leaves, duties, noRest) {
   const recs = leaves[emp.name + '__' + date] || [];
   for (const r of recs) {
     if (!r.type) continue;
+    // 見紅休標記為「已取消」＝那天改成上班（例如去當助教），不顯示成休假。
+    if (r.type === '見紅休' && r.isAuto === SC.GOV_REST_CANCELLED) continue;
     let key;
     if (r.type === '值班' && r.isAuto === '未值班') {
       key = '未值班';
@@ -288,8 +290,8 @@ function getCellStatuses(emp, y, m, d, leaves, duties, noRest) {
   }
   // 見紅休（2026-08-24 新舊制分界）：
   // 9 月起（新制）見紅休已是真實紀錄，上面的 leaves 迴圈已經處理過（type==='見紅休' 會 push 進 result），
-  // 這裡不再即時判斷補標——若當天已手動取消見紅休（例如去當助教），Ragic 沒有紀錄，
-  // 不該被這段即時邏輯強制補回「見紅休」。
+  // 這裡不再即時判斷補標——若當天已手動取消見紅休（例如去當助教），該紀錄被標記為已取消、
+  // 上面迴圈已跳過，不該被這段即時邏輯強制補回「見紅休」。
   // 8 月以前（舊制）維持即時判斷。
   if (result.length === 0 && !noRest[date] && !SC.isPrescheduledRestMonth(y, m) && SC.isGovRestFor(emp.name, y, m, d)) {
     result.push('見紅休');
@@ -699,7 +701,9 @@ function PersonalView({ emp, onBack }) {
     if (!open) return false;
     if (SC.isPrescheduledRestMonth(year, month)) {
       const date = fmtDate(year, month, d);
-      const hasGovRestRecord = (leaves[emp.name + '__' + date] || []).some(r => r.type === '見紅休');
+      // 已取消的見紅休不算數，那天要能正常點排休（例如六日去當助教後想在該日登記別的假別）
+      const hasGovRestRecord = (leaves[emp.name + '__' + date] || [])
+        .some(r => r.type === '見紅休' && r.isAuto !== SC.GOV_REST_CANCELLED);
       if (hasGovRestRecord) return false;
       return true;
     }
@@ -960,6 +964,8 @@ function TeamView({ emps, onBack }) {
     for (const recs of Object.values(leaves)) {
       for (const r of recs) {
         if (!s[r.empName] || !r.type) continue;
+        // 已取消的見紅休是上班日，不計入休假天數
+        if (r.type === '見紅休' && r.isAuto === SC.GOV_REST_CANCELLED) continue;
         if (r.type === '值班' && r.isAuto === '未值班') {
           s[r.empName]['未值班'] = (s[r.empName]['未值班'] || 0) + 1;
         } else {

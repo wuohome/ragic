@@ -118,8 +118,13 @@ const DEPT_COLORS = SC.DEPT_COLORS;
 const DEPT_ORDER = SC.DEPT_ORDER;
 // 社宅部不排值班，只排值日生
 
-// 見紅休人員（設計部 + 瓊安）
+// 見紅休人員（2026-08-24 起：瓊安 + 設計部沈郁雯/呂鴻墀 + 行銷部王芳瑜）
 const GOV_REST_EMPLOYEES = new Set(SC.GOV_REST_NAMES);
+
+// 見紅休「已取消」標記（存在 IS_AUTO 欄位，沿用值班「未值班」的標記模式）。
+// 新制下取消見紅休不刪紀錄而是標記，否則「刻意取消」與「還沒預排」在資料上無法區分，
+// 重跑一鍵預排時會把取消掉的那天又排回來。詳見 handleClick 見紅休分支的註解。
+const GOV_REST_CANCELLED = SC.GOV_REST_CANCELLED;
 
 // 2026/07 起：1F/2F/3F 每天；4F 只在週五
 const FLOORS = SC.FLOORS;
@@ -797,6 +802,27 @@ const App = () => {
                         }
                         // action === null → 取消，不做任何事
                     }
+                } else if (mode === "見紅休" && sameTypeEntry.isAuto !== GOV_REST_CANCELLED) {
+                    // 見紅休取消 → 不刪紀錄，改標記「已取消」（沿用值班「未值班」的標記模式）。
+                    // 原因：若直接 DELETE，該格會變成「沒有紀錄」，與「還沒預排過」在資料上無法區分，
+                    // 之後重跑「一鍵預排休假」時會把刻意取消的那天又排回來（例如週六去當助教卻被標成休假）。
+                    // 標記保留後，預排會跳過它；再點一次即可還原成正常見紅休。
+                    await SC.proxyFetch(`updateLeave/${sameTypeEntry.ragicId}`, {
+                        method: "POST",
+                        headers: {"Content-Type":"application/json"},
+                        body: JSON.stringify({ [CONFIG.F_LEAVE.IS_AUTO]: GOV_REST_CANCELLED })
+                    });
+                    setLeaves(l => ({...l, [key]: (l[key]||[]).map(e => e.ragicId === sameTypeEntry.ragicId ? {...e, isAuto: GOV_REST_CANCELLED} : e)}));
+                    showToast(`${empName} ${dateStr} 見紅休已取消（該天上班）`);
+                } else if (mode === "見紅休") {
+                    // 已取消狀態再點一次 → 還原成正常見紅休
+                    await SC.proxyFetch(`updateLeave/${sameTypeEntry.ragicId}`, {
+                        method: "POST",
+                        headers: {"Content-Type":"application/json"},
+                        body: JSON.stringify({ [CONFIG.F_LEAVE.IS_AUTO]: "" })
+                    });
+                    setLeaves(l => ({...l, [key]: (l[key]||[]).map(e => e.ragicId === sameTypeEntry.ragicId ? {...e, isAuto: ""} : e)}));
+                    showToast(`${empName} ${dateStr} 見紅休已還原`);
                 } else {
                 // 其他類型（排休/請假/特休）→ 原邏輯：清除
                 await SC.proxyFetch(`deleteLeave/${sameTypeEntry.ragicId}`, { method:"DELETE" });
@@ -1583,6 +1609,9 @@ const App = () => {
                 .filter(([id, f]) => {
                     const type = f[CONFIG.F_LEAVE.TYPE] || "";
                     if (type !== "見紅休") return false;
+                    // 標記為「已取消」的一律保留：它是珊珊刻意把那天改成上班的紀錄，
+                    // 刪掉的話重跑預排會把休假又排回去（dept 仍是系統預排，光看 dept 判斷不出來）。
+                    if ((f[CONFIG.F_LEAVE.IS_AUTO] || "") === SC.GOV_REST_CANCELLED) return false;
                     const dept = f[CONFIG.F_LEAVE.DEPT] || "";
                     if (dept !== "系統預排見紅休") return false; // 手動改過的保留
                     const date = f[CONFIG.F_LEAVE.DATE] || "";
@@ -1622,7 +1651,9 @@ const App = () => {
                 await sleep(200);
             }
 
-            // 已存在的紀錄（含保留下來的手動紀錄）不重複寫入：同一人同一天已有見紅休紀錄就跳過
+            // 已存在的紀錄（含保留下來的手動紀錄、以及標記為「已取消」的）不重複寫入。
+            // 「已取消」的紀錄之所以必須留在這份集合裡：它代表珊珊刻意把那天改成上班（例如去當助教），
+            // 重跑預排時必須跳過，不能又補一筆休假回去。
             const existingKeys = new Set(
                 Object.entries(allLeaveJson)
                     .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
@@ -1678,7 +1709,7 @@ const App = () => {
                 grBatchMeta.forEach((m, i) => {
                     const key = `${m.empName}|${m.dateStr}`;
                     if (!next[key]) next[key] = [];
-                    next[key].push({ ragicId: grResults[i]?.ragicId || "", type: "見紅休" });
+                    next[key].push({ ragicId: grResults[i]?.ragicId || "", type: "見紅休", isAuto: "" });
                 });
                 return next;
             });
@@ -1717,7 +1748,8 @@ const App = () => {
                     if (v.isAuto === "未值班") zhibanMissed++;
                     else zhiban++;
                 }
-                else if (v.type === "見紅休") govRestDays++; // 新制真實紀錄，獨立計數，不算進請假
+                // 新制真實紀錄，獨立計數，不算進請假；標記「已取消」的那天是上班日，不計入休假
+                else if (v.type === "見紅休") { if (v.isAuto !== GOV_REST_CANCELLED) govRestDays++; }
                 else qingjia++;
             });
         });
@@ -2060,9 +2092,10 @@ const App = () => {
                                             // 9 月起見紅休是月初預排出來的真實紀錄（type==="見紅休"，含在 leaveList 裡），
                                             // 不再即時計算、格子也恢復可點擊（isGovRestClickBlock 決定要不要 gate）；
                                             // 8 月以前維持舊制：即時算 + 格子不可點。
+                                            // 標記「已取消」的見紅休那天是上班日，不算休假、不顯示灰底「休」。
                                             const isNewRestMonth = SC.isPrescheduledRestMonth(year, month);
                                             const isGovRest = isNewRestMonth
-                                                ? leaveList.some(l => l.type === "見紅休")
+                                                ? leaveList.some(l => l.type === "見紅休" && l.isAuto !== GOV_REST_CANCELLED)
                                                 : !nrInfo && SC.isGovRestFor(emp.name, year, month, day);
                                             const isGovRestClickBlock = !isNewRestMonth && isGovRest;
                                             const savingKey = mode === "值日" ? `duty|${dateStr}` : mode === "清運" ? `trash|${dateStr}` : key;
