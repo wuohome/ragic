@@ -1024,9 +1024,22 @@ const SS = Object.freeze({ // 子表欄位（1000730 底下）
 });
 // 資料來源欄唯二合法值之一；空白／任何非此值一律視為「珊珊補記」（決策2）
 const SS_SOURCE_STAFF = '同仁請款';
+// 發票查重／claim 編號只在意近期資料（決策2 已把 1,040 列珊珊歷史手工帳全數排除在查重比對
+// 之外），撈全表卻拿全部 20+ 個月的原因是 ssFetchWholeTable 沒有窗口參數。6 個月涵蓋「當月
+// ＋前 5 月」，發票日期通常不會離送單日太久（口頭規則，無書面 SLA），且隨月份前進舊資料會
+// 自然滾出窗口，不會像撈全表那樣隨系統運作時間單調增長（見 2026-08-14 撈全表隱患修復）。
+const SS_DUPCHECK_MONTHS_BACK = 6;
 
 const PC_CATEGORIES = new Set(['交通', '餐費', '五金', '耗材', '規費', '其他']);
 const PC_INVOICE_TYPES = new Set(['電子發票', '手開發票', '收據', '免用統一發票']);
+// 收據沒有統一發票號碼：只有發票類型才要求號碼，也才可用號碼查重。
+const PC_RECEIPT_INVOICE_TYPE = '收據';
+function pcRequiresInvoiceNumber(invoiceType) {
+  return invoiceType !== PC_RECEIPT_INVOICE_TYPE;
+}
+function pcShouldCheckDuplicateInvoice(invoiceType, invoiceNumber) {
+  return pcRequiresInvoiceNumber(invoiceType) && Boolean(invoiceNumber);
+}
 const PC_SOURCES = new Set(['qr', 'manual']);
 // spec 僅寫「一般 2000 字，短欄位自己訂合理值」，未給精確數字，以下為 spec-外決定的保守上限
 const PC_TEXT_MAX = { item: 200, site: 100, note: 2000, invoiceNumber: 30, sellerTaxId: 20, store: 100 };
@@ -1124,13 +1137,56 @@ function ssShiftMonthStart(monthStart, delta) {
   return `${y}/${String(mo).padStart(2, '0')}/01`;
 }
 
-// 一次 GET 整張 shanshans/1（含全部 20 筆主表與各自子表格，目前約 1,040 列，實測單次回應
-// ~1MB，量體可控，2026-08-11 實測驗證）。查重／claim 編號產生／珊珊既有列排除都靠這份攤平
-// 資料在 JS 端比對，不用 Ragic where=（where 對子表格內欄位無法查詢）。
-async function ssFetchWholeTable(env) {
-  const { upstream, data } = await getFromRagic(env, SS_SHEET, 'naming=EID&limit=0,50');
+// GET shanshans/1（含主表與各自子表格）。查重／claim 編號產生／珊珊既有列排除都靠這份攤平
+// 資料在 JS 端比對，不用 Ragic where=（where 對子表格內欄位無法查詢，只能篩主表）。
+//
+// 2026-08-14 撈全表隱患修復（兩個問題）：
+// 1) 原本 `limit=0,50` 沒有 where，主表一筆＝一個月、2025/01 起累積（目前 20 筆），月份數
+//    超過 50（約 2029/02）就會撈到最舊的 50 筆、當月反而被截掉——查重防線會對近期資料完全
+//    失明。現在一律補 `ignoreFixedFilter=true`（vault 既定紀律，listing 預設有隱藏 fixed
+//    filter，交叉驗證用）；不帶 monthsBack 的呼叫端（pettyCashListAll/ListMine，需要完整
+//    歷史）改用 `limit=0,500`（≈40 年份的月數，遠超可預見營運年限）。
+// 2) `monthsBack` 給查重／claim 編號用：只在意近期資料（決策2 早已把 1,040 列珊珊歷史手工
+//    帳排除在查重比對外），改用 `where=monthStart,gte,...` 窗口，避免每次查重都撈回對查重
+//    完全無用的歷史月份（實測目前整表約 1.09MB，窗口後大幅縮小；且隨月份前進舊資料自然滾出
+//    窗口，不會像撈全表那樣隨系統運作時間單調增長）。
+async function ssFetchWholeTable(env, monthsBack = null) {
+  let qs = 'naming=EID&ignoreFixedFilter=true';
+  if (monthsBack) {
+    const since = ssShiftMonthStart(ssTodayMonthStart(), -(monthsBack - 1));
+    qs += `&where=${SSM.monthStart},gte,${encodeURIComponent(since)}&limit=0,100`;
+  } else {
+    qs += '&limit=0,500';
+  }
+  const { upstream, data } = await getFromRagic(env, SS_SHEET, qs);
   if (!upstream.ok || !data) return null;
   return data;
+}
+
+// 撈全表的資料中是否含有指定月份（monthStart 格式 YYYY/MM/01）的主表記錄。
+function ssTableHasMonth(table, monthStart) {
+  for (const [rid, rec] of Object.entries(table || {})) {
+    if (!/^\d+$/.test(rid)) continue;
+    if (pcVal(rec[SSM.monthStart]) === monthStart) return true;
+  }
+  return false;
+}
+
+// 查重路徑讀回健全性檢查：撈全表若沒有當月記錄，用單筆 eq 查詢（沿用既有 ssFindMonthRecord）
+// 覆核，區分「本月確實還沒開帳」（合法，ssEnsureMonthRecord 稍後會補開，此時放行不算風險——
+// 本月還沒有人送過款，不可能漏掉本月的重複發票）與「本月已存在但這次撈全表沒回來」（讀取異
+// 常，2026-08-14 曾實測 listing 漏掉當月 record 37，後續複查未能重現、根因未定，但零防護仍
+// 是洞）。只有後者回傳 false，查重路徑收到 false 要擋單，放行的代價（重複請款進到財務資料）
+// 遠高於擋一次單。
+async function ssDupCheckTableIsReliable(env, table) {
+  const monthStart = ssTodayMonthStart();
+  if (ssTableHasMonth(table, monthStart)) return true;
+  const check = await ssFindMonthRecord(env, monthStart);
+  if (check.found) {
+    console.error('[ssDupCheckTableIsReliable] missing_current_month_anomaly', { monthStart, rid: check.found.rid });
+    return false;
+  }
+  return true; // notFound：本月未開帳，合法；error：ssFindMonthRecord 已自行記錄，這裡不重複擋
 }
 
 // 攤平：{ mainRid, mainRec, monthStart, rowId, row }[]
@@ -1360,6 +1416,8 @@ function ssNewestRowId(fullData) {
 function ssFindByInvoice(table, invoiceNumber, excludeRid = null) {
   for (const e of ssFlattenRows(table)) {
     if (pcVal(e.row[SS.dataSource]) !== SS_SOURCE_STAFF) continue;
+    // 收據的既有自編號不是統一發票號碼，不得阻擋真正發票的查重。
+    if (!pcRequiresInvoiceNumber(pcVal(e.row[SS.invoiceType]).trim())) continue;
     if (excludeRid && ssComposeRid(e.mainRid, e.rowId) === excludeRid) continue;
     if (pcVal(e.row[SS.receiptNo]).trim() === invoiceNumber) return e;
   }
@@ -1751,8 +1809,9 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
   if (action === 'pettyCashCheckInvoice') {
     const invoiceNumber = pcClean(url.searchParams.get('invoiceNumber'));
     if (!invoiceNumber) return jsonResp({ error: 'invalid_invoiceNumber' }, 400, origin);
-    const table = await ssFetchWholeTable(env);
+    const table = await ssFetchWholeTable(env, SS_DUPCHECK_MONTHS_BACK);
     if (!table) return jsonResp({ error: 'upstream_error' }, 502, origin);
+    if (!(await ssDupCheckTableIsReliable(env, table))) return jsonResp({ error: 'system_busy', detail: 'read_integrity_check_failed' }, 503, origin);
     const found = ssFindByInvoice(table, invoiceNumber);
     if (!found) return jsonResp({ ok: true, exists: false }, 200, origin);
     const row = found.row;
@@ -1779,7 +1838,7 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     const site = pcClean(form.get('site'));
     const note = pcClean(form.get('note'));
     const invoiceType = pcClean(form.get('invoiceType'));
-    const invoiceNumber = pcClean(form.get('invoiceNumber'));
+    const invoiceNumberRaw = pcClean(form.get('invoiceNumber'));
     const invoiceDateRaw = form.get('invoiceDate');
     const sellerTaxId = pcClean(form.get('sellerTaxId'));
     const store = pcClean(form.get('store'));
@@ -1794,7 +1853,9 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     if (site.length > PC_TEXT_MAX.site) return jsonResp({ error: 'invalid_site' }, 400, origin);
     if (note.length > PC_TEXT_MAX.note) return jsonResp({ error: 'invalid_note' }, 400, origin);
     if (!PC_INVOICE_TYPES.has(invoiceType)) return jsonResp({ error: 'invalid_invoiceType' }, 400, origin);
-    if (!invoiceNumber || invoiceNumber.length > PC_TEXT_MAX.invoiceNumber) return jsonResp({ error: 'invalid_invoiceNumber' }, 400, origin);
+    // 收據的自編編號不參與任何發票防重邏輯，也不寫入正式欄位，避免拿收據繞過重複請款。
+    const invoiceNumber = pcRequiresInvoiceNumber(invoiceType) ? invoiceNumberRaw : '';
+    if ((pcRequiresInvoiceNumber(invoiceType) && !invoiceNumber) || invoiceNumber.length > PC_TEXT_MAX.invoiceNumber) return jsonResp({ error: 'invalid_invoiceNumber' }, 400, origin);
     const invoiceDate = decorNormalizeDate(invoiceDateRaw);
     if (!invoiceDate) return jsonResp({ error: 'invalid_invoiceDate' }, 400, origin);
     if (sellerTaxId.length > PC_TEXT_MAX.sellerTaxId) return jsonResp({ error: 'invalid_sellerTaxId' }, 400, origin);
@@ -1811,11 +1872,15 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
       if (f.size > PC_MAX_FILE_BYTES) return jsonResp({ error: 'file_too_large', size: f.size }, 400, origin);
     }
 
-    // 決策3：發票號碼查重，撈全表攤平比對（只比對資料來源=同仁請款的列）
-    const table = await ssFetchWholeTable(env);
+    // 決策3：發票號碼查重，撈近 SS_DUPCHECK_MONTHS_BACK 個月攤平比對（只比對資料來源=同仁
+    // 請款的列；claim 編號 ssNextClaimNo 只在意當日，同一份窗口資料即可覆用，不需另撈）
+    const table = await ssFetchWholeTable(env, SS_DUPCHECK_MONTHS_BACK);
     if (!table) return jsonResp({ error: 'upstream_error' }, 502, origin);
-    const dup = ssFindByInvoice(table, invoiceNumber);
-    if (dup) return ssDuplicateResponse(dup, invoiceNumber, origin);
+    if (!(await ssDupCheckTableIsReliable(env, table))) return jsonResp({ error: 'system_busy', detail: 'read_integrity_check_failed' }, 503, origin);
+    if (pcShouldCheckDuplicateInvoice(invoiceType, invoiceNumber)) {
+      const dup = ssFindByInvoice(table, invoiceNumber);
+      if (dup) return ssDuplicateResponse(dup, invoiceNumber, origin);
+    }
 
     // 決策5：金額 >= 上限，轉建 finance2/5（pcCreatePurchaseOrder 完全不動）
     const isTransfer = amount >= PC_AMOUNT_LIMIT;
@@ -1913,6 +1978,9 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
 
     const table = await ssFetchWholeTable(env);
     if (!table) return jsonResp({ error: 'upstream_error' }, 502, origin);
+    // 列表路徑非查重防線，讀取異常不擋，只帶旗標讓前端/finance 知道這次資料可能不完整
+    // （2026-08-14 撈全表隱患修復 § 隱患二）
+    const dataIntegrityWarning = !ssTableHasMonth(table, ssTodayMonthStart());
     const claims = ssFlattenRows(table)
       .filter((e) => pcVal(e.row[SS.dataSource]) === SS_SOURCE_STAFF) // 決策2：珊珊手記不進來
       .filter((e) => pcVal(e.row[SS.deleted]) !== 'Yes')
@@ -1925,7 +1993,7 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
       .map((e) => ssPublicRecord(e))
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
       .slice(0, limit);
-    return jsonResp({ ok: true, claims, viewer: { name: identity.name, role: 'staff' } }, 200, origin);
+    return jsonResp({ ok: true, claims, dataIntegrityWarning, viewer: { name: identity.name, role: 'staff' } }, 200, origin);
   }
 
   if (action === 'pettyCashListAll') {
@@ -1950,6 +2018,8 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
 
     const table = await ssFetchWholeTable(env);
     if (!table) return jsonResp({ error: 'upstream_error' }, 502, origin);
+    // 列表路徑非查重防線，讀取異常不擋，只帶旗標（2026-08-14 撈全表隱患修復 § 隱患二）
+    const dataIntegrityWarning = !ssTableHasMonth(table, ssTodayMonthStart());
     let entries = ssFlattenRows(table).filter((e) => pcVal(e.row[SS.dataSource]) === SS_SOURCE_STAFF); // 決策2
     if (!includeDeleted) entries = entries.filter((e) => pcVal(e.row[SS.deleted]) !== 'Yes');
     if (paid === 'unpaid') entries = entries.filter((e) => pcVal(e.row[SS.isPaid]) !== 'Yes');
@@ -1980,7 +2050,7 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     summary.prevBalanceUncertain = !!month.prevBalanceUncertain;
 
     return jsonResp({
-      ok: true, claims, summary,
+      ok: true, claims, summary, dataIntegrityWarning,
       viewer: { name: identity.name, role: identity.isFinance ? 'finance' : 'viewer' },
     }, 200, origin);
   }
@@ -2270,15 +2340,26 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
       const old = pcVal(existingRow[SS.invoiceType]).trim();
       if (old !== v) changes.push({ fid: SS.invoiceType, label: '發票類型', oldDisplay: old || '（空白）', newDisplay: v, writeValue: v });
     }
+    const effectiveInvoiceType = fieldsIn.invoiceType === undefined
+      ? pcVal(existingRow[SS.invoiceType]).trim()
+      : pcClean(fieldsIn.invoiceType);
+    const existingInvoiceType = pcVal(existingRow[SS.invoiceType]).trim();
+    const existingInvoiceNumber = pcVal(existingRow[SS.receiptNo]).trim();
+    // 已驗過的發票號碼不能靠改成收據釋放重複使用；要改憑證類型請另建新單。
+    if (fieldsIn.invoiceType !== undefined && pcRequiresInvoiceNumber(existingInvoiceType)
+      && !pcRequiresInvoiceNumber(effectiveInvoiceType) && existingInvoiceNumber) {
+      return jsonResp({ error: 'invoice_type_change_not_allowed' }, 400, origin);
+    }
+    const invoiceTypeChanged = effectiveInvoiceType !== existingInvoiceType;
     let invoiceNumberChanged = false, newInvoiceNumber = null;
     if (fieldsIn.invoiceNumber !== undefined) {
-      const v = pcClean(fieldsIn.invoiceNumber);
-      if (!v || v.length > PC_TEXT_MAX.invoiceNumber) return jsonResp({ error: 'invalid_invoiceNumber' }, 400, origin);
+      // 收據即使前端帶入店家自編號，也一律正規化為空白，不能留下可繞過查重的假發票號碼。
+      const v = pcRequiresInvoiceNumber(effectiveInvoiceType) ? pcClean(fieldsIn.invoiceNumber) : '';
+      if ((pcRequiresInvoiceNumber(effectiveInvoiceType) && !v) || v.length > PC_TEXT_MAX.invoiceNumber) return jsonResp({ error: 'invalid_invoiceNumber' }, 400, origin);
       newInvoiceNumber = v;
-      const old = pcVal(existingRow[SS.receiptNo]).trim();
-      if (old !== v) {
+      if (existingInvoiceNumber !== v) {
         invoiceNumberChanged = true;
-        changes.push({ fid: SS.receiptNo, label: '發票號碼', oldDisplay: old || '（空白）', newDisplay: v, writeValue: v });
+        changes.push({ fid: SS.receiptNo, label: '發票號碼', oldDisplay: existingInvoiceNumber || '（空白）', newDisplay: v || '（空白）', writeValue: v });
       }
     }
     if (fieldsIn.invoiceDate !== undefined) {
@@ -2331,11 +2412,19 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
       return jsonResp({ error: 'amount_over_limit', limit: PC_AMOUNT_LIMIT }, 400, origin);
     }
 
-    if (invoiceNumberChanged) {
-      const table = await ssFetchWholeTable(env);
+    const effectiveInvoiceNumber = newInvoiceNumber === null
+      ? existingInvoiceNumber
+      : newInvoiceNumber;
+    // 既有空白資料可照常修其他欄位；只有實際改到單據類型／號碼時才套用新規則。
+    if ((invoiceNumberChanged || invoiceTypeChanged) && pcRequiresInvoiceNumber(effectiveInvoiceType) && !effectiveInvoiceNumber) {
+      return jsonResp({ error: 'invalid_invoiceNumber' }, 400, origin);
+    }
+    if ((invoiceNumberChanged || invoiceTypeChanged) && pcShouldCheckDuplicateInvoice(effectiveInvoiceType, effectiveInvoiceNumber)) {
+      const table = await ssFetchWholeTable(env, SS_DUPCHECK_MONTHS_BACK);
       if (!table) return jsonResp({ error: 'upstream_error' }, 502, origin);
-      const dup = ssFindByInvoice(table, newInvoiceNumber, rid);
-      if (dup) return ssDuplicateResponse(dup, newInvoiceNumber, origin);
+      if (!(await ssDupCheckTableIsReliable(env, table))) return jsonResp({ error: 'system_busy', detail: 'read_integrity_check_failed' }, 503, origin);
+      const dup = ssFindByInvoice(table, effectiveInvoiceNumber, rid);
+      if (dup) return ssDuplicateResponse(dup, effectiveInvoiceNumber, origin);
     }
 
     if (changes.length === 0) {
@@ -2356,7 +2445,9 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     const upd = await ssUpdateSubRow(env, entry.mainRid, entry.rowId, fields);
     if (upd.error) {
       if (upd.error.error === 'upstream_invalid' && /收據編號|發票號碼/.test(String(upd.error.msg || ''))) {
-        const table2 = await ssFetchWholeTable(env);
+        // Ragic 端 noDup 已經判定重複，這裡只是撈資料組更友善的錯誤訊息，不是查重防線本身
+        // （防線在上面 invoiceNumberChanged 那段），窗口化純粹是省流量
+        const table2 = await ssFetchWholeTable(env, SS_DUPCHECK_MONTHS_BACK);
         const dup2 = table2 ? ssFindByInvoice(table2, newInvoiceNumber || '', rid) : null;
         return ssDuplicateResponse(dup2, newInvoiceNumber || '', origin);
       }
@@ -2870,10 +2961,8 @@ const TENANT_FIELDS_WHITELIST = new Set([
 // （前端該擋自 2026-03-23 commit 5c7f7185 起就存在且從未失效，問題出在不經前端的腳本寫入）。
 // 此處補上 Worker 端伺服器驗證，不管呼叫方是不是瀏覽器都擋得住。
 // 與 schedule-common.js 的 SC.GOV_REST_NAMES / SC.HOLIDAYS_2026 保持同步，異動需同時改兩邊。
-// 2026-08-24 陳勁豪已轉租賃部承攬（自行排休、不再享見紅休）移除，王芳瑜（行銷部）加入。
-// ⚠️ 本檔（worker-proxy-src/index.js）只是 worktree 內同步副本，實際生效的部署來源在另一個
-// repo：Mac Mini ~/Projects/wuohome-ragic-proxy/src/index.js（wrangler deploy），本次未部署，
-// 需 Joan 另行授權才會生效，見交付摘要「未做的事情」。
+// 2026-08-24 名單更正：陳勁豪已轉租賃部承攬（自行排休、納入值班池）移除；王芳瑜（行銷部，
+// 2026/08/17 到職）加入。前端 schedule-common.js 的 SC.GOV_REST_NAMES 已同步（commit 10a06330）。
 const GOV_REST_NAMES = new Set(['張瓊安', '沈郁雯', '呂鴻墀', '王芳瑜']);
 const GOV_HOLIDAYS_2026 = new Set([
   '2026/01/01','2026/02/16','2026/02/17','2026/02/18','2026/02/19','2026/02/20',
@@ -3628,6 +3717,29 @@ async function postUrlEncodedToRagic(env, sheetPath, paramsString, extraQuery = 
   let data = null;
   try { data = JSON.parse(text); } catch {}
   return { upstream, data };
+}
+
+// decorating/15「意見回饋」sheet：reportBug 額外同步一份可搜尋歷史紀錄（Telegram 為主、這是備份）。
+// 只有 3 個文字/單選欄位可寫，無截圖附件欄位（ponytail-debt：附件欄位需 Joan 或 ragic agent 後續在 Ragic 後台手動新增，
+// 目前是 schema 缺口不是程式邏輯缺口，Worker 端無法建欄位）。
+const BUG_REPORT_FEEDBACK_SHEET = 'decorating/15';
+async function syncBugReportToRagic(env, { safeType, safeTitle, safeUrl, safeDesc, uaShort, nowTW, hasScreenshot }) {
+  const title = `[問題回報] ${safeType} — ${safeTitle || '（無標題）'}`.slice(0, 200);
+  const body = [
+    safeDesc,
+    '',
+    '頁面：' + (safeUrl || '—'),
+    '裝置：' + uaShort,
+    '時間：' + nowTW,
+    hasScreenshot ? '（已附截圖，見 Telegram OPS 群組）' : '（無截圖）',
+  ].join('\n').slice(0, 2000);
+  const params = new URLSearchParams();
+  params.set('1000428', title);
+  params.set('1000926', '已提出');
+  params.set('1000429', body);
+  // 1000427「人員」是 Ragic「使用者（選取）」型態，reportBug 前端無登入身分可對應，故不寫該欄，
+  // 交由 Ragic 端 $USERNAME 預設值（= 建立記錄用的 API key 所屬帳號）。
+  return postUrlEncodedToRagic(env, BUG_REPORT_FEEDBACK_SHEET, params.toString());
 }
 
 async function getFromRagic(env, sheetPath, queryString) {
@@ -6949,6 +7061,13 @@ export default {
           return res.json().catch(function() { return { ok: false }; });
         }
 
+        // Ragic「意見回饋」同步：Telegram 是主流程，這裡失敗不得擋主流程，只記 log（見 syncBugReportToRagic 上方註解）。
+        function syncBugReportNonBlocking(hasScreenshot) {
+          var p = syncBugReportToRagic(env, { safeType, safeTitle, safeUrl, safeDesc, uaShort, nowTW, hasScreenshot })
+            .catch(function(e) { console.error('[reportBug->ragic] sync failed', e); });
+          if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
+        }
+
         if (images.length === 0) {
           var res = await fetch(TG_BASE + '/sendMessage', {
             method: 'POST',
@@ -6957,6 +7076,7 @@ export default {
           });
           var json = await res.json().catch(function() { return {}; });
           if (!json.ok) return jsonResp({ error: 'telegram_error', detail: json.description }, 502, allowedOrigin);
+          syncBugReportNonBlocking(false);
           return jsonResp({ ok: true }, 200, allowedOrigin);
         }
 
@@ -6969,11 +7089,15 @@ export default {
           });
           var json2 = await res2.json().catch(function() { return {}; });
           if (!json2.ok) return jsonResp({ error: 'telegram_error', detail: json2.description }, 502, allowedOrigin);
+          syncBugReportNonBlocking(false);
           return jsonResp({ ok: true, warn: 'screenshot_failed' }, 200, allowedOrigin);
         }
         for (var k = 1; k < images.length; k++) {
+          // ponytail-debt: 第 2 張以後的截圖 best-effort 送出，失敗吞掉不中斷——第 1 張失敗已在上層有 sendMessage fallback 告知使用者，
+          // 多圖場景全部失敗頂多少幾張圖，不影響已送出的文字通知；未來若要精確追蹤失敗率可在此補 console.error(e)。
           await sendPhoto(images[k], '').catch(function() {});
         }
+        syncBugReportNonBlocking(true);
         return jsonResp({ ok: true }, 200, allowedOrigin);
       }
 
