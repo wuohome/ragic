@@ -624,6 +624,13 @@ const App = () => {
                 if (!okTrashDay) return;
             }
 
+            // 清運免排名單（2026/10 起）：內勤 19:00 前下班、垃圾 20:00 才丟，自動預排不會排到他們。
+            // 手動仍可排（珊珊臨時代班的實際需求），但跳確認框避免誤點；標記未倒/清除不受影響。
+            if (!myTrash && SC.isTrashExemptFor(empName, year, month)) {
+                const okExempt = await openConfirm(`${empName} 在清運免排名單內（內勤 19:00 前下班，垃圾 20:00 才丟），仍要排 ${dateStr} 的清運值日嗎？`);
+                if (!okExempt) return;
+            }
+
             setSaving(s => ({...s, [trashKey]: true}));
             try {
                 if (otherTrash) {
@@ -915,7 +922,7 @@ const App = () => {
 
     const handleAutoSchedule = async () => {
         if (employees.length === 0) { showToast("尚未載入員工資料", false); return; }
-        const okAutoDuty = await openConfirm(`確定要自動預排 ${year} 年 ${month} 月的值日生？\n每天 3 位（1F/2F/3F），週五加排 4F；清運值日（🗑️）已有紀錄的日子維持不動，沒排的日子會自動補（週三、週日不排，六日僅承攬同仁可排，當天排休/請假者跳過，近期次數少者優先）。現有的自動排班紀錄會被覆蓋。`);
+        const okAutoDuty = await openConfirm(`確定要自動預排 ${year} 年 ${month} 月的值日生？\n每天 3 位（1F/2F/3F），週五加排 4F；清運值日（🗑️）已有紀錄的日子維持不動，沒排的日子會自動補（週三、週日不排，六日僅承攬同仁可排，當天排休/請假者跳過，內勤五位不排清運，近期次數少者優先）。現有的自動排班紀錄會被覆蓋。`);
         if (!okAutoDuty) return;
 
         setAutoScheduling(true);
@@ -1184,8 +1191,11 @@ const App = () => {
                 if (noRest[dateStr]) continue;
 
                 // ── 清運值日自動補位（2026-08-02 新增，獨立於樓層值日邏輯，不影響下方樓層排班）──
-                // Joan 拍板四條規則：①週三/週日不排 ②週六僅承攬同仁可排 ③當天排休/特休/請假跳過
-                // ④已有紀錄（trashByDate，含手動/歷史保留）的日子不補。
+                // Joan 拍板五條規則：①週三/週日不排 ②週六僅承攬同仁可排 ③當天排休/特休/請假跳過
+                // ④已有紀錄（trashByDate，含手動/歷史保留）的日子不補
+                // ⑤清運免排名單（2026-09-10 Joan 拍板，2026/10 起）：張瓊安/韓珊珊/沈郁雯/呂鴻墀/王芳瑜
+                //   五位內勤 19:00 前下班、垃圾 20:00 才丟，自動預排一律不排他們（手動仍可排，跳確認框）。
+                //   注意這份清單與見紅休名單是兩件事，只是剛好有四人重疊，詳見 SC.TRASH_DUTY_EXEMPT_NAMES 註解。
                 // 額外技術性排除（非第 5 條業務規則，是尊重既有伺服器端硬規則）：見紅休名單
                 // （張瓊安/沈郁雯/呂鴻墀/王芳瑜，2026-08-24 陳勁豪轉承攬移除、王芳瑜加入）在週末/國定假日一律不可被排「值日」類型，Cloudflare Worker
                 // createLeave 會直接 400 拒絕（2026-07-26 三度誤排事故後加的安全閘），清運紀錄類型
@@ -1199,6 +1209,7 @@ const App = () => {
                         .filter(e => !trashOffToday.has(e.name)) // ③當天排休/特休/請假跳過
                         .filter(e => !isTrashSaturday || e.hire === "承攬") // ②週六僅承攬同仁可排
                         .filter(e => !SC.isGovRestFor(e.name, year, month, day)) // 見紅休日不可排（伺服器端硬擋，見上方註解）
+                        .filter(e => !SC.isTrashExemptFor(e.name, year, month)) // ⑤清運免排名單：內勤 19:00 前下班，垃圾 20:00 才丟（2026/10 起，見 schedule-common.js）
                         .map(e => ({ name: e.name, count: trashCountMap[e.name] || 0, last: trashLastDateMap[e.name] || "" }))
                         .sort((a, b) => (a.count - b.count) || SC._cmpDateStr(a.last || "0000/00/00", b.last || "0000/00/00"));
                     if (trashCandidates.length > 0) {
