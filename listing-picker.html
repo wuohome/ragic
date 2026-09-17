@@ -36,6 +36,11 @@
         </div>
         <p id="copiedMsg" class="hidden text-xs text-emerald-600 mt-1">已複製，貼到 LINE 給租客吧</p>
       </div>
+
+      <div id="noPhoneWarning" class="hidden bg-amber-50 border border-amber-300 rounded-lg p-4 text-sm text-amber-800">
+        <p class="font-semibold mb-1">⚠️ 還不能產生連結</p>
+        <p>你的聯絡電話目前是空的，租客拿到連結也找不到人可以打電話。請先到 Ragic 的「使用者」資料，把你的「行動電話」欄位填上並存檔，填好後回來這頁重新選一次姓名。</p>
+      </div>
     </div>
 
     <!-- 右：即時預覽 / 統計 -->
@@ -80,6 +85,7 @@ const statTotal = document.getElementById('statTotal');
 const statNoPhoto = document.getElementById('statNoPhoto');
 const statNoExpiry = document.getElementById('statNoExpiry');
 const listPreview = document.getElementById('listPreview');
+const noPhoneWarning = document.getElementById('noPhoneWarning');
 
 async function loadAgents() {
   try {
@@ -87,7 +93,7 @@ async function loadAgents() {
     const data = await resp.json();
     const agents = data.agents || [];
     sel.innerHTML = '<option value="">— 請選擇 —</option>' +
-      agents.map(a => `<option value="${a.slug}">${a.name}</option>`).join('');
+      agents.map(a => `<option value="${a.slug}">${a.name}${a.hasPhone ? '' : '（未填電話）'}</option>`).join('');
   } catch (e) {
     sel.innerHTML = '<option value="">載入失敗，請重新整理</option>';
   }
@@ -101,11 +107,13 @@ function rowHtml(l) {
   return `<div class="border-b border-slate-100 py-1.5"><span class="text-slate-700">${l.address}</span>${flagText}</div>`;
 }
 
+// 回傳這次撈到的 agent 資訊（含 phone），讓呼叫端決定要不要顯示連結；
+// 統計/預覽不論有沒有電話都照常顯示，業務仍能看到「這條連結目前會顯示什麼」。
 async function loadStats(slug) {
   statsEmpty.classList.add('hidden');
   statsBox.classList.add('hidden');
   const resp = await fetch(`${PROXY}/getPublicListings?a=${encodeURIComponent(slug)}`);
-  if (!resp.ok) return;
+  if (!resp.ok) return null;
   const data = await resp.json();
   const listings = data.listings || [];
   const noPhotoCount = listings.filter(l => !l.hasPhoto).length;
@@ -115,22 +123,29 @@ async function loadStats(slug) {
   document.getElementById('noPhotoNotice').classList.toggle('hidden', !(listings.length > 0 && noPhotoCount === listings.length));
   listPreview.innerHTML = listings.map(rowHtml).join('') || '<p class="text-slate-400">目前沒有會顯示的物件</p>';
   statsBox.classList.remove('hidden');
+  return data.agent || null;
 }
 
-sel.addEventListener('change', () => {
+sel.addEventListener('change', async () => {
   const slug = sel.value;
+  linkBox.classList.add('hidden');
+  noPhoneWarning.classList.add('hidden');
+  copiedMsg.classList.add('hidden');
   if (!slug) {
-    linkBox.classList.add('hidden');
     statsEmpty.classList.remove('hidden');
     statsBox.classList.add('hidden');
+    return;
+  }
+  const agent = await loadStats(slug);
+  // 沒有電話就不產生連結（§ 8 驗收發現：沒電話的連結對租客是死的，比不給連結更糟）。
+  if (!agent || !agent.phone) {
+    noPhoneWarning.classList.remove('hidden');
     return;
   }
   const url = new URL('listings.html', location.href);
   url.search = 'a=' + encodeURIComponent(slug);
   linkInput.value = url.toString();
   linkBox.classList.remove('hidden');
-  copiedMsg.classList.add('hidden');
-  loadStats(slug);
 });
 
 copyBtn.addEventListener('click', async () => {

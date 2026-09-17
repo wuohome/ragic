@@ -60,6 +60,7 @@
     <div class="flex items-center justify-between gap-3">
       <p class="text-sm text-slate-600">聯絡業務<br><span class="font-bold text-slate-800" id="agentName">—</span></p>
       <a id="callBtn" href="#" class="hidden bg-indigo-600 text-white font-bold px-6 py-3 rounded-full">📞 一鍵撥打</a>
+      <span id="noPhoneNote" class="hidden bg-slate-100 text-slate-500 text-sm px-4 py-2 rounded-full">請洽窩的家</span>
     </div>
   </div>
 </div>
@@ -86,6 +87,7 @@ const els = {
   conditionTags: document.getElementById('conditionTags'),
   agentName: document.getElementById('agentName'),
   callBtn: document.getElementById('callBtn'),
+  noPhoneNote: document.getElementById('noPhoneNote'),
   backLink: document.getElementById('backLink'),
   backTop: document.getElementById('backTop'),
 };
@@ -147,6 +149,9 @@ async function load() {
   if (agent.phone) {
     els.callBtn.href = 'tel:' + agent.phone.replace(/[^0-9+]/g, '');
     els.callBtn.classList.remove('hidden');
+  } else {
+    // 沒有電話就不要渲染一個按了沒反應的撥號按鈕，改用不可點的靜態說明（比死按鈕更不傷信任）。
+    els.noPhoneNote.classList.remove('hidden');
   }
 
   els.loadingBox.classList.add('hidden');
