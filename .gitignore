@@ -17,3 +17,11 @@ js/ragic-key.js
 *.bak
 *.bak-*
 _verify/
+
+# 🚨 2026-09-17: wrangler 本機狀態與設定不進 public repo
+# `.wrangler/cache/wrangler-account.json` 帶 Cloudflare 帳號身分；
+# wrangler.jsonc 是 Worker 設定，本 repo 是前端頁面 repo，不該收；
+# backups/ 是本機暫存的舊版 html/patch。三者原本都會被 `git add .` 掃進去。
+.wrangler/
+wrangler.jsonc
+backups/
