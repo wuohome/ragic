@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>窩的家 — 現在在租的房子</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background:#f8fafc; font-family:'PingFang TC','Microsoft JhengHei',sans-serif; }
+  .no-photo-box {
+    background: repeating-linear-gradient(45deg, #e2e8f0, #e2e8f0 10px, #edf2f7 10px, #edf2f7 20px);
+  }
+</style>
+</head>
+<body class="antialiased text-slate-800">
+
+<div id="noAgent" class="hidden min-h-screen flex items-center justify-center p-6 text-center">
+  <div>
+    <div class="text-5xl mb-4">🏠</div>
+    <p class="text-lg font-semibold text-slate-700">請向窩的家的業務索取專屬連結</p>
+    <p class="text-sm text-slate-400 mt-2">這個網址需要業務提供的專屬連結才能瀏覽物件</p>
+  </div>
+</div>
+
+<div id="loadingBox" class="min-h-screen flex items-center justify-center p-6 text-center text-slate-400">
+  載入中⋯
+</div>
+
+<div id="app" class="hidden max-w-2xl mx-auto pb-10">
+  <!-- Header：業務資訊 + 一鍵撥打 -->
+  <div class="bg-indigo-600 text-white px-5 py-5 sticky top-0 z-10 shadow">
+    <div class="flex items-center justify-between gap-3">
+      <div>
+        <p class="text-xs text-indigo-200">窩的家為您推薦的自有案源</p>
+        <p class="font-bold text-lg" id="agentName">—</p>
+      </div>
+      <a id="callBtn" href="#" class="bg-white text-indigo-600 font-bold text-sm px-4 py-2 rounded-full whitespace-nowrap hidden">📞 撥打</a>
+    </div>
+  </div>
+
+  <!-- 篩選（預設收起） -->
+  <div class="px-4 pt-4">
+    <button id="filterToggle" class="text-sm text-indigo-600 font-medium mb-2">🔍 篩選條件</button>
+    <div id="filterBox" class="hidden bg-white rounded-xl shadow p-4 mb-3 space-y-3">
+      <div class="grid grid-cols-2 gap-2">
+        <select id="fRegion" class="border border-slate-300 rounded-lg px-3 py-2 text-sm"><option value="">全部地區</option></select>
+        <select id="fCategory" class="border border-slate-300 rounded-lg px-3 py-2 text-sm"><option value="">全部房型</option></select>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <input id="fRentMin" type="number" placeholder="租金下限" class="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+        <input id="fRentMax" type="number" placeholder="租金上限" class="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+      </div>
+      <div class="flex gap-4 text-sm">
+        <label class="flex items-center gap-1"><input id="fPets" type="checkbox"> 可寵物</label>
+        <label class="flex items-center gap-1"><input id="fElevator" type="checkbox"> 有電梯</label>
+      </div>
+      <button id="fApply" class="w-full bg-indigo-600 text-white rounded-lg py-2 text-sm font-medium">套用篩選</button>
+    </div>
+  </div>
+
+  <div id="list" class="px-4 space-y-4"></div>
+
+  <div id="emptyMsg" class="hidden text-center text-slate-400 py-16">
+    目前沒有符合條件的物件，換個篩選條件試試看
+  </div>
+</div>
+
+<script>
+const PROXY = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+const qs = new URLSearchParams(location.search);
+const slug = (qs.get('a') || '').trim();
+
+const els = {
+  noAgent: document.getElementById('noAgent'),
+  loadingBox: document.getElementById('loadingBox'),
+  app: document.getElementById('app'),
+  agentName: document.getElementById('agentName'),
+  callBtn: document.getElementById('callBtn'),
+  list: document.getElementById('list'),
+  emptyMsg: document.getElementById('emptyMsg'),
+  filterToggle: document.getElementById('filterToggle'),
+  filterBox: document.getElementById('filterBox'),
+  fRegion: document.getElementById('fRegion'),
+  fCategory: document.getElementById('fCategory'),
+  fRentMin: document.getElementById('fRentMin'),
+  fRentMax: document.getElementById('fRentMax'),
+  fPets: document.getElementById('fPets'),
+  fElevator: document.getElementById('fElevator'),
+  fApply: document.getElementById('fApply'),
+};
+
+let agent = null;
+
+function showNoAgent() {
+  els.loadingBox.classList.add('hidden');
+  els.noAgent.classList.remove('hidden');
+}
+
+function cardHtml(l) {
+  const photo = l.hasPhoto
+    ? `<img src="${l.photoUrl}" alt="物件照片" class="w-full h-48 object-cover rounded-t-xl" loading="lazy">`
+    : `<div class="no-photo-box w-full h-40 rounded-t-xl flex items-center justify-center text-slate-400 text-sm">
+         🏠 尚無照片，可洽業務詢問更多資訊
+       </div>`;
+  const badge = l.statusBadge
+    ? `<span class="inline-block bg-amber-100 text-amber-700 text-xs font-medium px-2 py-0.5 rounded-full mb-1">${l.statusBadge}</span>`
+    : '';
+  const rent = l.rent != null ? l.rent.toLocaleString('zh-TW') : '洽業務';
+  const tags = [l.layout, l.propertyCategory, l.propertyType].filter(Boolean).map(t =>
+    `<span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">${t}</span>`).join('');
+  const area = (l.mainArea != null) ? `<span class="text-xs text-slate-500">約 ${l.mainArea} 坪</span>` : '';
+  return `
+    <a href="listing.html?a=${encodeURIComponent(slug)}&id=${encodeURIComponent(l.id)}"
+       class="block bg-white rounded-xl shadow overflow-hidden hover:shadow-md transition">
+      ${photo}
+      <div class="p-4">
+        ${badge}
+        <div class="flex items-baseline justify-between">
+          <p class="text-xl font-bold text-indigo-600">${rent}<span class="text-xs text-slate-400 ml-1">/月</span></p>
+          ${area}
+        </div>
+        <p class="text-sm text-slate-600 mt-1">${l.address}</p>
+        <div class="flex flex-wrap gap-1.5 mt-2">${tags}</div>
+      </div>
+    </a>`;
+}
+
+function populateFilterOptions(listings) {
+  const regions = [...new Set(listings.map(l => l.district).filter(Boolean))].sort();
+  const cats = [...new Set(listings.map(l => l.propertyCategory).filter(Boolean))].sort();
+  els.fRegion.innerHTML = '<option value="">全部地區</option>' + regions.map(r => `<option value="${r}">${r}</option>`).join('');
+  els.fCategory.innerHTML = '<option value="">全部房型</option>' + cats.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+let filterOptionsReady = false;
+
+async function loadListings(params = {}) {
+  const query = new URLSearchParams({ a: slug, ...params });
+  const resp = await fetch(`${PROXY}/getPublicListings?${query.toString()}`);
+  if (!resp.ok) { showNoAgent(); return; }
+  const data = await resp.json();
+  agent = data.agent;
+  els.agentName.textContent = agent.name + ' — 窩的家';
+  if (agent.phone) {
+    els.callBtn.href = 'tel:' + agent.phone.replace(/[^0-9+]/g, '');
+    els.callBtn.classList.remove('hidden');
+  }
+  const listings = data.listings || [];
+  if (!filterOptionsReady) { populateFilterOptions(listings); filterOptionsReady = true; }
+  els.list.innerHTML = listings.map(cardHtml).join('');
+  els.emptyMsg.classList.toggle('hidden', listings.length > 0);
+  els.loadingBox.classList.add('hidden');
+  els.app.classList.remove('hidden');
+}
+
+els.filterToggle.addEventListener('click', () => els.filterBox.classList.toggle('hidden'));
+els.fApply.addEventListener('click', () => {
+  const params = {};
+  if (els.fRegion.value) params.region = els.fRegion.value;
+  if (els.fCategory.value) params.propertyCategory = els.fCategory.value;
+  if (els.fRentMin.value) params.rentMin = els.fRentMin.value;
+  if (els.fRentMax.value) params.rentMax = els.fRentMax.value;
+  if (els.fPets.checked) params.pets = '1';
+  if (els.fElevator.checked) params.elevator = '1';
+  loadListings(params);
+});
+
+if (!/^[a-z0-9-]{2,40}$/.test(slug)) {
+  showNoAgent();
+} else {
+  loadListings().catch(showNoAgent);
+}
+</script>
+</body>
+</html>

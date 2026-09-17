@@ -408,6 +408,13 @@ const ALLOWED_ACTIONS = {
   // 明細編輯 + 簽收簽名（2026-08-05）。兩支皆 finance 專用（viewer 一律 404）。
   pettyCashUpdate:       { method: 'POST' },
   pettyCashSign:         { method: 'POST' },
+  // Group Y: 窩的家自有案源推薦頁（listings.html / listing.html / listing-picker.html，
+  // property-data-kept/10，2026-09-17，全唯讀）。無 token gate——連結本身就是要公開分享的
+  // slug（見規劃書 §1.3「沒有裸連結」不等於「要保密」），守門靠回傳欄位白名單 + 狀態/委託/
+  // 保護期三道過濾一律在 Worker 端做（規劃書 §6 硬性要求）。
+  listingAgents:         { method: 'GET' },
+  getPublicListings:     { method: 'GET' },
+  getPublicListing:      { method: 'GET' },
 };
 
 const REPAIR_INTERNAL_ACTIONS = new Set([
@@ -1313,23 +1320,59 @@ async function ssEnsureMonthRecord(env, monthStart) {
 // 歷史舊資料或極端情況下 1000719 仍是空字串——此時往前一個月找該月的 1000721 當替代上月
 // 結餘，自行算出 display 用的餘額（絕不寫回 Ragic 唯讀欄位，只影響本次 API 回應的數字）。
 async function ssMonthBalance(env, mainRec, monthStart) {
-  const rawPrev = pcVal(mainRec[SSM.prevBalance]);
   const depositSum = pcNum(mainRec[SSM.depositSum]) || 0;
   const expenseSum = pcNum(mainRec[SSM.expenseSum]) || 0;
-  if (rawPrev !== '') {
-    const rawBalance = pcNum(mainRec[SSM.balance]);
+  const rawPrev = pcVal(mainRec[SSM.prevBalance]);
+
+  // 2026-09-03：上月結餘（1000719）是「開新月當下抄一次」的靜態值，不是公式。上個月結算
+  // 之後才補進去的現金（小吳哥常常隔月才補、發票又壓月底才交）永遠不會回頭反映到這個月，
+  // 於是珊珊手上明明有錢，畫面卻說現金不足、付款鈕被鎖住（8 月補了 50,000，9 月看到的
+  // 上月結餘仍是結算當下的 976）。這裡改成每次讀餘額都回上一個月重新結算一次，用上月
+  // 「當下的真實結餘」覆蓋掉抄下來的舊值——珊珊皮包裡的現金本來就是連續的，不會月底歸零。
+  const prevMonthStart = monthStart ? ssShiftMonthStart(monthStart, -1) : null;
+  const prevLookup = prevMonthStart ? await ssFindMonthRecord(env, prevMonthStart) : null;
+
+  // 上月讀取失敗（不是「查無」）時不可以拿舊值硬算——那就是拿一個可能過期的數字放行付款。
+  // 回報 uncertain，由呼叫端 fail-closed 停用付款。
+  if (prevLookup && prevLookup.error) {
     return {
-      balance: rawBalance !== null ? rawBalance : (Number(rawPrev) + depositSum - expenseSum),
-      prevBalance: Number(rawPrev), stale: false,
+      balance: null, prevBalance: null, stale: true, uncertain: true,
+      reason: 'prev_month_lookup_failed',
     };
   }
-  const prevMonthStart = monthStart ? ssShiftMonthStart(monthStart, -1) : null;
-  // ssFindMonthRecord 2026-08-12 改成三態回傳（found / notFound / error），這裡跟著改。
-  // 讀取失敗與查無都當作「拿不到上月結餘」→ fallback 0，行為與改版前一致。
-  const prevLookup = prevMonthStart ? await ssFindMonthRecord(env, prevMonthStart) : null;
+
   const prevRecord = prevLookup && prevLookup.found ? prevLookup.found : null;
-  const fallbackPrev = prevRecord ? (pcNum(prevRecord.rec[SSM.balance]) || 0) : 0;
-  return { balance: fallbackPrev + depositSum - expenseSum, prevBalance: fallbackPrev, stale: true };
+  const livePrev = prevRecord ? pcNum(prevRecord.rec[SSM.balance]) : null;
+
+  if (livePrev !== null) {
+    const storedPrev = rawPrev === '' ? null : pcNum(rawPrev);
+    if (storedPrev !== livePrev) {
+      // 只記 log，不寫回 Ragic：1000719 在 Ragic UI 是唯讀欄，珊珊自己看那張表時仍會看到
+      // 她熟悉的手抄值；系統這邊用即時重算的數字。要不要回寫是帳務政策，不是這支 API 的事。
+      console.warn('[ssMonthBalance] carry_forward_refreshed', {
+        monthStart, storedPrev, livePrev, delta: livePrev - (storedPrev ?? 0),
+      });
+    }
+    return {
+      balance: livePrev + depositSum - expenseSum,
+      prevBalance: livePrev, stale: false, refreshed: storedPrev !== livePrev,
+    };
+  }
+
+  // 上個月根本沒開帳（最早一筆之前、或中間跳月）：拿不到結轉基準。
+  // 這個月自己抄過的值還可以用，抄都沒抄過就是真的不知道。
+  if (rawPrev !== '') {
+    const storedPrev = pcNum(rawPrev);
+    const rawBalance = pcNum(mainRec[SSM.balance]);
+    return {
+      balance: rawBalance !== null ? rawBalance : (storedPrev + depositSum - expenseSum),
+      prevBalance: storedPrev, stale: false,
+    };
+  }
+  return {
+    balance: null, prevBalance: null, stale: true, uncertain: true,
+    reason: 'no_prev_month_record',
+  };
 }
 
 // 子表寫入欄位長度上限：預設沿用 wbAddSubRow/wbUpdateSubRow 既有 2000 字上限，以下白名單覆寫
@@ -1592,6 +1635,60 @@ function parsePettyCashViewerEmails(env) {
   try { list = JSON.parse(env.PETTY_CASH_VIEWER_EMAILS || '[]'); } catch { return new Set(); }
   if (!Array.isArray(list)) return new Set();
   return new Set(list.filter((e) => typeof e === 'string').map((e) => e.trim().toLowerCase()));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// D：service-key 代理身分（2026-08-25 補上）。零用金登入態改造（wuohome-petty-cash
+// docs/登入態改造_規格_2026-08-19.md）規定的「既有 Worker 只加一個 service-key 代理入口」。
+//
+// 為什麼需要這條：改造後 Vercel 端自己發 30 天 pc_session cookie，Google ID token 只在
+// 第一次登入時出現一次，之後的請求 Vercel 手上沒有 ID token 可以轉發，只能以「我已經驗過
+// 這個人是誰」的身分代打。於是這條路徑不驗 Google，改驗 X-Service-Key 是不是我們自己發的
+// 那把，再拿 X-Acting-Email 反查人事表得出身分——白名單與在職狀態的判斷完全沿用 C 段的
+// 同一套規則，身分權威仍然是 Ragic 人事表，沒有因為信任 Vercel 而放寬。
+//
+// ⚠️ 2026-08-25 診斷：這段在 8/19 改造時漏寫（規格書寫了、secret 也設了、Vercel 與 session
+// Worker 都上線了，只有這 15 行沒進正本），導致整個零用金系統從 8/19 起任何人都登不進去
+// ——pettyCashIdentity 一律回 not_found，前端翻譯成「連結無效或已失效」誤導成連結問題。
+//
+// 回傳 null＝沒帶 service key（或帶錯），呼叫端 fallback 到 C（Google）→ A/B（舊 token）。
+// 帶了正確 service key 但這個人不在白名單，回 __authError 403 not_whitelisted，不 fallback
+// ——比照 C 段的理由：身分明確查過且不合格，再往下試只會拿到同型 404 混淆真正的原因。
+async function authenticatePettyCashServiceKey(request, env, origin) {
+  const provided = request.headers.get('X-Service-Key') || '';
+  const expected = env.PETTY_CASH_SERVICE_KEY || '';
+  if (!provided || !expected) return null;      // 沒帶 → 交給後面的 Google／舊 token 路徑
+  if (!pcTimingSafeEqual(provided, expected)) return null;
+
+  const email = pcClean(request.headers.get('X-Acting-Email') || '').toLowerCase();
+  if (!email) return { __authError: jsonResp({ error: 'invalid_session' }, 401, origin) };
+
+  const { upstream, data } = await getFromRagic(env, PETTY_CASH_STAFF_SHEET, 'naming=EID&limit=200');
+  if (!upstream.ok || !data) return { __authError: jsonResp({ error: 'not_whitelisted' }, 403, origin) };
+  const records = Object.values(data).filter((r) => r && typeof r === 'object');
+  const rec = records.find((r) => pcClean(r[PC_STAFF_EMAIL_FIELD]).toLowerCase() === email);
+  const status = rec ? pcClean(rec[PC_STAFF_STATUS_FIELD]) : '';
+  const name = rec ? pcClean(rec[PC_STAFF_NAME_FIELD]) : '';
+  if (!rec || !PC_ACTIVE_STATUSES.has(status) || !name) {
+    return { __authError: jsonResp({ error: 'not_whitelisted' }, 403, origin) };
+  }
+
+  return {
+    name,
+    department: pcClean(rec[PC_STAFF_DEPT_FIELD]),
+    email,
+    isFinance: parsePettyCashFinanceEmails(env).has(email),
+    isViewer: parsePettyCashViewerEmails(env).has(email),
+  };
+}
+
+// 定時比較，不因為前幾個字元就先回 false（避免用回應時間逐字元猜出金鑰）。
+// 長度不同直接 false 是可以接受的洩漏——金鑰長度本來就不是祕密。
+function pcTimingSafeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 async function authenticatePettyCashGoogle(request, env, origin) {
@@ -2046,8 +2143,10 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     // 決策7：balance 讀當月主表 1000721（見 ssMonthBalance 已知落差容錯）
     const monthStart = ssTodayMonthStart();
     const month = await ssEnsureMonthRecord(env, monthStart);
-    summary.balance = month.error ? null : (await ssMonthBalance(env, month.rec, monthStart)).balance;
-    summary.prevBalanceUncertain = !!month.prevBalanceUncertain;
+    const listBal = month.error ? null : await ssMonthBalance(env, month.rec, monthStart);
+    summary.balance = listBal ? listBal.balance : null;
+    // 結轉基準拿不到時餘額不可信：ssMonthBalance 回 uncertain，或開月當下就沒抄到上月結餘。
+    summary.prevBalanceUncertain = !!month.prevBalanceUncertain || !listBal || !!listBal.uncertain;
 
     return jsonResp({
       ok: true, claims, summary, dataIntegrityWarning,
@@ -2252,7 +2351,9 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     }
     return jsonResp({
       ok: true, balance: bal.balance, breakdown: { 期初: 0, 補充: deposit, 付款: -payment },
-      prevBalanceUncertain: !!month.prevBalanceUncertain,
+      // uncertain＝這一輪拿不到可信的結轉基準（上月讀取失敗／上月沒開帳），餘額不能拿來比大小。
+      prevBalanceUncertain: !!month.prevBalanceUncertain || !!bal.uncertain,
+      carryForward: bal.prevBalance,
     }, 200, origin);
   }
 
@@ -3120,6 +3221,196 @@ const ALLIANCE_PUBLIC_FIELD_IDS = new Set([
   '1002009', // company
   '1001929', // propertyType
 ]);
+
+// ── Group Y: 窩的家自有案源推薦頁（listings.html / listing.html / listing-picker.html，2026-09-17）──
+// 讀 AP15_OWN_SHEET（property-data-kept/10，已於上方 Group G 定義）。重用既有
+// OWN_SUBTABLE_KEY／OWN_SUBTABLE_PUBLIC 常數（開發人員子表格 _subtable_1000254，含
+// 1000251 姓名／1000252 電話），不重建同義常數。
+const LF = Object.freeze({
+  status: '1000707', city: '1000051', district: '1000052', address: '1000055',
+  rent: '1000076', rentIncludes: '1000079', condition: '1000070',
+  propertyType: '1000061', propertyCategory: '1000062', layout: '1000063',
+  pets: '1000219', mainArea: '1000058', registeredArea: '1000059',
+  water: '1000081', electricity: '1000080', photo591: '1000895',
+  mandateType: '1000248', mandateStart: '1000260', mandateEnd: '1000261',
+  devName: '1000251', devPhone: '1000252',
+});
+
+// 狀態白名單（規劃書 §4.6 Q8：實際資料「已收定可帶看」無逗號 2 筆／「已收定，可帶看」有逗號
+// 1 筆兩種寫法並存，兩種都要認）。
+const LISTING_VISIBLE_STATUSES = new Set(['代租中', '即將開放', '已收定可帶看', '已收定，可帶看']);
+const LISTING_STATUS_BADGE = {
+  '即將開放': '即將開放',
+  '已收定可帶看': '已有人下定，仍可帶看',
+  '已收定，可帶看': '已有人下定，仍可帶看',
+};
+
+// 手刻姓名→slug 對照表（2026-09-17，2026-09-17 curl 全表 590 筆實測共 24 個相異開發人員姓名，
+// 其中 1 筆是明顯誤填的 email 字串已排除，故 23 筆）。用查表而非自動拼音轉換，理由：① Ragic
+// 子表格只有中文姓名，沒有羅馬拼音欄位，要轉羅馬拼音本來就需要人工判斷；② 業務人數少且是公司
+// 真實同仁，查表比引入拼音套件更可控、可讀；③ 規劃書指定範例「吳彥廷→wu-yenting」是他個人慣用
+// 拼法（非標準漢語拼音 wu-yanting），只有查表能精確對上這個範例。
+// ponytail-debt：新進業務若不在表內，listingSlugForName() 會退化成較不可讀的 hash slug（見下），
+// 屆時只要把「這個人的中文名」→「他慣用的英文/拼音」補一行進這張表即可，不用碰其他邏輯。
+const LISTING_AGENT_SLUG_MAP = {
+  '吳彥廷': 'wu-yenting',
+  '劉子碩': 'liu-zishuo',
+  '吳惠慈': 'wu-huici',
+  '吳炫儒': 'wu-xuanru',
+  '張則泓': 'zhang-zehong',
+  '張忠豪': 'zhang-zhonghao',
+  '方鼎文': 'fang-dingwen',
+  '曾正煌': 'zeng-zhenghuang',
+  '李卓威': 'li-zhuowei',
+  '李維': 'li-wei',
+  '林佳燕': 'lin-jiayan',
+  '林宣佑': 'lin-xuanyou',
+  '楊書銘': 'yang-shuming',
+  '白欣宜': 'bai-xinyi',
+  '葉恩廷': 'ye-enting',
+  '蕭靜芳': 'xiao-jingfang',
+  '蕭頤臻': 'xiao-yizhen',
+  '詹張傳': 'zhan-zhangchuan',
+  '謝佳芬': 'xie-jiafen',
+  '鐘晟鈺': 'zhong-shengyu',
+  '關宗宇': 'guan-zongyu',
+  '陳勁豪': 'chen-jinhao',
+  '陳心瑜': 'chen-xinyu',
+};
+
+function validListingSlug(s) { return typeof s === 'string' && /^[a-z0-9-]{2,40}$/.test(s); }
+
+// 濾掉明顯不是真人姓名的子表格資料（如誤填 email）：只接受 2-12 字、不含 @／數字／半形英文字母。
+function listingValidDevName(s) {
+  const name = decorClean(s);
+  if (name.length < 2 || name.length > 12) return false;
+  if (/[@0-9a-zA-Z]/.test(name)) return false;
+  return true;
+}
+
+async function listingSlugForName(name) {
+  const known = LISTING_AGENT_SLUG_MAP[name];
+  if (known) return known;
+  const hash = await pcSha256Hex(name); // 既有 helper（Group X 零用金已用），不重造
+  return 'staff-' + hash.slice(0, 8);
+}
+
+// 從全表（含下架，見規劃書 §1.3「roster 只是名冊，跟這筆物件誰開發的無關」）子表格算出
+// 姓名→{slug, phone} 名冊。同一人的電話偶有含/不含 dash 兩種寫法（規劃書 §4.6 未提及但
+// 2026-09-17 curl 實測發現，如 0916332312 / 0916-332-312 並存），取出現次數最多的非空字串。
+async function listingBuildRoster(data) {
+  const counts = new Map(); // name -> Map(phone -> count)
+  for (const rec of Object.values(data)) {
+    if (!rec || typeof rec !== 'object') continue;
+    const sub = rec[OWN_SUBTABLE_KEY];
+    if (!sub || typeof sub !== 'object') continue;
+    for (const row of Object.values(sub)) {
+      if (!row || typeof row !== 'object') continue;
+      const name = decorClean(row[LF.devName]);
+      if (!listingValidDevName(name)) continue;
+      const phone = decorClean(row[LF.devPhone]);
+      if (!counts.has(name)) counts.set(name, new Map());
+      const pc = counts.get(name);
+      pc.set(phone, (pc.get(phone) || 0) + 1);
+    }
+  }
+  const roster = [];
+  for (const [name, phoneCounts] of counts) {
+    let bestPhone = '', bestCount = -1;
+    for (const [phone, count] of phoneCounts) {
+      if (phone && count > bestCount) { bestPhone = phone; bestCount = count; }
+    }
+    roster.push({ name, phone: bestPhone, slug: await listingSlugForName(name) });
+  }
+  return roster;
+}
+
+async function listingFetchAll(env) {
+  const { upstream, data } = await getFromRagic(env, AP15_OWN_SHEET, 'v=3&naming=EID&ignoreFixedFilter=true&subtables=1&limit=0,1000');
+  if (!upstream.ok || !data || typeof data !== 'object') return null;
+  return data;
+}
+
+function listingIsVisibleStatus(rec) { return LISTING_VISIBLE_STATUSES.has(decorClean(rec[LF.status])); }
+
+// 委託迄日：空白視為未到期（規劃書 §4.6 Q4，45% 空白率是建檔漏填不是沒有委託，反過來做會
+// 砍掉近一半物件）；有值且已過今天才擋。
+function listingIsExpired(rec) {
+  const end = decorClean(rec[LF.mandateEnd]);
+  if (!end) return false;
+  return cmpDateStr(todayTaipei(), end) > 0;
+}
+
+// 專任開發保護期：委託類型=='專任' 且 委託起日 ≤ 今天 ≤ 委託起日+7（雙邊界，規劃書 §4.6 Q5
+// 修正過的公式——只寫上界會把「委託起日填在未來」的髒資料誤判成保護中，實測真有一筆這樣的
+// 記錄）。刻意不讀/不寫 1002098（該欄位 drift 87.6%，見規劃書 §4.4），現算不碰壞資料。
+function listingIsProtected(rec) {
+  if (decorClean(rec[LF.mandateType]) !== '專任') return false;
+  const start = decorParseDateOnly(rec[LF.mandateStart]);
+  if (!start) return false;
+  const days = decorDaysBetween(start, decorTodayTaipei());
+  return days >= 0 && days <= 7;
+}
+
+// 保護期內只有該筆的開發業務自己能分享；非保護期（團隊共享／開放聯盟合作）全店都能分享，
+// P0 不分聯盟夥伴與自家業務（規劃書未要求 P0 區分永策）。
+function listingSharableBy(rec, agentName) {
+  if (!listingIsProtected(rec)) return true;
+  const sub = rec[OWN_SUBTABLE_KEY];
+  if (!sub || typeof sub !== 'object') return false;
+  for (const row of Object.values(sub)) {
+    if (row && decorClean(row[LF.devName]) === agentName) return true;
+  }
+  return false;
+}
+
+// 地址只回傳到「號」，樓層/之X 絕不出 Worker（規劃書 §6 硬性要求 4）。無「號」字的地址
+// （罕見，資料本身缺門牌）原樣回傳，沒有更後面的內容可砍。
+function listingShortAddress(rec) {
+  const full = decorClean(rec[LF.address]);
+  const idx = full.indexOf('號');
+  return idx >= 0 ? full.slice(0, idx + 1) : full;
+}
+
+// ⚠️ 2026-09-17 開發時實測發現規劃書 §4.2/§4.6 對照錯誤，已改用正確來源，詳見交付摘要：
+// 子表格 1000854／主表公式欄 1000855 是「開發人員大頭照」自動帶入（同一人跨不同物件的值
+// 完全相同，如「李卓威」在多筆不同地址的物件裡 1000854 皆為同一個 t5xdcKBulD@IMG_0557.jpeg），
+// 不是物件照片，絕不可用於租客端。全表唯一真實的物件照片來源只有 591 截圖（1000895，
+// 590 筆中僅個位數有值）。
+function listingPhotoUrl(rec) {
+  const raw = decorClean(rec[LF.photo591]);
+  return raw ? `https://ap15.ragic.com/sims/file.jsp?a=wuohome&f=${encodeURIComponent(raw)}` : null;
+}
+
+// 回傳前逐欄手動取用白名單欄位（不 spread 原始 Ragic record），委託/開發人/屋主等欄位
+// 在程式碼層面就不可能被回傳（規劃書 §6 硬性要求 2）。
+function listingPublicRecord(rid, rec) {
+  const status = decorClean(rec[LF.status]);
+  const rentIncludesRaw = rec[LF.rentIncludes];
+  const conditionRaw = rec[LF.condition];
+  return {
+    id: String(rid),
+    status,
+    statusBadge: LISTING_STATUS_BADGE[status] || null,
+    city: decorClean(rec[LF.city]),
+    district: decorClean(rec[LF.district]),
+    address: listingShortAddress(rec),
+    rent: decorNum(rec[LF.rent]),
+    rentIncludes: Array.isArray(rentIncludesRaw) ? rentIncludesRaw.filter(Boolean) : [],
+    condition: Array.isArray(conditionRaw) ? conditionRaw.filter(Boolean) : [],
+    propertyType: decorClean(rec[LF.propertyType]) || null,
+    propertyCategory: decorClean(rec[LF.propertyCategory]) || null,
+    layout: decorClean(rec[LF.layout]) || null,
+    pets: decorClean(rec[LF.pets]) || null,
+    mainArea: decorNum(rec[LF.mainArea]),
+    registeredArea: decorNum(rec[LF.registeredArea]),
+    water: decorClean(rec[LF.water]) || null,
+    electricity: decorClean(rec[LF.electricity]) || null,
+    photoUrl: listingPhotoUrl(rec),
+    hasPhoto: Boolean(listingPhotoUrl(rec)),
+    hasExpirySet: Boolean(decorClean(rec[LF.mandateEnd])),
+  };
+}
 
 const SHEET_MAP = {
   listEmployees:  'ragicforms4/20004',
@@ -4735,10 +5026,20 @@ export default {
     // 為何不 fallback）。
     let pettyCashIdentity = null;
     if (PETTY_CASH_ACTIONS.has(action)) {
-      const google = await authenticatePettyCashGoogle(request, env, allowedOrigin);
+      // 2026-08-25：先試 service key（Vercel 代打，見上方 D），沒帶才走 Google（C），
+      // 都沒有才 fallback 舊 `?token=`（A/B）。三條路都只認 Ragic 人事表這個身分權威。
+      const svc = await authenticatePettyCashServiceKey(request, env, allowedOrigin);
+      if (svc && svc.__authError) return svc.__authError;
+      const google = svc ? null : await authenticatePettyCashGoogle(request, env, allowedOrigin);
       if (google && google.__authError) return google.__authError;
       let candidate;
-      if (google) {
+      if (svc) {
+        // service key 路徑同樣已確認是在職/試用同仁（見 D），isStaff 恆為 true。
+        candidate = {
+          isStaff: true, isFinance: svc.isFinance, isViewer: svc.isViewer,
+          name: svc.name, department: svc.department, email: svc.email,
+        };
+      } else if (google) {
         // Google 驗證本身已要求是在職/試用同仁才會成功（見 authenticatePettyCashGoogle），
         // 走到這裡 isStaff 恆為 true；isFinance/isViewer 是額外資格，互不排斥。
         candidate = {
@@ -7512,6 +7813,82 @@ export default {
           quoteNo: rec[RQF.quoteNo] || '',
           status: rec[RQF.status] || '',
           snapshot,
+        }, 200, allowedOrigin);
+      }
+
+      // ============ Group Y: 窩的家自有案源推薦頁（唯讀，property-data-kept/10）============
+      if (action === 'listingAgents') {
+        // 業務後台下拉選單用：只回 slug+name，不回電話（picker 本身不需要打電話給任何人）。
+        const data = await listingFetchAll(env);
+        if (!data) return jsonResp({ error: 'upstream_error' }, 502, allowedOrigin);
+        const roster = await listingBuildRoster(data);
+        roster.sort((a, b) => a.slug.localeCompare(b.slug));
+        return jsonResp({ agents: roster.map((r) => ({ slug: r.slug, name: r.name })) }, 200, allowedOrigin);
+      }
+
+      if (action === 'getPublicListings') {
+        const slug = (url.searchParams.get('a') || '').trim();
+        if (!validListingSlug(slug)) return jsonResp({ error: 'unknown_agent' }, 404, allowedOrigin);
+        const data = await listingFetchAll(env);
+        if (!data) return jsonResp({ error: 'upstream_error' }, 502, allowedOrigin);
+        const roster = await listingBuildRoster(data);
+        const agent = roster.find((r) => r.slug === slug);
+        if (!agent) return jsonResp({ error: 'unknown_agent' }, 404, allowedOrigin);
+
+        // 篩選「意圖」，不是 raw where：全部在 Worker 這裡用 JS 過濾已經整表取回的資料，
+        // 客戶端參數從未被組進任何 Ragic 查詢字串（規劃書 §6 硬性要求 1）。
+        const regionFilter = (url.searchParams.get('region') || '').trim().slice(0, 20);
+        const categoryFilter = (url.searchParams.get('propertyCategory') || '').trim().slice(0, 20);
+        const rentMaxRaw = Number(url.searchParams.get('rentMax'));
+        const rentMinRaw = Number(url.searchParams.get('rentMin'));
+        const rentMax = Number.isFinite(rentMaxRaw) && rentMaxRaw > 0 ? rentMaxRaw : null;
+        const rentMin = Number.isFinite(rentMinRaw) && rentMinRaw > 0 ? rentMinRaw : null;
+        const petsOnly = url.searchParams.get('pets') === '1';
+        const elevatorOnly = url.searchParams.get('elevator') === '1';
+
+        const listings = [];
+        for (const [rid, rec] of Object.entries(data)) {
+          if (!rec || typeof rec !== 'object') continue;
+          if (!listingIsVisibleStatus(rec)) continue;
+          if (listingIsExpired(rec)) continue;
+          if (!listingSharableBy(rec, agent.name)) continue;
+
+          const pub = listingPublicRecord(rid, rec);
+          if (regionFilter && pub.district !== regionFilter) continue;
+          if (categoryFilter && pub.propertyCategory !== categoryFilter) continue;
+          if (rentMax !== null && pub.rent !== null && pub.rent > rentMax) continue;
+          if (rentMin !== null && pub.rent !== null && pub.rent < rentMin) continue;
+          if (petsOnly && (!pub.pets || pub.pets.includes('不可'))) continue;
+          if (elevatorOnly && !(pub.propertyType || '').includes('電梯')) continue;
+          listings.push(pub);
+        }
+        // 有照片的排前面，沒照片的排到最後（規劃書 §4.3／§8 驗收 7）
+        listings.sort((a, b) => (a.hasPhoto === b.hasPhoto ? 0 : (a.hasPhoto ? -1 : 1)));
+
+        return jsonResp({
+          agent: { slug: agent.slug, name: agent.name, phone: agent.phone },
+          listings,
+        }, 200, allowedOrigin);
+      }
+
+      if (action === 'getPublicListing') {
+        const slug = (url.searchParams.get('a') || '').trim();
+        const rid = (url.searchParams.get('id') || '').trim();
+        // 查無或不符一律同型 404，不分因由防列舉（比照 v29/v30 IDOR root-fix 慣例）。
+        if (!validListingSlug(slug) || !validRid(rid)) return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
+        const data = await listingFetchAll(env);
+        if (!data) return jsonResp({ error: 'upstream_error' }, 502, allowedOrigin);
+        const roster = await listingBuildRoster(data);
+        const agent = roster.find((r) => r.slug === slug);
+        if (!agent) return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
+        const rec = data[rid];
+        if (!rec || typeof rec !== 'object') return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
+        if (!listingIsVisibleStatus(rec) || listingIsExpired(rec) || !listingSharableBy(rec, agent.name)) {
+          return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
+        }
+        return jsonResp({
+          agent: { slug: agent.slug, name: agent.name, phone: agent.phone },
+          listing: listingPublicRecord(rid, rec),
         }, 200, allowedOrigin);
       }
     } catch (e) {

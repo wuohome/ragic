@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>窩的家 — 物件詳情</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background:#f8fafc; font-family:'PingFang TC','Microsoft JhengHei',sans-serif; }
+  .no-photo-box {
+    background: repeating-linear-gradient(45deg, #e2e8f0, #e2e8f0 10px, #edf2f7 10px, #edf2f7 20px);
+  }
+</style>
+</head>
+<body class="antialiased text-slate-800">
+
+<div id="notFound" class="hidden min-h-screen flex items-center justify-center p-6 text-center">
+  <div>
+    <div class="text-5xl mb-4">🔑</div>
+    <p class="text-lg font-semibold text-slate-700">找不到這個物件</p>
+    <p class="text-sm text-slate-400 mt-2">可能已經租出去了，或連結有誤</p>
+    <a id="backLink" href="listings.html" class="inline-block mt-4 text-indigo-600 font-medium">回到物件列表 →</a>
+  </div>
+</div>
+
+<div id="loadingBox" class="min-h-screen flex items-center justify-center p-6 text-center text-slate-400">
+  載入中⋯
+</div>
+
+<div id="app" class="hidden max-w-2xl mx-auto pb-24">
+  <div class="bg-white px-4 py-3 flex items-center gap-3 sticky top-0 z-10 shadow-sm">
+    <a id="backTop" href="listings.html" class="text-slate-500">← 返回列表</a>
+  </div>
+
+  <div id="photoWrap"></div>
+
+  <div class="p-4 space-y-4">
+    <div>
+      <span id="badge" class="hidden inline-block bg-amber-100 text-amber-700 text-xs font-medium px-2 py-0.5 rounded-full mb-1"></span>
+      <p class="text-2xl font-bold text-indigo-600" id="rent">—</p>
+      <p class="text-sm text-slate-600 mt-1" id="address">—</p>
+      <div class="flex flex-wrap gap-1.5 mt-2" id="tags"></div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-4 grid grid-cols-2 gap-3 text-sm" id="detailGrid"></div>
+
+    <div id="includesBox" class="hidden bg-white rounded-xl shadow p-4">
+      <p class="text-xs text-slate-400 mb-1">租金已包含</p>
+      <div class="flex flex-wrap gap-1.5" id="includesTags"></div>
+    </div>
+
+    <div id="conditionBox" class="hidden bg-white rounded-xl shadow p-4">
+      <p class="text-xs text-slate-400 mb-1">房屋現況</p>
+      <div class="flex flex-wrap gap-1.5" id="conditionTags"></div>
+    </div>
+  </div>
+
+  <!-- 底部固定聯絡列 -->
+  <div class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 px-4 py-3 max-w-2xl mx-auto">
+    <div class="flex items-center justify-between gap-3">
+      <p class="text-sm text-slate-600">聯絡業務<br><span class="font-bold text-slate-800" id="agentName">—</span></p>
+      <a id="callBtn" href="#" class="hidden bg-indigo-600 text-white font-bold px-6 py-3 rounded-full">📞 一鍵撥打</a>
+    </div>
+  </div>
+</div>
+
+<script>
+const PROXY = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+const qs = new URLSearchParams(location.search);
+const slug = (qs.get('a') || '').trim();
+const id = (qs.get('id') || '').trim();
+
+const els = {
+  notFound: document.getElementById('notFound'),
+  loadingBox: document.getElementById('loadingBox'),
+  app: document.getElementById('app'),
+  photoWrap: document.getElementById('photoWrap'),
+  badge: document.getElementById('badge'),
+  rent: document.getElementById('rent'),
+  address: document.getElementById('address'),
+  tags: document.getElementById('tags'),
+  detailGrid: document.getElementById('detailGrid'),
+  includesBox: document.getElementById('includesBox'),
+  includesTags: document.getElementById('includesTags'),
+  conditionBox: document.getElementById('conditionBox'),
+  conditionTags: document.getElementById('conditionTags'),
+  agentName: document.getElementById('agentName'),
+  callBtn: document.getElementById('callBtn'),
+  backLink: document.getElementById('backLink'),
+  backTop: document.getElementById('backTop'),
+};
+
+function showNotFound() {
+  els.loadingBox.classList.add('hidden');
+  els.notFound.classList.remove('hidden');
+}
+
+function detailRow(label, value) {
+  if (value === null || value === undefined || value === '') return '';
+  return `<div><p class="text-slate-400 text-xs">${label}</p><p class="font-medium">${value}</p></div>`;
+}
+
+async function load() {
+  const backHref = `listings.html?a=${encodeURIComponent(slug)}`;
+  els.backLink.href = backHref;
+  els.backTop.href = backHref;
+
+  if (!/^[a-z0-9-]{2,40}$/.test(slug) || !/^[0-9]{1,12}$/.test(id)) { showNotFound(); return; }
+
+  const resp = await fetch(`${PROXY}/getPublicListing?a=${encodeURIComponent(slug)}&id=${encodeURIComponent(id)}`);
+  if (!resp.ok) { showNotFound(); return; }
+  const data = await resp.json();
+  const l = data.listing;
+  const agent = data.agent;
+
+  document.title = `${l.district}${l.address ? '' : ''} — 窩的家`;
+
+  els.photoWrap.innerHTML = l.hasPhoto
+    ? `<img src="${l.photoUrl}" alt="物件照片" class="w-full max-h-96 object-cover">`
+    : `<div class="no-photo-box w-full h-56 flex items-center justify-center text-slate-400">🏠 尚無照片，可洽業務詢問更多資訊</div>`;
+
+  if (l.statusBadge) { els.badge.textContent = l.statusBadge; els.badge.classList.remove('hidden'); }
+  els.rent.textContent = (l.rent != null ? l.rent.toLocaleString('zh-TW') : '洽業務詢價') + (l.rent != null ? ' / 月' : '');
+  els.address.textContent = l.address;
+  els.tags.innerHTML = [l.layout, l.propertyCategory, l.propertyType].filter(Boolean)
+    .map(t => `<span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">${t}</span>`).join('');
+
+  els.detailGrid.innerHTML = [
+    detailRow('格局', l.layout),
+    detailRow('主建坪數', l.mainArea != null ? l.mainArea + ' 坪' : ''),
+    detailRow('登記坪數', l.registeredArea != null ? l.registeredArea + ' 坪' : ''),
+    detailRow('寵物', l.pets),
+    detailRow('水費', l.water),
+    detailRow('電費', l.electricity),
+  ].join('') || '<p class="text-slate-400 col-span-2">詳細資訊請洽業務</p>';
+
+  if (l.rentIncludes && l.rentIncludes.length) {
+    els.includesBox.classList.remove('hidden');
+    els.includesTags.innerHTML = l.rentIncludes.map(t => `<span class="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full">${t}</span>`).join('');
+  }
+  if (l.condition && l.condition.length) {
+    els.conditionBox.classList.remove('hidden');
+    els.conditionTags.innerHTML = l.condition.map(t => `<span class="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">${t}</span>`).join('');
+  }
+
+  els.agentName.textContent = agent.name;
+  if (agent.phone) {
+    els.callBtn.href = 'tel:' + agent.phone.replace(/[^0-9+]/g, '');
+    els.callBtn.classList.remove('hidden');
+  }
+
+  els.loadingBox.classList.add('hidden');
+  els.app.classList.remove('hidden');
+}
+
+load().catch(showNotFound);
+</script>
+</body>
+</html>
