@@ -43,6 +43,10 @@
       <p class="text-sm font-semibold text-slate-700 mb-3">這條連結目前會顯示什麼</p>
       <div id="statsEmpty" class="text-slate-400 text-sm py-10 text-center">先選姓名才會看到統計</div>
       <div id="statsBox" class="hidden">
+        <div id="noPhotoNotice" class="hidden text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-3">
+          目前案源全部沒有照片：舊的 591 截圖來源已下架（截圖上會印到別的業務資訊，不能用），
+          新的照片來源公司另外在處理，還沒接上。
+        </div>
         <div class="grid grid-cols-3 gap-2 text-center mb-4">
           <div class="bg-indigo-50 rounded-lg py-3">
             <p class="text-2xl font-bold text-indigo-600" id="statTotal">0</p>
@@ -104,9 +108,11 @@ async function loadStats(slug) {
   if (!resp.ok) return;
   const data = await resp.json();
   const listings = data.listings || [];
+  const noPhotoCount = listings.filter(l => !l.hasPhoto).length;
   statTotal.textContent = listings.length;
-  statNoPhoto.textContent = listings.filter(l => !l.hasPhoto).length;
+  statNoPhoto.textContent = noPhotoCount;
   statNoExpiry.textContent = listings.filter(l => !l.hasExpirySet).length;
+  document.getElementById('noPhotoNotice').classList.toggle('hidden', !(listings.length > 0 && noPhotoCount === listings.length));
   listPreview.innerHTML = listings.map(rowHtml).join('') || '<p class="text-slate-400">目前沒有會顯示的物件</p>';
   statsBox.classList.remove('hidden');
 }

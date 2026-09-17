@@ -3231,7 +3231,7 @@ const LF = Object.freeze({
   rent: '1000076', rentIncludes: '1000079', condition: '1000070',
   propertyType: '1000061', propertyCategory: '1000062', layout: '1000063',
   pets: '1000219', mainArea: '1000058', registeredArea: '1000059',
-  water: '1000081', electricity: '1000080', photo591: '1000895',
+  water: '1000081', electricity: '1000080',
   mandateType: '1000248', mandateStart: '1000260', mandateEnd: '1000261',
   devName: '1000251', devPhone: '1000252',
 });
@@ -3372,15 +3372,18 @@ function listingShortAddress(rec) {
   return idx >= 0 ? full.slice(0, idx + 1) : full;
 }
 
-// ⚠️ 2026-09-17 開發時實測發現規劃書 §4.2/§4.6 對照錯誤，已改用正確來源，詳見交付摘要：
-// 子表格 1000854／主表公式欄 1000855 是「開發人員大頭照」自動帶入（同一人跨不同物件的值
-// 完全相同，如「李卓威」在多筆不同地址的物件裡 1000854 皆為同一個 t5xdcKBulD@IMG_0557.jpeg），
-// 不是物件照片，絕不可用於租客端。全表唯一真實的物件照片來源只有 591 截圖（1000895，
-// 590 筆中僅個位數有值）。
-function listingPhotoUrl(rec) {
-  const raw = decorClean(rec[LF.photo591]);
-  return raw ? `https://ap15.ragic.com/sims/file.jsp?a=wuohome&f=${encodeURIComponent(raw)}` : null;
-}
+// ⚠️ 2026-09-17 開發時實測發現規劃書 §4.2/§4.6 對照錯誤：子表格 1000854／主表公式欄 1000855
+// 是「開發人員大頭照」自動帶入（同一人跨不同物件的值完全相同，如「李卓威」在多筆不同地址的
+// 物件裡 1000854 皆為同一個 t5xdcKBulD@IMG_0557.jpeg），不是物件照片，絕不可用於租客端。
+//
+// ⚠️ 2026-09-18 main 逐張下載目視檢查後移除 591 截圖（1000895）：那 5 筆截圖是整頁擷圖，畫面上
+// 印著別的業務（非分享者本人）的大頭照與電話（實測其中一張是蕭小姐 0902-267-101），另一張顯眼
+// 處是別家建商「寶石敦岳」的廣告看板電話；還有一張截圖上印著「有效期 2026-06-04」已過期日期。
+// 直接違反 §1.3（租客只能看到分享者本人聯絡方式）與整案動機（591 廣告會過期）。這個欄位在
+// 定義上就是「591 截圖」，代表全部 5 筆值都會有這兩個問題，不是個案，因此整條照片來源移除，
+// 不只挑掉這幾張。目前沒有其他可用的物件照片來源——P1 改抓公司自己 591 帳號上傳的物件照片，
+// 屬另一條獨立工項（不在本次範圍）。listingPublicRecord() 因此固定回 hasPhoto:false、
+// photoUrl:null，前端佔位圖邏輯不用改，只是現在 100% 會命中。
 
 // 回傳前逐欄手動取用白名單欄位（不 spread 原始 Ragic record），委託/開發人/屋主等欄位
 // 在程式碼層面就不可能被回傳（規劃書 §6 硬性要求 2）。
@@ -3406,8 +3409,8 @@ function listingPublicRecord(rid, rec) {
     registeredArea: decorNum(rec[LF.registeredArea]),
     water: decorClean(rec[LF.water]) || null,
     electricity: decorClean(rec[LF.electricity]) || null,
-    photoUrl: listingPhotoUrl(rec),
-    hasPhoto: Boolean(listingPhotoUrl(rec)),
+    photoUrl: null,
+    hasPhoto: false,
     hasExpirySet: Boolean(decorClean(rec[LF.mandateEnd])),
   };
 }
@@ -7862,7 +7865,10 @@ export default {
           if (elevatorOnly && !(pub.propertyType || '').includes('電梯')) continue;
           listings.push(pub);
         }
-        // 有照片的排前面，沒照片的排到最後（規劃書 §4.3／§8 驗收 7）
+        // 有照片的排前面，沒照片的排到最後（規劃書 §4.3／§8 驗收 7）。2026-09-18 起 hasPhoto
+        // 恆為 false（591 截圖來源已移除，見 listingPublicRecord 上方註解），此排序現階段是
+        // no-op（stable sort，全部相等時保留原順序，不會讓順序看起來亂跳）；保留邏輯是為 P1
+        // 接回真正的物件照片來源時不用再改這段。
         listings.sort((a, b) => (a.hasPhoto === b.hasPhoto ? 0 : (a.hasPhoto ? -1 : 1)));
 
         return jsonResp({
