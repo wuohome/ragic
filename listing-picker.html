@@ -49,8 +49,8 @@
       <div id="statsEmpty" class="text-slate-400 text-sm py-10 text-center">先選姓名才會看到統計</div>
       <div id="statsBox" class="hidden">
         <div id="noPhotoNotice" class="hidden text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-3">
-          目前案源全部沒有照片：舊的 591 截圖來源已下架（截圖上會印到別的業務資訊，不能用），
-          新的照片來源公司另外在處理，還沒接上。
+          照片來自我們自己刊在 591 上的廣告，每天自動更新一次。沒照片的多半是還沒上 591，
+          或是 591 的廣告已經到期下架——只要把廣告刊上去，隔天照片就會自己出現。
         </div>
         <div class="grid grid-cols-3 gap-2 text-center mb-4">
           <div class="bg-indigo-50 rounded-lg py-3">
@@ -72,6 +72,7 @@
   </div>
 </div>
 
+<script src="assets/listing-photos.js"></script>
 <script>
 const PROXY = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
 const sel = document.getElementById('agentSelect');
@@ -101,7 +102,8 @@ async function loadAgents() {
 
 function rowHtml(l) {
   const flags = [];
-  if (!l.hasPhoto) flags.push('<span class="text-red-500">沒照片</span>');
+  // 照片以 ListingPhotos 對照表為準，不看 Worker 的 hasPhoto（見 assets/listing-photos.js）
+  if (!ListingPhotos.has(l.id)) flags.push('<span class="text-red-500">沒照片</span>');
   if (!l.hasExpirySet) flags.push('<span class="text-amber-500">委託迄日未填</span>');
   const flagText = flags.length ? ` — ${flags.join('、')}` : '';
   return `<div class="border-b border-slate-100 py-1.5"><span class="text-slate-700">${l.address}</span>${flagText}</div>`;
@@ -112,15 +114,19 @@ function rowHtml(l) {
 async function loadStats(slug) {
   statsEmpty.classList.add('hidden');
   statsBox.classList.add('hidden');
-  const resp = await fetch(`${PROXY}/getPublicListings?a=${encodeURIComponent(slug)}`);
+  const [resp] = await Promise.all([
+    fetch(`${PROXY}/getPublicListings?a=${encodeURIComponent(slug)}`),
+    ListingPhotos.load(),
+  ]);
   if (!resp.ok) return null;
   const data = await resp.json();
   const listings = data.listings || [];
-  const noPhotoCount = listings.filter(l => !l.hasPhoto).length;
+  const noPhotoCount = listings.filter(l => !ListingPhotos.has(l.id)).length;
   statTotal.textContent = listings.length;
   statNoPhoto.textContent = noPhotoCount;
   statNoExpiry.textContent = listings.filter(l => !l.hasExpirySet).length;
-  document.getElementById('noPhotoNotice').classList.toggle('hidden', !(listings.length > 0 && noPhotoCount === listings.length));
+  // 只要還有物件沒照片就把說明留著（原本是「全部都沒有」才顯示），業務才知道該補哪裡
+  document.getElementById('noPhotoNotice').classList.toggle('hidden', !(listings.length > 0 && noPhotoCount > 0));
   listPreview.innerHTML = listings.map(rowHtml).join('') || '<p class="text-slate-400">目前沒有會顯示的物件</p>';
   statsBox.classList.remove('hidden');
   return data.agent || null;
