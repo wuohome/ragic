@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的案源推薦連結</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background:#f8fafc; font-family:'PingFang TC','Microsoft JhengHei',sans-serif; }
+</style>
+</head>
+<body class="antialiased text-slate-800 p-4">
+
+<div class="max-w-5xl mx-auto">
+  <div class="mb-6">
+    <h1 class="text-xl font-bold">我的案源推薦連結</h1>
+    <p class="text-sm text-slate-500 mt-1">產生一條只有你名字、只顯示窩的家自有案源的連結，丟給租客。</p>
+    <p class="text-xs text-amber-600 mt-1">⚠️ 這頁沒有登入，選誰就是誰，請不要幫別人產生連結。</p>
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-6">
+    <!-- 左：表單 -->
+    <div class="bg-white rounded-xl shadow p-5 space-y-4 self-start">
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-1">請選擇你的姓名</label>
+        <select id="agentSelect" class="w-full border border-slate-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500">
+          <option value="">— 載入中 —</option>
+        </select>
+      </div>
+
+      <div id="linkBox" class="hidden">
+        <label class="block text-sm font-semibold text-slate-700 mb-1">你的專屬連結（全部在租物件，永久有效）</label>
+        <div class="flex gap-2">
+          <input id="linkInput" readonly class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-slate-50 text-slate-600">
+          <button id="copyBtn" class="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-medium whitespace-nowrap">複製</button>
+        </div>
+        <p id="copiedMsg" class="hidden text-xs text-emerald-600 mt-1">已複製，貼到 LINE 給租客吧</p>
+      </div>
+    </div>
+
+    <!-- 右：即時預覽 / 統計 -->
+    <div class="bg-white rounded-xl shadow p-5">
+      <p class="text-sm font-semibold text-slate-700 mb-3">這條連結目前會顯示什麼</p>
+      <div id="statsEmpty" class="text-slate-400 text-sm py-10 text-center">先選姓名才會看到統計</div>
+      <div id="statsBox" class="hidden">
+        <div class="grid grid-cols-3 gap-2 text-center mb-4">
+          <div class="bg-indigo-50 rounded-lg py-3">
+            <p class="text-2xl font-bold text-indigo-600" id="statTotal">0</p>
+            <p class="text-xs text-slate-500">會顯示的物件</p>
+          </div>
+          <div class="bg-red-50 rounded-lg py-3">
+            <p class="text-2xl font-bold text-red-500" id="statNoPhoto">0</p>
+            <p class="text-xs text-slate-500">沒有照片</p>
+          </div>
+          <div class="bg-amber-50 rounded-lg py-3">
+            <p class="text-2xl font-bold text-amber-500" id="statNoExpiry">0</p>
+            <p class="text-xs text-slate-500">委託迄日沒填</p>
+          </div>
+        </div>
+        <div id="listPreview" class="space-y-1.5 max-h-96 overflow-y-auto text-sm"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PROXY = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+const sel = document.getElementById('agentSelect');
+const linkBox = document.getElementById('linkBox');
+const linkInput = document.getElementById('linkInput');
+const copyBtn = document.getElementById('copyBtn');
+const copiedMsg = document.getElementById('copiedMsg');
+const statsEmpty = document.getElementById('statsEmpty');
+const statsBox = document.getElementById('statsBox');
+const statTotal = document.getElementById('statTotal');
+const statNoPhoto = document.getElementById('statNoPhoto');
+const statNoExpiry = document.getElementById('statNoExpiry');
+const listPreview = document.getElementById('listPreview');
+
+async function loadAgents() {
+  try {
+    const resp = await fetch(`${PROXY}/listingAgents`);
+    const data = await resp.json();
+    const agents = data.agents || [];
+    sel.innerHTML = '<option value="">— 請選擇 —</option>' +
+      agents.map(a => `<option value="${a.slug}">${a.name}</option>`).join('');
+  } catch (e) {
+    sel.innerHTML = '<option value="">載入失敗，請重新整理</option>';
+  }
+}
+
+function rowHtml(l) {
+  const flags = [];
+  if (!l.hasPhoto) flags.push('<span class="text-red-500">沒照片</span>');
+  if (!l.hasExpirySet) flags.push('<span class="text-amber-500">委託迄日未填</span>');
+  const flagText = flags.length ? ` — ${flags.join('、')}` : '';
+  return `<div class="border-b border-slate-100 py-1.5"><span class="text-slate-700">${l.address}</span>${flagText}</div>`;
+}
+
+async function loadStats(slug) {
+  statsEmpty.classList.add('hidden');
+  statsBox.classList.add('hidden');
+  const resp = await fetch(`${PROXY}/getPublicListings?a=${encodeURIComponent(slug)}`);
+  if (!resp.ok) return;
+  const data = await resp.json();
+  const listings = data.listings || [];
+  statTotal.textContent = listings.length;
+  statNoPhoto.textContent = listings.filter(l => !l.hasPhoto).length;
+  statNoExpiry.textContent = listings.filter(l => !l.hasExpirySet).length;
+  listPreview.innerHTML = listings.map(rowHtml).join('') || '<p class="text-slate-400">目前沒有會顯示的物件</p>';
+  statsBox.classList.remove('hidden');
+}
+
+sel.addEventListener('change', () => {
+  const slug = sel.value;
+  if (!slug) {
+    linkBox.classList.add('hidden');
+    statsEmpty.classList.remove('hidden');
+    statsBox.classList.add('hidden');
+    return;
+  }
+  const url = new URL('listings.html', location.href);
+  url.search = 'a=' + encodeURIComponent(slug);
+  linkInput.value = url.toString();
+  linkBox.classList.remove('hidden');
+  copiedMsg.classList.add('hidden');
+  loadStats(slug);
+});
+
+copyBtn.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(linkInput.value);
+  } catch (e) {
+    linkInput.select();
+    document.execCommand('copy');
+  }
+  copiedMsg.classList.remove('hidden');
+});
+
+loadAgents();
+</script>
+</body>
+</html>
