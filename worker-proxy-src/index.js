@@ -7821,12 +7821,16 @@ export default {
 
       // ============ Group Y: 窩的家自有案源推薦頁（唯讀，property-data-kept/10）============
       if (action === 'listingAgents') {
-        // 業務後台下拉選單用：只回 slug+name，不回電話（picker 本身不需要打電話給任何人）。
+        // 業務後台下拉選單用：只回 slug+name+hasPhone，不回實際電話號碼（picker 本身不需要
+        // 打電話給任何人；hasPhone 只是布林旗標，讓下拉選單能在選之前標示「未填電話」，
+        // 2026-09-18 main 驗收發現有 2 位業務 Ragic 使用者資料沒填手機，連結會變成死的）。
         const data = await listingFetchAll(env);
         if (!data) return jsonResp({ error: 'upstream_error' }, 502, allowedOrigin);
         const roster = await listingBuildRoster(data);
         roster.sort((a, b) => a.slug.localeCompare(b.slug));
-        return jsonResp({ agents: roster.map((r) => ({ slug: r.slug, name: r.name })) }, 200, allowedOrigin);
+        return jsonResp({
+          agents: roster.map((r) => ({ slug: r.slug, name: r.name, hasPhone: !!r.phone })),
+        }, 200, allowedOrigin);
       }
 
       if (action === 'getPublicListings') {
