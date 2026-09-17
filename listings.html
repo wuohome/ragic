@@ -66,6 +66,7 @@
   </div>
 </div>
 
+<script src="assets/listing-photos.js"></script>
 <script>
 const PROXY = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
 const qs = new URLSearchParams(location.search);
@@ -99,8 +100,13 @@ function showNoAgent() {
 }
 
 function cardHtml(l) {
-  const photo = l.hasPhoto
-    ? `<img src="${l.photoUrl}" alt="物件照片" class="w-full h-48 object-cover rounded-t-xl" loading="lazy">`
+  // 照片走 ListingPhotos 對照表，不是 Worker 的 hasPhoto（Worker 那邊永遠 false，原因見 assets/listing-photos.js）
+  const pics = ListingPhotos.of(l.id);
+  const photo = pics.length
+    ? `<div class="relative">
+         ${ListingPhotos.thumbTag(pics[0], 'alt="物件照片" loading="lazy" class="w-full h-48 object-cover rounded-t-xl bg-slate-100"')}
+         ${pics.length > 1 ? `<span class="absolute bottom-2 right-2 bg-black/55 text-white text-xs px-2 py-0.5 rounded-full">📷 ${pics.length}</span>` : ''}
+       </div>`
     : `<div class="no-photo-box w-full h-40 rounded-t-xl flex items-center justify-center text-slate-400 text-sm">
          🏠 尚無照片，可洽業務詢問更多資訊
        </div>`;
@@ -138,7 +144,11 @@ let filterOptionsReady = false;
 
 async function loadListings(params = {}) {
   const query = new URLSearchParams({ a: slug, ...params });
-  const resp = await fetch(`${PROXY}/getPublicListings?${query.toString()}`);
+  // 物件清單與照片對照表同時抓，照片這邊失敗不影響清單顯示
+  const [resp] = await Promise.all([
+    fetch(`${PROXY}/getPublicListings?${query.toString()}`),
+    ListingPhotos.load(),
+  ]);
   if (!resp.ok) { showNoAgent(); return; }
   const data = await resp.json();
   agent = data.agent;

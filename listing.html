@@ -65,6 +65,7 @@
   </div>
 </div>
 
+<script src="assets/listing-photos.js"></script>
 <script>
 const PROXY = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
 const qs = new URLSearchParams(location.search);
@@ -109,7 +110,10 @@ async function load() {
 
   if (!/^[a-z0-9-]{2,40}$/.test(slug) || !/^[0-9]{1,12}$/.test(id)) { showNotFound(); return; }
 
-  const resp = await fetch(`${PROXY}/getPublicListing?a=${encodeURIComponent(slug)}&id=${encodeURIComponent(id)}`);
+  const [resp] = await Promise.all([
+    fetch(`${PROXY}/getPublicListing?a=${encodeURIComponent(slug)}&id=${encodeURIComponent(id)}`),
+    ListingPhotos.load(),
+  ]);
   if (!resp.ok) { showNotFound(); return; }
   const data = await resp.json();
   const l = data.listing;
@@ -117,9 +121,31 @@ async function load() {
 
   document.title = `${l.district}${l.address ? '' : ''} — 窩的家`;
 
-  els.photoWrap.innerHTML = l.hasPhoto
-    ? `<img src="${l.photoUrl}" alt="物件照片" class="w-full max-h-96 object-cover">`
-    : `<div class="no-photo-box w-full h-56 flex items-center justify-center text-slate-400">🏠 尚無照片，可洽業務詢問更多資訊</div>`;
+  // 照片走 ListingPhotos 對照表（Worker 的 hasPhoto 永遠 false，原因見 assets/listing-photos.js）。
+  // 多張時做成橫向滑動相簿：手機上用手指滑，每張吸附對齊，右下角顯示第幾張。
+  const pics = ListingPhotos.of(l.id);
+  if (pics.length) {
+    els.photoWrap.innerHTML = `
+      <div class="relative bg-slate-900">
+        <div id="gallery" class="flex overflow-x-auto snap-x snap-mandatory scroll-smooth">
+          ${pics.map(p => `<div class="snap-center shrink-0 w-full">
+            ${ListingPhotos.fullTag(p, 'alt="物件照片" loading="lazy" class="w-full h-72 object-contain"')}
+          </div>`).join('')}
+        </div>
+        ${pics.length > 1 ? `<span id="galleryCount" class="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full">1 / ${pics.length}</span>` : ''}
+      </div>`;
+    const gal = document.getElementById('gallery');
+    const counter = document.getElementById('galleryCount');
+    if (gal && counter) {
+      gal.addEventListener('scroll', () => {
+        const i = Math.round(gal.scrollLeft / gal.clientWidth) + 1;
+        counter.textContent = `${Math.min(i, pics.length)} / ${pics.length}`;
+      }, { passive: true });
+    }
+  } else {
+    els.photoWrap.innerHTML =
+      `<div class="no-photo-box w-full h-56 flex items-center justify-center text-slate-400">🏠 尚無照片，可洽業務詢問更多資訊</div>`;
+  }
 
   if (l.statusBadge) { els.badge.textContent = l.statusBadge; els.badge.classList.remove('hidden'); }
   els.rent.textContent = (l.rent != null ? l.rent.toLocaleString('zh-TW') : '洽業務詢價') + (l.rent != null ? ' / 月' : '');
