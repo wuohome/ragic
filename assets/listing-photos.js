@@ -44,10 +44,17 @@ window.ListingPhotos = (function () {
 
   function of(id) { return map[String(id)] || []; }
 
-  // 給 <img> 用：主網址 + onerror 退路，兩者都要接參數
+  /* 給 <img> 用：主網址 + 兩層退路。
+   *
+   * 第一層：換成蓋浮水印的變體（偶爾只有無浮水印那版讀不到）。
+   * 第二層：連退路都讀不到就整張藏起來——照片網址指的是 591 圖床，廣告一旦下架、
+   * 對照表又還沒重建（每天 08:30 一次）的那個空窗，圖有可能失效。寧可看起來像
+   * 「沒有照片」，也不要在租客眼前掛一個破圖示。 */
   function imgTag(base, variant, attrs) {
-    return '<img src="' + base + variant + '" ' +
-      'onerror="this.onerror=null;this.src=\'' + base + fallback + '\'" ' +
+    var onErr =
+      "if(this.dataset.retried){this.style.display='none';return;}" +
+      "this.dataset.retried='1';this.src='" + base + fallback + "';";
+    return '<img src="' + base + variant + '" onerror="' + onErr + '" ' +
       (attrs || '') + '>';
   }
 
