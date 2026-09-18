@@ -1068,6 +1068,10 @@ footer.app-footer{
         <span class="hint">存進 Ragic，產生可分享連結</span>
       </div>
       <div class="card-body">
+        <div class="field">
+          <label for="fRepairTicketNo">報修單號（選填）</label>
+          <input type="text" id="fRepairTicketNo" placeholder="例如 REP-202609-012" autocomplete="off">
+        </div>
         <button type="button" class="btn primary" id="btnRqCreate" style="width:100%;">建立報價單</button>
         <div id="rqCreateError" style="display:none;margin-top:10px;font-size:12.5px;color:var(--danger);"></div>
         <div id="rqCreateResult" style="display:none;margin-top:14px;"></div>
@@ -1224,6 +1228,7 @@ function createDefaultState(){
     quoteNo: genQuoteNo(now),
     quoteDate: toDateInputValue(now),
     validDays: 7,
+    repairTicketNo: '',
     seller: createDefaultSeller(),
     customer: { name:'', phone:'', address:'' },
     site: { address:'', note:'' },
@@ -1608,6 +1613,7 @@ function renderForm(){
   $('fCustAddress').value = state.customer.address;
   $('fSiteAddress').value = state.site.address;
   $('fSiteNote').value = state.site.note;
+  $('fRepairTicketNo').value = state.repairTicketNo || '';
 
   $('fBlankRows').value = state.extraBlankRows;
 
@@ -1865,6 +1871,7 @@ function bindStaticFields(){
   });
   on('fSiteAddress','input', function(e){ state.site.address = e.target.value; renderPreview(); scheduleSave(); });
   on('fSiteNote','input', function(e){ state.site.note = e.target.value; renderPreview(); scheduleSave(); });
+  on('fRepairTicketNo','input', function(e){ state.repairTicketNo = e.target.value; scheduleSave(); });
 
   on('fBlankRows','input', function(e){
     state.extraBlankRows = Math.max(0, Number(e.target.value) || 0);
@@ -2184,6 +2191,7 @@ function bindRqCreate(){
     var payload = {
       customerName: state.customer.name,
       customerPhone: state.customer.phone,
+      repairTicketNo: state.repairTicketNo ? state.repairTicketNo.trim() : '',
       quoteDate: fmtDateSlash(state.quoteDate),
       validUntilDate: addDays(state.quoteDate, state.validDays),
       issuer: state.seller.contact,
