@@ -1736,6 +1736,64 @@ async function authenticatePettyCashGoogle(request, env, origin) {
   return identity;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Group S 追加：資產活化工作檯 Google 登入（2026-09-24，51 條同仁連結改 Google 登入
+// 第 1 批）。複用零用金 v49 authenticatePettyCashGoogle 的整套驗證邏輯（tokeninfo +
+// aud + email_verified + 反查人事表在職狀態），差別只在授權條件——零用金認的是
+// isFinance/isViewer 兩個獨立布林，這裡認的是「部門是否等於這條工作檯原本服務的
+// 對象」。原 WORKBENCH_TOKEN 固定連結沒有角色分流、誰持有網址誰就能用，實際使用者
+// 是小吳哥（部門=經營階層）與其操盤團隊忠豪哥／阿傳／宣佑（部門=租賃部）。用人事表
+// 部門欄位（fid 3000937）等價表達：在職／試用 且 部門 ∈ {租賃部, 經營階層}。
+// 舊 `?token=` 路徑完全不動，只在沒帶 Authorization header 時才會被呼叫（fallback）。
+// ─────────────────────────────────────────────────────────────────────────────
+const WB_ALLOWED_DEPARTMENTS = new Set(['租賃部', '經營階層']);
+const wbGoogleAuthCache = new Map(); // sha256(idToken) → { expiresAt, identity }
+
+async function authenticateWorkbenchGoogle(request, env, origin) {
+  const authHeader = request.headers.get('Authorization') || '';
+  const m = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
+  const idToken = m ? m[1].trim() : '';
+  if (!idToken) return null; // 沒帶 Authorization → 呼叫端 fallback 舊 `?token=` 路徑
+
+  const fail = (status, error) => ({ __authError: jsonResp({ error }, status, origin) });
+
+  const cacheKey = await pcSha256Hex(idToken);
+  const cached = wbGoogleAuthCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.identity;
+
+  let info;
+  try {
+    const res = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken));
+    if (!res.ok) return fail(401, 'invalid_session');
+    info = await res.json();
+  } catch {
+    return fail(401, 'invalid_session');
+  }
+  if (!info || info.aud !== PC_GOOGLE_CLIENT_ID) return fail(401, 'wrong_audience');
+  if (info.email_verified === 'false') return fail(403, 'email_unverified');
+
+  const email = pcClean(info.email).toLowerCase();
+  if (!email) return fail(401, 'invalid_session');
+
+  const { upstream, data } = await getFromRagic(env, PETTY_CASH_STAFF_SHEET, 'naming=EID&limit=200');
+  if (!upstream.ok || !data) return fail(403, 'not_whitelisted');
+  const records = Object.values(data).filter((r) => r && typeof r === 'object');
+  const rec = records.find((r) => pcClean(r[PC_STAFF_EMAIL_FIELD]).toLowerCase() === email);
+  const status = rec ? pcClean(rec[PC_STAFF_STATUS_FIELD]) : '';
+  const name = rec ? pcClean(rec[PC_STAFF_NAME_FIELD]) : '';
+  const department = rec ? pcClean(rec[PC_STAFF_DEPT_FIELD]) : '';
+  if (!rec || !PC_ACTIVE_STATUSES.has(status) || !name) return fail(403, 'not_whitelisted');
+  if (!WB_ALLOWED_DEPARTMENTS.has(department)) return fail(403, 'not_whitelisted');
+
+  const identity = { name, department, email };
+
+  const expSeconds = Number(info.exp);
+  const remainingMs = Number.isFinite(expSeconds) ? (expSeconds * 1000 - Date.now()) : 0;
+  const ttlMs = Math.max(0, Math.min(5 * 60 * 1000, remainingMs));
+  wbGoogleAuthCache.set(cacheKey, { expiresAt: Date.now() + ttlMs, identity });
+  return identity;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 零用金轉單（金額 >= PC_AMOUNT_LIMIT，2026-08-10 建）。決策5：這段完全不動，只碰
 // finance2/5（採購/請款表）+ decorating/4（協力廠商）+ ragicforms4/20004（人事表銀行資料），
@@ -4994,12 +5052,23 @@ export default {
       if (!repairIdentity) return jsonResp({ error: 'forbidden' }, 403, allowedOrigin);
     }
 
-    // Group S: 資產活化工作檯 P5 — 固定連結 token 驗證。失敗一律同型 404（不分因由防列舉），
-    // 比照 payment-receipt v30 / earnest v29 IDOR root-fix 手法（見規格書 § P5 認證）。
+    // Group S: 資產活化工作檯 P5 — 雙軌身分驗證（2026-09-24，51 條同仁連結改 Google 登入
+    // 第 1 批）。優先序同 Group X 零用金：帶 Authorization header 就走 Google（反查人事表
+    // 部門 ∈ {租賃部, 經營階層}），沒帶才 fallback 舊 `?token=`（TODO: Google 登入穩定後
+    // 移除，比照零用金 v49 慣例）。舊路徑完全不動、行為不變；`?token=` 帶了但也帶了
+    // Authorization header 時只認 Authorization，不會 fallback（同零用金 C 段設計理由：
+    // 避免「哪個身分生效」變得無法診斷）。Google 驗證本身失敗（invalid_session 等）回該
+    // 錯誤本身的 401/403，不套用同型 404；角色不符（不在允許部門）沿用 not_whitelisted
+    // 403，因為這是「已知道是誰、明確不合格」而非「查無此人」。
     if (WORKBENCH_ACTIONS.has(action)) {
-      const wbToken = url.searchParams.get('token');
-      if (!wbToken || !env.WORKBENCH_TOKEN || wbToken !== env.WORKBENCH_TOKEN) {
-        return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
+      const wbGoogle = await authenticateWorkbenchGoogle(request, env, allowedOrigin);
+      if (wbGoogle && wbGoogle.__authError) return wbGoogle.__authError;
+      if (!wbGoogle) {
+        // 沒帶 Authorization → fallback 舊 `?token=` 路徑，行為完全不變
+        const wbToken = url.searchParams.get('token');
+        if (!wbToken || !env.WORKBENCH_TOKEN || wbToken !== env.WORKBENCH_TOKEN) {
+          return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
+        }
       }
     }
 

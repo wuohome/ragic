@@ -263,6 +263,13 @@
   .wb-invalid h1 { font-size: 20px; margin: 0; }
   .wb-invalid p { color: var(--muted); font-size: 13.5px; margin: 0; max-width: 40ch; }
 
+  /* ---------- Google 登入三態畫面（2026-09-24，51 條連結改 Google 登入第 1 批）---------- */
+  .wb-auth-gate { display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; gap: 16px; font-family: var(--font-sans); color: var(--ink); text-align: center; padding: 24px; }
+  .wb-auth-gate h1 { font-size: 20px; margin: 0; }
+  .wb-auth-gate p { color: var(--muted); font-size: 13.5px; margin: 0; max-width: 42ch; line-height: 1.6; }
+  .wb-auth-gate .wb-gsi-btn { min-height: 40px; }
+  .wb-auth-gate__logout { margin-top: 4px; font-size: 12.5px; color: var(--navy); text-decoration: underline; cursor: pointer; background: none; border: none; padding: 0; }
+
   .wb-toast-wrap { position: fixed; top: 18px; right: 18px; z-index: 200; display: flex; flex-direction: column; gap: 8px; max-width: 380px; }
   .wb-toast { padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 600; box-shadow: var(--shadow-hover); animation: wb-toast-in 200ms var(--ease); }
   .wb-toast--ok { background: var(--teal-bg); color: var(--teal-text); }
@@ -324,11 +331,16 @@
     .wb-modal { width: 100%; }
   }
 </style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 <div class="wb-toast-wrap" id="wbToastWrap"></div>
 
-<div class="app-shell" id="wbApp">
+<!-- Google 登入三態畫面（2026-09-24，51 條連結改 Google 登入第 1 批）。舊 ?token= 參數
+     不再拆封使用，僅供舊書籤仍能開啟頁面本身；實際資料一律要求 Google 登入。 -->
+<div id="wbAuthGate" class="wb-auth-gate" style="display:none;"></div>
+
+<div class="app-shell" id="wbApp" style="display:none;">
 
   <!-- ============ 左側導覽列 ============ -->
   <aside class="sidebar">
@@ -560,12 +572,140 @@
   'use strict';
 
   var BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
-  var TOKEN = new URLSearchParams(location.search).get('token');
+  // Google 登入（2026-09-24，51 條同仁連結改 Google 登入第 1 批，照 v49 架構：
+  // Worker 自己驗 ID token 再反查人事表，不用 Supabase 白名單表）。
+  // 舊 ?token= 參數不再拆封使用——舊書籤仍能開啟這個頁面本身，只是一律先看到
+  // Google 登入畫面，不會直接放行資料（見 窩的家/系統部/規格書/固定連結改Google登入_分批計畫.md）。
+  var GOOGLE_CLIENT_ID = '18499630691-mi617tp07ptq943nlkhslf7bfu27j6cn.apps.googleusercontent.com';
+  var GID_STORAGE_KEY = 'wuohome_gid_v1';
+  var _idToken = null;
+  var _silentRetried = false;
 
-  if (!TOKEN) {
-    document.body.innerHTML = '<div class="wb-invalid"><h1>連結無效</h1><p>此工作檯需要正確的連結授權，請向系統管理員索取完整連結（含 token 參數）。</p></div>';
-    return;
+  function readIdTokenCache() {
+    try {
+      var raw = localStorage.getItem(GID_STORAGE_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (!parsed || !parsed.idToken || !parsed.exp) return null;
+      return parsed;
+    } catch (e) { return null; }
   }
+  function writeIdTokenCache(idToken, exp) {
+    try { localStorage.setItem(GID_STORAGE_KEY, JSON.stringify({ idToken: idToken, exp: exp })); } catch (e) {}
+  }
+  function clearIdTokenCache() {
+    try { localStorage.removeItem(GID_STORAGE_KEY); } catch (e) {}
+  }
+  function decodeJwtExp(idToken) {
+    try {
+      var payload = JSON.parse(atob(idToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      return typeof payload.exp === 'number' ? payload.exp * 1000 : 0;
+    } catch (e) { return 0; }
+  }
+
+  function showAuthGate(html) {
+    document.getElementById('wbApp').style.display = 'none';
+    var gate = document.getElementById('wbAuthGate');
+    gate.style.display = 'flex';
+    gate.innerHTML = html;
+  }
+  function hideAuthGate() {
+    document.getElementById('wbAuthGate').style.display = 'none';
+    document.getElementById('wbApp').style.display = '';
+  }
+  function renderSignedOutGate() {
+    showAuthGate(
+      '<h1>資產活化工作檯</h1>' +
+      '<p>本系統僅供窩的家同仁使用，請用公司登記的 Google 帳號登入。</p>' +
+      '<div id="wbGsiBtn" class="wb-gsi-btn"></div>'
+    );
+    renderGoogleButton();
+  }
+  function renderNotWhitelistedGate(email) {
+    showAuthGate(
+      '<h1>此帳號尚未獲得授權</h1>' +
+      '<p>目前登入的是 ' + esc(email || '') + '，不在使用名單內。如果你是窩的家同仁，請聯絡管理部確認帳號與部門設定。</p>' +
+      '<button class="wb-auth-gate__logout" id="wbGateLogout" type="button">登出，換帳號再試</button>'
+    );
+    var btn = document.getElementById('wbGateLogout');
+    if (btn) btn.addEventListener('click', function () { signOut(); renderSignedOutGate(); });
+  }
+  function renderSessionErrorGate(message) {
+    showAuthGate(
+      '<h1>登入狀態已失效</h1>' +
+      '<p>' + esc(message || '請重新登入一次。') + '</p>' +
+      '<div id="wbGsiBtn" class="wb-gsi-btn"></div>'
+    );
+    renderGoogleButton();
+  }
+  function renderGoogleButton() {
+    if (!window.google || !google.accounts || !google.accounts.id) {
+      setTimeout(renderGoogleButton, 200);
+      return;
+    }
+    var el = document.getElementById('wbGsiBtn');
+    if (el) google.accounts.id.renderButton(el, { theme: 'outline', size: 'large', text: 'signin_with', locale: 'zh_TW' });
+  }
+  function signOut() {
+    _idToken = null;
+    clearIdTokenCache();
+    if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
+  }
+
+  function onGoogleCredential(resp) {
+    var idToken = resp && resp.credential;
+    if (!idToken) return;
+    var exp = decodeJwtExp(idToken);
+    _idToken = idToken;
+    if (exp) writeIdTokenCache(idToken, exp);
+    _silentRetried = false;
+    hideAuthGate();
+    boot();
+    scheduleSilentRenew(exp);
+  }
+
+  function scheduleSilentRenew(exp) {
+    if (!exp) return;
+    var delay = Math.max(0, exp - Date.now() - 5 * 60 * 1000);
+    setTimeout(function () {
+      if (window.google && google.accounts && google.accounts.id) google.accounts.id.prompt();
+    }, delay);
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible' || !_idToken) return;
+    var cached = readIdTokenCache();
+    if (!cached || cached.exp - Date.now() < 5 * 60 * 1000) {
+      if (window.google && google.accounts && google.accounts.id) google.accounts.id.prompt();
+    }
+  });
+  window.addEventListener('storage', function (e) {
+    if (e.key === GID_STORAGE_KEY && !e.newValue) { _idToken = null; renderSignedOutGate(); }
+  });
+
+  function initGoogleAuth() {
+    if (!window.google || !google.accounts || !google.accounts.id) {
+      setTimeout(initGoogleAuth, 200);
+      return;
+    }
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      auto_select: true,
+      use_fedcm_for_prompt: true,
+      callback: onGoogleCredential,
+    });
+    var cached = readIdTokenCache();
+    if (cached && cached.exp - Date.now() > 2 * 60 * 1000) {
+      _idToken = cached.idToken;
+      hideAuthGate();
+      boot();
+      scheduleSilentRenew(cached.exp);
+    } else {
+      renderSignedOutGate();
+      google.accounts.id.prompt();
+    }
+  }
+  initGoogleAuth();
 
   // ---------- 欄位選項清單（對應 Ragic 單選/多選欄位定義） ----------
   var OPT_STATUS       = ['詢問中', '資金體檢中', 'ready待簽', '已簽約', '已成案', '已放棄'];
@@ -828,16 +968,14 @@
     });
   }
 
-  // ---------- API ----------
+  // ---------- API（2026-09-24 改 Bearer ID token，不再帶 ?token=）----------
   function apiGet(path) {
-    var sep = path.indexOf('?') >= 0 ? '&' : '?';
-    return fetch(BASE + '/' + path + sep + 'token=' + encodeURIComponent(TOKEN)).then(handleResp);
+    return fetch(BASE + '/' + path, { headers: { 'Authorization': 'Bearer ' + _idToken } }).then(handleResp);
   }
   function apiPost(path, body) {
-    var sep = path.indexOf('?') >= 0 ? '&' : '?';
-    return fetch(BASE + '/' + path + sep + 'token=' + encodeURIComponent(TOKEN), {
+    return fetch(BASE + '/' + path, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _idToken },
       body: JSON.stringify(body),
     }).then(handleResp);
   }
@@ -853,8 +991,25 @@
       return data || {};
     });
   }
+  // 2026-09-24：舊版「連結無效」文案改成 Google 三態畫面裡對應的狀態。401（invalid_session／
+  // wrong_audience）代表本地快取的 ID token 失效，導回登入畫面重新來過；403 not_whitelisted
+  // 代表帳號不在允許名單（不在職或部門不符），顯示「此帳號尚未獲得授權」；其餘（含舊路徑
+  // 遺留的同型 404）一律導回登入畫面，不特別區分——分不出來也不該分得出來。
   function reportInvalidToken() {
-    document.body.innerHTML = '<div class="wb-invalid"><h1>連結無效或已失效</h1><p>token 不正確，請向系統管理員索取正確的工作檯連結。</p></div>';
+    if (_idToken && (window.google && google.accounts && google.accounts.id)) {
+      var email = null;
+      try {
+        var payload = JSON.parse(atob(_idToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+        email = payload.email;
+      } catch (e) {}
+      clearIdTokenCache();
+      _idToken = null;
+      renderNotWhitelistedGate(email);
+      return;
+    }
+    clearIdTokenCache();
+    _idToken = null;
+    renderSignedOutGate();
   }
 
   // ---------- 開機：載入資料 ----------
@@ -1451,7 +1606,8 @@
   });
   document.getElementById('wbRefreshBtn').addEventListener('click', boot);
 
-  boot();
+  // 2026-09-24：不再於 IIFE 底部自動呼叫 boot()，改由 Google 登入成功回呼
+  // （onGoogleCredential／initGoogleAuth 內的快取命中分支）觸發，見上方認證段落。
 })();
 </script>
 </body>
