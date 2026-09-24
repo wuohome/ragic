@@ -101,9 +101,13 @@ function readIdTokenCache() {
   } catch { return null; }
 }
 function writeIdTokenCache(idToken, exp) {
+  // ponytail-debt: localStorage 寫入失敗（無痕模式/儲存已滿/被瀏覽器政策封鎖）只降級為
+  // 不快取，不影響安全性——Google 驗證仍在伺服器端做，快取只是免除重複登入的體驗優化；
+  // 失敗時使用者頂多每次都要重新走一次 Google 登入。與第 1 批 asset-workbench.html 同款寫法。
   try { localStorage.setItem(GID_STORAGE_KEY, JSON.stringify({ idToken, exp })); } catch {}
 }
 function clearIdTokenCache() {
+  // ponytail-debt: 同上，登出時清快取失敗不影響安全性（伺服器端才是授權依據）。
   try { localStorage.removeItem(GID_STORAGE_KEY); } catch {}
 }
 function decodeJwtExp(idToken) {
@@ -258,6 +262,8 @@ function reportAuthFailure(errCode) {
   clearIdTokenCache();
   if (errCode === 'not_whitelisted' && _idToken) {
     let email = null;
+    // ponytail-debt: 這裡解碼 JWT 純粹是為了在「不在名單」畫面顯示帳號名稱方便使用者辨識，
+    // 失敗就顯示空字串，不影響任何安全判定——授權與否完全由伺服器端 tokeninfo 驗證決定。
     try {
       const payload = JSON.parse(atob(_idToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
       email = payload.email;
