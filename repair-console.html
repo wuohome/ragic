@@ -6,6 +6,7 @@
   <meta name="referrer" content="no-referrer">
   <title>工務工作台｜窩的家</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif; }
     button, input, select, textarea, summary { min-height: 44px; }
@@ -13,13 +14,9 @@
   </style>
 </head>
 <body class="min-h-screen bg-slate-100 text-slate-800">
-  <div id="invalidLink" class="hidden min-h-screen items-center justify-center p-6">
-    <div class="w-full max-w-md rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm">
-      <div class="mb-3 text-4xl" aria-hidden="true">🔒</div>
-      <h1 class="text-xl font-bold text-slate-900">連結無效，請聯絡管理員</h1>
-      <p class="mt-2 text-sm text-slate-500">請使用管理員提供的工務專屬連結。</p>
-    </div>
-  </div>
+  <!-- Google 登入三態畫面（2026-09-24，51 條同仁連結改 Google 登入第 2 批）。舊 ?token=
+       參數不再拆封使用，僅供舊書籤仍能開啟頁面本身；實際資料一律要求 Google 登入。 -->
+  <div id="authGate" class="hidden min-h-screen items-center justify-center p-6"></div>
 
   <div id="app" class="hidden">
     <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -85,21 +82,124 @@
 <script>
 'use strict';
 const API_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
-function loadRepairToken() {
-  const currentUrl = new URL(window.location.href);
-  const fromUrl = currentUrl.searchParams.get('token')?.trim() || '';
-  let stored = '';
+
+// Google 登入（2026-09-24，51 條同仁連結改 Google 登入第 2 批，照第 1 批 v49 架構：
+// Worker 自己驗 ID token 再反查人事表，不用 Supabase 白名單表）。舊 ?token= 參數不再
+// 拆封使用——舊書籤仍能開啟這個頁面本身，只是一律先看到 Google 登入畫面，不會直接
+// 放行資料（見 窩的家/系統部/規格書/固定連結改Google登入_分批計畫.md § 第 2 批施工紀錄）。
+const GOOGLE_CLIENT_ID = '18499630691-mi617tp07ptq943nlkhslf7bfu27j6cn.apps.googleusercontent.com';
+const GID_STORAGE_KEY = 'wuohome_gid_v1';
+let _idToken = null;
+
+function readIdTokenCache() {
   try {
-    if (fromUrl) sessionStorage.setItem('wuohomeRepairConsoleToken', fromUrl);
-    stored = sessionStorage.getItem('wuohomeRepairConsoleToken')?.trim() || '';
-  } catch { stored = ''; }
-  if (currentUrl.searchParams.has('token')) {
-    currentUrl.searchParams.delete('token');
-    history.replaceState(null, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
-  }
-  return fromUrl || stored;
+    const raw = localStorage.getItem(GID_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.idToken || !parsed.exp) return null;
+    return parsed;
+  } catch { return null; }
 }
-const REPAIR_TOKEN = loadRepairToken();
+function writeIdTokenCache(idToken, exp) {
+  try { localStorage.setItem(GID_STORAGE_KEY, JSON.stringify({ idToken, exp })); } catch {}
+}
+function clearIdTokenCache() {
+  try { localStorage.removeItem(GID_STORAGE_KEY); } catch {}
+}
+function decodeJwtExp(idToken) {
+  try {
+    const payload = JSON.parse(atob(idToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : 0;
+  } catch { return 0; }
+}
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function showAuthGate(html) {
+  byId('app').classList.add('hidden');
+  const gate = byId('authGate');
+  gate.classList.remove('hidden'); gate.classList.add('flex');
+  gate.innerHTML = html;
+}
+function hideAuthGate() {
+  const gate = byId('authGate');
+  gate.classList.add('hidden'); gate.classList.remove('flex');
+  byId('app').classList.remove('hidden');
+}
+function renderSignedOutGate() {
+  showAuthGate(
+    '<div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">' +
+    '<div class="mb-3 text-4xl" aria-hidden="true">🔧</div>' +
+    '<h1 class="text-xl font-bold text-slate-900">工務工作台</h1>' +
+    '<p class="mt-2 text-sm text-slate-500">本系統僅供窩的家同仁使用，請用公司登記的 Google 帳號登入。</p>' +
+    '<div id="gsiBtn" class="mt-4 flex justify-center"></div>' +
+    '</div>'
+  );
+  renderGoogleButton();
+}
+function renderNotWhitelistedGate(email) {
+  showAuthGate(
+    '<div class="w-full max-w-md rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm">' +
+    '<div class="mb-3 text-4xl" aria-hidden="true">🔒</div>' +
+    '<h1 class="text-xl font-bold text-slate-900">此帳號尚未獲得授權</h1>' +
+    '<p class="mt-2 text-sm text-slate-500">目前登入的是 ' + escHtml(email || '') + '，不在使用名單內。如果你是窩的家同仁，請聯絡管理部確認帳號與職稱設定。</p>' +
+    '<button id="gateLogout" type="button" class="mt-4 text-sm text-orange-600 underline">登出，換帳號再試</button>' +
+    '</div>'
+  );
+  const btn = byId('gateLogout');
+  if (btn) btn.addEventListener('click', function () { signOut(); renderSignedOutGate(); });
+}
+function renderGoogleButton() {
+  if (!window.google || !google.accounts || !google.accounts.id) { setTimeout(renderGoogleButton, 200); return; }
+  const el = byId('gsiBtn');
+  if (el) google.accounts.id.renderButton(el, { theme: 'outline', size: 'large', text: 'signin_with', locale: 'zh_TW' });
+}
+function signOut() {
+  _idToken = null;
+  clearIdTokenCache();
+  if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
+}
+function onGoogleCredential(resp) {
+  const idToken = resp && resp.credential;
+  if (!idToken) return;
+  const exp = decodeJwtExp(idToken);
+  _idToken = idToken;
+  if (exp) writeIdTokenCache(idToken, exp);
+  hideAuthGate();
+  loadAll();
+  scheduleSilentRenew(exp);
+}
+function scheduleSilentRenew(exp) {
+  if (!exp) return;
+  const delay = Math.max(0, exp - Date.now() - 5 * 60 * 1000);
+  setTimeout(function () { if (window.google && google.accounts && google.accounts.id) google.accounts.id.prompt(); }, delay);
+}
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState !== 'visible' || !_idToken) return;
+  const cached = readIdTokenCache();
+  if (!cached || cached.exp - Date.now() < 5 * 60 * 1000) {
+    if (window.google && google.accounts && google.accounts.id) google.accounts.id.prompt();
+  }
+});
+window.addEventListener('storage', function (e) {
+  if (e.key === GID_STORAGE_KEY && !e.newValue) { _idToken = null; renderSignedOutGate(); }
+});
+function initGoogleAuth() {
+  if (!window.google || !google.accounts || !google.accounts.id) { setTimeout(initGoogleAuth, 200); return; }
+  google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, auto_select: true, use_fedcm_for_prompt: true, callback: onGoogleCredential });
+  const cached = readIdTokenCache();
+  if (cached && cached.exp - Date.now() > 2 * 60 * 1000) {
+    _idToken = cached.idToken;
+    hideAuthGate();
+    loadAll();
+    scheduleSilentRenew(cached.exp);
+  } else {
+    renderSignedOutGate();
+    google.accounts.id.prompt();
+  }
+}
 const COST_STATUSES = new Set(['新進件', '待估價']);
 // v2 工作檯優化：已報價=待業務收款，不是勁豪的工作，移到「在別人手上的單」唯讀區（見下方 OTHER_HANDS_STATUSES）。
 const DISPATCH_STATUSES = new Set(['已收款']);
@@ -136,13 +236,38 @@ const money = (value) => Number(value || 0).toLocaleString('zh-TW');
 
 async function internalFetch(action, options = {}) {
   const headers = new Headers(options.headers || {});
-  headers.set('X-WH-Repair-Token', REPAIR_TOKEN);
+  headers.set('Authorization', `Bearer ${_idToken}`);
   const response = await fetch(`${API_BASE}/${action}`, { ...options, headers });
   let data;
   try { data = await response.json(); }
   catch { throw new Error('伺服器回應格式錯誤'); }
-  if (!response.ok || !data.ok) throw new Error(clean(data.error || data.message) || `操作失敗（${response.status}）`);
+  if (!response.ok || !data.ok) {
+    const errCode = clean(data.error || data.message);
+    // 2026-09-24：401（invalid_session/wrong_audience）代表本地快取的 ID token 失效，
+    // 導回登入畫面重新來過；403 not_whitelisted 代表帳號不在允許名單（不在職或職稱/部門
+    // 不符），顯示「此帳號尚未獲得授權」。兩者都不當一般錯誤丟給呼叫端，直接切換登入態。
+    if (response.status === 401 || errCode === 'not_whitelisted') {
+      reportAuthFailure(errCode);
+      throw new Error('請重新登入');
+    }
+    throw new Error(errCode || `操作失敗（${response.status}）`);
+  }
   return data;
+}
+function reportAuthFailure(errCode) {
+  clearIdTokenCache();
+  if (errCode === 'not_whitelisted' && _idToken) {
+    let email = null;
+    try {
+      const payload = JSON.parse(atob(_idToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      email = payload.email;
+    } catch {}
+    _idToken = null;
+    renderNotWhitelistedGate(email);
+    return;
+  }
+  _idToken = null;
+  renderSignedOutGate();
 }
 
 function make(tag, classes, text) {
@@ -501,11 +626,9 @@ async function loadAll() {
 }
 
 byId('refreshButton').addEventListener('click', loadAll);
-if (!REPAIR_TOKEN) {
-  byId('invalidLink').classList.remove('hidden'); byId('invalidLink').classList.add('flex');
-} else {
-  byId('app').classList.remove('hidden'); loadAll();
-}
+// 2026-09-24：不再檢查 REPAIR_TOKEN 直接開頁，改由 Google 登入成功回呼
+// （onGoogleCredential／initGoogleAuth 內的快取命中分支）觸發 loadAll()，見上方認證段落。
+initGoogleAuth();
 </script>
 </body>
 </html>

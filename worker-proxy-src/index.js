@@ -422,6 +422,13 @@ const REPAIR_INTERNAL_ACTIONS = new Set([
   'repairSetMargin', 'repairReportPayment', 'repairDispatch', 'repairComplete',
   'repairAccept', 'repairReject', 'repairCancel',
 ]);
+// console 專用 action（工務工作台看全部）。Google 登入第 2 批（2026-09-24）只改這些
+// action 的身分來源；business 專用 action（repairCreate/repairListMine/repairSetMargin/
+// repairReportPayment）與雙角色皆可的 repairCancel 完全不受影響，仍走舊 authenticateRepair。
+const REPAIR_CONSOLE_ONLY_ACTIONS = new Set([
+  'repairListAll', 'repairQuoteCost', 'repairDispatch', 'repairComplete',
+  'repairAccept', 'repairReject',
+]);
 const REPAIR_SHEET = 'maintenance-management/8';
 const REPAIR_VENDOR_SHEET = 'decorating/4';
 const RF = Object.freeze({
@@ -994,6 +1001,7 @@ const PETTY_CASH_STAFF_SHEET = 'ragicforms4/20004';
 const PC_STAFF_TOKEN_FIELD = '1003215';
 const PC_STAFF_NAME_FIELD = '3000933';
 const PC_STAFF_DEPT_FIELD = '3000937';
+const PC_STAFF_TITLE_FIELD = '3000939'; // 職稱（同一次人事表查詢一併取回，見 authenticateRepairConsoleGoogle）
 const PC_STAFF_STATUS_FIELD = '3000945';
 const PC_ACTIVE_STATUSES = new Set(['在職', '試用']); // 只有這兩種在職狀態可請款
 
@@ -1791,6 +1799,71 @@ async function authenticateWorkbenchGoogle(request, env, origin) {
   const remainingMs = Number.isFinite(expSeconds) ? (expSeconds * 1000 - Date.now()) : 0;
   const ttlMs = Math.max(0, Math.min(5 * 60 * 1000, remainingMs));
   wbGoogleAuthCache.set(cacheKey, { expiresAt: Date.now() + ttlMs, identity });
+  return identity;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Group R 追加：工務工作台（repair-console.html）Google 登入（2026-09-24，51 條同仁
+// 連結改 Google 登入第 2 批）。複用同一套 tokeninfo/aud/email_verified 驗證鏈，授權
+// 條件依 main/Joan 2026-09-24 裁決：在職／試用 且（部門＝經營階層 或 職稱欄含「工務」
+// 二字）。理由：人事表本無「工務部」這個部門值；工務報修主表 37 筆 2026-08-24 之後
+// console 端零動作（陳勁豪轉租賃部承攬後已無人使用）；經營階層（吳彥廷／蕭靜芳）保有
+// 全覽權；日後新聘工務人員只要人事表職稱填含「工務」即自動取得，不建白名單、不動任何
+// secret。陳勁豪（現部門＝租賃部、職稱空白）依此規則會落在「不在名單」，這是角色跟著
+// 人事表走的預期結果，不是 bug。
+// 只認 console 角色（工務工作台=看全部），不影響 repairListMine 等 business 專用 action
+// ——那些仍走舊 authenticateRepair（X-WH-Repair-Token），本函式完全不碰。
+// ─────────────────────────────────────────────────────────────────────────────
+const repairConsoleGoogleAuthCache = new Map(); // sha256(idToken) → { expiresAt, identity }
+
+function isRepairConsoleAuthorized(status, department, title) {
+  if (!PC_ACTIVE_STATUSES.has(status)) return false;
+  if (department === '經營階層') return true;
+  return typeof title === 'string' && title.includes('工務');
+}
+
+async function authenticateRepairConsoleGoogle(request, env, origin) {
+  const authHeader = request.headers.get('Authorization') || '';
+  const m = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
+  const idToken = m ? m[1].trim() : '';
+  if (!idToken) return null; // 沒帶 Authorization → 呼叫端 fallback 舊 X-WH-Repair-Token 路徑
+
+  const fail = (status, error) => ({ __authError: jsonResp({ error }, status, origin) });
+
+  const cacheKey = await pcSha256Hex(idToken);
+  const cached = repairConsoleGoogleAuthCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.identity;
+
+  let info;
+  try {
+    const res = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken));
+    if (!res.ok) return fail(401, 'invalid_session');
+    info = await res.json();
+  } catch {
+    return fail(401, 'invalid_session');
+  }
+  if (!info || info.aud !== PC_GOOGLE_CLIENT_ID) return fail(401, 'wrong_audience');
+  if (info.email_verified === 'false') return fail(403, 'email_unverified');
+
+  const email = pcClean(info.email).toLowerCase();
+  if (!email) return fail(401, 'invalid_session');
+
+  const { upstream, data } = await getFromRagic(env, PETTY_CASH_STAFF_SHEET, 'naming=EID&limit=200');
+  if (!upstream.ok || !data) return fail(403, 'not_whitelisted');
+  const records = Object.values(data).filter((r) => r && typeof r === 'object');
+  const rec = records.find((r) => pcClean(r[PC_STAFF_EMAIL_FIELD]).toLowerCase() === email);
+  const status = rec ? pcClean(rec[PC_STAFF_STATUS_FIELD]) : '';
+  const name = rec ? pcClean(rec[PC_STAFF_NAME_FIELD]) : '';
+  const department = rec ? pcClean(rec[PC_STAFF_DEPT_FIELD]) : '';
+  const title = rec ? pcClean(rec[PC_STAFF_TITLE_FIELD]) : '';
+  if (!rec || !name || !isRepairConsoleAuthorized(status, department, title)) return fail(403, 'not_whitelisted');
+
+  const identity = { role: 'console', name, department, title, email };
+
+  const expSeconds = Number(info.exp);
+  const remainingMs = Number.isFinite(expSeconds) ? (expSeconds * 1000 - Date.now()) : 0;
+  const ttlMs = Math.max(0, Math.min(5 * 60 * 1000, remainingMs));
+  repairConsoleGoogleAuthCache.set(cacheKey, { expiresAt: Date.now() + ttlMs, identity });
   return identity;
 }
 
@@ -5048,7 +5121,17 @@ export default {
 
     let repairIdentity = null;
     if (REPAIR_INTERNAL_ACTIONS.has(action)) {
-      repairIdentity = authenticateRepair(request, env);
+      // Group R: 工務工作台 console 角色雙軌身分驗證（2026-09-24，51 條同仁連結改 Google
+      // 登入第 2 批）。優先序同 Group S/X：console 專用 action 且帶 Authorization header
+      // 就走 Google（反查人事表，授權條件見 authenticateRepairConsoleGoogle 上方註解）；
+      // 沒帶 Authorization 才 fallback 舊 X-WH-Repair-Token（business 專用 action 與
+      // repairCancel 完全不受影響，一律走這條舊路徑，行為不變）。
+      if (REPAIR_CONSOLE_ONLY_ACTIONS.has(action)) {
+        const consoleGoogle = await authenticateRepairConsoleGoogle(request, env, allowedOrigin);
+        if (consoleGoogle && consoleGoogle.__authError) return consoleGoogle.__authError;
+        if (consoleGoogle) repairIdentity = consoleGoogle;
+      }
+      if (!repairIdentity) repairIdentity = authenticateRepair(request, env);
       if (!repairIdentity) return jsonResp({ error: 'forbidden' }, 403, allowedOrigin);
     }
 
