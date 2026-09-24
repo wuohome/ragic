@@ -591,9 +591,14 @@
     } catch (e) { return null; }
   }
   function writeIdTokenCache(idToken, exp) {
+    // ponytail-debt: localStorage 在無痕模式／被瀏覽器政策停用時 setItem 會拋錯，
+    // 這裡刻意吞掉——寫入快取只是加速下次開頁，失敗時退回「按按鈕重新登入」即可，
+    // 不該讓整頁因為快取寫不進去而白屏。標準接法文件（Google登入_標準接法.md）
+    // 明文要求「try/catch 包起來，無痕模式或被停用時要能安靜退回」。
     try { localStorage.setItem(GID_STORAGE_KEY, JSON.stringify({ idToken: idToken, exp: exp })); } catch (e) {}
   }
   function clearIdTokenCache() {
+    // ponytail-debt: 同上，清快取失敗不影響本次登出流程本身
     try { localStorage.removeItem(GID_STORAGE_KEY); } catch (e) {}
   }
   function decodeJwtExp(idToken) {
@@ -982,6 +987,9 @@
   function handleResp(res) {
     return res.text().then(function (text) {
       var data = null;
+      // ponytail-debt: 後端理論上必回 JSON，但非 200 時偶有純文字/空 body，
+      // parse 失敗時 data 維持 null、走下面 !res.ok 分支用 HTTP status 組錯誤訊息，
+      // 不因為 body 不是合法 JSON 而讓整個請求鏈丟未預期例外。
       try { data = JSON.parse(text); } catch (e) {}
       if (!res.ok) {
         var err = new Error((data && (data.msg || data.error)) || ('HTTP ' + res.status));
@@ -998,6 +1006,9 @@
   function reportInvalidToken() {
     if (_idToken && (window.google && google.accounts && google.accounts.id)) {
       var email = null;
+      // ponytail-debt: 這裡解 JWT payload 純粹是為了在「不在名單」畫面顯示目前登入的
+      // 是哪個 email，解析失敗（格式異常/非預期 token）時退回 email=null，畫面照樣顯示、
+      // 只是少一行資訊，不影響導向登出重登這個主流程。
       try {
         var payload = JSON.parse(atob(_idToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
         email = payload.email;
