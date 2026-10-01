@@ -1323,49 +1323,122 @@ async function ssEnsureMonthRecord(env, monthStart) {
   return { rid: String(newRid), rec, created: true, prevBalanceUncertain: prevBalanceValue === null };
 }
 
-// 目前零用金結餘：優先信任 Ragic 端 1000721（公式 A2+D8-E8）。正常路徑下 ssEnsureMonthRecord
-// 開新月記錄時已把上月結餘寫進 1000719，這裡到不了 fallback；保留純防呆（第二道防線），涵蓋
-// 歷史舊資料或極端情況下 1000719 仍是空字串——此時往前一個月找該月的 1000721 當替代上月
-// 結餘，自行算出 display 用的餘額（絕不寫回 Ragic 唯讀欄位，只影響本次 API 回應的數字）。
-async function ssMonthBalance(env, mainRec, monthStart) {
+// ── 結轉鏈補正（2026-10-01）──────────────────────────────────────────────────────────────
+// 事故：八月帳事後補記 50,000 存入 → 八月 1000721 從 976 變 50,976；九月 1000719 仍停在
+// 976 → 九月 1000721 = -44,012；十月 1000719 又抄了 -44,012。2026-09-03 的「回上一個月重算」
+// 只看上月的 1000721，而九月本身就是錯的，所以兩層以上的斷鏈照樣擋死付款（畫面 -44,012）。
+// 根因：1000719 是開帳時抄一次的靜態值，上月補記只要跨過兩個月就必然失效。
+// 決策（Joan 2026-10-01 拍板）：改成「寫回」Ragic——讀餘額時從最舊往最新逐月比對
+// 「該月 1000719 == 前一月（已補正）的 1000721」，不符就把該月 1000719 寫成前月 1000721，
+// 帶 doFormula=true 讓 1000721 重算，讀回驗證兩個欄位都對才繼續下一月。
+// 寫入語意：POST `shanshans/1/{rid}` 只帶 1000719 一個欄位＝只更新該欄（與 ssAddSubRowRaw 只帶
+// 子表欄位同理，未帶的主表欄位與子表都不動）。
+// 請求數：穩態（沒有斷鏈）= 3 個並行讀取（往前 3 個月，當月沿用呼叫端已讀的記錄）、0 寫入；
+// 每發現一個斷鏈月才多 1 寫 + 1 讀。
+const SS_CHAIN_MONTHS_BACK = 3;
+
+// 把 rid 這筆月帳的 1000719 寫成 expectedPrev，讀回驗證 1000719 與 1000721 都正確。
+// 成功回 { rec, balance }；任何失敗回 null（呼叫端 fail-closed）。
+async function ssHealCarryForward(env, rid, monthStart, expectedPrev, storedPrev) {
+  const { upstream, data } = await postUrlEncodedToRagic(
+    env, `${SS_SHEET}/${rid}`,
+    new URLSearchParams({ [SSM.prevBalance]: String(expectedPrev) }).toString(),
+    'doFormula=true'
+  );
+  const fail = detectUpstreamFailure(upstream, data);
+  if (fail) {
+    console.error('[ssHealCarryForward] write_failed', { monthStart, rid, fail });
+    return null;
+  }
+  const { upstream: ru, data: rd } = await getFromRagic(env, `${SS_SHEET}/${rid}`, 'naming=EID');
+  const rec = (ru.ok && rd) ? (rd[String(rid)] || Object.values(rd)[0]) : null;
+  if (!rec) {
+    console.error('[ssHealCarryForward] readback_failed', { monthStart, rid });
+    return null;
+  }
+  const gotPrev = pcNum(rec[SSM.prevBalance]);
+  const gotBal = pcNum(rec[SSM.balance]);
+  const wantBal = expectedPrev + (pcNum(rec[SSM.depositSum]) || 0) - (pcNum(rec[SSM.expenseSum]) || 0);
+  if (gotPrev !== expectedPrev || gotBal !== wantBal) {
+    console.error('[ssHealCarryForward] readback_mismatch', { monthStart, rid, expectedPrev, gotPrev, wantBal, gotBal });
+    return null;
+  }
+  console.warn('[ssHealCarryForward] carry_forward_healed', {
+    monthStart, rid, storedPrev, newPrev: expectedPrev, delta: expectedPrev - (storedPrev ?? 0), newBalance: gotBal,
+  });
+  return { rec, balance: gotBal };
+}
+
+// 回傳：
+//   { uncertain: true, reason }        讀取／寫入／讀回任一失敗（fail-closed）
+//   { noPrev: true }                   上月查無（跳月或最早一筆）：沒有結轉基準，交給呼叫端 fallback
+//   { prev, rec, healed }              prev＝當月該有的 1000719；rec＝當月（可能已補正）記錄
+async function ssReconcileCarryChain(env, mainRec, mainRid, monthStart) {
+  const starts = [];
+  for (let k = 1; k <= SS_CHAIN_MONTHS_BACK; k++) starts.push(ssShiftMonthStart(monthStart, -k));
+  if (!monthStart || starts.some((x) => !x)) return { noPrev: true };
+  const lookups = await Promise.all(starts.map((x) => ssFindMonthRecord(env, x)));
+  if (lookups.some((l) => l.error)) return { uncertain: true, reason: 'prev_month_lookup_failed' };
+
+  // 由近往遠取「連續有帳」的月份；遇到查無（跳月）就停，不往更舊的補
+  const chain = [];
+  for (let k = 0; k < lookups.length; k++) {
+    if (!lookups[k].found) break;
+    chain.push({ monthStart: starts[k], rid: lookups[k].found.rid, rec: lookups[k].found.rec });
+  }
+  if (chain.length === 0) return { noPrev: true };
+  chain.reverse(); // 最舊 → 最新（M-n … M-1）
+
+  let base = pcNum(chain[0].rec[SSM.balance]);
+  if (base === null) return { uncertain: true, reason: 'chain_base_unreadable' };
+  let healed = 0;
+  const steps = chain.slice(1).concat([{ monthStart, rid: mainRid, rec: mainRec, current: true }]);
+  for (const step of steps) {
+    const stored = pcNum(step.rec[SSM.prevBalance]);
+    if (stored !== base) {
+      if (!step.rid) return { uncertain: true, reason: 'carry_heal_no_rid' };
+      const r = await ssHealCarryForward(env, step.rid, step.monthStart, base, stored);
+      if (!r) return { uncertain: true, reason: 'carry_heal_failed' };
+      step.rec = r.rec;
+      healed += 1;
+      base = r.balance;
+    } else {
+      base = pcNum(step.rec[SSM.balance]);
+      if (base === null && !step.current) return { uncertain: true, reason: 'chain_balance_unreadable' };
+    }
+  }
+  // base 此時是當月結餘；當月該有的 1000719 是進入最後一步之前的 base，直接讀補正後的當月記錄即可
+  const cur = steps[steps.length - 1];
+  return { prev: pcNum(cur.rec[SSM.prevBalance]), rec: cur.rec, healed };
+}
+
+// 目前零用金結餘。2026-10-01 起：先跑結轉鏈補正（見上），再以「補正後的上月結餘 + 當月存入
+// − 當月支出」計算；補正會寫回 Ragic 1000719。
+// 找不到上月記錄（跳月或最早一筆之前）才走下方 fallback，沿用該月自己抄過的 1000719。
+// mainRid：當月主表 rid（補正當月 1000719 需要；呼叫端 month.rid）。
+async function ssMonthBalance(env, mainRec, monthStart, mainRid) {
+  const rid = mainRid || pcVal(mainRec?._ragicId) || '';
+  const chain = await ssReconcileCarryChain(env, mainRec, rid, monthStart);
+  if (chain.uncertain) {
+    // 任何讀寫失敗都不得拿舊值放行付款：回報 uncertain，由呼叫端 fail-closed 停用付款。
+    return {
+      balance: null, prevBalance: null, stale: true, uncertain: true,
+      reason: chain.reason,
+    };
+  }
+  if (!chain.noPrev) {
+    const rec = chain.rec;
+    const dep = pcNum(rec[SSM.depositSum]) || 0;
+    const exp = pcNum(rec[SSM.expenseSum]) || 0;
+    return {
+      balance: chain.prev + dep - exp,
+      prevBalance: chain.prev, stale: false, refreshed: chain.healed > 0,
+    };
+  }
+
   const depositSum = pcNum(mainRec[SSM.depositSum]) || 0;
   const expenseSum = pcNum(mainRec[SSM.expenseSum]) || 0;
   const rawPrev = pcVal(mainRec[SSM.prevBalance]);
-
-  // 2026-09-03：上月結餘（1000719）是「開新月當下抄一次」的靜態值，不是公式。上個月結算
-  // 之後才補進去的現金（小吳哥常常隔月才補、發票又壓月底才交）永遠不會回頭反映到這個月，
-  // 於是珊珊手上明明有錢，畫面卻說現金不足、付款鈕被鎖住（8 月補了 50,000，9 月看到的
-  // 上月結餘仍是結算當下的 976）。這裡改成每次讀餘額都回上一個月重新結算一次，用上月
-  // 「當下的真實結餘」覆蓋掉抄下來的舊值——珊珊皮包裡的現金本來就是連續的，不會月底歸零。
-  const prevMonthStart = monthStart ? ssShiftMonthStart(monthStart, -1) : null;
-  const prevLookup = prevMonthStart ? await ssFindMonthRecord(env, prevMonthStart) : null;
-
-  // 上月讀取失敗（不是「查無」）時不可以拿舊值硬算——那就是拿一個可能過期的數字放行付款。
-  // 回報 uncertain，由呼叫端 fail-closed 停用付款。
-  if (prevLookup && prevLookup.error) {
-    return {
-      balance: null, prevBalance: null, stale: true, uncertain: true,
-      reason: 'prev_month_lookup_failed',
-    };
-  }
-
-  const prevRecord = prevLookup && prevLookup.found ? prevLookup.found : null;
-  const livePrev = prevRecord ? pcNum(prevRecord.rec[SSM.balance]) : null;
-
-  if (livePrev !== null) {
-    const storedPrev = rawPrev === '' ? null : pcNum(rawPrev);
-    if (storedPrev !== livePrev) {
-      // 只記 log，不寫回 Ragic：1000719 在 Ragic UI 是唯讀欄，珊珊自己看那張表時仍會看到
-      // 她熟悉的手抄值；系統這邊用即時重算的數字。要不要回寫是帳務政策，不是這支 API 的事。
-      console.warn('[ssMonthBalance] carry_forward_refreshed', {
-        monthStart, storedPrev, livePrev, delta: livePrev - (storedPrev ?? 0),
-      });
-    }
-    return {
-      balance: livePrev + depositSum - expenseSum,
-      prevBalance: livePrev, stale: false, refreshed: storedPrev !== livePrev,
-    };
-  }
 
   // 上個月根本沒開帳（最早一筆之前、或中間跳月）：拿不到結轉基準。
   // 這個月自己抄過的值還可以用，抄都沒抄過就是真的不知道。
@@ -2274,7 +2347,7 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     // 決策7：balance 讀當月主表 1000721（見 ssMonthBalance 已知落差容錯）
     const monthStart = ssTodayMonthStart();
     const month = await ssEnsureMonthRecord(env, monthStart);
-    const listBal = month.error ? null : await ssMonthBalance(env, month.rec, monthStart);
+    const listBal = month.error ? null : await ssMonthBalance(env, month.rec, monthStart, month.rid);
     summary.balance = listBal ? listBal.balance : null;
     // 結轉基準拿不到時餘額不可信：ssMonthBalance 回 uncertain，或開月當下就沒抄到上月結餘。
     summary.prevBalanceUncertain = !!month.prevBalanceUncertain || !listBal || !!listBal.uncertain;
@@ -2465,7 +2538,7 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     const monthStart = ssTodayMonthStart();
     const month = await ssEnsureMonthRecord(env, monthStart);
     if (month.error) return jsonResp({ error: 'upstream_error' }, 502, origin);
-    const bal = await ssMonthBalance(env, month.rec, monthStart);
+    const bal = await ssMonthBalance(env, month.rec, monthStart, month.rid);
 
     // 決策7：breakdown 從當月子表逐列分類加總（期初恆 0——珊珊手工帳本身已含結轉，不重算）
     const { upstream, data } = await getFromRagic(env, `${SS_SHEET}/${month.rid}`, 'naming=EID');
