@@ -1,4 +1,5 @@
-// 零用金結轉鏈補正：用 mock Ragic 驗證邏輯。node test_chain.js [path/to/index.js]
+// 零用金結轉鏈補正：用 mock Ragic 驗證邏輯（從 index.js 文字抽出函式執行，不需任何測試框架）。
+// 用法：在 worker-proxy-src 目錄執行 `node test_petty_cash_carry_chain.js [path/to/index.js]`，預設測同目錄 index.js。
 const fs = require('fs');
 const src = fs.readFileSync(process.argv[2] || 'index.js', 'utf8');
 function grab(startMarker, endMarker) {
