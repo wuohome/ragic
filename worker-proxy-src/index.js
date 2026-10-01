@@ -1290,8 +1290,9 @@ async function ssFindMonthRecord(env, monthStart) {
 // doFormula=true&doLinkLoad=first 讓 1000721/1000734/1000735 隨之算好，正常路徑不必再靠
 // ssMonthBalance() 事後補算；找不到上月記錄（跳月或最早一筆之前）就不塞值，改標記
 // prevBalanceUncertain，讓呼叫端知道這筆結餘不可信，不靜默塞 0。
-async function ssEnsureMonthRecord(env, monthStart) {
-  const lookup = await ssFindMonthRecord(env, monthStart);
+async function ssEnsureMonthRecord(env, monthStart, pre = null) {
+  // pre：呼叫端已用 ssPrefetchMonths 並行讀好的當月查詢結果（省一輪序列往返），語意與自己查完全相同
+  const lookup = pre?.cur || await ssFindMonthRecord(env, monthStart);
   // 讀取失敗時絕不開新帳——寧可這次動作失敗，也不要無中生有一張空月帳（2026-08-12 事故）
   if (lookup.error) return { error: lookup.error };
   if (lookup.found) return { ...lookup.found, created: false };
@@ -1373,11 +1374,11 @@ async function ssHealCarryForward(env, rid, monthStart, expectedPrev, storedPrev
 //   { uncertain: true, reason }        讀取／寫入／讀回任一失敗（fail-closed）
 //   { noPrev: true }                   上月查無（跳月或最早一筆）：沒有結轉基準，交給呼叫端 fallback
 //   { prev, rec, healed }              prev＝當月該有的 1000719；rec＝當月（可能已補正）記錄
-async function ssReconcileCarryChain(env, mainRec, mainRid, monthStart) {
+async function ssReconcileCarryChain(env, mainRec, mainRid, monthStart, prevLookups = null) {
   const starts = [];
   for (let k = 1; k <= SS_CHAIN_MONTHS_BACK; k++) starts.push(ssShiftMonthStart(monthStart, -k));
   if (!monthStart || starts.some((x) => !x)) return { noPrev: true };
-  const lookups = await Promise.all(starts.map((x) => ssFindMonthRecord(env, x)));
+  const lookups = prevLookups || await Promise.all(starts.map((x) => ssFindMonthRecord(env, x)));
   if (lookups.some((l) => l.error)) return { uncertain: true, reason: 'prev_month_lookup_failed' };
 
   // 由近往遠取「連續有帳」的月份；遇到查無（跳月）就停，不往更舊的補
@@ -1412,13 +1413,23 @@ async function ssReconcileCarryChain(env, mainRec, mainRid, monthStart) {
   return { prev: pcNum(cur.rec[SSM.prevBalance]), rec: cur.rec, healed };
 }
 
+// 當月＋往前 SS_CHAIN_MONTHS_BACK 個月的月帳查詢一次並行發出（2026-10-01 效能：原本
+// 「查當月 → 查前 3 月 → 再讀當月」三輪序列，每輪 Worker→Ragic 往返約 0.7–0.9 秒，併成一輪）。
+// 純讀取、不寫入；後續補正寫回仍由 ssReconcileCarryChain 由舊到新依序做。
+async function ssPrefetchMonths(env, monthStart) {
+  const prevStarts = [];
+  for (let k = 1; k <= SS_CHAIN_MONTHS_BACK; k++) prevStarts.push(ssShiftMonthStart(monthStart, -k));
+  const all = await Promise.all([monthStart, ...prevStarts].map((x) => (x ? ssFindMonthRecord(env, x) : null)));
+  return { cur: all[0], prevs: prevStarts.some((x) => !x) ? null : all.slice(1) };
+}
+
 // 目前零用金結餘。2026-10-01 起：先跑結轉鏈補正（見上），再以「補正後的上月結餘 + 當月存入
 // − 當月支出」計算；補正會寫回 Ragic 1000719。
 // 找不到上月記錄（跳月或最早一筆之前）才走下方 fallback，沿用該月自己抄過的 1000719。
 // mainRid：當月主表 rid（補正當月 1000719 需要；呼叫端 month.rid）。
-async function ssMonthBalance(env, mainRec, monthStart, mainRid) {
+async function ssMonthBalance(env, mainRec, monthStart, mainRid, prevLookups = null) {
   const rid = mainRid || pcVal(mainRec?._ragicId) || '';
-  const chain = await ssReconcileCarryChain(env, mainRec, rid, monthStart);
+  const chain = await ssReconcileCarryChain(env, mainRec, rid, monthStart, prevLookups);
   if (chain.uncertain) {
     // 任何讀寫失敗都不得拿舊值放行付款：回報 uncertain，由呼叫端 fail-closed 停用付款。
     return {
@@ -1735,6 +1746,26 @@ function parsePettyCashViewerEmails(env) {
 // 回傳 null＝沒帶 service key（或帶錯），呼叫端 fallback 到 C（Google）→ A/B（舊 token）。
 // 帶了正確 service key 但這個人不在白名單，回 __authError 403 not_whitelisted，不 fallback
 // ——比照 C 段的理由：身分明確查過且不合格，再往下試只會拿到同型 404 混淆真正的原因。
+// 人事表（64 KB／約 0.9 秒，每個請求都撈一次是財務頁變慢的最大單項）60 秒快取，同 isolate 內並行請求
+// 共用同一個 in-flight promise。TTL 短＝離職／停權最多延遲 60 秒生效；讀取失敗不快取（下一個請求重撈）。
+// 只快取「人事表原始記錄」，白名單／在職判斷仍每次照舊在呼叫端做。
+const PC_STAFF_CACHE_MS = 60 * 1000;
+let pcStaffRecordsCache = null; // { at, promise }
+async function pcGetStaffRecords(env) {
+  const now = Date.now();
+  if (pcStaffRecordsCache && now - pcStaffRecordsCache.at < PC_STAFF_CACHE_MS) return pcStaffRecordsCache.promise;
+  const promise = (async () => {
+    const { upstream, data } = await getFromRagic(env, PETTY_CASH_STAFF_SHEET, 'naming=EID&limit=200');
+    if (!upstream.ok || !data) return null;
+    return Object.values(data).filter((r) => r && typeof r === 'object');
+  })();
+  const entry = { at: now, promise };
+  pcStaffRecordsCache = entry;
+  promise.then((r) => { if (!r && pcStaffRecordsCache === entry) pcStaffRecordsCache = null; },
+               () => { if (pcStaffRecordsCache === entry) pcStaffRecordsCache = null; });
+  return promise;
+}
+
 async function authenticatePettyCashServiceKey(request, env, origin) {
   const provided = request.headers.get('X-Service-Key') || '';
   const expected = env.PETTY_CASH_SERVICE_KEY || '';
@@ -1744,9 +1775,8 @@ async function authenticatePettyCashServiceKey(request, env, origin) {
   const email = pcClean(request.headers.get('X-Acting-Email') || '').toLowerCase();
   if (!email) return { __authError: jsonResp({ error: 'invalid_session' }, 401, origin) };
 
-  const { upstream, data } = await getFromRagic(env, PETTY_CASH_STAFF_SHEET, 'naming=EID&limit=200');
-  if (!upstream.ok || !data) return { __authError: jsonResp({ error: 'not_whitelisted' }, 403, origin) };
-  const records = Object.values(data).filter((r) => r && typeof r === 'object');
+  const records = await pcGetStaffRecords(env);
+  if (!records) return { __authError: jsonResp({ error: 'not_whitelisted' }, 403, origin) };
   const rec = records.find((r) => pcClean(r[PC_STAFF_EMAIL_FIELD]).toLowerCase() === email);
   const status = rec ? pcClean(rec[PC_STAFF_STATUS_FIELD]) : '';
   const name = rec ? pcClean(rec[PC_STAFF_NAME_FIELD]) : '';
@@ -2317,7 +2347,16 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     if (!Number.isFinite(limit) || limit <= 0) limit = 200;
     limit = Math.min(Math.floor(limit), 1000);
 
-    const table = await ssFetchWholeTable(env);
+    // 2026-10-01 效能：撈全表（1.2 MB，約 1.3–2 秒）與餘額計算（開月＋結轉鏈）互不依賴，並行跑；
+    // 原本是先撈全表、再序列做餘額，兩段相加。餘額的 fail-closed 判斷不變（見下方 listBal 處理）。
+    const monthStart = ssTodayMonthStart();
+    const balanceP = (async () => {
+      const pre = await ssPrefetchMonths(env, monthStart);
+      const month = await ssEnsureMonthRecord(env, monthStart, pre);
+      const listBal = month.error ? null : await ssMonthBalance(env, month.rec, monthStart, month.rid, pre.prevs);
+      return { month, listBal };
+    })();
+    const [table, { month, listBal }] = await Promise.all([ssFetchWholeTable(env), balanceP]);
     if (!table) return jsonResp({ error: 'upstream_error' }, 502, origin);
     // 列表路徑非查重防線，讀取異常不擋，只帶旗標（2026-08-14 撈全表隱患修復 § 隱患二）
     const dataIntegrityWarning = !ssTableHasMonth(table, ssTodayMonthStart());
@@ -2345,9 +2384,6 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     }, { total: 0, unpaidCount: 0, unpaidAmount: 0, paidCount: 0, paidAmount: 0, pendingReviewCount: 0 });
 
     // 決策7：balance 讀當月主表 1000721（見 ssMonthBalance 已知落差容錯）
-    const monthStart = ssTodayMonthStart();
-    const month = await ssEnsureMonthRecord(env, monthStart);
-    const listBal = month.error ? null : await ssMonthBalance(env, month.rec, monthStart, month.rid);
     summary.balance = listBal ? listBal.balance : null;
     // 結轉基準拿不到時餘額不可信：ssMonthBalance 回 uncertain，或開月當下就沒抄到上月結餘。
     summary.prevBalanceUncertain = !!month.prevBalanceUncertain || !listBal || !!listBal.uncertain;
@@ -2536,14 +2572,15 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
 
   if (action === 'pettyCashBalance') {
     const monthStart = ssTodayMonthStart();
-    const month = await ssEnsureMonthRecord(env, monthStart);
+    const pre = await ssPrefetchMonths(env, monthStart);
+    const month = await ssEnsureMonthRecord(env, monthStart, pre);
     if (month.error) return jsonResp({ error: 'upstream_error' }, 502, origin);
-    const bal = await ssMonthBalance(env, month.rec, monthStart, month.rid);
+    const bal = await ssMonthBalance(env, month.rec, monthStart, month.rid, pre.prevs);
 
     // 決策7：breakdown 從當月子表逐列分類加總（期初恆 0——珊珊手工帳本身已含結轉，不重算）
-    const { upstream, data } = await getFromRagic(env, `${SS_SHEET}/${month.rid}`, 'naming=EID');
-    const rec = (upstream.ok && data) ? (data[month.rid] || Object.values(data)[0]) : null;
-    const sub = rec ? (rec[`_subtable_${SS_SUBTABLE_KEY}`] || {}) : {};
+    // 2026-10-01 效能：直接用已讀到的當月記錄（含子表）；原本這裡再讀一次同一筆（多一輪 0.7–1.7 秒）。
+    // 結轉補正只改主表 1000719，不動子表列，所以子表內容與補正後重讀等價。
+    const sub = month.rec?.[`_subtable_${SS_SUBTABLE_KEY}`] || {};
     let deposit = 0, payment = 0;
     for (const row of Object.values(sub)) {
       const d = pcNum(row[SS.deposit]);
@@ -4203,6 +4240,7 @@ async function ragicFetch(url, options) {
 
 async function postUrlEncodedToRagic(env, sheetPath, paramsString, extraQuery = '') {
   const qs = extraQuery ? `&${extraQuery}` : '';
+  const t0 = Date.now();
   const upstream = await ragicFetch(`${env.RAGIC_BASE}/${sheetPath}?api${qs}`, {
     method: 'POST',
     headers: {
@@ -4212,6 +4250,7 @@ async function postUrlEncodedToRagic(env, sheetPath, paramsString, extraQuery = 
     body: paramsString,
   });
   const text = await upstream.text();
+  console.log(`[ragic-t] POST ${sheetPath} ${Date.now() - t0}ms ${text.length}B`);
   let data = null;
   try { data = JSON.parse(text); } catch {}
   return { upstream, data };
@@ -4242,10 +4281,13 @@ async function syncBugReportToRagic(env, { safeType, safeTitle, safeUrl, safeDes
 
 async function getFromRagic(env, sheetPath, queryString) {
   const sep = queryString ? '&' : '';
+  const t0 = Date.now();
   const upstream = await ragicFetch(`${env.RAGIC_BASE}/${sheetPath}?api${sep}${queryString || ''}`, {
     headers: { 'Authorization': 'Basic ' + env.RAGIC_KEY },
   });
   const text = await upstream.text();
+  // 耗時 log（2026-10-01 零用金讀取變慢排查，常駐）：只記路徑、毫秒、位元組，不記查詢條件與內容
+  console.log(`[ragic-t] GET ${sheetPath} ${Date.now() - t0}ms ${text.length}B`);
   let data = null;
   try { data = JSON.parse(text); } catch {}
   return { upstream, data };
