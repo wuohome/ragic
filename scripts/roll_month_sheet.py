@@ -120,24 +120,56 @@ def execute_with_retry(request, max_retries: int = 4, base_delay: int = 5):
             time.sleep(delay)
 
 
-def send_ops_alert(msg: str):
-    sys.path.insert(0, str(Path.home() / '.claude' / 'scripts'))
+# 2026-10-02：告警改交「系統通報員」（Discord 系統部）。通報員不通時 hubnotify 自動退回
+# 直推 Telegram OPS（保留）。alert 成功寫旗標檔，之後條件消失才送 recover（沒發過不打通報員）。
+_HUB_SRC = "Ragic 業績月表"
+_HUB_STATE = Path.home() / ".claude" / "state"
+
+
+def hub_alert(key, title, body=""):
     try:
-        from _secrets import OPS_BOT_TOKEN, OPS_CHAT_ID
+        sys.path.insert(0, "/Users/9m/Projects/sys-hub/client")
+        from hubnotify import notify
+        r = notify("alert", key, title, body, source=_HUB_SRC)
+        if r.get("ok"):
+            _HUB_STATE.mkdir(parents=True, exist_ok=True)
+            (_HUB_STATE / f"hub-{key}.alerted").write_text("1")
+        log(f"[hub] alert {key} via={r.get('via')} ok={r.get('ok')}")
+        return bool(r.get("ok"))
     except Exception as e:
-        log(f'[alert] cannot import OPS creds: {e}')
-        return False
-    url = f'https://api.telegram.org/bot{OPS_BOT_TOKEN}/sendMessage'
-    data = urllib.parse.urlencode({'chat_id': OPS_CHAT_ID, 'text': msg}).encode()
-    try:
-        with urllib.request.urlopen(url, data=data, timeout=10) as r:
-            r.read()
-        log('[alert] sent to OPS bot')
-        return True
-    except Exception as e:
-        log(f'[alert] send failed: {e}')
+        log(f"[hub] alert failed: {e}")
         return False
 
+
+def hub_recover(key, title=""):
+    flag = _HUB_STATE / f"hub-{key}.alerted"
+    if not flag.exists():
+        return
+    try:
+        sys.path.insert(0, "/Users/9m/Projects/sys-hub/client")
+        from hubnotify import notify
+        r = notify("recover", key, title, source=_HUB_SRC)
+        if r.get("ok"):
+            flag.unlink()
+        log(f"[hub] recover {key} via={r.get('via')} ok={r.get('ok')}")
+    except Exception as e:
+        log(f"[hub] recover failed: {e}")
+
+
+def send_ops_alert(msg: str, kind: str = 'alert', key: str = 'perf.roll'):
+    """沿用舊函式名。msg 第一行當標題、其餘當內文。alert 走警報；成功建表用 kind='daily'（進隔天早報前的早報）。"""
+    title, _, body = msg.partition('\n')
+    if kind == 'alert':
+        return hub_alert(key, title, body)
+    try:
+        sys.path.insert(0, "/Users/9m/Projects/sys-hub/client")
+        from hubnotify import notify
+        res = notify(kind, key, title, body, source=_HUB_SRC)
+        log(f"[hub] {kind} {key} via={res.get('via')} ok={res.get('ok')}")
+        return bool(res.get("ok"))
+    except Exception as e:
+        log(f"[hub] {kind} failed: {e}")
+        return False
 
 def _norm(s):
     return (s or '').replace(' ', '').replace('　', '').strip()
@@ -469,10 +501,12 @@ def ensure(roc: int, month: int):
         names = [h['name'] for h in hits]
         msg = f'⚠️ 同名業績表有 {len(hits)} 張：{names}\nauto-detect 會取最近修改那張，請刪除重複檔案。'
         log(msg)
-        send_ops_alert(msg)
+        send_ops_alert(msg, key='perf.roll.dup')
         return
     if len(hits) == 1:
         log(f"已存在：{hits[0]['name']} (id={hits[0]['id']})，skip（冪等）")
+        hub_recover('perf.roll.dup')
+        hub_recover('perf.roll')
         return
 
     # 0 張 → 找上月表
@@ -528,7 +562,8 @@ def ensure(roc: int, month: int):
         f'已複製上月格式並清空明細（標題/人名/公式保留）。\n'
         f'請轉知珊珊直接使用這張表，勿另建同名新表。'
     )
-    send_ops_alert(msg)
+    send_ops_alert(msg, kind='daily', key='perf.roll.created')
+    hub_recover('perf.roll')
     log(f'完成：{new_name} (id={new_id})')
 
 

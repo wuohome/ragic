@@ -97,6 +97,42 @@ def get_sa_clients():
 
 
 
+# 2026-10-02：告警改交「系統通報員」（Discord 系統部）。通報員不通時 hubnotify 自動退回
+# 直推 Telegram OPS（保留）。alert 成功寫旗標檔，之後條件消失才送 recover（沒發過不打通報員）。
+_HUB_SRC = "Ragic 業績更新"
+_HUB_STATE = Path.home() / ".claude" / "state"
+
+
+def hub_alert(key, title, body=""):
+    try:
+        sys.path.insert(0, "/Users/9m/Projects/sys-hub/client")
+        from hubnotify import notify
+        r = notify("alert", key, title, body, source=_HUB_SRC)
+        if r.get("ok"):
+            _HUB_STATE.mkdir(parents=True, exist_ok=True)
+            (_HUB_STATE / f"hub-{key}.alerted").write_text("1")
+        print(f"[hub] alert {key} via={r.get('via')} ok={r.get('ok')}", file=sys.stderr)
+        return bool(r.get("ok"))
+    except Exception as e:
+        print(f"[hub] alert failed: {e}", file=sys.stderr)
+        return False
+
+
+def hub_recover(key, title=""):
+    flag = _HUB_STATE / f"hub-{key}.alerted"
+    if not flag.exists():
+        return
+    try:
+        sys.path.insert(0, "/Users/9m/Projects/sys-hub/client")
+        from hubnotify import notify
+        r = notify("recover", key, title, source=_HUB_SRC)
+        if r.get("ok"):
+            flag.unlink()
+        print(f"[hub] recover {key} via={r.get('via')} ok={r.get('ok')}", file=sys.stderr)
+    except Exception as e:
+        print(f"[hub] recover failed: {e}", file=sys.stderr)
+
+
 def is_zero_perf_anomaly(total_perf, gsheet_data, now=None):
     """sanity check: non-day1-5, employees>=10, total==0 => anomaly.
     FIX-2026-07-02-month-roller: 豁免期由僅 day==1 放寬到 day<=5，
@@ -145,28 +181,11 @@ def maybe_alert_zero_perf(roc_year, month, quiet=False):
             pass
     state_file.parent.mkdir(parents=True, exist_ok=True)
     state_file.write_text(str(now))
-    sys.path.insert(0, str(__import__("pathlib").Path.home() / ".claude" / "scripts"))
-    try:
-        from _secrets import OPS_BOT_TOKEN, OPS_CHAT_ID
-    except Exception as e:
-        print(f"[sanity] cannot import OPS creds: {e}", file=sys.stderr)
-        return False
-    msg = (
-        "⚠️ 業績 cron sanity check 觸發\n"
+    return hub_alert(
+        "perf.zero", "業績更新被擋：本月業績全是 0",
         f"{roc_year}/{month:02d} total_perf=0 且非月初 + 員工解析 >=10\n"
         "已擋住 commit + push（避免 silent push 0 業績）\n"
-        "行動：檢查源 sheet 是否被清空 / SA 權限是否被撤 / sheet ID 是否需更新"
-    )
-    url = f"https://api.telegram.org/bot{OPS_BOT_TOKEN}/sendMessage"
-    data = urllib.parse.urlencode({"chat_id": OPS_CHAT_ID, "text": msg}).encode()
-    try:
-        with __import__("urllib.request", fromlist=["urlopen"]).urlopen(url, data=data, timeout=10) as r:
-            r.read()
-        print("[sanity] alert sent to OPS bot", file=sys.stderr)
-        return True
-    except Exception as e:
-        print(f"[sanity] alert failed: {e}", file=sys.stderr)
-        return False
+        "行動：檢查源 sheet 是否被清空 / SA 權限是否被撤 / sheet ID 是否需更新")
 
 
 def maybe_remind_new_month_sheet(roc_year, month):
@@ -192,31 +211,14 @@ def maybe_remind_new_month_sheet(roc_year, month):
             pass
     state_file.parent.mkdir(parents=True, exist_ok=True)
     state_file.write_text(str(now))
-    sys.path.insert(0, str(__import__("pathlib").Path.home() / ".claude" / "scripts"))
-    try:
-        from _secrets import OPS_BOT_TOKEN, OPS_CHAT_ID
-    except Exception as e:
-        print(f"[L50-remind] cannot import OPS creds: {e}", file=sys.stderr)
-        return False
-    msg = (
-        "⚠️ 業績 cron auto-detect 全 miss\n"
+    return hub_alert(
+        "perf.newsheet", "業績 cron 找不到本月業績表",
         f"{roc_year}/{month:02d} 母 folder + mirror folder 都找不到業績表\n"
         "可能原因：\n"
         "1. 當月業績表尚未建立（珊珊未月結）\n"
         "2. SA 對母 folder 的 Reader 被撤\n"
         f"3. 檔名不符命名規則（應含 {roc_year}年{month}月業績表）\n"
-        "行動：確認後若急用，在 MONTH_SHEET_OVERRIDE 手填 sheet_id"
-    )
-    url = f"https://api.telegram.org/bot{OPS_BOT_TOKEN}/sendMessage"
-    data = urllib.parse.urlencode({"chat_id": OPS_CHAT_ID, "text": msg}).encode()
-    try:
-        with __import__("urllib.request", fromlist=["urlopen"]).urlopen(url, data=data, timeout=10) as r:
-            r.read()
-        print("[L50-remind] all-miss reminder sent to OPS bot", file=sys.stderr)
-        return True
-    except Exception as e:
-        print(f"[L50-remind] reminder failed: {e}", file=sys.stderr)
-        return False
+        "行動：確認後若急用，在 MONTH_SHEET_OVERRIDE 手填 sheet_id")
 
 def _pick_exact_month_sheet(files: list, roc_year: int, month: int) -> Optional[dict]:
     """從 candidate 過濾「檔名去空格後精確 == {roc}年{month}月業績表」那張。
@@ -776,6 +778,7 @@ def main():
             print(f"⏭  skip：當月 sheet 還沒建（珊珊未月結）— 不寫 markdown，留待下輪")
             sys.exit(0)
     gsheet_data, extras = fetch_result
+    hub_recover("perf.newsheet", "業績表已找到")
     if not gsheet_data:
         print("❌ 解析到 0 筆有效員工業績（sheet 找到但解析空），abort", file=sys.stderr)
         sys.exit(1)
@@ -812,6 +815,7 @@ def main():
         maybe_alert_zero_perf(roc_year, month, quiet=sheet_has_signal)
         sys.exit(2)
 
+    hub_recover("perf.zero", "本月業績已非 0，業績更新恢復")
     original = vault_md.read_text(encoding='utf-8')
     h2_pattern = re.compile(r'^## ', re.MULTILINE)
     matches = list(h2_pattern.finditer(original))
