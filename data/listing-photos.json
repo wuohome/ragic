@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-10-02T08:32:55+08:00",
+ "generatedAt": "2026-10-03T08:32:57+08:00",
  "listings": {
   "245": [
    "https://img1.591.com.tw/house/2026/09/27/179050275322858807.jpg",
@@ -211,20 +211,6 @@
    "https://img1.591.com.tw/house/2026/08/29/178793541101996609.jpg",
    "https://img1.591.com.tw/house/2026/08/29/178793541043662505.jpg"
   ],
-  "647": [
-   "https://img1.591.com.tw/house/2026/09/14/178937015735825603.jpg",
-   "https://img1.591.com.tw/house/2026/09/14/178937015735691107.jpg",
-   "https://img1.591.com.tw/house/2026/09/14/178937015738003901.jpg",
-   "https://img1.591.com.tw/house/2026/09/14/178937015743672209.jpg",
-   "https://img1.591.com.tw/house/2026/09/14/178937015745829703.jpg",
-   "https://img1.591.com.tw/house/2026/09/14/178937015748975808.jpg",
-   "https://img1.591.com.tw/house/2026/09/14/178937015766278501.jpg",
-   "https://img1.591.com.tw/house/2026/09/14/178937017701224703.jpg",
-   "https://img1.591.com.tw/house/2026/09/14/178937015765625707.jpg",
-   "https://img1.591.com.tw/house/2026/09/14/178937015775365207.jpg",
-   "https://img1.591.com.tw/house/2026/09/14/178937015764916600.jpg",
-   "https://img1.591.com.tw/house/2026/09/14/178937015773654001.jpg"
-  ],
   "651": [
    "https://img1.591.com.tw/house/2026/09/17/178961445477649608.jpg",
    "https://img1.591.com.tw/house/2026/09/16/178955392551171000.jpg",
@@ -337,20 +323,6 @@
    "https://img1.591.com.tw/house/2026/09/23/179017576343957808.jpg",
    "https://img1.591.com.tw/house/2026/09/23/179017576804343607.jpg"
   ],
-  "678": [
-   "https://img1.591.com.tw/house/2026/09/16/178955859585768601.jpg",
-   "https://img1.591.com.tw/house/2026/09/16/178955860278636009.jpg",
-   "https://img1.591.com.tw/house/2026/09/16/178955861261464509.jpg",
-   "https://img1.591.com.tw/house/2026/09/16/178955861582442003.jpg",
-   "https://img1.591.com.tw/house/2026/09/16/178955871203010005.jpg",
-   "https://img1.591.com.tw/house/2026/09/16/178955862089451803.jpg",
-   "https://img1.591.com.tw/house/2026/09/16/178955863281978702.jpg",
-   "https://img1.591.com.tw/house/2026/09/16/178955863837780109.jpg",
-   "https://img1.591.com.tw/house/2026/09/16/178955864869998107.jpg",
-   "https://img1.591.com.tw/house/2026/09/16/178955865997968403.jpg",
-   "https://img1.591.com.tw/house/2026/09/16/178955866509406901.jpg",
-   "https://img1.591.com.tw/house/2026/09/16/178955867035661003.jpg"
-  ],
   "682": [
    "https://img1.591.com.tw/house/2026/09/26/179042646973726404.jpg",
    "https://img1.591.com.tw/house/2026/09/26/179042646981051606.jpg",
@@ -378,6 +350,20 @@
    "https://img1.591.com.tw/house/2026/09/28/179058028572291905.jpg",
    "https://img1.591.com.tw/house/2026/09/28/179058028580941202.jpg",
    "https://img1.591.com.tw/house/2026/09/28/179058028599858802.jpg"
+  ],
+  "684": [
+   "https://img1.591.com.tw/house/2026/10/02/179094347421446108.jpg",
+   "https://img1.591.com.tw/house/2026/10/02/179094347503097105.jpg",
+   "https://img1.591.com.tw/house/2026/10/02/179094370375107208.jpg",
+   "https://img1.591.com.tw/house/2026/10/02/179094358848222103.jpg",
+   "https://img1.591.com.tw/house/2026/10/02/179094347468070706.jpg",
+   "https://img1.591.com.tw/house/2026/10/02/179094347433150805.jpg",
+   "https://img1.591.com.tw/house/2026/10/02/179094347484426107.jpg",
+   "https://img1.591.com.tw/house/2026/10/02/179094347430947408.jpg",
+   "https://img1.591.com.tw/house/2026/10/02/179094347434038204.jpg",
+   "https://img1.591.com.tw/house/2026/10/02/179094355424446206.jpg",
+   "https://img1.591.com.tw/house/2026/10/02/179094347435769508.jpg",
+   "https://img1.591.com.tw/house/2026/10/02/179094347436787604.jpg"
   ]
  },
  "provenance": {
@@ -456,11 +442,6 @@
    "how": "match",
    "why": "三重區大同北路167巷／2 樓"
   },
-  "647": {
-   "houseId": "22010903",
-   "how": "match",
-   "why": "新莊區建中街／租金 9500／坪數吻合／業務吻合"
-  },
   "651": {
    "houseId": "22025285",
    "how": "match",
@@ -501,11 +482,6 @@
    "how": "link",
    "why": "Ragic 連結欄直接指到這則現役廣告"
   },
-  "678": {
-   "houseId": "22025673",
-   "how": "match",
-   "why": "三重區中正北路／9 樓／格局 3房2廳2衛／業務吻合"
-  },
   "682": {
    "houseId": "22074558",
    "how": "match",
@@ -515,6 +491,11 @@
    "houseId": "22080254",
    "how": "link",
    "why": "Ragic 連結欄直接指到這則現役廣告"
+  },
+  "684": {
+   "houseId": "22109740",
+   "how": "match",
+   "why": "三重區光復路二段87巷／4 樓／格局 3房2廳2衛"
   }
  },
  "source": "591-own-ads",
