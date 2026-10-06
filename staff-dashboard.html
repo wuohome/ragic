@@ -907,6 +907,7 @@ const NAME_ALIASES = {
   '炫儒':'吳炫儒','佳燕':'林佳燕','心瑜':'陳心瑜','kelly':'陳心瑜','Kelly':'陳心瑜','則泓':'張則泓','薇雅':'陳薇雅',
   '卓威':'李卓威','小方':'方鼎文','馬丁':'關宗宇','小吳哥':'吳彥廷','兆傑':'劉兆傑',
   '恩廷':'葉恩廷',  // 2026-07-08 到職，補上漏掉的小名對照
+  '欣宜':'白欣宜',  // 2026-10 業績表寫小名，補對照
   '20011205xiluo@gmail.com':'曾宇謙',
 };
 
@@ -1013,7 +1014,7 @@ function toPerfRecords(rawData) {
 }
 
 function toInventoryRecords(rawData) {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = ymd(new Date());  // 本地日期；toISOString 是 UTC，台北 08:00 前會少一天
   const out = [];
   for (const c of Object.values(rawData)) {
     const status = (c['狀態'] || '').trim();
@@ -1029,7 +1030,7 @@ function toInventoryRecords(rawData) {
                       || (c['開發人員'] || '');
     let daysOn = 0;
     if (d) {
-      try { daysOn = Math.round((new Date(todayStr) - new Date(d)) / 86400000); } catch(e) {}
+      try { daysOn = Math.max(0, Math.round((new Date(todayStr) - new Date(d)) / 86400000)); } catch(e) {}
     }
     out.push({
       date: d || '—', dateSource, name: c['案名']||'', city: c['縣市']||'',
@@ -1117,7 +1118,7 @@ function parsePerfMd(text) {
     const rank = cols[1].replace(/\*/g, '').trim();
     if (!/^\d+$/.test(rank)) continue;
     const name = normalizeName(cols[2].replace(/\*/g, '').trim());
-    if (!name || name === '合計') continue;
+    if (!name || name === '合計' || isExcluded(name)) continue;
     // Bug B fix: cols[4] 可能是「—」(待結)，parseInt 返回 NaN；fallback 讀 cols[3]（原始業績數字欄）
     let rawPerf = cols[4].replace(/,/g, '').replace(/\*/g, '').trim();
     let perf = parseInt(parseFloat(rawPerf));
@@ -2542,14 +2543,20 @@ function renderPerfIntake(){
       let perfAchievers = 0, perfTotal2 = 0, casesAchievers = 0, casesTotal2 = 0;
       const goalRaw = window._rawGoals || {};
       const nowYm2 = (() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
+      // 目標在 Ragic 分人填（張忠豪、蕭頤臻），業績與進案用合併名計 → 先依 normalizeName 合併目標再比
+      const goalByName = {};
       Object.values(goalRaw).forEach(r => {
         const m = (r['月份']||'').trim();
         if (m !== nowYm2 && !m.startsWith(nowYm2)) return;
-        const nm    = (r['員工姓名']||r['_index_title_']||'').trim();
-        const tPerf  = parseFloat(r['業績目標(萬)']) || 0;
-        const tCases = parseFloat(r['新進案件量(間)']) || 0;
-        if (tPerf  > 0) { perfTotal2++;  if ((perfCounter[nm]||0)    >= tPerf*10000) perfAchievers++; }
-        if (tCases > 0) { casesTotal2++; if ((intakeCounter[nm]||0)  >= tCases)      casesAchievers++; }
+        const nm = normalizeName((r['員工姓名']||r['_index_title_']||'').trim());
+        if (!nm) return;
+        const g = goalByName[nm] || (goalByName[nm] = { perf: 0, cases: 0 });
+        g.perf  += parseFloat(r['業績目標(萬)']) || 0;
+        g.cases += parseFloat(r['新進案件量(間)']) || 0;
+      });
+      Object.entries(goalByName).forEach(([nm, g]) => {
+        if (g.perf  > 0) { perfTotal2++;  if ((perfCounter[nm]||0)   >= g.perf*10000) perfAchievers++; }
+        if (g.cases > 0) { casesTotal2++; if ((intakeCounter[nm]||0) >= g.cases)      casesAchievers++; }
       });
 
       document.getElementById('mStoreGoalBadge').className = `text-xs font-bold px-3 py-1 rounded-full ${badgeCls}`;
@@ -2887,8 +2894,8 @@ function renderAnalysis(){
     `範圍內 ${myIntake.length} 件進案 · 三類業績合計 ${fmtMoney(grandTotal)} 元`;
 
   // ── 最近進案距今 + 最長空窗（永遠用全歷史，不受範圍影響）──
-  const sortedDates = allMyIntake.map(r => r.date).sort();
   const today = new Date(); today.setHours(0,0,0,0);
+  const sortedDates = allMyIntake.map(r => r.date).filter(d => d && d <= ymd(today)).sort();  // 委託日填在未來的不算
   let daysAgo = '—', maxGap = '—';
   if (sortedDates.length) {
     const lastDate = new Date(sortedDates[sortedDates.length-1]);
