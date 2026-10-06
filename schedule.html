@@ -922,7 +922,18 @@ const App = () => {
 
     const handleAutoSchedule = async () => {
         if (employees.length === 0) { showToast("尚未載入員工資料", false); return; }
-        const okAutoDuty = await openConfirm(`確定要自動預排 ${year} 年 ${month} 月的值日生？\n每天 3 位（1F/2F/3F），週五加排 4F；清運值日（🗑️）已有紀錄的日子維持不動，沒排的日子會自動補（週三、週日不排，六日僅承攬同仁可排，當天排休/請假者跳過，內勤五位不排清運，近期次數少者優先）。現有的自動排班紀錄會被覆蓋。`);
+        // 過去鎖定（2026-10-06）：今天以前（含今天）的值日一律不動，見 SC.isDutyLocked
+        const lockTodayStr = SC.todayStr();
+        const monthLastStr = `${year}/${String(month).padStart(2,"0")}/${String(new Date(year, month, 0).getDate()).padStart(2,"0")}`;
+        if (SC.isDutyLocked(monthLastStr, lockTodayStr)) {
+            await openAlert(`${year} 年 ${month} 月的日子都已經過去，這個月已經鎖定，按這顆鈕不會改任何東西。\n要改個別日子（例如標未掃），請直接點格子。`);
+            return;
+        }
+        const monthFirstStr = `${year}/${String(month).padStart(2,"0")}/01`;
+        const lockNote = SC.isDutyLocked(monthFirstStr, lockTodayStr)
+            ? `今天以前（含今天 ${lockTodayStr.slice(5)}）的值日都不會動，只重排明天起的日子。已經掃過的次數會算進去，掃比較多的人之後會少排一點。`
+            : `這個月還沒開始，會重排整個月。`;
+        const okAutoDuty = await openConfirm(`確定要自動預排 ${year} 年 ${month} 月的值日生？\n\n${lockNote}\n\n每天 3 位（1F/2F/3F），週五加排 4F。清運（🗑️）已經有人的日子不動，沒人的日子會自動補（週三、週日不排，六日只排承攬同仁，當天休假的人跳過，內勤五位不排清運，次數少的人優先）。你手動排的值日會保留。`);
         if (!okAutoDuty) return;
 
         setAutoScheduling(true);
@@ -1005,6 +1016,7 @@ const App = () => {
             const manualByDate = {}; // dateStr -> [{ empName, floor }]
             const trashByDate = {}; // dateStr -> [清運值日的人]（保留不刪、當天不重複排樓層）
             const toDelete = [];
+            let lockedKeptCount = 0; // 過去鎖定保留的系統預排筆數
             Object.entries(allLeaveForDuty)
                 .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
                 .forEach(([id, f]) => {
@@ -1044,11 +1056,21 @@ const App = () => {
                         if (!manualByDate[date]) manualByDate[date] = [];
                         manualByDate[date].push({ empName, floor });
                         if (empName) countMap[empName] = (countMap[empName] || 0) + 1;
+                    } else if (SC.isDutyLocked(date, lockTodayStr)) {
+                        // 過去鎖定：系統預排但日子已過（含今天）→ 保留不刪，比照手動佔用樓層/人，
+                        // 並計入當月次數（未掃不計，與上月 countMap 同口徑），之後的日子才會少排掃過的人
+                        const empName = f[CONFIG.F_LEAVE.EMP] || "";
+                        const note = f[CONFIG.F_LEAVE.NOTE] || "";
+                        const floor = /^(1F|2F|3F|4F)$/.test(note) ? note : "";
+                        if (!manualByDate[date]) manualByDate[date] = [];
+                        manualByDate[date].push({ empName, floor });
+                        if (empName && isAuto !== "未掃") countMap[empName] = (countMap[empName] || 0) + 1;
+                        lockedKeptCount++;
                     } else {
                         toDelete.push([id, f]);
                     }
                 });
-            console.log("保留手動值日天數:", Object.keys(manualByDate).length);
+            console.log("保留手動值日天數:", Object.keys(manualByDate).length, "；過去鎖定保留筆數:", lockedKeptCount);
 
             // ══════════════════════════════════════════════════════════════
             // 清運值日自動預排（2026-08-02 新增，Joan 看流程圖拍板「可以 改吧」）
@@ -1104,9 +1126,10 @@ const App = () => {
                     `⚠️ 最終確認：即將「刪除」${toDelete.length} 筆值日紀錄並重新產生新排班\n\n` +
                     `影響月份：${year}-${String(month).padStart(2, "0")}（共 ${affectedDates.length} 天）\n` +
                     `影響樓層：${affectedFloors.join("、") || "（無樓層標記）"}\n` +
-                    `手動排班（不受影響、會保留）：${manualKeptCount} 筆\n\n` +
+                    `今天以前已排的值日（鎖定、不會動）：${lockedKeptCount} 筆\n` +
+                    `手動排班（不受影響、會保留）：${manualKeptCount - lockedKeptCount} 筆\n\n` +
                     `按「確定」會先自動下載一份 JSON 備份到你的電腦，再執行刪除＋重排。\n` +
-                    `此動作無法在頁面內復原，請確認是本人操作、且真的要重排整月。`
+                    `此動作無法在頁面內復原，請確認是本人操作、且真的要重排${affectedDates[0].slice(5)}起的日子。`
                 );
                 if (!okFinalDuty) {
                     showToast("已取消，未做任何變更");
@@ -1189,6 +1212,20 @@ const App = () => {
 
                 // 禁休日不排值日生（全員打掃）
                 if (noRest[dateStr]) continue;
+
+                // 過去鎖定（2026-10-06）：今天以前（含今天）不新增樓層、不回填清運；
+                // 只把當天已排的人登記為「有排過」，讓明天不連續排同一人、同週加權照算
+                if (SC.isDutyLocked(dateStr, lockTodayStr)) {
+                    const lockedWeek = getWeekNum(day);
+                    lastAssigned.clear();
+                    (manualByDate[dateStr] || []).forEach(({ empName }) => {
+                        if (!empName) return;
+                        lastAssigned.add(empName);
+                        if (!weeklyAssigned[empName]) weeklyAssigned[empName] = new Set();
+                        weeklyAssigned[empName].add(lockedWeek);
+                    });
+                    continue;
+                }
 
                 // ── 清運值日自動補位（2026-08-02 新增，獨立於樓層值日邏輯，不影響下方樓層排班）──
                 // Joan 拍板五條規則：①週三/週日不排 ②週六僅承攬同仁可排 ③當天排休/特休/請假跳過
