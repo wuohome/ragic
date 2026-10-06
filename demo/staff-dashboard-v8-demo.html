@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>【示範頁】窩的家｜租賃部業績儀表板（改版預覽）</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;overflow-x:hidden;}
+  .medal-1{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#78350f;}
+  .medal-2{background:linear-gradient(135deg,#e5e7eb,#9ca3af);color:#374151;}
+  .medal-3{background:linear-gradient(135deg,#fdba74,#c2410c);color:#fff;}
+  .bar{transition:width .7s cubic-bezier(.4,0,.2,1);}
+  button,.chip{min-height:36px;}
+  .chip{cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;user-select:none;}
+  .chip:hover{background:#dbeafe;}
+  .chip.active{background:#2563eb;color:#fff;}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+  /* 分頁列：黏在頂部，右側漸層提示可滑 */
+  #tabWrap{position:sticky;top:0;z-index:40;background:rgba(248,250,252,.96);backdrop-filter:blur(6px);border-bottom:1px solid #e2e8f0;}
+  #tabBar{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;}
+  #tabBar::-webkit-scrollbar{display:none;}
+  .tab{cursor:pointer;white-space:nowrap;flex-shrink:0;border-bottom:3px solid transparent;display:flex;align-items:center;min-height:44px;padding:0 12px;font-size:16px;color:#475569;}
+  .tab.active{border-bottom-color:#2563eb;color:#2563eb;font-weight:700;}
+  .tl-full{display:none;} .tl-ico{display:none;}
+  @media(min-width:768px){
+    .tl-full{display:inline;} .tl-short{display:none;} .tl-ico{display:inline;margin-right:4px;}
+    .tab{font-size:18px;padding:0 16px;}
+  }
+  #tabFade{position:absolute;top:0;right:0;bottom:0;width:44px;pointer-events:none;background:linear-gradient(90deg,rgba(248,250,252,0),#f1f5f9 80%);display:none;align-items:center;justify-content:flex-end;padding-right:6px;color:#64748b;font-size:18px;}
+  #tabFade.on{display:flex;}
+  @media(min-width:1024px){#tabFade{display:none!important;}}
+  .tag-admin{display:none!important;} body.admin .tag-admin{display:flex!important;}
+</style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen pb-24">
+
+<div class="bg-yellow-300 text-yellow-950 text-center font-bold text-sm sm:text-base px-4 py-2.5 border-b-2 border-yellow-500">🧪 這是示範頁，資料是假的（改版預覽，不會動到線上版）</div>
+
+<div class="max-w-5xl mx-auto px-4 sm:px-6 pt-4 sm:pt-10">
+
+  <header class="mb-4 sm:mb-8">
+    <h1 class="text-xl sm:text-4xl font-black text-slate-900 whitespace-nowrap">🏠 窩的家 租賃部業績儀表板</h1>
+    <p class="text-slate-500 mt-1 sm:mt-2 text-xs sm:text-base flex items-center gap-1.5 whitespace-nowrap">
+      <span>即時資料 2026-10-06 13:20・業績表 2026-10-06 12:30</span>
+      <button onclick="toast(this)" aria-label="重新整理" class="px-2.5 sm:px-3 text-xs bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition shrink-0">🔄<span class="hidden sm:inline"> 重新整理</span></button>
+    </p>
+  </header>
+
+</div>
+
+<!-- 分頁列（黏在頂部） -->
+<div id="tabWrap">
+  <div class="max-w-5xl mx-auto px-2 sm:px-6 relative">
+    <div id="tabBar" role="tablist">
+      <div class="tab active" data-tab="month"><span class="tl-ico">📦</span><span class="tl-short">業績</span><span class="tl-full">進案量 &amp; 業績</span></div>
+      <div class="tab" data-tab="recurring"><span class="tl-short">續約</span><span class="tl-full">續約業績&amp;代管</span></div>
+      <div class="tab" data-tab="inventory"><span class="tl-ico">📦</span><span class="tl-short">庫存</span><span class="tl-full">庫存統計</span></div>
+      <div class="tab" data-tab="ad591"><span class="tl-ico">📢</span><span class="tl-short">591</span><span class="tl-full">591 廣告</span></div>
+      <div class="tab" data-tab="outreach"><span class="tl-ico">📞</span><span class="tl-short">開發</span><span class="tl-full">開發追蹤</span></div>
+      <div class="tab" data-tab="clients"><span class="tl-ico">👥</span><span class="tl-short">客戶</span><span class="tl-full">客戶來源</span></div>
+      <div class="tab" data-tab="analysis"><span class="tl-ico">🔬</span><span class="tl-short">分析</span><span class="tl-full">業務分析</span></div>
+      <div class="tab tag-admin" data-tab="compare"><span class="tl-ico">⚖️</span><span class="tl-short">比對</span><span class="tl-full">資料比對</span></div>
+    </div>
+    <div id="tabFade">›</div>
+  </div>
+</div>
+
+<div class="max-w-5xl mx-auto px-4 sm:px-6">
+  <div id="tabDesc" class="text-sm text-slate-500 mb-4 mt-3"></div>
+
+  <!-- ══ 進案量 & 業績 ══ -->
+  <div class="tab-panel active" id="panel-month">
+    <section class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100 mb-4 sm:mb-6">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2"><label class="text-sm text-slate-500">起</label>
+          <input type="date" value="2026-10-01" class="border border-slate-200 rounded-lg px-3 py-2 text-sm min-h-[36px]"></div>
+        <div class="flex items-center gap-2"><label class="text-sm text-slate-500">迄</label>
+          <input type="date" value="2026-10-31" class="border border-slate-200 rounded-lg px-3 py-2 text-sm min-h-[36px]"></div>
+      </div>
+      <div class="flex flex-wrap gap-2 mt-3" id="mChips"></div>
+      <p class="text-xs text-slate-500 mt-3">📊 來源：這個月份 2026-10 的月累計・進案量：滑動期間逐日（示範頁只切換按鈕外觀，數字固定）</p>
+    </section>
+
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-5 mb-4 sm:mb-6">
+      <div class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">📦 進案件數</div>
+        <div class="flex items-baseline gap-2"><div class="text-3xl sm:text-4xl font-black text-purple-600">2</div><div class="text-slate-400">件</div></div>
+        <button id="ratioBtn" class="mt-2 text-xs text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-full px-3 text-left leading-tight py-1.5" aria-expanded="false">⚠️ 有 1 筆沒填開發比例，沒算進排行 ▾</button>
+        <div id="ratioBox" class="hidden mt-2 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-2.5 leading-relaxed">沒填比例的案件：<b>雙園街57巷</b>（林佳燕，2026-10-03）<br>請開發人員到 Ragic 補填比例，排行才會算進去。</div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">👥 參與開發人員</div>
+        <div class="flex items-baseline gap-2"><div class="text-3xl sm:text-4xl font-black text-indigo-600">2</div><div class="text-slate-400">人</div></div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">💰 全店業績</div>
+        <div class="flex items-baseline gap-2"><div class="text-3xl sm:text-4xl font-black text-blue-600">95,000</div><div class="text-slate-400">元</div></div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">🏅 有業績人員</div>
+        <div class="flex items-baseline gap-2"><div class="text-3xl sm:text-4xl font-black text-emerald-600">5</div><div class="text-slate-400">人</div></div>
+      </div>
+    </section>
+
+    <section class="mb-4 sm:mb-6">
+      <div class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="text-lg font-bold text-slate-900">🏁 10月全店目標達成</h2>
+          <span class="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-500">目標未填</span>
+        </div>
+        <div class="mb-5">
+          <div class="flex justify-between items-baseline mb-2">
+            <span class="text-sm font-semibold text-slate-600">💰 業績</span>
+            <div class="text-right"><span class="text-2xl font-black text-slate-900">9.5 萬</span><span class="text-slate-400 text-sm"> / —</span><span class="ml-2 text-base font-bold text-slate-400">—</span></div>
+          </div>
+          <div class="relative h-4 bg-slate-100 rounded-full overflow-hidden"><div class="absolute right-0 top-0 h-full w-0.5 bg-slate-400 opacity-60"></div></div>
+          <div class="flex justify-between mt-1"><span class="text-xs text-slate-500"></span><span class="text-xs text-slate-500">目標 —</span></div>
+        </div>
+        <div>
+          <div class="flex justify-between items-baseline mb-2">
+            <span class="text-sm font-semibold text-slate-600">📦 委託間數</span>
+            <div class="text-right"><span class="text-2xl font-black text-slate-900">1 間</span><span class="text-slate-400 text-sm"> / —</span><span class="ml-2 text-base font-bold text-slate-400">—</span></div>
+          </div>
+          <div class="relative h-4 bg-slate-100 rounded-full overflow-hidden"><div class="absolute right-0 top-0 h-full w-0.5 bg-slate-400 opacity-60"></div></div>
+          <div class="flex justify-between mt-1"><span class="text-xs text-slate-500"></span><span class="text-xs text-slate-500">目標 —</span></div>
+        </div>
+        <div class="mt-4 pt-4 border-t border-slate-100 text-sm text-amber-700 text-center">⚠️ 本月目標尚未填報，達成率暫不顯示</div>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+      <div class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-slate-900">📦 進案量排行</h2>
+          <div class="flex bg-slate-100 rounded-full p-0.5 gap-0.5 text-xs font-semibold" data-rank="intake">
+            <button class="rk px-3 rounded-full bg-white text-slate-900 shadow-sm" data-v="rank">排行</button>
+            <button class="rk px-3 rounded-full text-slate-500" data-v="goal">達成率</button>
+          </div>
+        </div>
+        <div id="intakeRank" class="space-y-3"></div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-slate-900">💰 業績排行</h2>
+          <div class="flex bg-slate-100 rounded-full p-0.5 gap-0.5 text-xs font-semibold" data-rank="perf">
+            <button class="rk px-3 rounded-full bg-white text-slate-900 shadow-sm" data-v="rank">排行</button>
+            <button class="rk px-3 rounded-full text-slate-500" data-v="goal">達成率</button>
+          </div>
+        </div>
+        <div id="perfRank" class="space-y-3"></div>
+      </div>
+    </section>
+
+    <section class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100 mb-4 sm:mb-6">
+      <div class="mb-4">
+        <h2 class="text-xl font-bold text-slate-900">⏱️ 最後進案距今</h2>
+        <p class="text-slate-500 text-sm mt-0.5">不受月份篩選影響，計算到今天為止</p>
+      </div>
+      <div id="lastCase" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 sm:gap-3"></div>
+    </section>
+
+    <section class="bg-white rounded-2xl p-4 sm:p-8 shadow-sm border border-slate-100">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">📋 進案明細</h2>
+      <div id="detailCards" class="md:hidden space-y-3"></div>
+      <div class="hidden md:block overflow-x-auto"><table class="w-full text-sm">
+        <thead><tr class="text-slate-500 border-b border-slate-200 text-left"><th class="py-2 pr-4">委託日</th><th class="py-2 pr-4">案名</th><th class="py-2 pr-4">狀態</th><th class="py-2 pr-4">地區</th><th class="py-2 pr-4 text-right">月租</th><th class="py-2">開發人員</th></tr></thead>
+        <tbody id="detailRows" class="divide-y divide-slate-100"></tbody></table></div>
+    </section>
+  </div>
+
+  <!-- ══ 續約 ══ -->
+  <div class="tab-panel" id="panel-recurring">
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-5 mb-4 sm:mb-6" id="recKpi"></section>
+    <section class="bg-white rounded-2xl p-4 sm:p-8 shadow-sm border border-slate-100 mb-4 sm:mb-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">🔁 本月續約業績排行</h2>
+      <div id="recRank" class="space-y-3"></div>
+    </section>
+    <section class="bg-white rounded-2xl p-4 sm:p-8 shadow-sm border border-slate-100">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">🗓️ 近期到期的代管案</h2>
+      <div id="recList" class="divide-y divide-slate-100"></div>
+    </section>
+  </div>
+
+  <!-- ══ 庫存 ══ -->
+  <div class="tab-panel" id="panel-inventory">
+    <section class="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-5 mb-4 sm:mb-6">
+      <div class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100 col-span-2 md:col-span-1"><div class="text-slate-500 text-sm mb-1">全店總庫存</div><div class="flex items-baseline gap-2"><div class="text-4xl sm:text-5xl font-black text-blue-600">126</div><div class="text-slate-400">件</div></div></div>
+      <div class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100"><div class="text-slate-500 text-sm mb-1">專任出租案</div><div class="flex items-baseline gap-2"><div class="text-3xl sm:text-4xl font-black text-indigo-600">18</div><div class="text-slate-400">件</div></div></div>
+      <div class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100"><div class="text-slate-500 text-sm mb-1">一般出租案</div><div class="flex items-baseline gap-2"><div class="text-3xl sm:text-4xl font-black text-emerald-600">64</div><div class="text-slate-400">件</div></div></div>
+      <div class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100"><div class="text-slate-500 text-sm mb-1">包租案</div><div class="flex items-baseline gap-2"><div class="text-3xl sm:text-4xl font-black text-amber-600">0</div><div class="text-slate-400">件</div></div></div>
+      <div class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100"><div class="text-slate-500 text-sm mb-1">代管案</div><div class="flex items-baseline gap-2"><div class="text-3xl sm:text-4xl font-black text-purple-600">26</div><div class="text-slate-400">件</div></div></div>
+    </section>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+      <section class="bg-white rounded-2xl p-4 sm:p-8 shadow-sm border border-slate-100">
+        <div class="mb-4"><h2 class="text-xl font-bold text-slate-900">🎯 新進案件排行</h2>
+          <p class="text-sm text-slate-500 mt-0.5">自己接來的（不含包租/代管）・10 件達標制</p></div>
+        <div id="invRank" class="space-y-3"></div>
+        <button id="invRankMore" class="mt-4 w-full rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold"></button>
+      </section>
+      <section class="bg-white rounded-2xl p-4 sm:p-8 shadow-sm border border-slate-100">
+        <h2 class="text-xl font-bold text-slate-900 mb-4">📊 委託類型分佈</h2>
+        <div id="invDist" class="space-y-3"></div>
+      </section>
+    </div>
+
+    <section class="bg-white rounded-2xl p-4 sm:p-8 shadow-sm border border-slate-100">
+      <h2 class="text-xl font-bold text-slate-900 mb-3">📋 庫存明細</h2>
+      <div class="flex flex-wrap gap-2 mb-3" id="invChips"></div>
+      <p class="text-sm text-slate-500 mb-4">依上架天數排序，超過 90 天標橘色</p>
+      <div id="invCards" class="md:hidden space-y-3"></div>
+      <div class="hidden md:block"><table class="w-full text-sm">
+        <thead><tr class="text-slate-500 border-b border-slate-200 text-left"><th class="py-2 pr-4">案名</th><th class="py-2 pr-4">類型</th><th class="py-2 pr-4">地區</th><th class="py-2 pr-4 text-right">月租</th><th class="py-2 pr-4 text-right">上架天數</th><th class="py-2">負責人</th></tr></thead>
+        <tbody id="invRows" class="divide-y divide-slate-100"></tbody></table></div>
+      <button id="invMore" class="mt-4 w-full rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-semibold"></button>
+    </section>
+  </div>
+
+  <!-- ══ 591 ══ -->
+  <div class="tab-panel" id="panel-ad591">
+    <section class="mb-4 sm:mb-6">
+      <div class="bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-50 rounded-2xl p-4 sm:p-6 shadow-sm border border-sky-200">
+        <div class="flex items-center gap-2 mb-2"><span class="text-2xl">⏳</span><span class="font-bold text-lg text-sky-900">今日到期（24h 內）</span></div>
+        <div class="flex items-baseline gap-2 mb-2"><div class="text-6xl sm:text-7xl font-black text-sky-700 leading-none">1</div><div class="text-sky-800 font-semibold text-lg">筆</div></div>
+        <p class="text-sm text-sky-800 mb-2">系統到期時會自動下架，看看要不要主動續刊或改補新</p>
+        <div class="text-sky-900 text-sm font-medium">張忠豪 1 筆</div>
+      </div>
+    </section>
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-5 mb-4 sm:mb-6">
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100"><div class="text-slate-500 text-sm mb-1">🏠 在刊</div><div class="text-4xl sm:text-5xl font-black text-blue-600">91</div></div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100"><div class="text-slate-500 text-sm mb-1">🪹 空位</div><div class="text-4xl sm:text-5xl font-black text-amber-600">0</div></div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100"><div class="text-slate-500 text-sm mb-1">⭐ 精選</div><div class="text-4xl sm:text-5xl font-black text-amber-500">0</div></div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100"><div class="text-slate-500 text-sm mb-1">⚡ 置頂</div><div class="text-4xl sm:text-5xl font-black text-pink-600">59</div></div>
+    </section>
+
+    <section class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100 mb-4 sm:mb-6">
+      <div class="flex items-center justify-between mb-4"><h2 class="text-xl font-bold text-slate-900">📦 套餐版位</h2><span class="text-xs text-slate-500">綠＝在刊・黃＝空位・紅＝到期</span></div>
+      <div id="adPackageList" class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4"></div>
+    </section>
+
+    <section class="bg-white rounded-2xl p-4 sm:p-8 shadow-sm border border-slate-100 mb-4 sm:mb-6">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div><h2 class="text-xl font-bold text-slate-900">🏆 負責人記分板</h2><p class="text-sm text-slate-500 mt-0.5">按在刊數排序，呈現當下各業務的版位使用情況</p></div>
+        <span class="text-sm text-slate-500 font-semibold">共 15 人</span>
+      </div>
+      <div id="ownerBoard" class="divide-y divide-slate-100"></div>
+      <button id="ownerMore" class="mt-3 w-full rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold"></button>
+    </section>
+
+    <section class="bg-white rounded-2xl p-4 sm:p-8 shadow-sm border border-slate-100">
+      <h2 class="text-xl font-bold text-slate-900 mb-3">📑 物件清單</h2>
+      <div class="flex flex-wrap gap-2 mb-4" id="adChips"></div>
+      <div id="adList" class="divide-y divide-slate-100"></div>
+      <button id="adMore" class="mt-4 w-full rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-semibold"></button>
+    </section>
+  </div>
+
+  <!-- ══ 開發 ══ -->
+  <div class="tab-panel" id="panel-outreach">
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-5 mb-4 sm:mb-6" id="outKpi"></section>
+    <section class="bg-white rounded-2xl p-4 sm:p-8 shadow-sm border border-slate-100">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">📞 本週開發量排行</h2>
+      <div id="outRank" class="space-y-3"></div>
+    </section>
+  </div>
+
+  <!-- ══ 客戶 ══ -->
+  <div class="tab-panel" id="panel-clients">
+    <section class="bg-white rounded-2xl p-4 sm:p-8 shadow-sm border border-slate-100 mb-4 sm:mb-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">👥 客戶來源分佈（近 30 天）</h2>
+      <div id="cliDist" class="space-y-3"></div>
+    </section>
+    <section class="bg-white rounded-2xl p-4 sm:p-8 shadow-sm border border-slate-100">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">🆕 最新進線客戶</h2>
+      <div id="cliList" class="divide-y divide-slate-100"></div>
+    </section>
+  </div>
+
+  <!-- ══ 分析 ══ -->
+  <div class="tab-panel" id="panel-analysis">
+    <section class="bg-white rounded-2xl p-4 sm:p-8 shadow-sm border border-slate-100 mb-4 sm:mb-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-3">🔬 選一位業務看分析</h2>
+      <div class="flex flex-wrap gap-2" id="anaChips"></div>
+    </section>
+    <section id="anaCard" class="bg-white rounded-2xl p-4 sm:p-8 shadow-sm border border-slate-100 mb-4 sm:mb-6"></section>
+  </div>
+
+  <!-- ══ 比對（管理者） ══ -->
+  <div class="tab-panel" id="panel-compare">
+    <section class="bg-white rounded-2xl p-4 sm:p-8 shadow-sm border border-slate-100 mb-4">
+      <h2 class="text-xl font-bold text-slate-900 mb-2">⚖️ 資料比對（管理者專用）</h2>
+      <p class="text-sm text-slate-500 mb-4">核對 Ragic 與業績表兩邊的數字是否一致。同仁看不到這個分頁。</p>
+      <div class="space-y-3">
+        <div class="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3"><span class="text-sm font-semibold text-emerald-800">進案件數</span><span class="text-sm text-emerald-700">兩邊一致（2 件）</span></div>
+        <div class="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3"><span class="text-sm font-semibold text-emerald-800">全店業績</span><span class="text-sm text-emerald-700">兩邊一致（95,000 元）</span></div>
+        <div class="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"><span class="text-sm font-semibold text-amber-800">開發比例</span><span class="text-sm text-amber-700">1 筆沒填（雙園街57巷）</span></div>
+      </div>
+    </section>
+  </div>
+
+  <p class="text-center text-xs text-slate-500 mt-8">即時資料・每三小時自動從 Ragic 抓取・窩的家系統部</p>
+</div>
+
+<!-- 示範頁專用小說明 -->
+<div class="mx-4 mt-6 md:mx-0 md:mt-0 md:fixed md:bottom-3 md:left-3 z-50 md:max-w-[260px] bg-slate-900 text-white text-xs rounded-xl px-3 py-2 shadow-lg leading-relaxed" id="demoNote">
+  示範：網址加 <b>?admin=1</b> 會出現資料比對
+  <div class="mt-1.5"><button id="adminToggle" class="bg-white/15 hover:bg-white/25 rounded-full px-3 text-xs font-semibold"></button></div>
+</div>
+<div id="toastEl" class="fixed top-3 left-1/2 -translate-x-1/2 z-[60] bg-slate-900 text-white text-sm px-4 py-2 rounded-full shadow-lg hidden">示範頁不會真的重新抓資料</div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const TODAY=new Date('2026-10-06T00:00:00');
+function toast(){const t=$('#toastEl');t.classList.remove('hidden');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.add('hidden'),1800);}
+function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function seeded(seed){let s=seed;return()=>{s=(s*1664525+1013904223)%4294967296;return s/4294967296;};}
+function medal(i){return i<3?`<div class="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-base medal-${i+1}">${['🥇','🥈','🥉'][i]}</div>`:`<div class="w-8 h-8 shrink-0 rounded-full bg-slate-100 text-slate-500 text-sm font-bold flex items-center justify-center">${i+1}</div>`;}
+function rankRows(list,max,unit,grad='from-blue-500 to-indigo-500'){return list.map((r,i)=>`<div class="flex items-center gap-3 min-w-0">${medal(i)}<div class="flex-1 min-w-0"><div class="flex justify-between gap-2 text-sm"><span class="font-semibold text-slate-800 truncate">${esc(r[0])}</span><span class="font-black text-slate-900 shrink-0">${r[1]}<span class="text-slate-400 font-normal text-xs"> ${unit}</span></span></div><div class="h-2 bg-slate-100 rounded-full mt-1.5 overflow-hidden"><div class="bar h-full rounded-full bg-gradient-to-r ${grad}" style="width:${Math.max(4,r[1]/max*100)}%"></div></div></div></div>`).join('');}
+function kpi(label,val,unit,color){return `<div class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100"><div class="text-slate-500 text-sm mb-1">${label}</div><div class="flex items-baseline gap-2"><div class="text-3xl sm:text-4xl font-black ${color}">${val}</div><div class="text-slate-400">${unit}</div></div></div>`;}
+function moreBtn(btn,list,state,label){btn.textContent=state.open?'收合 ▴':`看全部 ${list.length} ${label} ▾`;btn.classList.toggle('hidden',list.length<=state.n);btn.style.minHeight='44px';}
+
+/* ── 分頁 ── */
+const DESC={month:'各業務在選定期間內新接了多少委託案件，以及距上次進案多久',recurring:'續約業績與代管案件的進度',inventory:'全店庫存、新進案件排行與庫存明細',ad591:'591 刊登版位使用情況與到期提醒',outreach:'各業務的開發量追蹤',clients:'客戶從哪裡來',analysis:'單一業務的表現分析',compare:'管理者核對資料用'};
+function showTab(k){
+  if(!$(`.tab[data-tab="${k}"]`))k='month';
+  $$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===k));
+  $$('.tab-panel').forEach(p=>p.classList.toggle('active',p.id==='panel-'+k));
+  $('#tabDesc').textContent=DESC[k];
+  const a=$(`.tab[data-tab="${k}"]`);a.scrollIntoView({inline:'center',block:'nearest'});
+  updFade();
+}
+$$('.tab').forEach(t=>t.addEventListener('click',()=>{showTab(t.dataset.tab);window.scrollTo({top:0});}));
+function updFade(){const b=$('#tabBar');$('#tabFade').classList.toggle('on',b.scrollWidth>b.clientWidth+4&&b.scrollLeft+b.clientWidth<b.scrollWidth-6);}
+$('#tabBar').addEventListener('scroll',updFade);window.addEventListener('resize',updFade);
+
+/* ── admin ── */
+const isAdmin=new URLSearchParams(location.search).get('admin')==='1';
+document.body.classList.toggle('admin',isAdmin);
+$('#adminToggle').textContent=isAdmin?'關掉（回一般網址）':'試試看（加上 ?admin=1）';
+$('#adminToggle').onclick=()=>{const u=new URL(location.href);isAdmin?u.searchParams.delete('admin'):u.searchParams.set('admin','1');location.href=u.toString();};
+
+/* ── 進案量&業績 ── */
+$('#mChips').innerHTML=['本週','上週','本月','上月','2026-10','2026-09','2026-08','2026-07'].map(t=>`<span class="chip px-3 bg-slate-100 rounded-full text-sm font-medium ${t==='本月'?'active':''}">${t}</span>`).join('');
+$('#mChips').addEventListener('click',e=>{const c=e.target.closest('.chip');if(!c)return;$$('.chip',$('#mChips')).forEach(x=>x.classList.remove('active'));c.classList.add('active');});
+$('#ratioBtn').onclick=function(){const b=$('#ratioBox');const o=b.classList.toggle('hidden')===false;this.setAttribute('aria-expanded',o);this.textContent='⚠️ 有 1 筆沒填開發比例，沒算進排行 '+(o?'▴':'▾');};
+const INTAKE=[['黃帟潔',0.5],['張忠豪&蕭頤臻',0.5]];
+const PERF=[['蕭靜芳',4],['葉恩廷',2.4],['吳彥廷',1.6],['白欣宜',1.2],['關宗宇',0.3]];
+function renderRank(which,v){
+  const el=$(which==='intake'?'#intakeRank':'#perfRank');
+  if(v==='rank'){el.innerHTML=which==='intake'?rankRows(INTAKE,0.5,'間'):rankRows(PERF,4,'萬');}
+  else{const l=(which==='intake'?INTAKE:PERF).map(r=>r[0]);el.innerHTML=`<div class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">⚠️ 本月目標尚未填報，達成率暫不顯示</div>`+l.map(n=>`<div class="flex items-center justify-between text-sm gap-2"><span class="font-semibold text-slate-700 truncate">${esc(n)}</span><span class="text-slate-500 shrink-0">目標未填</span></div>`).join('');}
+}
+renderRank('intake','rank');renderRank('perf','rank');
+$$('[data-rank]').forEach(g=>g.addEventListener('click',e=>{const b=e.target.closest('.rk');if(!b)return;$$('.rk',g).forEach(x=>{const on=x===b;x.classList.toggle('bg-white',on);x.classList.toggle('text-slate-900',on);x.classList.toggle('shadow-sm',on);x.classList.toggle('text-slate-500',!on);});renderRank(g.dataset.rank,b.dataset.v);}));
+
+const LC=[['🏢 全部門',4,'10-02'],['張忠豪&蕭頤臻',4,'10-02'],['黃帟潔',4,'10-02'],['蕭靜芳',7,'09-29'],['方鼎文',11],['吳惠慈',19],['林宣佑',21],['李卓威',25],['關宗宇',27],['詹張傳',28],['白欣宜',28],['楊書銘',49],['劉子碩',62],['葉恩廷',65],['吳彥廷',73],['陳勁豪',86],['林佳燕',103],['謝佳芬',126],['鐘晟鈺',130],['李維',207],['曾正煌',300]];
+function lcStyle(d){return d<=7?['bg-emerald-50 border-emerald-200','text-emerald-700','bg-emerald-500']:d<=14?['bg-yellow-50 border-yellow-200','text-yellow-700','bg-yellow-500']:d<=30?['bg-orange-50 border-orange-200','text-orange-700','bg-orange-500']:['bg-rose-50 border-rose-200','text-rose-700','bg-rose-500'];}
+$('#lastCase').innerHTML=LC.map(([n,d,dt])=>{const date=dt?'2026-'+dt:new Date(TODAY-d*864e5).toISOString().slice(0,10);const s=lcStyle(d);return `<div class="rounded-xl border p-3 min-w-0 ${s[0]}"><div class="flex items-center gap-1.5 text-sm font-semibold text-slate-700 min-w-0"><span class="w-2 h-2 rounded-full shrink-0 ${s[2]}"></span><span class="truncate">${esc(n)}</span></div><div class="mt-1"><span class="text-2xl font-black ${s[1]}">${d}</span><span class="text-sm ${s[1]}"> 天前</span></div><div class="text-xs text-slate-500">${date}</div></div>`;}).join('')
+ +['吳健勳','張嗣祥','高晶晶'].map(n=>`<div class="rounded-xl border border-slate-200 bg-slate-50 p-3 min-w-0"><div class="flex items-center gap-1.5 text-sm font-semibold text-slate-600 min-w-0"><span class="w-2 h-2 rounded-full shrink-0 bg-slate-400"></span><span class="truncate">${n}</span></div><div class="mt-1 text-base font-bold text-slate-500">尚無進案</div><div class="text-xs text-slate-500">新人・還沒有進案紀錄</div></div>`).join('');
+
+const DET=[['2026-10-02','漢皇鼎真4F','代租中','新北市三重區',47000,'黃帟潔 (50%)、張忠豪&蕭頤臻 (50%)'],['2026-10-03','雙園街57巷','代租中','新北市三重區',32000,'林佳燕（比例未填）']];
+const unfilled=s=>s.includes('未填');
+$('#detailCards').innerHTML=DET.map(d=>`<div class="rounded-xl border border-slate-200 p-3.5"><div class="flex items-start justify-between gap-2"><div class="font-bold text-slate-900 break-words min-w-0">${d[1]}</div><span class="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">${d[2]}</span></div><div class="flex justify-between text-sm text-slate-600 mt-1.5"><span>${d[3]}</span><span class="font-bold text-slate-900">${d[4].toLocaleString()} 元</span></div><div class="text-sm mt-1.5 ${unfilled(d[5])?'text-amber-700':'text-slate-500'}">開發：${d[5]}</div><div class="text-xs text-slate-500 mt-1">委託日 ${d[0]}</div></div>`).join('');
+$('#detailRows').innerHTML=DET.map(d=>`<tr><td class="py-3 pr-4 text-slate-500 whitespace-nowrap">${d[0]}</td><td class="py-3 pr-4 font-semibold text-slate-900">${d[1]}</td><td class="py-3 pr-4"><span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">${d[2]}</span></td><td class="py-3 pr-4 text-slate-600">${d[3]}</td><td class="py-3 pr-4 text-right font-bold">${d[4].toLocaleString()}</td><td class="py-3 ${unfilled(d[5])?'text-amber-700':'text-slate-600'}">${d[5]}</td></tr>`).join('');
+
+/* ── 續約 ── */
+$('#recKpi').innerHTML=kpi('🔁 本月續約件數','6','件','text-blue-600')+kpi('💰 續約業績','3.2','萬','text-emerald-600')+kpi('🛡️ 代管案','26','件','text-purple-600')+kpi('⏳ 30 天內到期','4','件','text-amber-600');
+$('#recRank').innerHTML=rankRows([['蕭靜芳',1.4],['方鼎文',0.9],['林宣佑',0.6],['詹張傳',0.3]],1.4,'萬','from-emerald-500 to-teal-500');
+$('#recList').innerHTML=[['三重・正義北路 2F','10-18','方鼎文'],['板橋・文化路二段 5F','10-25','蕭靜芳'],['新莊・中正路 3F','11-02','林宣佑'],['永和・中山路一段 4F','11-09','詹張傳']].map(r=>`<div class="py-3 flex items-center justify-between gap-3 min-w-0"><div class="min-w-0"><div class="font-semibold text-slate-900 truncate">${r[0]}</div><div class="text-sm text-slate-500">負責：${r[2]}</div></div><span class="shrink-0 text-sm font-semibold px-3 py-1 rounded-full bg-amber-100 text-amber-700">${r[1]} 到期</span></div>`).join('');
+
+/* ── 庫存 ── */
+const INV_RANK=[['張忠豪&蕭頤臻',22.9],['蕭靜芳',11],['方鼎文',7],['林宣佑',6.65],['詹張傳',6.05],['李卓威',6],['劉子碩',5.8],['謝佳芬',2.7],['吳惠慈',2.3],['關宗宇',2.1],['白欣宜',1.8],['楊書銘',1.5],['黃帟潔',1.2],['林佳燕',1.0],['葉恩廷',0.8],['吳彥廷',0.5],['陳勁豪',0.4],['鐘晟鈺',0.3],['李維',0.2]];
+const invR={open:false,n:10};
+function drawInvRank(){const l=invR.open?INV_RANK:INV_RANK.slice(0,invR.n);$('#invRank').innerHTML=rankRows(l,22.9,'件','from-indigo-500 to-purple-500');
+  // 排名數字固定從全列表算
+  const b=$('#invRankMore');b.textContent=invR.open?'收合 ▴':`看全部 ${INV_RANK.length} 人 ▾`;b.style.minHeight='44px';}
+$('#invRankMore').onclick=()=>{invR.open=!invR.open;drawInvRank();};drawInvRank();
+$('#invDist').innerHTML=[['一般出租案',64,'bg-emerald-500'],['代管案',26,'bg-purple-500'],['專任出租案',18,'bg-indigo-500'],['帶看同意',12,'bg-sky-500'],['社會住宅',6,'bg-rose-400'],['包租案',0,'bg-amber-500']].map(r=>`<div><div class="flex justify-between text-sm"><span class="font-semibold text-slate-700">${r[0]}</span><span class="text-slate-600">${r[1]} 件</span></div><div class="h-2.5 bg-slate-100 rounded-full mt-1 overflow-hidden"><div class="h-full rounded-full ${r[2]}" style="width:${r[1]/64*100}%"></div></div></div>`).join('');
+
+const rnd=seeded(7);
+const AREAS=['新北市板橋區','新北市三重區','新北市中和區','新北市永和區','新北市新莊區','新北市蘆洲區','新北市新店區','新北市土城區','台北市大安區','台北市中山區','台北市信義區','台北市松山區','台北市內湖區','台北市士林區'];
+const BLD=['漢皇鼎真','幸福匯','親親大院','遠雄御瀧','文化路二段','正義北路','中正路','中山路一段','重新路','大同南路','復興路','民生路','四維路','光復路','成功路','忠孝東路','南京東路','基隆路'];
+const SUF=['套房','1房','2房','3房','電梯華廈','4F','5F','3F','2F','B棟'];
+const OWN=INV_RANK.map(r=>r[0]);
+const TYPES=[['專任出租案',18],['一般出租案',64],['代管案',26],['帶看同意',12],['社會住宅',6]];
+let INV=[];TYPES.forEach(([t,n])=>{for(let i=0;i<n;i++){INV.push({name:BLD[Math.floor(rnd()*BLD.length)]+(rnd()<.5?'':' ')+SUF[Math.floor(rnd()*SUF.length)],type:t,area:AREAS[Math.floor(rnd()*AREAS.length)],rent:Math.round((8+rnd()*52)*10)*100,days:Math.max(3,Math.round(3+Math.pow(rnd(),1.8)*397)),own:OWN[Math.floor(rnd()*8)]});}});
+INV.sort((a,b)=>b.days-a.days);
+const inv={type:'all',open:false,n:10};
+const chipList=[['all','全部'],['專任出租案','專任'],['一般出租案','一般'],['包租案','包租'],['代管案','代管'],['帶看同意','帶看同意'],['社會住宅','社會住宅']];
+$('#invChips').innerHTML=chipList.map(([k,l])=>`<span class="chip px-3 bg-slate-100 rounded-full text-sm font-medium ${k==='all'?'active':''}" data-k="${k}">${l}</span>`).join('');
+$('#invChips').addEventListener('click',e=>{const c=e.target.closest('.chip');if(!c)return;$$('.chip',$('#invChips')).forEach(x=>x.classList.remove('active'));c.classList.add('active');inv.type=c.dataset.k;inv.open=false;drawInv();});
+function drawInv(){
+  const all=INV.filter(x=>inv.type==='all'||x.type===inv.type);const l=inv.open?all:all.slice(0,inv.n);
+  const dc=d=>d>90?'text-orange-600 font-bold':'text-slate-700';
+  if(!all.length){$('#invCards').innerHTML=$('#invRows').innerHTML='';$('#invCards').innerHTML='<div class="text-center text-slate-500 text-sm py-6">這個類型目前沒有案件</div>';$('#invRows').innerHTML='<tr><td colspan="6" class="text-center text-slate-500 text-sm py-6">這個類型目前沒有案件</td></tr>';}
+  else{
+  $('#invCards').innerHTML=l.map(x=>`<div class="rounded-xl border ${x.days>90?'border-orange-200 bg-orange-50/40':'border-slate-200'} p-3.5"><div class="flex items-start justify-between gap-2"><div class="font-bold text-slate-900 min-w-0 break-words">${x.name}</div><span class="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700">${x.type.replace('出租案','').replace('案','')}</span></div><div class="flex justify-between text-sm text-slate-600 mt-1.5"><span>${x.area}</span><span class="font-bold text-slate-900">${x.rent.toLocaleString()} 元</span></div><div class="flex justify-between text-sm mt-1.5"><span class="text-slate-500">負責：${x.own}</span><span class="${dc(x.days)}">上架 ${x.days} 天</span></div></div>`).join('');
+  $('#invRows').innerHTML=l.map(x=>`<tr><td class="py-3 pr-4 font-semibold text-slate-900">${x.name}</td><td class="py-3 pr-4"><span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700">${x.type.replace('出租案','').replace('案','')}</span></td><td class="py-3 pr-4 text-slate-600">${x.area}</td><td class="py-3 pr-4 text-right font-bold">${x.rent.toLocaleString()}</td><td class="py-3 pr-4 text-right ${dc(x.days)}">${x.days}</td><td class="py-3 text-slate-600">${x.own}</td></tr>`).join('');}
+  moreBtn($('#invMore'),all,inv,'件');
+}
+$('#invMore').onclick=()=>{inv.open=!inv.open;drawInv();};drawInv();
+
+/* ── 591 ── */
+const OWNERS=[['張忠豪',12,1],['蕭靜芳',10,0],['方鼎文',9,0],['林宣佑',8,0],['詹張傳',8,0],['李卓威',7,0],['劉子碩',7,0],['謝佳芬',6,0],['黃帟潔',5,0],['吳惠慈',5,0],['關宗宇',4,0],['白欣宜',4,0],['楊書銘',3,0],['葉恩廷',2,0],['吳彥廷',1,0]];
+const own={open:false,n:5};
+function drawOwners(){const l=own.open?OWNERS:OWNERS.slice(0,own.n);$('#ownerBoard').innerHTML=l.map((o,i)=>`<div class="flex items-center gap-3 py-2.5 min-w-0">${medal(i)}<div class="flex-1 min-w-0 font-semibold text-slate-800 truncate text-sm">${o[0]}</div><div class="text-sm text-slate-700 shrink-0">在刊 <b class="text-blue-600 text-base">${o[1]}</b></div><div class="text-sm shrink-0 w-20 text-right ${o[2]?'text-sky-700 font-bold':'text-slate-500'}">到期 ${o[2]}</div></div>`).join('');moreBtn($('#ownerMore'),OWNERS,own,'人');}
+$('#ownerMore').onclick=()=>{own.open=!own.open;drawOwners();};drawOwners();
+const r2=seeded(31);let AD=[];
+OWNERS.forEach(([n,c])=>{for(let i=0;i<c;i++)AD.push({o:n,name:BLD[Math.floor(r2()*BLD.length)]+SUF[Math.floor(r2()*SUF.length)],area:AREAS[Math.floor(r2()*AREAS.length)],rent:Math.round((8+r2()*45)*10)*100,pin:false,exp:false});});
+AD[0].exp=true;
+{const idx=AD.map((_,i)=>i).sort((a,b)=>(Math.sin(a*12.9898)*43758)%1-(Math.sin(b*12.9898)*43758)%1);idx.slice(0,59).forEach(i=>AD[i].pin=true);}
+const adS={f:'exp',open:false,n:15};
+const cnt={exp:AD.filter(x=>x.exp).length,pin:AD.filter(x=>x.pin).length,all:AD.length};
+$('#adChips').innerHTML=[['exp','今日到期'],['pin','置頂'],['all','全部']].map(([k,l])=>`<span class="chip px-4 bg-slate-100 rounded-full text-sm font-medium ${k==='exp'?'active':''}" data-k="${k}">${l} ${cnt[k]}</span>`).join('');
+$('#adChips').addEventListener('click',e=>{const c=e.target.closest('.chip');if(!c)return;$$('.chip',$('#adChips')).forEach(x=>x.classList.remove('active'));c.classList.add('active');adS.f=c.dataset.k;adS.open=false;drawAd();});
+function drawAd(){const all=AD.filter(x=>adS.f==='all'||x[adS.f]);const l=adS.open?all:all.slice(0,adS.n);
+  $('#adList').innerHTML=l.map(x=>`<div class="py-3 min-h-[52px] flex items-center justify-between gap-3 min-w-0"><div class="min-w-0"><div class="font-semibold text-slate-900 text-sm break-words">${x.name}</div><div class="text-xs text-slate-500">${x.area}・${x.rent.toLocaleString()} 元・${x.o}</div></div><div class="flex gap-1.5 shrink-0">${x.exp?'<span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-100 text-sky-700">今日到期</span>':''}${x.pin?'<span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-pink-100 text-pink-700">置頂</span>':''}</div></div>`).join('');
+  moreBtn($('#adMore'),all,adS,'筆');}
+$('#adMore').onclick=()=>{adS.open=!adS.open;drawAd();};drawAd();
+
+
+$('#adPackageList').innerHTML=[[1,25,0,0],[2,25,0,0],[3,25,0,0],[4,16,0,9]].map(([n,a,v,e])=>{const t=a+v+e;let bg='from-emerald-50 to-emerald-100 border-emerald-200',st='滿刊',sc='bg-emerald-500';if(e>0){bg='from-red-50 to-red-100 border-red-200';st=e+' 筆到期';sc='bg-red-500';}else if(v>0){bg='from-amber-50 to-amber-100 border-amber-200';st=v+' 空位';sc='bg-amber-500';}
+ const parts=[`<span class="text-emerald-700 font-bold">${a} 在刊</span>`];if(v)parts.push(`<span class="text-amber-700 font-bold">${v} 空位</span>`);if(e)parts.push(`<span class="text-red-700 font-bold">${e} 到期</span>`);
+ return `<div class="rounded-xl border p-3 sm:p-4 bg-gradient-to-br ${bg} min-w-0"><div class="flex items-center justify-between gap-1 mb-3"><span class="text-sm font-bold text-slate-700">套餐 #${n}</span><span class="${sc} text-white text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">${st}</span></div><div class="flex items-baseline gap-1 mb-2"><span class="text-4xl font-black text-slate-900">${a}</span><span class="text-xs text-slate-500 ml-1">筆在刊</span></div><div class="flex h-2 rounded-full overflow-hidden bg-white/70 mb-2"><div class="h-full bg-emerald-500" style="width:${a/t*100}%"></div><div class="h-full bg-amber-400" style="width:${v/t*100}%"></div><div class="h-full bg-red-400" style="width:${e/t*100}%"></div></div><div class="flex flex-wrap gap-x-2 gap-y-0.5 text-xs">${parts.join('<span class="text-slate-400">·</span>')}</div></div>`;}).join('');
+/* ── 開發／客戶／分析 ── */
+$('#outKpi').innerHTML=kpi('📞 本週開發電話','86','通','text-blue-600')+kpi('🤝 約到面談','9','組','text-indigo-600')+kpi('📝 取得委託','2','件','text-emerald-600')+kpi('⏳ 待追蹤','14','筆','text-amber-600');
+$('#outRank').innerHTML=rankRows([['蕭靜芳',21],['張忠豪&蕭頤臻',17],['方鼎文',12],['林宣佑',10],['詹張傳',9],['李卓威',7]],21,'通','from-sky-500 to-blue-600');
+$('#cliDist').innerHTML=[['591 來電',46,'bg-blue-500'],['官網表單',22,'bg-indigo-500'],['LINE 詢問',18,'bg-emerald-500'],['朋友介紹',9,'bg-amber-500'],['路過／店頭',5,'bg-rose-400']].map(r=>`<div><div class="flex justify-between text-sm"><span class="font-semibold text-slate-700">${r[0]}</span><span class="text-slate-600">${r[1]} 位</span></div><div class="h-2.5 bg-slate-100 rounded-full mt-1 overflow-hidden"><div class="h-full rounded-full ${r[2]}" style="width:${r[1]/46*100}%"></div></div></div>`).join('');
+$('#cliList').innerHTML=[['591 來電','今天 11:40','蕭靜芳'],['LINE 詢問','今天 10:15','方鼎文'],['官網表單','昨天 17:02','林宣佑'],['朋友介紹','昨天 09:30','詹張傳']].map(r=>`<div class="py-3 flex items-center justify-between gap-3"><div class="min-w-0"><div class="font-semibold text-slate-900 text-sm">${r[0]}</div><div class="text-xs text-slate-500">${r[1]}</div></div><span class="text-sm text-slate-600 shrink-0">${r[2]} 接</span></div>`).join('');
+const ANA=['蕭靜芳','張忠豪&蕭頤臻','方鼎文','林宣佑'];
+function drawAna(n){$$('.chip',$('#anaChips')).forEach(c=>c.classList.toggle('active',c.dataset.n===n));$('#anaCard').innerHTML=`<h2 class="text-xl font-bold text-slate-900 mb-4">${esc(n)} 的近三個月</h2><div class="grid grid-cols-3 gap-3">${[['進案','4','件','text-purple-600'],['業績','5.1','萬','text-blue-600'],['庫存','18','件','text-emerald-600']].map(k=>`<div class="rounded-xl bg-slate-50 p-3 text-center"><div class="text-xs text-slate-500">${k[0]}</div><div class="text-2xl font-black ${k[3]}">${k[1]}<span class="text-sm text-slate-400 font-normal"> ${k[2]}</span></div></div>`).join('')}</div><p class="text-sm text-slate-500 mt-4">示範內容：實際頁面會在這裡顯示每月走勢與案件來源。</p>`;}
+$('#anaChips').innerHTML=ANA.map(n=>`<span class="chip px-4 bg-slate-100 rounded-full text-sm font-medium" data-n="${n}">${n}</span>`).join('');
+$('#anaChips').addEventListener('click',e=>{const c=e.target.closest('.chip');if(c)drawAna(c.dataset.n);});drawAna(ANA[0]);
+
+showTab('month');
+// 示範用：?tab=xxx 直接開某分頁
+{const t=new URLSearchParams(location.search).get('tab');if(t)showTab(t);}
+updFade();
+</script>
+</body>
+</html>
