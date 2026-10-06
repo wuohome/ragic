@@ -37,6 +37,10 @@
   .dual-range input[type=range].end-slider::-moz-range-thumb{border-color:#10b981;}
   #loadingOverlay{position:fixed;inset:0;background:rgba(248,250,252,.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;transition:opacity .4s;}
   #loadingOverlay.fade-out{opacity:0;pointer-events:none;}
+  /* 背景資料還沒到的分頁：先藏內容、顯示一行載入中 */
+  .tab-panel.rest-wait>*{display:none;}
+  .tab-panel.rest-wait::before{content:'資料載入中…';display:block;text-align:center;padding:48px 0;color:#94a3b8;}
+  .tab-panel.rest-wait.rest-fail::before{content:'這部分資料沒載到，請按上方「重新整理」';color:#e11d48;}
 </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
@@ -1205,8 +1209,7 @@ async function ragicFetch(action, params = '') {
 }
 
 let _loadDone = 0;
-const _loadTotal = 10;
-const _loadLabels = ['進案量','業績','庫存','開發追蹤','委託屋主','客戶來源','人事資料','業績比對','GSheet時間','業績目標'];
+const _loadTotal = 6;  // 只算首頁要等的；庫存／開發／客戶在首頁出來後背景接著載（fetchRestData）
 function setProgress(label) {
   _loadDone++;
   const pct = Math.round(_loadDone / _loadTotal * 100);
@@ -1226,13 +1229,11 @@ async function fetchAllData() {
 
   const intakeParams = `subtables=true&where=${encodeURIComponent(`1000260,gte,${fmtDate(dataStart)}`)}&where=${encodeURIComponent(`1000260,lte,${fmtDate(dataEnd)}`)}&limit=10000`;
 
-  const [rawIntake, rawPayments, rawInventory, rawOutreach, rawCommission, rawClients, rawHr, perfMdText, perfCommits, rawGoals] = await Promise.all([
+  // 首頁（進案量&業績）只需要這 6 項；其餘 4 張大表（合計約 10MB）由 fetchRestData 在首頁出來後再抓。
+  // Ragic 對同時請求會排隊，全部一起抓首頁要等 9～11 秒，拆開後首頁約 2～3 秒（2026-10-06 實測）。
+  const [rawIntake, rawPayments, rawHr, perfMdText, perfCommits, rawGoals] = await Promise.all([
     ragicFetch('listIntake', intakeParams).then(r => { setProgress('進案量'); return r; }),
     ragicFetch('listPayments', 'subtables=true&limit=10000').then(r => { setProgress('業績'); return r; }),
-    ragicFetch('listInventory', 'subtables=true&limit=10000').then(r => { setProgress('庫存'); return r; }),
-    ragicFetch('listOutreach', 'subtables=true&limit=10000').then(r => { setProgress('開發追蹤'); return r; }),
-    ragicFetch('listCommission', 'subtables=true&limit=10000').then(r => { setProgress('委託屋主'); return r; }),
-    ragicFetch('listClients', 'limit=10000').then(r => { setProgress('客戶來源'); return r; }),
     ragicFetch('listStaff', 'limit=200').then(r => { setProgress('人事資料'); return r; }),
     fetch('data/perf.md').then(r => r.ok ? r.text() : '').catch(() => '').then(r => { setProgress('業績比對'); return r; }),
     fetch('https://api.github.com/repos/wuohome/ragic/commits?path=data/perf.md&per_page=1')
@@ -1249,6 +1250,60 @@ async function fetchAllData() {
 
   INTAKE    = toIntakeRecords(rawIntake);
   PERF_RAGIC = toPerfRecords(rawPayments);
+
+  const inactive = getInactiveStaff(rawHr);
+  // perf.md 最後 commit 時間 = GSheet 快照時間（Mac Mini launchd 每日 20:00 push）
+  if (perfCommits && perfCommits[0]?.commit?.committer?.date) {
+    const d = new Date(perfCommits[0].commit.committer.date);
+    PERF_GSHEET_UPDATED = d.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\//g, '-');
+  }
+  const perfOb   = parsePerfMd(perfMdText);
+  window._perfOb = perfOb;
+
+  // For month perf tab + year tab: prefer OB perf (has historical data), fallback to Ragic
+  PERF    = perfOb.length > 0 ? perfOb : PERF_RAGIC;
+  COMPARE = buildCompare(PERF_RAGIC, perfOb);
+
+  // 當月業績：perf.md 直接包含當月 GSheet 資料（Mac Mini launchd 每天 20:00 更新）
+  PERF_GSHEET_AVAILABLE = true;
+  window._rawHr = rawHr;  // 供 renderAnalysis Tier 0 讀精確到職日
+
+  rebuildActiveStaff();  // 先用進案＋業績建；fetchRestData 補齊庫存／開發／客戶後再建一次
+
+  // 建立到職月份 map（供業務分析頁的時序曲線 x 軸起點用）
+  STAFF_ONBOARD_MONTH = {};
+  for (const rec of Object.values(rawHr)) {
+    const name = (rec['姓名'] || '').trim();
+    const onboard = (rec['到職日期'] || rec['到職日'] || rec['入職日'] || '').trim();
+    if (name && onboard && onboard.length >= 7) {
+      STAFF_ONBOARD_MONTH[name] = onboard.slice(0,7).replaceAll('/', '-');
+    }
+  }
+  // 夫妻檔合併：取較早到職（蕭頤臻舊名「蕭眞儀」，HR record 可能仍為舊名）
+  const a = STAFF_ONBOARD_MONTH['張忠豪'];
+  const b = STAFF_ONBOARD_MONTH['蕭頤臻'] || STAFF_ONBOARD_MONTH['蕭眞儀'];
+  if (a && b) STAFF_ONBOARD_MONTH['張忠豪&蕭頤臻'] = a <= b ? a : b;
+  else if (a) STAFF_ONBOARD_MONTH['張忠豪&蕭頤臻'] = a;
+  else if (b) STAFF_ONBOARD_MONTH['張忠豪&蕭頤臻'] = b;
+
+  // 解析 extras（續約/代管業績）並掛到 window 供 renderRecurring 使用
+  window.PERF_EXTRAS = parseExtrasFromPerfMd(perfMdText);
+
+  // 儲存 rawGoals 供全店達成區塊達標人員計算使用
+  window._rawGoals = rawGoals || {};
+
+  // 渲染當月業績目標面板
+  renderGoalPanel(rawGoals || {});
+}
+
+// 首頁出來之後才抓的 4 張大表：庫存、開發募集、委託屋主、客戶來源
+async function fetchRestData() {
+  const [rawInventory, rawOutreach, rawCommission, rawClients] = await Promise.all([
+    ragicFetch('listInventory', 'subtables=true&limit=10000'),
+    ragicFetch('listOutreach', 'subtables=true&limit=10000'),
+    ragicFetch('listCommission', 'subtables=true&limit=10000'),
+    ragicFetch('listClients', 'limit=10000'),
+  ]);
   INVENTORY = toInventoryRecords(rawInventory);
   OUTREACH  = toOutreachRecords(rawOutreach);
   CLIENTS   = toClientRecords(rawClients);
@@ -1292,35 +1347,15 @@ async function fetchAllData() {
   }
   OUTREACH.sort((a, b) => (b.date||'').localeCompare(a.date||''));
 
-  const inactive = getInactiveStaff(rawHr);
-  // perf.md 最後 commit 時間 = GSheet 快照時間（Mac Mini launchd 每日 20:00 push）
-  if (perfCommits && perfCommits[0]?.commit?.committer?.date) {
-    const d = new Date(perfCommits[0].commit.committer.date);
-    PERF_GSHEET_UPDATED = d.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\//g, '-');
-  }
-  const perfOb   = parsePerfMd(perfMdText);
+  rebuildActiveStaff();
+  renderGoalPanel(window._rawGoals || {});  // 「尚未填目標」名單依完整在職名單重算
+}
 
-  // For month perf tab + year tab: prefer OB perf (has historical data), fallback to Ragic
-  PERF    = perfOb.length > 0 ? perfOb : PERF_RAGIC;
-  COMPARE = buildCompare(PERF_RAGIC, perfOb);
-
-  // 當月業績：perf.md 直接包含當月 GSheet 資料（Mac Mini launchd 每天 20:00 更新）
-
-
-
-
-
-
-
-
-  // FIX-2026-04-28-loading: 移除孤立 } (原 if perfSnapshots block 殘骸)
-  PERF_GSHEET_AVAILABLE = true;
-  window._rawHr = rawHr;  // 供 renderAnalysis Tier 0 讀精確到職日
-
-  // Build active staff set：只接受 HR 在職員工本名 + 白名單合併名
-  // 避免下拉選單出現「吳惠慈、關宗宇」「張忠豪、蕭眞儀、詹張傳」這種混合字串
+// 在職名單：只接受 HR 在職員工本名 + 白名單合併名，且在任一份資料出現過
+// 避免下拉選單出現「吳惠慈、關宗宇」「張忠豪、蕭眞儀、詹張傳」這種混合字串
+function rebuildActiveStaff() {
   const hrValid = new Set();
-  for (const rec of Object.values(rawHr)) {
+  for (const rec of Object.values(window._rawHr || {})) {
     const name = (rec['姓名'] || '').trim();
     const status = (rec['在職狀態'] || rec['狀態'] || '').trim();
     if (name && (status === '在職' || status === '試用')) hrValid.add(name);
@@ -1335,37 +1370,12 @@ async function fetchAllData() {
     if (validNames.has(norm)) allStaff.add(norm);
   };
   for (const r of INTAKE) for (const d of (r.devs||[])) addIfValid(d.name);
-  for (const r of perfOb) addIfValid(r.name);
+  for (const r of (window._perfOb || [])) addIfValid(r.name);
   for (const r of INVENTORY) for (const d of (r.devs||[])) addIfValid(d.name);
   for (const r of OUTREACH) addIfValid(r.dev);
   for (const r of CLIENTS) addIfValid(r.staff);
   for (const n of EXCLUDE_DEVS) allStaff.delete(n);
   ACTIVE_STAFF = allStaff;
-
-  // 建立到職月份 map（供業務分析頁的時序曲線 x 軸起點用）
-  STAFF_ONBOARD_MONTH = {};
-  for (const rec of Object.values(rawHr)) {
-    const name = (rec['姓名'] || '').trim();
-    const onboard = (rec['到職日期'] || rec['到職日'] || rec['入職日'] || '').trim();
-    if (name && onboard && onboard.length >= 7) {
-      STAFF_ONBOARD_MONTH[name] = onboard.slice(0,7).replaceAll('/', '-');
-    }
-  }
-  // 夫妻檔合併：取較早到職（蕭頤臻舊名「蕭眞儀」，HR record 可能仍為舊名）
-  const a = STAFF_ONBOARD_MONTH['張忠豪'];
-  const b = STAFF_ONBOARD_MONTH['蕭頤臻'] || STAFF_ONBOARD_MONTH['蕭眞儀'];
-  if (a && b) STAFF_ONBOARD_MONTH['張忠豪&蕭頤臻'] = a <= b ? a : b;
-  else if (a) STAFF_ONBOARD_MONTH['張忠豪&蕭頤臻'] = a;
-  else if (b) STAFF_ONBOARD_MONTH['張忠豪&蕭頤臻'] = b;
-
-  // 解析 extras（續約/代管業績）並掛到 window 供 renderRecurring 使用
-  window.PERF_EXTRAS = parseExtrasFromPerfMd(perfMdText);
-
-  // 儲存 rawGoals 供全店達成區塊達標人員計算使用
-  window._rawGoals = rawGoals || {};
-
-  // 渲染當月業績目標面板
-  renderGoalPanel(rawGoals || {});
 }
 
 
@@ -3436,6 +3446,26 @@ document.getElementById('clEnd').addEventListener('change',()=>{document.querySe
 // ════════════════════════════════════════════════════════════════════
 // INIT — fetch data then render
 // ════════════════════════════════════════════════════════════════════
+const REST_TABS = ['inventory', 'outreach', 'clients', 'analysis'];
+async function loadRestAndRender(){
+  try {
+    await fetchRestData();
+    buildStaffSelector();
+    renderLastCase();
+    renderPerfIntake();  // 在職名單補齊後重畫首頁（不重設使用者選的區間）
+    renderInventory();
+    applyOutreachPreset('thisMonth');
+    applyClientPreset('thisMonth');
+    initAnaRangeUI();
+    renderAnalysis();
+  } catch(err) {
+    console.error('Dashboard background load error:', err);
+    REST_TABS.forEach(t => document.getElementById('panel-'+t).classList.add('rest-fail'));
+    return;
+  }
+  REST_TABS.forEach(t => document.getElementById('panel-'+t).classList.remove('rest-wait'));
+}
+
 (async function init(){
   const t0 = Date.now();
   try {
@@ -3452,20 +3482,16 @@ document.getElementById('clEnd').addEventListener('change',()=>{document.querySe
     document.getElementById('updateStatus').innerHTML = `即時資料　${ts}（${elapsed}s）${gsheetNote}`;
     document.getElementById('refreshBtn').classList.remove('hidden');
 
-    // Build UI
-    buildStaffSelector();
+    // Build UI（首頁要的先畫；庫存／開發／客戶／業務分析等背景資料到了再畫）
+    REST_TABS.forEach(t => document.getElementById('panel-'+t).classList.add('rest-wait'));
     buildMonthChips();
     buildRecChips();
     buildCompareChips();
     renderLastCase();
     applyMonthPreset('thisMonth');
     if(compareMonths.length) renderCompare(compareMonths[0]);
-    renderInventory();
-    applyOutreachPreset('thisMonth');
-    applyClientPreset('thisMonth');
     renderAd591();
-    initAnaRangeUI();
-    renderAnalysis();
+    loadRestAndRender();
 
     // Fade out loading
     const overlay = document.getElementById('loadingOverlay');
@@ -3488,6 +3514,7 @@ document.getElementById('clEnd').addEventListener('change',()=>{document.querySe
 
   } catch(err) {
     console.error('Dashboard load error:', err);
+    if (!document.getElementById('loadingText')) return;  // 首頁已出來，錯誤在背景階段，由 loadRestAndRender 處理
     document.getElementById('loadingText').textContent = '❌ 資料載入失敗';
     document.getElementById('loadingDetail').textContent = err.message + '　— 請檢查網路連線或重新整理';
     document.getElementById('loadingDetail').innerHTML += '<br><button onclick="location.reload()" class="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">重新整理</button>';
