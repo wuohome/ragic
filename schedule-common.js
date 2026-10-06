@@ -250,6 +250,16 @@ SC.CLEANING_FEE = { FLOOR_DUTY: 200, TRASH_DUTY: 300 };
 // 兩日期字串（YYYY/MM/DD）比較，a < b 回傳負值
 SC._cmpDateStr = (a, b) => a.replace(/\//g, "") .localeCompare(b.replace(/\//g, ""));
 
+// 今天（本機時間）YYYY/MM/DD
+SC.todayStr = () => {
+    const t = new Date();
+    return `${t.getFullYear()}/${String(t.getMonth() + 1).padStart(2, "0")}/${String(t.getDate()).padStart(2, "0")}`;
+};
+
+// ── 一鍵預排值日生「過去鎖定」（2026-10-06 Joan：已經過了的時間全部鎖定，不然對已經打掃過的人不公平）──
+// 今天以前（含今天，當天的人早上已收到點名通知）的系統預排值日不刪、不重排、不新增；只鎖按鈕，手動點格照舊可改
+SC.isDutyLocked = (dateStr, todayStr) => SC._cmpDateStr(dateStr, todayStr) <= 0;
+
 // 到職天數（依「當天」計算，dateStr / hireDateStr 皆為 YYYY/MM/DD）
 SC._daysSinceHire = (dateStr, hireDateStr) => {
     if (!hireDateStr || hireDateStr === "9999/12/31") return 9999; // 無到職日視為老員工
