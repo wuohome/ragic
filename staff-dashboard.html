@@ -2371,10 +2371,13 @@ function renderRecurring() {
 // ════════════════════════════════════════
 function renderLastCase(){
   const today=new Date(); today.setHours(0,0,0,0);
+  const todayStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   const lastDate={};
-  INTAKE.forEach(r=>(r.devs||[]).forEach(d=>{
+  // 委託日填在未來的案件還沒進案，不算（否則會出現「-30天前」）；只列 HR 在職者（HR 讀不到時不過濾）
+  INTAKE.forEach(r=>{ if(!r.date||r.date>todayStr) return; (r.devs||[]).forEach(d=>{
+    if(ACTIVE_STAFF.size && !ACTIVE_STAFF.has(d.name)) return;
     if(!lastDate[d.name]||r.date>lastDate[d.name]) lastDate[d.name]=r.date;
-  }));
+  }); });
   const allLast=Object.values(lastDate).reduce((a,b)=>a>b?a:b,'');
   function daysAgo(ds){const d=new Date(ds);d.setHours(0,0,0,0);return Math.round((today-d)/86400000);}
   function cls(n){if(n<=7)return 'bg-emerald-100 text-emerald-800 border-emerald-200';if(n<=14)return 'bg-yellow-100 text-yellow-800 border-yellow-200';if(n<=30)return 'bg-orange-100 text-orange-800 border-orange-200';return 'bg-red-100 text-red-800 border-red-200';}
