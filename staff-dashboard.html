@@ -1017,6 +1017,7 @@ function toInventoryRecords(rawData) {
   const todayStr = ymd(new Date());  // 本地日期；toISOString 是 UTC，台北 08:00 前會少一天
   const out = [];
   for (const c of Object.values(rawData)) {
+    if (c['sync_來源'] === 'sync_ap16') continue;  // 永策同步物件不算窩的家庫存（與進案口徑一致，2026-10-06 小特助決定）
     const status = (c['狀態'] || '').trim();
     if (status === '下架' || !status) continue;
     let d = (c['委託時間(起)'] || '').replaceAll('/', '-').trim();
