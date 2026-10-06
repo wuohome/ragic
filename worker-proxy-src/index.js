@@ -5691,17 +5691,25 @@ export default {
         const entries = Array.from(form.entries());
         if (entries.length === 0) return jsonResp({ error: 'empty_fields' }, 400, allowedOrigin);
         const newForm = new FormData();
+        // 舊版前端（快取中的頁面）送 _0、_1…（0 起算）。整批一起換成負數：第 1 列拿最負的、最後一列是 -1。
+        let legacyMax = -1;
+        for (const [key] of entries) {
+          const lm = /^\d{7}_(\d{1,3})$/.exec(key);
+          if (lm) legacyMax = Math.max(legacyMax, Number(lm[1]));
+        }
         for (const [key, value] of entries) {
           const m = /^(\d{7})(?:_(-?\d{1,3}))?$/.exec(key);
           if (!m) return jsonResp({ error: 'invalid_field', key, reason: 'bad_format' }, 400, allowedOrigin);
           const fid = m[1];
           if (!HR_FIELDS_WHITELIST.has(fid)) return jsonResp({ error: 'invalid_field', key, fid, reason: 'not_whitelisted' }, 400, allowedOrigin);
-          // 子表格列編號（2026-10-06）：Ragic 新增記錄時只認「負數」列編號（_-1、_-2…）。
+          // 子表格列編號（2026-10-06）：Ragic 新增記錄時只認「負數」列編號。
           // 0 或正數會被當成「修改既有的第 N 列」，新記錄上沒有那一列，整列被靜默丟掉——
           // 2026-05-04 上線起 11 位新人的學歷／工作經歷／緊急聯絡人／證件就是這樣一筆都沒存進去。
           // 這個 action 只會新增記錄，沒有「修改既有列」的合法情境，所以非負數一律換成負數
-          // （同一列的各欄與該列的檔案欄用同一個編號，仍對得起來），舊版前端快取的頁面也一併救回。
-          const outKey = (m[2] !== undefined && !m[2].startsWith('-')) ? `${fid}_-${Number(m[2]) + 1}` : key;
+          // （同一列的各欄與該列的檔案欄用同一個編號，仍對得起來）。
+          // 順序：Ragic 依編號由小到大（最負的在前）排列新列（2026-10-06 測試記錄實測），
+          // 所以第 1 列要拿最負的，換出來的畫面順序才與同仁填的順序一致。
+          const outKey = (m[2] !== undefined && !m[2].startsWith('-')) ? `${fid}_-${legacyMax + 1 - Number(m[2])}` : key;
           if (value instanceof File) {
             if (value.size > HR_MAX_FILE_BYTES) return jsonResp({ error: 'file_too_large', key, size: value.size }, 400, allowedOrigin);
             newForm.append(outKey, value, value.name);
