@@ -1088,6 +1088,10 @@ async function submit() {
     if(data.files['照片']) fd.append(MAIN_FIELDS['照片'], data.files['照片'], data.files['照片'].name);
     if(data.files['存摺上傳']) fd.append(MAIN_FIELDS['存摺上傳'], data.files['存摺上傳'], data.files['存摺上傳'].name);
 
+    /* 子表格列編號：Ragic 新增記錄時，新的一列一律要用「負數」編號（_-1、_-2…），同一列的各欄與檔案欄共用同一個。
+       用 _0、_1 會被 Ragic 當成「修改既有的第 0、1 列」，新記錄上沒有那一列，整列被靜默丟掉
+       （2026-05-04 上線～2026-10-06 的 11 位新人學歷／工作經歷／緊急聯絡人／證件因此全沒存進去）。 */
+    const subRow = (i) => -(i + 1);
     const pushSub = (kind, rows) => {
       const map = SUB_FIELDS[kind];
       rows.forEach((row, i) => {
@@ -1095,7 +1099,7 @@ async function submit() {
           let v = row[k];
           if(v==null || v==='') return;
           if(k.includes('日期')) v = dt(v);
-          fd.append(`${fid}_${i}`, String(v));
+          fd.append(`${fid}_${subRow(i)}`, String(v));
         });
       });
     };
@@ -1106,7 +1110,7 @@ async function submit() {
     pushSub('cert', certs);
     certs.forEach((row, i) => {
       const cf = row._uid ? data.files[row._uid + '__file'] : null;
-      if(cf) fd.append(`1000925_${i}`, cf, cf.name);
+      if(cf) fd.append(`1000925_${subRow(i)}`, cf, cf.name);
     });
 
     const res = await fetch(WORKER_API, { method: 'POST', body: fd });
