@@ -3839,10 +3839,13 @@ function repairPublicRecord(rid, rec, includeConsoleFields = false) {
 }
 
 async function sendRepairNotification(env, ticketNo, status) {
+  const text = `${env.REPAIR_NOTIFY_PREFIX || ''}工務報修 ${String(ticketNo || '（未編號）')} → ${String(status)}`;
+  // 2026-10-02：先交給系統部通報員（Discord 交辦頻道）；沒收下才退回原本的 Telegram
+  if (await notifyHubIngest(env, { source: '工務報修', key: `repair.${String(ticketNo || 'none')}.${String(status)}`, title: text, channel: 'assign' })) return null;
   if (!env.TG_BOT_TOKEN) return null;
   const body = {
     chat_id: env.JOAN_CHAT_ID || '8163308207',
-    text: `${env.REPAIR_NOTIFY_PREFIX || ''}工務報修 ${String(ticketNo || '（未編號）')} → ${String(status)}`,
+    text,
   };
   try {
     const response = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendMessage`, {
@@ -4260,7 +4263,7 @@ async function postUrlEncodedToRagic(env, sheetPath, paramsString, extraQuery = 
 // 只有 3 個文字/單選欄位可寫，無截圖附件欄位（ponytail-debt：附件欄位需 Joan 或 ragic agent 後續在 Ragic 後台手動新增，
 // 目前是 schema 缺口不是程式邏輯缺口，Worker 端無法建欄位）。
 const BUG_REPORT_FEEDBACK_SHEET = 'decorating/15';
-async function syncBugReportToRagic(env, { safeType, safeTitle, safeUrl, safeDesc, uaShort, nowTW, hasScreenshot }) {
+async function syncBugReportToRagic(env, { safeType, safeTitle, safeUrl, safeDesc, uaShort, nowTW, hasScreenshot, shotWhere = 'Telegram OPS 群組' }) {
   const title = `[問題回報] ${safeType} — ${safeTitle || '（無標題）'}`.slice(0, 200);
   const body = [
     safeDesc,
@@ -4268,7 +4271,7 @@ async function syncBugReportToRagic(env, { safeType, safeTitle, safeUrl, safeDes
     '頁面：' + (safeUrl || '—'),
     '裝置：' + uaShort,
     '時間：' + nowTW,
-    hasScreenshot ? '（已附截圖，見 Telegram OPS 群組）' : '（無截圖）',
+    hasScreenshot ? `（已附截圖，見 ${shotWhere}）` : '（無截圖）',
   ].join('\n').slice(0, 2000);
   const params = new URLSearchParams();
   params.set('1000428', title);
@@ -4563,6 +4566,7 @@ async function processEarnestSubmission(env, submissionId, rid, fields, operator
   // Notify Joan via Telegram directly (Worker can reach api.telegram.org public internet)
   const notifyData = {
     submission_id: submissionId,
+    rid,
     earnest_no: finalVal.fields?.['1000796'] || '',
     tenant_name: finalVal.fields?.['1000792'] || '',
     tenant_phone: finalVal.fields?.['1000808'] || '',
@@ -4571,8 +4575,93 @@ async function processEarnestSubmission(env, submissionId, rid, fields, operator
     failed_at: failedAt,
     retry_count: 3,
   };
+  // 2026-10-01：先交給系統部總機（Discord 按鈕）；總機沒收下才退回原本的 Telegram 帶按鈕訊息
+  if (await notifyHubEarnestFailed(env, notifyData)) return;
   const msgText = buildFailureMessage(notifyData);
   await sendTelegramMessage(env, msgText, submissionId);
+}
+
+// ============ 系統部總機（sys-hub）整合（2026-10-01 第二階段 B）============
+// 排班守門／定金重送的按鈕改到 Discord：總機驗過簽章與「只認瓊安」後，帶共享密鑰呼叫本路由，
+// 由 Worker 執行（KV 與原本的閘門邏輯都在這裡，不重寫一份）。Telegram 按鈕路徑原封不動，
+// 總機掛掉時定金失敗通知仍退回 Telegram 帶按鈕的原格式。
+const HUB_BUTTON_PATH = 'hub-button';
+const HUB_EARNEST_URL_DEFAULT = 'https://mac-mini.tail7c34ea.ts.net/sys-hub/earnest-failed';
+
+function hubConstantTimeEqual(a, b) {
+  const x = String(a), y = String(b);
+  if (x.length !== y.length) return false;
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x.charCodeAt(i) ^ y.charCodeAt(i);
+  return diff === 0;
+}
+
+// 與 /telegram-webhook 內 retry / manual 兩個分支同一套邏輯（讀 KV → submitEarnestToRagic → 寫回 KV 狀態）。
+async function handleEarnestHubButton(env, action, submissionId, dryRun = false) {
+  if (!validUuid(submissionId)) return '\n\n❌ submission id 格式錯誤';
+  if (dryRun) return '\n\n🧪 測試，未寫入';
+  const kvKey = KV_PREFIX + submissionId;
+  let raw, val;
+  try { raw = await env.EARNEST_QUEUE.get(kvKey); } catch { return '\n\n❌ 讀取佇列失敗（KV）'; }
+  if (!raw) return '\n\n❌ submission 不存在';
+  try { val = JSON.parse(raw); } catch { return '\n\n❌ submission 資料損毀'; }
+  if (action === 'retry') {
+    const { rid, fields } = val;
+    if (!rid || !fields) return '\n\n❌ submission 資料不完整';
+    const result = await submitEarnestToRagic(env, rid, fields);
+    const now = getNowIso();
+    if (result.ok) {
+      const updated = { ...val, status: 'success', ragic_id: result.ragicId, completed_at: now };
+      try { await env.EARNEST_QUEUE.put(kvKey, JSON.stringify(updated), { expirationTtl: KV_TTL_SECONDS }); } catch {}
+      const ts = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+      return `\n\n✅ 重試已觸發 (${ts})`;
+    }
+    const errEntry = { attempt: 'manual_retry', error: result.error, code: result.code, msg: result.msg, at: now };
+    const updated = { ...val, status: 'failed_need_human', last_error: errEntry, error_history: [...(val.error_history || []), errEntry] };
+    try { await env.EARNEST_QUEUE.put(kvKey, JSON.stringify(updated), { expirationTtl: KV_TTL_SECONDS }); } catch {}
+    return `\n\n❌ 重試失敗：${escapeHtml(result.error || String(result.code || ''))}`;
+  }
+  if (action === 'manual') {
+    const updated = { ...val, status: 'manual_processed', completed_at: getNowIso() };
+    try { await env.EARNEST_QUEUE.put(kvKey, JSON.stringify(updated), { expirationTtl: KV_TTL_SECONDS }); } catch {}
+    const ts = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+    return `\n\n📋 已標記為人工處理 (${ts})`;
+  }
+  return null;
+}
+
+// 把定金失敗通知交給總機（Discord）。回傳 true＝總機已收下並發出；false＝呼叫端要退回 Telegram 帶按鈕的原格式。
+async function notifyHubEarnestFailed(env, data) {
+  if (!env.HUB_SECRET) return false;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 5000);
+  try {
+    const res = await fetch(env.HUB_EARNEST_URL || HUB_EARNEST_URL_DEFAULT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Hub-Token': env.HUB_SECRET },
+      body: JSON.stringify(data),
+      signal: ctrl.signal,
+    });
+    return res.ok;
+  } catch { return false; } finally { clearTimeout(timer); }
+}
+
+// 通用單向通知入口（2026-10-02）：Worker 連不到 127.0.0.1，改走 Funnel 的 /sys-hub/ingest，Authorization: Bearer 共享密鑰（secret HUB_INGEST_SECRET）。
+// 回傳 true＝通報員已收下並發到 Discord；false（沒設密鑰、逾時、非 2xx）＝呼叫端必須退回原本的 Telegram，不得漏通知。
+const HUB_INGEST_URL_DEFAULT = 'https://mac-mini.tail7c34ea.ts.net/sys-hub/ingest';
+async function notifyHubIngest(env, data) {
+  if (!env.HUB_INGEST_SECRET) return false;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), data.images && data.images.length ? 15000 : 5000);
+  try {
+    const res = await fetch(env.HUB_INGEST_URL || HUB_INGEST_URL_DEFAULT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + env.HUB_INGEST_SECRET },
+      body: JSON.stringify(data),
+      signal: ctrl.signal,
+    });
+    return res.ok;
+  } catch { return false; } finally { clearTimeout(timer); }
 }
 
 async function handleRepairAction(action, request, env, ctx, identity, origin) {
@@ -4931,6 +5020,13 @@ const SCHEDULE_LEAVE_SHEET = 'ragicforms4/2';
 const SCHEDULE_F_EMP_NAME = '3000933';
 const SCHEDULE_F_EMP_STATUS = '3000945';
 const SCHEDULE_F_EMP_TERMINATION_DATE = '3000944';
+// 2026-10-01：聘雇類別（與 schedule-guard 的 F_EMP.HIRE 同欄位 3000955）。
+const SCHEDULE_F_EMP_HIRE_TYPE = '3000955';
+// 閘門準則須與 schedule-guard src/core/detect.js 一致：離職，或聘雇類別＝兼職（已轉兼職、
+// 不進值日生/值班人員池）。不放寬到任意在職同仁。
+function isScheduleIneligibleEmp(emp) {
+  return emp[SCHEDULE_F_EMP_STATUS] === '離職' || emp[SCHEDULE_F_EMP_HIRE_TYPE] === '兼職';
+}
 // 標記（shiftmark）可回溯的天數上限：不得早於員工離職日期前 30 天。理由：離職日期
 // （3000944）常是行政生效日（可能在未來），真正停止到班的時間點沒有獨立欄位可查；
 // 30 天是本次判斷、非精確數字，用意是擋掉「舊資料被誤觸發」這類 payload（2026-08-14
@@ -4983,7 +5079,7 @@ async function findEmployeeByName(env, name) {
   return entries[0][1];
 }
 
-async function handleScheduleShiftCallback(env, action, payload) {
+async function handleScheduleShiftCallback(env, action, payload, dryRun = false) {
   if (action === 'shift') {
     const parts = (payload || '').split(':');
     if (parts.length !== 2) return '\n\n❌ payload 格式錯誤（預期 recordId:employeeRecordId）';
@@ -4998,8 +5094,8 @@ async function handleScheduleShiftCallback(env, action, payload) {
 
     const currentEmp = await findEmployeeByName(env, currentEmpName);
     if (!currentEmp) return `\n\n❌ 查無「${escapeHtml(currentEmpName)}」的員工資料，無法確認在職狀態`;
-    if (currentEmp[SCHEDULE_F_EMP_STATUS] !== '離職') {
-      return `\n\n❌ 這筆不是離職同仁的班，不處理（${escapeHtml(currentEmpName)} 目前在職狀態：${escapeHtml(currentEmp[SCHEDULE_F_EMP_STATUS] || '未知')}）`;
+    if (!isScheduleIneligibleEmp(currentEmp)) {
+      return `\n\n❌ 這筆不是離職或已轉兼職同仁的班，不處理（${escapeHtml(currentEmpName)} 目前在職狀態：${escapeHtml(currentEmp[SCHEDULE_F_EMP_STATUS] || '未知')}，聘雇類別：${escapeHtml(currentEmp[SCHEDULE_F_EMP_HIRE_TYPE] || '未知')}）`;
     }
 
     // 2026-08-14 補強：日期閘門。已過去的班次不得改派給任何在職同仁——那筆班若已發生
@@ -5034,6 +5130,8 @@ async function handleScheduleShiftCallback(env, action, payload) {
       }
     }
 
+    // 2026-10-01 系統部總機測試用：所有唯讀閘門都過了，但不寫入（Telegram 路徑 dryRun 恆為 false）
+    if (dryRun) return `\n\n🧪 測試，未寫入（閘門全數通過；正式會把 ${escapeHtml(shiftDateStr)} ${escapeHtml(typeStr)} 改派給 ${escapeHtml(newEmpName)}）`;
     const params = new URLSearchParams({ [SCHEDULE_F_LEAVE_EMP]: newEmpName, [SCHEDULE_F_LEAVE_DEPT]: '手動變更' });
     const { upstream, data } = await postUrlEncodedToRagic(env, `${SCHEDULE_LEAVE_SHEET}/${recordId}`, params.toString());
     const fail = detectUpstreamFailure(upstream, data);
@@ -5061,8 +5159,8 @@ async function handleScheduleShiftCallback(env, action, payload) {
     if (!currentEmpName) return `\n\n❌ 該筆紀錄無員工欄位資料，無法確認安全閘門`;
     const currentEmp = await findEmployeeByName(env, currentEmpName);
     if (!currentEmp) return `\n\n❌ 查無「${escapeHtml(currentEmpName)}」的員工資料，無法確認在職狀態`;
-    if (currentEmp[SCHEDULE_F_EMP_STATUS] !== '離職') {
-      return `\n\n❌ 這筆不是離職同仁的班，不處理（${escapeHtml(currentEmpName)} 目前在職狀態：${escapeHtml(currentEmp[SCHEDULE_F_EMP_STATUS] || '未知')}）`;
+    if (!isScheduleIneligibleEmp(currentEmp)) {
+      return `\n\n❌ 這筆不是離職或已轉兼職同仁的班，不處理（${escapeHtml(currentEmpName)} 目前在職狀態：${escapeHtml(currentEmp[SCHEDULE_F_EMP_STATUS] || '未知')}，聘雇類別：${escapeHtml(currentEmp[SCHEDULE_F_EMP_HIRE_TYPE] || '未知')}）`;
     }
 
     // 2026-08-14 補強：日期閘門，分兩層。
@@ -5079,11 +5177,14 @@ async function handleScheduleShiftCallback(env, action, payload) {
     // 三、四個月前的歷史紀錄（2026-08-14 事故：偏移 --today 測試把 3-5 月已完成的舊
     // 班次判定成待處理，就是這個洞；離職日期可能是未來生效的行政日期，往前抓 30 天
     // 是本次判斷、非精確數字，見上方 SCHEDULE_MARK_LOOKBACK_DAYS 常數註解）。
+    // 轉兼職者沒有離職日期可當基準（2026-10-01）：改用「今天往前 30 天」當下界，
+    // 與 schedule-guard 只抓近期殘留（lookback 3 天）的精神一致且更寬。
     const terminationDateStr = currentEmp[SCHEDULE_F_EMP_TERMINATION_DATE];
-    if (!validDateStr(terminationDateStr)) {
+    const markIsPartTimeOnly = !validDateStr(terminationDateStr) && currentEmp[SCHEDULE_F_EMP_STATUS] !== '離職' && currentEmp[SCHEDULE_F_EMP_HIRE_TYPE] === '兼職';
+    if (!markIsPartTimeOnly && !validDateStr(terminationDateStr)) {
       return `\n\n❌ 查無 ${escapeHtml(currentEmpName)} 的離職日期資料，無法確認可標記範圍，拒絕標記`;
     }
-    const markLowerBound = addDaysToDateStr(terminationDateStr, -SCHEDULE_MARK_LOOKBACK_DAYS);
+    const markLowerBound = addDaysToDateStr(markIsPartTimeOnly ? todayForMark : terminationDateStr, -SCHEDULE_MARK_LOOKBACK_DAYS);
     if (!markLowerBound || cmpDateStr(markDateStr, markLowerBound) < 0) {
       const markMonth = (markDateStr.split('/')[1] || '?').replace(/^0/, '');
       return `\n\n❌ 這筆是 ${escapeHtml(markMonth)} 月的舊紀錄，超出可標記範圍（僅允許離職日期前 ${SCHEDULE_MARK_LOOKBACK_DAYS} 天內，即 ${escapeHtml(markLowerBound || '?')} 之後），拒絕標記`;
@@ -5093,8 +5194,9 @@ async function handleScheduleShiftCallback(env, action, payload) {
     const markValue = typeStr === '值班' ? '未值班' : '未掃';
     const oldNote = record[SCHEDULE_F_LEAVE_NOTE] || '';
     const stamp = todayTaipei();
-    const newNote = `${oldNote}${oldNote ? '；' : ''}${currentEmpName}離職未到班，系統自動標記（${stamp}）`;
+    const newNote = `${oldNote}${oldNote ? '；' : ''}${currentEmpName}${currentEmp[SCHEDULE_F_EMP_STATUS] === '離職' ? '離職' : '已轉兼職'}未到班，系統自動標記（${stamp}）`;
 
+    if (dryRun) return `\n\n🧪 測試，未寫入（閘門全數通過；正式會把 ${escapeHtml(markDateStr)} ${escapeHtml(typeStr)} 標記為「${markValue}」）`;
     const params = new URLSearchParams({ [SCHEDULE_F_LEAVE_IS_AUTO]: markValue, [SCHEDULE_F_LEAVE_NOTE]: newNote });
     const { upstream, data } = await postUrlEncodedToRagic(env, `${SCHEDULE_LEAVE_SHEET}/${recordId}`, params.toString());
     const fail = detectUpstreamFailure(upstream, data);
@@ -5119,6 +5221,31 @@ export default {
     const path = url.pathname.replace(/^\//, '').replace(/\/$/, '');
 
     // ============ Telegram webhook: separate from CORS-locked actions ============
+    // ============ 系統部總機 → Worker 按鈕轉呼叫（2026-10-01）============
+    if (path === HUB_BUTTON_PATH) {
+      const jsonHdr = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+      if (request.method !== 'POST') return new Response(JSON.stringify({ error: 'method_not_allowed' }), { status: 405, headers: jsonHdr });
+      if (!env.HUB_SECRET || !hubConstantTimeEqual(request.headers.get('X-Hub-Secret') || '', env.HUB_SECRET)) {
+        return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: jsonHdr });
+      }
+      let hb;
+      try { hb = await request.json(); } catch { return new Response(JSON.stringify({ error: 'bad_json' }), { status: 400, headers: jsonHdr }); }
+      const hbAction = String(hb?.action || '');
+      const hbPayload = String(hb?.payload || '');
+      const hbDry = hb?.dry_run === true;
+      let hbText = null;
+      if (hbAction === 'shift' || hbAction === 'shiftmark') {
+        hbText = await handleScheduleShiftCallback(env, hbAction, hbPayload, hbDry);
+      } else if (hbAction === 'earnest_retry' || hbAction === 'earnest_manual') {
+        hbText = await handleEarnestHubButton(env, hbAction === 'earnest_retry' ? 'retry' : 'manual', hbPayload, hbDry);
+      } else {
+        return new Response(JSON.stringify({ error: 'unknown_action' }), { status: 400, headers: jsonHdr });
+      }
+      console.log(`[hub-button] action=${hbAction} dry=${hbDry} payload=${hbPayload.slice(0, 40)} result=${(hbText || '').replace(/\n/g, ' ')}`);
+      const hbOut = (hbText || '').trim();
+      return new Response(JSON.stringify({ ok: !!hbOut && !hbOut.includes('❌'), text: hbOut }), { status: 200, headers: jsonHdr });
+    }
+
     if (path === TELEGRAM_WEBHOOK_PATH) {
       // Always respond 200 immediately to prevent Telegram retries
       const responsePromise = new Response('ok', { status: 200 });
@@ -5565,18 +5692,27 @@ export default {
         if (entries.length === 0) return jsonResp({ error: 'empty_fields' }, 400, allowedOrigin);
         const newForm = new FormData();
         for (const [key, value] of entries) {
-          const m = /^(\d{7})(?:_(\d{1,3}))?$/.exec(key);
+          const m = /^(\d{7})(?:_(-?\d{1,3}))?$/.exec(key);
           if (!m) return jsonResp({ error: 'invalid_field', key, reason: 'bad_format' }, 400, allowedOrigin);
           const fid = m[1];
           if (!HR_FIELDS_WHITELIST.has(fid)) return jsonResp({ error: 'invalid_field', key, fid, reason: 'not_whitelisted' }, 400, allowedOrigin);
+          // 子表格列編號（2026-10-06）：Ragic 新增記錄時只認「負數」列編號（_-1、_-2…）。
+          // 0 或正數會被當成「修改既有的第 N 列」，新記錄上沒有那一列，整列被靜默丟掉——
+          // 2026-05-04 上線起 11 位新人的學歷／工作經歷／緊急聯絡人／證件就是這樣一筆都沒存進去。
+          // 這個 action 只會新增記錄，沒有「修改既有列」的合法情境，所以非負數一律換成負數
+          // （同一列的各欄與該列的檔案欄用同一個編號，仍對得起來），舊版前端快取的頁面也一併救回。
+          const outKey = (m[2] !== undefined && !m[2].startsWith('-')) ? `${fid}_-${Number(m[2]) + 1}` : key;
           if (value instanceof File) {
             if (value.size > HR_MAX_FILE_BYTES) return jsonResp({ error: 'file_too_large', key, size: value.size }, 400, allowedOrigin);
-            newForm.append(key, value, value.name);
+            newForm.append(outKey, value, value.name);
           } else {
             if (typeof value === 'string' && value.length > 2000) return jsonResp({ error: 'value_too_long', key }, 400, allowedOrigin);
-            newForm.append(key, value);
+            newForm.append(outKey, value);
           }
         }
+        // 零用金請款Token（PC_STAFF_TOKEN_FIELD）在 Ragic 設為必填，新人填表沒有這欄會整筆被退（2026-10-06）。
+        // 比照 2026-07-28 既有同仁的做法發一組 UUID v4；伺服器端產生、不在白名單內，前端無法指定。
+        newForm.append(PC_STAFF_TOKEN_FIELD, crypto.randomUUID());
         const upstream = await ragicFetch(`${env.RAGIC_BASE}/ragicforms4/20004?api`, {
           method: 'POST', headers: { 'Authorization': 'Basic ' + env.RAGIC_KEY }, body: newForm,
         });
@@ -7597,7 +7733,6 @@ export default {
         var caption = captionParts.join('\n');
 
         var BOT_TOKEN = env.OPS_BOT_TOKEN;
-        if (!BOT_TOKEN) return jsonResp({ error: 'server_config_error' }, 500, allowedOrigin);
         var CHAT_ID = '8163308207';
         var TG_BASE = 'https://api.telegram.org/bot' + BOT_TOKEN;
 
@@ -7633,11 +7768,29 @@ export default {
         }
 
         // Ragic「意見回饋」同步：Telegram 是主流程，這裡失敗不得擋主流程，只記 log（見 syncBugReportToRagic 上方註解）。
-        function syncBugReportNonBlocking(hasScreenshot) {
-          var p = syncBugReportToRagic(env, { safeType, safeTitle, safeUrl, safeDesc, uaShort, nowTW, hasScreenshot })
+        function syncBugReportNonBlocking(hasScreenshot, shotWhere) {
+          var p = syncBugReportToRagic(env, { safeType, safeTitle, safeUrl, safeDesc, uaShort, nowTW, hasScreenshot, shotWhere })
             .catch(function(e) { console.error('[reportBug->ragic] sync failed', e); });
           if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
         }
+
+        // 2026-10-02：先交給系統部通報員（Discord 交辦頻道，截圖當附件）。圖超過 3 張／合計超過 8MB／格式不認得 → 不走總機，
+        // 直接用原本的 Telegram（內容零損失）；總機沒收下也退回 Telegram。
+        var hubImgs = [], hubBytes = 0, hubOk = true;
+        for (var hi = 0; hi < images.length; hi++) {
+          var hm = /^data:image\/(jpeg|png|gif|webp);base64,([A-Za-z0-9+\/=]+)$/.exec(images[hi]);
+          if (!hm || hubImgs.length >= 3) { hubOk = false; break; }
+          hubBytes += Math.floor(hm[2].length * 3 / 4);
+          hubImgs.push(hm[2]);
+        }
+        if (hubOk && hubBytes <= 8 * 1024 * 1024 && await notifyHubIngest(env, {
+          source: '問題回報', key: 'bugreport.' + Date.now(), channel: 'assign',
+          title: '🐛 問題回報（' + safeType + '）', body: captionParts.slice(2).join('\n'), images: hubImgs,
+        })) {
+          syncBugReportNonBlocking(hubImgs.length > 0, 'Discord 系統部「交辦」頻道');
+          return jsonResp({ ok: true }, 200, allowedOrigin);
+        }
+        if (!BOT_TOKEN) return jsonResp({ error: 'server_config_error' }, 500, allowedOrigin);
 
         if (images.length === 0) {
           var res = await fetch(TG_BASE + '/sendMessage', {
