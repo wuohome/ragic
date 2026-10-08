@@ -56,8 +56,8 @@ const buildRecords = () => {
     return recs;
 };
 
-const run = async ({ todayStr, year = 2026, month = 10 }) => {
-    const records = buildRecords();
+const run = async ({ todayStr, year = 2026, month = 10, extra = {} }) => {
+    const records = { ...buildRecords(), ...extra };
     const log = { deleted: [], created: [], confirms: [], alerts: [], toasts: [] };
     const ctx = { console: { log() {}, error: (e) => { if (process.env.DBG) console.error(e); } }, Math, Date, Object, Set, Array, String, JSON, parseInt, Promise, setTimeout, Error };
     vm.createContext(ctx);
@@ -86,8 +86,26 @@ const run = async ({ todayStr, year = 2026, month = 10 }) => {
     return { records, log };
 };
 
+// 10 月值班：員工03 在 10/2、10/10、10/22；夫妻的張忠豪在 10/13
+const ZHIBAN = { "z1": [ds(2026, 10, 2), NAMES[2]], "z2": [ds(2026, 10, 10), NAMES[2]], "z3": [ds(2026, 10, 22), NAMES[2]], "z4": [ds(2026, 10, 13), "張忠豪"] };
+const zhibanRecords = () => Object.fromEntries(Object.entries(ZHIBAN).map(([id, [date, emp]]) => [id, { [F.EMP]: emp, [F.DATE]: date, [F.TYPE]: "值班", [F.NOTE]: "", [F.IS_AUTO]: "Yes", [F.DEPT]: "系統預排" }]));
+
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
+
+test("值班的人前一天不排值日（值班當天一定要掃，避免連兩天；夫妻配偶同理）", async () => {
+    for (let k = 0; k < 5; k++) {
+        const { log } = await run({ todayStr: "2026/09/20", extra: zhibanRecords() });
+        const byDate = {};
+        log.created.filter(r => !SCtrash(r[F.NOTE])).forEach(r => { (byDate[r[F.DATE]] ||= new Set()).add(r[F.EMP]); });
+        for (let d = 2; d <= 31; d++) {
+            const prev = byDate[ds(2026, 10, d - 1)] || new Set(), cur = byDate[ds(2026, 10, d)] || new Set();
+            const both = [...cur].filter(n => prev.has(n));
+            assert.equal(both.length, 0, `10/${d - 1}→10/${d} 連兩天：${both.join(",")}`);
+        }
+        assert.ok(byDate[ds(2026, 10, 13)].has("蕭頤臻"), "10/13 張忠豪值班，配偶蕭頤臻應同掃");
+    }
+});
 
 test("月中按：今天以前（含今天）的紀錄一筆都不刪，明天起的系統預排全刪重排", async () => {
     const { records, log } = await run({ todayStr: "2026/10/15" });
