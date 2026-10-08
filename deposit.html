@@ -1379,34 +1379,34 @@ input[type="date"] {
       <hr class="section-divider">
 
       <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5;">
-        租客資料選填，可等房客自己填寫簽名頁補齊。
+        租客姓名、電話、職業請先填完整：房客簽名頁只會顯示這三項讓房客核對（不能修改），沒填就產不出連結。
       </p>
 
       <!-- 租客姓名 -->
       <div class="field-group">
         <label class="field-label" for="eid1000792">
-          租客姓名
-          <span style="font-weight:400;color:var(--text-muted);font-size:13px;">（選填）</span>
+          租客姓名 <span class="required">*</span>
         </label>
         <input class="input" id="eid1000792" name="1000792" type="text" placeholder="王小明">
+        <div class="error-msg" id="err-tenantName">請輸入租客姓名</div>
       </div>
 
       <!-- 租客電話 -->
       <div class="field-group">
         <label class="field-label" for="eid1000808">
-          租客電話
-          <span style="font-weight:400;color:var(--text-muted);font-size:13px;">（選填）</span>
+          租客電話 <span class="required">*</span>
         </label>
         <input class="input" id="eid1000808" name="1000808" type="tel" inputmode="tel" placeholder="09xx-xxxxxx">
+        <div class="error-msg" id="err-tenantPhone">請輸入租客電話</div>
       </div>
 
       <!-- 租客職業 -->
       <div class="field-group">
         <label class="field-label" for="eid1000837">
-          租客職業
-          <span style="font-weight:400;color:var(--text-muted);font-size:13px;">（選填，房客之後會自己簽名補資料）</span>
+          租客職業 <span class="required">*</span>
         </label>
         <input class="input" id="eid1000837" name="1000837" type="text" placeholder="例：上班族、學生…">
+        <div class="error-msg" id="err-tenantJob">請輸入租客職業</div>
       </div>
     </section>
 
@@ -1824,6 +1824,13 @@ function validateStep(n) {
       showErr("err-source", "請選擇物件來源");
       ok = false;
     } else { clearErr("err-source"); }
+
+    // 租客姓名／電話／職業（2026-10 遠端收定升級：改必填；房客簽名頁唯讀核對，不再讓房客自己補）
+    [["eid1000792", "err-tenantName", "請輸入租客姓名"], ["eid1000808", "err-tenantPhone", "請輸入租客電話"], ["eid1000837", "err-tenantJob", "請輸入租客職業"]].forEach(([iid, eid, msg]) => {
+      const el = document.getElementById(iid);
+      if (!el.value.trim()) { showErr(eid, msg); markInputErr(el); ok = false; }
+      else { clearErr(eid); clearInputErr(el); }
+    });
   }
 
   return ok;

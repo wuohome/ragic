@@ -46,11 +46,92 @@
     
     .big-btn { transition: all 0.2s; cursor: pointer; }
     .big-btn:active { transform: scale(0.96); opacity: 0.9; }
+
+    /* 【正式版】條款純文字排版（無框卡片） */
+    .term-card {
+      padding: 0.25rem 0;
+      margin-bottom: 0.5rem;
+      transition: none;
+      background: transparent;
+    }
+    .term-card.confirmed {
+      /* 確認後無視覺變化（互動側才顯示總確認按鈕變綠），PDF 不顯示 */
+    }
+    .term-text {
+      font-size: 0.95rem;
+      line-height: 1.7;
+      color: #1e293b;
+      margin-bottom: 0;
+      font-weight: 500;
+    }
+    @media (min-width: 768px) {
+      .term-text { font-size: 1.1rem; }
+    }
+    .term-confirm-btn {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border-radius: 0.875rem;
+      font-weight: 900;
+      font-size: 1.1rem;
+      cursor: pointer;
+      border: 2.5px solid #94a3b8;
+      background: #f1f5f9;
+      color: #475569;
+      transition: all 0.2s;
+    }
+    @media (min-width: 768px) {
+      .term-confirm-btn { font-size: 1.4rem; padding: 1rem 1.25rem; }
+    }
+    .term-confirm-btn.done {
+      border-color: #16a34a;
+      background: #16a34a;
+      color: #fff;
+    }
+    .term-confirm-btn:active { transform: scale(0.97); }
+    /* 傳統收據底部簽名欄樣式 */
+    .receipt-sign-footer {
+      border-top: 2px solid #334155;
+      margin-top: 1rem;
+      padding-top: 0.75rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    .receipt-sign-col {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .receipt-sign-col .sign-label {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .receipt-sign-col .sign-field {
+      font-size: 0.9rem;
+      color: #334155;
+    }
+    /* 簽名區 gating */
+    #sign-gate-msg {
+      display: none;
+      background: #fef9c3;
+      border: 2px solid #fbbf24;
+      border-radius: 1rem;
+      padding: 0.85rem 1.1rem;
+      color: #92400e;
+      font-weight: 700;
+      font-size: 1rem;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    @media (min-width: 768px) {
+      #sign-gate-msg { font-size: 1.2rem; }
+    }
     
     /* 簽名板高度在手機上稍微縮小，避免佔據太多空間 */
-    #signature-pad { background: #ffffff; border: 3px dashed #3b82f6; border-radius: 20px; width: 100%; height: 250px; touch-action: none; }
+    #signature-pad { background: #ffffff; border: 1px solid #94a3b8; border-radius: 4px; width: 100%; height: 180px; touch-action: none; }
     @media (min-width: 768px) {
-        #signature-pad { height: 320px; }
+        #signature-pad { height: 220px; }
     }
 
     #loader { background: rgba(255, 255, 255, 0.98); z-index: 100; }
@@ -110,7 +191,7 @@
     <!-- 第一步：核對資料 -->
     <div id="step-1" class="hidden bg-white rounded-3xl md:rounded-[3rem] shadow-2xl p-5 md:p-14 border-t-[10px] md:border-t-[16px] border-blue-600">
       <h1 class="text-2xl md:text-5xl font-black text-blue-700 mb-3 md:mb-6 text-center md:text-left">請核對房客資料</h1>
-      <p class="text-slate-500 mb-6 md:mb-12 text-base md:text-2xl font-medium text-center md:text-left">房客您好，資料若有誤可直接修改。</p>
+      <p class="text-slate-500 mb-6 md:mb-12 text-base md:text-2xl font-medium text-center md:text-left">房客您好，請確認以下資料正確無誤。如有問題請聯絡窩的家業務人員。</p>
       
       <!-- 
         表單設定：
@@ -120,18 +201,18 @@
       <form id="ragicForm" method="POST" target="hidden_iframe" accept-charset="UTF-8" enctype="multipart/form-data" class="space-y-6 md:space-y-10">
         <div>
           <label class="block text-lg md:text-3xl font-black text-slate-700 mb-2 md:mb-4">房客姓名</label>
-          <!-- 寫入 ID：1000792 -->
-          <input type="text" name="1000792" id="input_name" class="grandpa-input w-full text-xl md:text-4xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-6 outline-none font-bold bg-yellow-50 shadow-inner">
+          <!-- 顯示 ID：1000792（唯讀，業務已填，客戶不可修改） -->
+          <input type="text" id="input_name" readonly class="grandpa-input w-full text-xl md:text-4xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-6 outline-none font-bold bg-slate-100 cursor-default select-none" placeholder="—">
         </div>
         <div>
           <label class="block text-lg md:text-3xl font-black text-slate-700 mb-2 md:mb-4">聯絡電話</label>
-          <!-- 寫入 ID：1000808 -->
-          <input type="tel" name="1000808" id="input_phone" class="grandpa-input w-full text-xl md:text-4xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-6 outline-none font-bold">
+          <!-- 顯示 ID：1000808（唯讀，業務已填，客戶不可修改） -->
+          <input type="text" id="input_phone" readonly class="grandpa-input w-full text-xl md:text-4xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-6 outline-none font-bold bg-slate-100 cursor-default select-none" placeholder="—">
         </div>
         <div>
           <label class="block text-lg md:text-3xl font-black text-slate-700 mb-2 md:mb-4">房客職業</label>
-          <!-- 寫入 ID：1000837 -->
-          <input type="text" name="1000837" id="input_occ" class="grandpa-input w-full text-xl md:text-4xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-6 outline-none font-bold">
+          <!-- 顯示 ID：1000837（唯讀，業務已填，客戶不可修改） -->
+          <input type="text" id="input_occ" readonly class="grandpa-input w-full text-xl md:text-4xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-6 outline-none font-bold bg-slate-100 cursor-default select-none" placeholder="—">
         </div>
         
         <!-- 簽名欄位 (Hidden) 寫入 ID：1000816 (Base64字串) -->
@@ -211,43 +292,82 @@
             簽約請攜帶：定金收據、押租金、服務費尾款、印章、雙證件影本3份。
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 px-2 md:px-6 mb-8 md:mb-12 border-b-2 pb-6 md:pb-10">
-            <div class="space-y-2 md:space-y-4">
-                <p class="text-lg md:text-2xl font-bold">房客（簽名）：<span id="show_final_name" class="underline px-2 md:px-4">-</span></p>
-                <!-- 這裡會顯示 Step 1 修改後的電話 -->
-                <p class="text-base md:text-xl">電話：<span id="show_final_phone">-</span></p>
-                <p class="text-base md:text-xl">職業：<span id="show_final_occ">-</span></p>
+        <!-- 【正式版】重要約定五條（純文字條款，無框卡片）-->
+        <div class="mt-4 md:mt-6 pt-4 md:pt-5 border-t border-slate-300">
+          <p style="font-weight:900; font-size:1rem; margin-bottom:0.6rem; color:#1e293b;">重要約定：</p>
+
+          <div class="term-card" id="term-card-1">
+            <p class="term-text">壹、上述條件由房客確認無誤，付定金後成立要約。</p>
+          </div>
+
+          <div class="term-card" id="term-card-2">
+            <p class="term-text">貳、如房東不同意上述條件，則定金無息全額退還於房客。</p>
+          </div>
+
+          <div class="term-card" id="term-card-3">
+            <p class="term-text">參、如房東同意上述條件，但因另有考量因素導致無法簽約，則定金無息全數退還於房客，不需支付額外費用。</p>
+          </div>
+
+          <div class="term-card" id="term-card-4">
+            <p class="term-text">肆、如房東同意上述條件，但房客因故反悔不租或超過簽約日仍不辦理簽約者，定金不予退還。</p>
+          </div>
+
+          <div class="term-card" id="term-card-5">
+            <p class="term-text">伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="show_service_fee" class="font-bold underline">-</span> 作為服務費。</p>
+          </div>
+
+          <!-- 一個總確認按鈕（互動用，PDF 隱藏）-->
+          <button class="term-confirm-btn no-pdf mt-4 md:mt-5" id="btn-confirm-all" onclick="confirmAll()">以上五點我已了解並同意 ✓</button>
+        </div>
+
+        <!-- 留證行（PDF 截圖時顯示，hidden 直到總確認）-->
+        <div id="pdf_confirm_line" class="hidden mt-2" style="font-size:0.8rem; color:#475569; padding-top:0.35rem;">
+          房客已於 <span id="pdf_confirm_time">—</span> 確認並同意上述重要約定。
+        </div>
+
+        <!-- 傳統收據底部簽名欄：橫線 + 左（房客簽名 canvas）+ 右（經辦人員）-->
+        <div class="receipt-sign-footer mt-4 md:mt-6">
+            <!-- 左欄：房客簽名 -->
+            <div class="receipt-sign-col">
+                <span class="sign-label">房客（簽名）：<span id="show_final_name" class="font-normal">-</span></span>
+                <!-- 簽名 canvas（確認後顯示）-->
+                <div id="sign-section" class="hidden mt-2" style="width:100%;">
+                  <div class="relative">
+                    <canvas id="signature-pad"></canvas>
+                    <div id="sig-placeholder" class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <p class="text-slate-300 text-sm font-bold select-none">請在此處簽名</p>
+                    </div>
+                    <img id="sig-img-for-pdf" style="display:none; width:100%; border:1px solid #94a3b8; background:#fff;" alt="簽名">
+                    <button id="btn-clear" class="absolute top-1 right-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-black text-xs shadow border border-slate-300 no-pdf">清除重寫</button>
+                  </div>
+                </div>
+                <span class="sign-field mt-2">電話：<span id="show_final_phone">-</span></span>
+                <span class="sign-field">職業：<span id="show_final_occ">-</span></span>
             </div>
-            <div class="text-left md:text-right space-y-2 md:space-y-4 mt-4 md:mt-0">
-                <p class="text-xs md:text-sm font-bold text-slate-500">優式租售管理 - 窩的家三重加盟店</p>
-                <p class="text-lg md:text-2xl font-bold">經辦人員：<span id="show_agent">-</span></p>
-                <p class="text-base md:text-xl">電話：<span id="show_agent_phone">-</span></p>
+            <!-- 右欄：經辦人員 -->
+            <div class="receipt-sign-col text-right">
+                <span class="sign-label">經辦人員：<span id="show_agent" class="font-normal">-</span></span>
+                <span class="sign-field mt-2">電話：<span id="show_agent_phone">-</span></span>
+                <span class="sign-field" style="font-size:0.78rem; color:#64748b; margin-top:0.25rem;">優式租售管理 - 窩的家三重加盟店</span>
             </div>
         </div>
+
+      </div><!-- end receipt-preview-container -->
+
+      <!-- Gating 提示（在收據外，不進 PDF）-->
+      <div id="sign-gate-msg" class="no-pdf">請先確認上方重要約定，才能進行簽名。</div>
+
+      <!-- 預覽/下載 PDF 按鈕（在簽名前即可用，不進 PDF）-->
+      <div class="mt-4 md:mt-6 no-pdf">
+        <button id="btn-preview-pdf" onclick="previewAndDownloadPDF()" class="w-full big-btn bg-blue-50 hover:bg-blue-100 text-blue-700 border-2 border-blue-300 font-black py-3 md:py-5 rounded-2xl md:rounded-3xl text-base md:text-xl">
+          📄 預覽 / 下載 PDF（簽名前可先確認）
+        </button>
       </div>
 
-      <div class="mb-8 md:mb-12">
-          <p class="font-black text-xl md:text-2xl mb-2 md:mb-4 text-slate-800">重要約定：</p>
-          <ul class="text-sm md:text-base space-y-2 text-slate-700 list-none">
-              <li>壹、上述條件由房客確認無誤，付定金後成立要約。</li>
-              <li>貳、如房東不同意上述條件，則定金無息全額退還於房客。</li>
-              <li>參、如房東同意上述條件，但因另有考量因素導致無法簽約，則定金無息全數退還於房客，不需支付額外費用。</li>
-              <li>肆、如房東同意上述條件，但房客因故反悔不租或超過簽約日仍不辦理簽約者，定金不予退還。</li>
-              <li>伍、要約成立(包含溝通調整後東客合意之條件)並簽約完成，房客需支付窩的家房屋租售有限公司簽約金額 <span id="show_service_fee" class="font-bold underline text-blue-700">-</span> 作為服務費。</li>
-          </ul>
-      </div>
-
-      <div class="mb-6 md:mb-10 text-center">
-        <label class="block text-2xl md:text-4xl font-black text-slate-800 mb-6 md:mb-10 underline decoration-blue-500 decoration-4 md:decoration-8 underline-offset-[8px] md:underline-offset-[16px]">房客簽名處</label>
-        <div class="relative">
-            <canvas id="signature-pad"></canvas>
-            <button id="btn-clear" class="absolute top-2 right-2 md:top-4 md:right-4 bg-slate-100 text-slate-600 px-4 md:px-8 py-2 md:py-4 rounded-lg md:rounded-xl font-black text-xs md:text-sm shadow border border-slate-300">清除重寫</button>
-        </div>
-      </div>
-
-      <div class="flex flex-col md:flex-row gap-4 md:gap-6 mt-8 md:mt-12">
+      <div class="flex flex-col md:flex-row gap-4 md:gap-6 mt-4 md:mt-6 no-pdf">
         <button id="btn-back" class="order-2 md:order-1 flex-1 bg-slate-200 text-slate-500 text-xl md:text-3xl font-black py-4 md:py-7 rounded-2xl md:rounded-3xl">回上一步</button>
-        <button id="btn-submit" class="order-1 md:order-2 big-btn flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white text-xl md:text-4xl font-black py-4 md:py-7 rounded-2xl md:rounded-3xl shadow-2xl">簽好了，送出 ✅</button>
+        <!-- 送出按鈕：五條未勾完前保持禁用 -->
+        <button id="btn-submit" disabled class="order-1 md:order-2 big-btn flex-[2] bg-slate-300 text-slate-400 text-xl md:text-4xl font-black py-4 md:py-7 rounded-2xl md:rounded-3xl shadow cursor-not-allowed">請先確認重要約定</button>
       </div>
     </div>
 
@@ -382,9 +502,14 @@
               </ul>
           </div>
 
+          <!-- 【legacy / 廢棄】pdf-export-area 已不再截圖，ID 加 _legacy 避免 duplicate -->
+          <div id="pdf_confirm_line_legacy" style="margin-top: 18px; padding: 10px 14px; background: #f0fdf4; border: 2px solid #16a34a; border-radius: 8px; font-size: 13px; font-weight: 700; color: #14532d;">
+            房客已於 <span id="pdf_confirm_time_legacy">—</span> 逐條確認並同意上述重要約定。
+          </div>
+
           <div style="display: flex; justify-content: space-between; margin-top: 50px; padding: 0 10px; border-top: 3px solid #000; padding-top: 30px;">
               <div style="width: 55%;">
-                  <p style="font-size: 24px; font-weight: bold; margin-bottom: 35px;">房客（簽名）：<img id="pdf_signature_img" style="display: inline-block; vertical-align: middle; max-height: 90px;"></p>
+                  <p style="font-size: 24px; font-weight: bold; margin-bottom: 35px;">房客姓名：<img id="pdf_signature_img_legacy" style="display: inline-block; vertical-align: middle; max-height: 90px;"></p>
                   <p style="font-size: 18px;">電話：<span id="pdf_phone">-</span></p>
                   <p style="font-size: 18px;">職業：<span id="pdf_occ">-</span></p>
               </div>
@@ -403,7 +528,7 @@
     const FIELDS = {
       // Step 2 顯示用欄位
       no: ["1000796", "定金單編號"],
-      addr: ["1000799", "地址"],
+      addr: ["1000799", "地址", "1002056", "公司件地址"],  // 新進案件用1000799/地址, fallback公司件1002056/公司件地址
       rent: ["1000818", "租金"],
       tax: ["1000821", "租金內含稅金"],
       deposit: ["1000819", "押金"],
@@ -635,12 +760,24 @@
       canvas.width = canvas.offsetWidth * ratio; canvas.height = canvas.offsetHeight * ratio;
       canvas.getContext("2d").scale(ratio, ratio);
       signaturePad = new SignaturePad(canvas, { minWidth: 0.8, maxWidth: 2.2, penColor: "black" });
+      // 簽名開始時隱藏 placeholder
+      signaturePad.addEventListener("beginStroke", () => {
+        const ph = $("sig-placeholder"); if (ph) ph.style.display = "none";
+      });
+    }
+
+    function resetSignaturePlaceholder() {
+      // 清除重寫後還原 placeholder
+      const ph = $("sig-placeholder");
+      if (ph && signaturePad && signaturePad.isEmpty()) ph.style.display = "";
     }
 
     function updatePreviewFromForm() {
-      const name = $("input_name").value;
-      const phone = $("input_phone").value;
-      const occ = $("input_occ").value;
+      // 【2026-06-20 唯讀改版】從 currentRecord 讀值（唯讀 input.value 亦相同，
+      // 但直接讀 source of truth 更安全，空值顯示「—」）
+      const name  = getValue(currentRecord, FIELDS.cust_name)  || "—";
+      const phone = getValue(currentRecord, FIELDS.cust_phone) || "—";
+      const occ   = getValue(currentRecord, FIELDS.cust_occ)   || "—";
 
       if($("show_final_name")) $("show_final_name").innerText = name;
       if($("show_final_phone")) $("show_final_phone").innerText = phone;
@@ -650,26 +787,149 @@
       if($("pdf_occ")) $("pdf_occ").innerText = occ;
     }
 
+    /* ── 【總確認按鈕】邏輯（一個按鈕取代五個）────────────── */
+    let allTermsConfirmed = false;
+
+    function confirmAll() {
+      allTermsConfirmed = true;
+      // 按鈕變綠 + 禁用
+      const btn = $('btn-confirm-all');
+      if (btn) { btn.classList.add('done'); btn.textContent = '✅ 已確認同意'; btn.disabled = true; }
+      // 五條卡片全部標綠
+      for (let i = 1; i <= 5; i++) {
+        const card = document.getElementById('term-card-' + i);
+        if (card) card.classList.add('confirmed');
+      }
+      // 顯示留證行 + 填時間戳
+      const now = new Date();
+      const twDate = new Date(now.getTime() + (8 * 60 - now.getTimezoneOffset()) * 60000);
+      const pad = n => String(n).padStart(2, '0');
+      const ts = `${twDate.getUTCFullYear()}-${pad(twDate.getUTCMonth()+1)}-${pad(twDate.getUTCDate())} ${pad(twDate.getUTCHours())}:${pad(twDate.getUTCMinutes())}`;
+      if ($("pdf_confirm_time")) $("pdf_confirm_time").textContent = ts;
+      if ($("pdf_confirm_line")) $("pdf_confirm_line").classList.remove('hidden');
+      // 解鎖 gating
+      const gateMsg = document.getElementById('sign-gate-msg');
+      const signSec = document.getElementById('sign-section');
+      const submitBtn = $('btn-submit');
+      if (gateMsg)   gateMsg.style.display = 'none';
+      if (signSec)   signSec.classList.remove('hidden');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.className = submitBtn.className
+          .replace('bg-slate-300 text-slate-400 cursor-not-allowed shadow', '')
+          .trim();
+        submitBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'shadow-2xl');
+        submitBtn.textContent = '簽好了，送出 ✅';
+      }
+      // canvas 在 hidden 解除後才能初始化
+      setTimeout(initSignature, 100);
+    }
+
+    function resetTerms() {
+      allTermsConfirmed = false;
+      // 重置總確認按鈕
+      const btn = $('btn-confirm-all');
+      if (btn) { btn.classList.remove('done'); btn.textContent = '以上五點我已了解並同意 ✓'; btn.disabled = false; }
+      // 重置五條卡片顏色
+      for (let i = 1; i <= 5; i++) {
+        const card = document.getElementById('term-card-' + i);
+        if (card) card.classList.remove('confirmed');
+      }
+      const gateMsg   = document.getElementById('sign-gate-msg');
+      const signSec   = document.getElementById('sign-section');
+      const submitBtn = $('btn-submit');
+      if (gateMsg)   gateMsg.style.display = 'none';
+      if (signSec)   signSec.classList.add('hidden');
+      if ($("pdf_confirm_line")) $("pdf_confirm_line").classList.add('hidden');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'shadow-2xl');
+        submitBtn.classList.add('bg-slate-300', 'text-slate-400', 'cursor-not-allowed', 'shadow');
+        submitBtn.textContent = '請先確認重要約定';
+      }
+    }
+    /* ───────────────────────────────────────────────────── */
+
     function goStep(n) {
       if (n === 2) {
         updatePreviewFromForm();
-        setTimeout(initSignature, 250);
+        resetTerms(); // 每次進 step-2 重置確認狀態
+        // initSignature 留給 checkAllTerms 在五條全勾後再觸發
       }
       $("step-1").classList.add('hidden'); $("step-2").classList.add('hidden');
       $("step-" + n).classList.remove('hidden'); window.scrollTo(0, 0);
     }
 
-    // 【新增】產生 PDF Blob 的共用函式
-    // 2026-05-17 緊急修復 file_too_large：scale 2→1.5、PNG→JPEG q=0.85，體積降約 70%
-    async function generatePDFBlob() {
-        const element = $("pdf-export-area");
-        const canvas = await html2canvas(element, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' });
+    // 【合一版】產生 PDF Blob：截 receipt-preview-container（可見 DOM），所見即所簽
+    // .no-pdf 元素（確認按鈕、gating 訊息）截圖前隱藏，截完後還原
+    // canvas 簽名截圖前換成 <img>，截完後還原
+    async function generatePDFBlob(opts = {}) {
+        const element = $("receipt-preview-container");
+
+        // 1. 隱藏 .no-pdf 元素（按鈕、清除重寫、gating 等不需出現在 PDF）
+        const noPdfEls = element.querySelectorAll('.no-pdf');
+        noPdfEls.forEach(el => el.dataset._origDisplay = el.style.display || '');
+        noPdfEls.forEach(el => el.style.display = 'none');
+
+        // 2. canvas 簽名 → img（html2canvas 截 canvas 有時不穩定）
+        const sigCanvas = $("signature-pad");
+        const sigImg = $("sig-img-for-pdf");
+        const hasSignature = signaturePad && !signaturePad.isEmpty();
+        if (hasSignature && sigCanvas && sigImg) {
+            sigImg.src = signaturePad.toDataURL("image/png");
+            sigImg.style.display = "block";
+            sigCanvas.style.display = "none";
+        }
+
+        // 3. 確保留證行可見（若已全確認）
+        const confirmLine = $("pdf_confirm_line");
+        let confirmWasHidden = false;
+        if (confirmLine && confirmLine.classList.contains('hidden')) {
+            confirmWasHidden = true;
+            // 若是「預覽 PDF」在簽名前呼叫，留證行維持 hidden；僅在 buildFormData 時（已全確認）才顯示
+        }
+
+        await new Promise(r => setTimeout(r, 80));
+
+        const htmlCanvas = await html2canvas(element, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff', logging: false });
+
+        // 4. 還原
+        noPdfEls.forEach(el => { el.style.display = el.dataset._origDisplay; delete el.dataset._origDisplay; });
+        if (hasSignature && sigCanvas && sigImg) {
+            sigImg.style.display = "none";
+            sigCanvas.style.display = "block";
+        }
+
         const imgWidth = 210;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        const imgHeight = (htmlCanvas.height * imgWidth) / htmlCanvas.width;
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', [imgWidth, imgHeight]);
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, imgWidth, imgHeight);
+        pdf.addImage(htmlCanvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, imgWidth, imgHeight);
         return pdf.output('blob');
+    }
+
+    // 預覽/下載 PDF（簽名前即可用，截的是當下畫面）
+    async function previewAndDownloadPDF() {
+        if (/Line\//i.test(navigator.userAgent)) {
+            alert("⚠️ LINE 內建瀏覽器無法下載 PDF\n\n請點右上角「⋯」→「在 Safari / Chrome 中開啟」→ 再按一次此按鈕。");
+            return;
+        }
+        const btn = $("btn-preview-pdf");
+        btn.innerText = "PDF 產生中..."; btn.disabled = true;
+        try {
+            const pdfBlob = await generatePDFBlob({ preview: true });
+            const url = URL.createObjectURL(pdfBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `定金收據預覽_${getValue(currentRecord, FIELDS.no)}.pdf`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error(err);
+            alert("下載失敗，請截圖存檔。");
+        } finally {
+            btn.innerText = "📄 預覽 / 下載 PDF（簽名前可先確認）"; btn.disabled = false;
+        }
     }
 
     // 下載按鈕 (現在可以重用生成邏輯)
@@ -681,8 +941,13 @@
         }
         const btn = event.currentTarget; btn.innerText = "PDF 產生中..."; btn.disabled = true;
         try {
+            // 【合一版】送出後 step-2 是 hidden，截圖前暫時顯示 receipt-preview-container
+            const step2 = $("step-2");
+            const wasHidden = step2 && step2.classList.contains('hidden');
+            if (wasHidden) { step2.style.visibility = 'hidden'; step2.style.position = 'fixed'; step2.style.top = '-9999px'; step2.classList.remove('hidden'); }
+            await new Promise(r => setTimeout(r, 50));
             const pdfBlob = await generatePDFBlob();
-            // 建立下載連結
+            if (wasHidden) { step2.classList.add('hidden'); step2.style.visibility = ''; step2.style.position = ''; step2.style.top = ''; }
             const url = URL.createObjectURL(pdfBlob);
             const a = document.createElement('a');
             a.href = url;
@@ -691,11 +956,11 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-        } catch (err) { 
+        } catch (err) {
             console.error(err);
-            alert("下載失敗，請先截圖存檔。"); 
-        } finally { 
-            btn.innerText = "📥 下載備份 PDF"; btn.disabled = false; 
+            alert("下載失敗，請先截圖存檔。");
+        } finally {
+            btn.innerText = "📥 下載備份 PDF"; btn.disabled = false;
         }
     }
 
@@ -707,9 +972,19 @@
     let _lastFd = null;
 
     async function buildFormData() {
+      // 【層2】留證時間戳（台灣時區 GMT+8）
+      const now = new Date();
+      const twOffset = 8 * 60; // 分鐘
+      const twDate = new Date(now.getTime() + (twOffset - now.getTimezoneOffset()) * 60000);
+      const pad = n => String(n).padStart(2, '0');
+      const confirmTs = `${twDate.getUTCFullYear()}-${pad(twDate.getUTCMonth()+1)}-${pad(twDate.getUTCDate())} ${pad(twDate.getUTCHours())}:${pad(twDate.getUTCMinutes())}`;
+      // 【合一版】留證時間寫進 receipt-preview-container 裡的留證行，同時顯示它
+      if ($("pdf_confirm_time")) $("pdf_confirm_time").textContent = confirmTs;
+      if ($("pdf_confirm_line")) $("pdf_confirm_line").classList.remove('hidden');
+
       const sigData = signaturePad.toDataURL("image/png");
-      if($("pdf_signature_img")) $("pdf_signature_img").src = sigData;
       if($("hidden_signature")) $("hidden_signature").value = sigData;
+      // sig-img-for-pdf 由 generatePDFBlob 內部處理（截圖前換 img，截完還原 canvas）
 
       await new Promise(r => setTimeout(r, 100));
 
@@ -724,9 +999,11 @@
       const fd = new FormData();
       fd.append("rid", recordId);
       if (earnestToken) fd.append("token", earnestToken); // IDOR root-fix 2026-07-16：Worker 寫入前會交叉驗證此 token 是否對得上 rid
-      fd.append("1000792", $("input_name").value);
-      fd.append("1000808", $("input_phone").value);
-      fd.append("1000837", $("input_occ").value);
+      // 【2026-06-20 唯讀改版】三欄改從 currentRecord 讀 Ragic 已存值，
+      // 不從 input.value 讀（input 已改 readonly，value 仍可讀，但以 source of truth 為準）
+      fd.append("1000792", getValue(currentRecord, FIELDS.cust_name));
+      fd.append("1000808", getValue(currentRecord, FIELDS.cust_phone));
+      fd.append("1000837", getValue(currentRecord, FIELDS.cust_occ));
       fd.append("1000816", sigData);
       fd.append("1001709", pdfFile, fileName);
       return fd;
@@ -836,7 +1113,7 @@
     window.onload = () => {
       $("btn-test").onclick = () => { recordId = $("test-id-input").value.trim(); $("test-mode-ui").classList.add('hidden'); executeLoad(); };
       $("btn-next").onclick = () => goStep(2); $("btn-back").onclick = () => goStep(1);
-      $("btn-clear").onclick = () => signaturePad.clear(); $("btn-submit").onclick = () => submitData();
+      $("btn-clear").onclick = () => { signaturePad.clear(); resetSignaturePlaceholder(); }; $("btn-submit").onclick = () => submitData();
       if (!recordId) { $("loader-spinner").classList.add('hidden'); $("loader-text").innerText = "請輸入 Record ID"; $("test-mode-ui").classList.remove('hidden'); }
       else if (isSuspiciousCode(recordId)) {
         $("loader-spinner").classList.add('hidden');
