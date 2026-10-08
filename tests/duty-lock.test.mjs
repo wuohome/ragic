@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const commonSrc = fs.readFileSync(path.join(root, "schedule-common.js"), "utf8");
-const html = fs.readFileSync(path.join(root, "schedule.html"), "utf8");
+const html = fs.readFileSync(path.join(root, "schedule.html"), "utf8").replace(/\r\n/g, "\n"); // Windows 簽出是 CRLF
 
 // 從 schedule.html 抽出 handleAutoSchedule 整段（到下一個同層的 "    };"）
 const start = html.indexOf("    const handleAutoSchedule = async () => {");
