@@ -1003,6 +1003,14 @@ const App = () => {
                 }
             }
 
+            // 上月補差上限（2026-10-08 瓊安：怕要補掃超多）：上月比平均多/少的次數最多帶 2 次進這個月，
+            // 不會因為上月請假多就被一口氣補排 3、4 次
+            {
+                const names = Object.keys(countMap);
+                const avgPrev = names.reduce((s, n) => s + countMap[n], 0) / (names.length || 1);
+                names.forEach(n => { countMap[n] = avgPrev + Math.max(-SC.DUTY_CARRY_CAP, Math.min(SC.DUTY_CARRY_CAP, countMap[n] - avgPrev)); });
+            }
+
             // === DEBUG: 值日排班診斷 ===
             console.log("=== 值日排班診斷 ===");
             console.log("排班月份:", year, "/", month);
@@ -1036,6 +1044,8 @@ const App = () => {
                         const tEmp = f[CONFIG.F_LEAVE.EMP] || "";
                         if (!trashByDate[date]) trashByDate[date] = [];
                         if (tEmp) trashByDate[date].push(tEmp);
+                        // 倒一次垃圾算掃一次（2026-10-08 瓊安拍板「算吧」）：當月清運也計入次數，業務倒得多、樓層就少排
+                        if (tEmp && isAuto !== "未掃") countMap[tEmp] = (countMap[tEmp] || 0) + 1;
                         return;
                     }
                     // 防呆②（2026-08-03）：原本只看 isAuto==="No" 判斷「是否為手動排班、免被刪除」，
@@ -1254,6 +1264,7 @@ const App = () => {
                         newTrashDuties[dateStr] = pick;
                         trashCountMap[pick] = (trashCountMap[pick] || 0) + 1;
                         trashLastDateMap[pick] = dateStr;
+                        countMap[pick] = (countMap[pick] || 0) + 1; // 倒一次垃圾算掃一次
                         // 併入 trashByDate，讓下方樓層排班的「當天清運的人不重複排樓層」判斷（第 1099 行附近）
                         // 也涵蓋這筆新補的清運，維持既有「清運與樓層不同天/不重複」的設計一致
                         if (!trashByDate[dateStr]) trashByDate[dateStr] = [];
@@ -1303,7 +1314,7 @@ const App = () => {
                 const scoreFn = (name) => {
                     let s = countMap[name] || 0;
                     const wk = weeklyAssigned[name];
-                    if (wk && wk.has(weekNum)) s += 5;
+                    if (wk && wk.has(weekNum)) s += SC.DUTY_SAME_WEEK_PENALTY;
                     return s;
                 };
                 // 自動需補人數 = 可用樓層數 -（是否會 unshift 值班者）
