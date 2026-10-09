@@ -44,6 +44,20 @@ SA_SCOPES = [
     'https://www.googleapis.com/auth/drive.readonly',
     'https://www.googleapis.com/auth/spreadsheets.readonly',
 ]
+# FIX-2026-10-10-google-5xx: Drive/Sheets 偶發 500/503（log 8/27~10/10 共 90+ 次），原本一次就放棄：
+# Drive 列檔 500 被當成「找不到業績表」發 perf.newsheet 假警報；單一 tab 503 則該員工被 continue 掉。
+# 所有 .execute() 改帶 num_retries（googleapiclient 內建：5xx/429/連線逾時指數退避重試）。
+GOOGLE_API_RETRIES = 4
+
+
+def _is_transient_google_error(e: Exception) -> bool:
+    """重試用完仍失敗、但屬 Google 端暫時性錯誤（5xx/429/逾時/連線）→ 不代表表不存在。
+    403/404/認證失敗不算（那是權限或設定問題，照舊要告警）。"""
+    from googleapiclient.errors import HttpError
+    if isinstance(e, HttpError):
+        status = getattr(e.resp, 'status', 0) or 0
+        return status >= 500 or status == 429
+    return isinstance(e, (TimeoutError, ConnectionError))
 
 # 綽號 → 本名
 # FIX-2026-05-20-yzhen-rename: 2026-05-19 蕭眞儀改名蕭頤臻；舊名/合併 key 全 alias 到「張忠豪&蕭頤臻」(vault 正式名)
@@ -264,6 +278,7 @@ def find_month_sheet(drive, roc_year: int, month: int) -> Optional[dict]:
 
     # ── layer 2: auto-detect 母 folder（主路徑，2026-05-22）───────────────
     name_q = f"{roc_year}年{month}月業績表"
+    transient_err = False  # layer 2/2.5 若是 Google 暫時出錯才落空，不能當成「表不存在」
     try:
         resp2 = drive.files().list(
             q=(
@@ -276,10 +291,11 @@ def find_month_sheet(drive, roc_year: int, month: int) -> Optional[dict]:
             orderBy='modifiedTime desc',
             supportsAllDrives=True,
             includeItemsFromAllDrives=True,
-        ).execute()
+        ).execute(num_retries=GOOGLE_API_RETRIES)
         auto_files = resp2.get('files', [])
     except Exception as e:
         print(f"[auto-detect] Drive API error: {e}", file=sys.stderr)
+        transient_err = transient_err or _is_transient_google_error(e)
         auto_files = []
 
     # 精確比對：Drive `name contains` 是分詞 match（搜「1月」會中 1~5 月全部），
@@ -308,10 +324,11 @@ def find_month_sheet(drive, roc_year: int, month: int) -> Optional[dict]:
             pageSize=50,
             supportsAllDrives=True,
             includeItemsFromAllDrives=True,
-        ).execute()
+        ).execute(num_retries=GOOGLE_API_RETRIES)
         all_files = resp_all.get('files', [])
     except Exception as e:
         print(f"[full-drive] Drive API error: {e}", file=sys.stderr)
+        transient_err = transient_err or _is_transient_google_error(e)
         all_files = []
 
     hit = _pick_exact_month_sheet(all_files, roc_year, month)
@@ -328,7 +345,7 @@ def find_month_sheet(drive, roc_year: int, month: int) -> Optional[dict]:
             pageSize=200,
             supportsAllDrives=True,
             includeItemsFromAllDrives=True,
-        ).execute()
+        ).execute(num_retries=GOOGLE_API_RETRIES)
         mirror_files = resp3.get('files', [])
     except Exception as e:
         print(f"[mirror-fallback] Drive API error: {e}", file=sys.stderr)
@@ -353,6 +370,11 @@ def find_month_sheet(drive, roc_year: int, month: int) -> Optional[dict]:
     print(f"   mirror 現有檔: {[f['name'] for f in mirror_files]}")
 
     # ── layer 4: all-miss → reminder ───────────────────────────────────
+    if transient_err:
+        # FIX-2026-10-10-google-5xx: 10/10 02:30 Drive 回 500 → 誤報「找不到 115年9月業績表」。
+        # 落空原因是 Google 暫時出錯 → 不發 newsheet 告警，15 分鐘後下一輪自然重試。
+        print(f"⏭  Google API 暫時出錯（重試 {GOOGLE_API_RETRIES} 次仍失敗），無法判定 {name_q} 是否存在，不發告警、留待下輪")
+        return None
     maybe_remind_new_month_sheet(roc_year, month)
     return None
 
@@ -499,7 +521,7 @@ def fetch_all_perf(roc_year: int, month: int) -> Optional[tuple]:
     print(f"✅ 找到當月 sheet: {sheet_name} (id={sheet_id[:20]}…)")
 
     # 列所有 tabs
-    meta = sheets.spreadsheets().get(spreadsheetId=sheet_id, includeGridData=False).execute()
+    meta = sheets.spreadsheets().get(spreadsheetId=sheet_id, includeGridData=False).execute(num_retries=GOOGLE_API_RETRIES)
     tabs = [s['properties']['title'] for s in meta['sheets']]
     print(f"{len(tabs)} 個 tabs")
     print(f"{'TAB':<14}  {'NAME':<14}  {'PERF':>10}  {'RENEWAL':>10}  {'MGMT':>10}")
@@ -512,7 +534,7 @@ def fetch_all_perf(roc_year: int, month: int) -> Optional[tuple]:
             data = sheets.spreadsheets().values().get(
                 spreadsheetId=sheet_id,
                 range=f"'{tab}'!A1:N200"
-            ).execute()
+            ).execute(num_retries=GOOGLE_API_RETRIES)
             rows = data.get('values', [])
         except Exception as e:
             print(f"{tab:<14}  fetch fail: {e}", file=sys.stderr)
