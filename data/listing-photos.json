@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-10-11T08:33:16+08:00",
+ "generatedAt": "2026-10-12T08:32:53+08:00",
  "listings": {
   "243": [
    "https://img1.591.com.tw/house/2026/03/04/177261365282040800.jpg",
@@ -14,20 +14,6 @@
    "https://img1.591.com.tw/house/2026/03/04/177261365318789607.jpg",
    "https://img1.591.com.tw/house/2026/03/03/177254458188953302.jpg",
    "https://img1.591.com.tw/house/2026/03/03/177254458096977807.jpg"
-  ],
-  "245": [
-   "https://img1.591.com.tw/house/2026/09/27/179050275322858807.jpg",
-   "https://img1.591.com.tw/house/2026/09/27/179050232778235106.jpg",
-   "https://img1.591.com.tw/house/2026/09/27/179050234221816509.jpg",
-   "https://img1.591.com.tw/house/2026/09/27/179050244851418202.jpg",
-   "https://img1.591.com.tw/house/2026/09/27/179050246048921403.jpg",
-   "https://img1.591.com.tw/house/2026/09/27/179050246804297603.jpg",
-   "https://img1.591.com.tw/house/2026/09/27/179050247212872300.jpg",
-   "https://img1.591.com.tw/house/2026/09/27/179050255158131508.jpg",
-   "https://img1.591.com.tw/house/2026/09/27/179050255943717608.jpg",
-   "https://img1.591.com.tw/house/2026/09/27/179050257781815503.jpg",
-   "https://img1.591.com.tw/house/2026/09/27/179050258660898202.jpg",
-   "https://img1.591.com.tw/house/2026/09/27/179050260336609908.jpg"
   ],
   "25": [
    "https://img1.591.com.tw/house/2025/10/15/176052986469209502.jpg",
@@ -335,7 +321,21 @@
    "https://img1.591.com.tw/house/2026/10/09/179152183833754109.jpg",
    "https://img1.591.com.tw/house/2026/10/09/179152183817500706.jpg",
    "https://img1.591.com.tw/house/2026/10/09/179152183827218200.jpg",
-   "https://img2.591.com.tw/house/2026/10/09/179152183846651003.jpg"
+   "https://img2.591.com.tw/house/2026/10/09/179152183841868001.jpg"
+  ],
+  "694": [
+   "https://img1.591.com.tw/house/2026/08/21/178728592331375707.jpg",
+   "https://img1.591.com.tw/house/2026/08/21/178728584091917300.jpg",
+   "https://img1.591.com.tw/house/2026/08/21/178728584129368605.jpg",
+   "https://img1.591.com.tw/house/2026/08/21/178728584136504207.jpg",
+   "https://img1.591.com.tw/house/2026/08/21/178728584136306005.jpg",
+   "https://img1.591.com.tw/house/2026/08/21/178728584129577905.jpg",
+   "https://img1.591.com.tw/house/2026/08/21/178728584090325501.jpg",
+   "https://img1.591.com.tw/house/2026/08/21/178728584094543403.jpg",
+   "https://img1.591.com.tw/house/2026/08/21/178728584095076909.jpg",
+   "https://img1.591.com.tw/house/2026/08/21/178728584130371201.jpg",
+   "https://img1.591.com.tw/house/2026/08/21/178728584088026904.jpg",
+   "https://img1.591.com.tw/house/2026/08/21/178728584129521001.jpg"
   ]
  },
  "provenance": {
@@ -343,11 +343,6 @@
    "houseId": "22118449",
    "how": "match",
    "why": "新莊區富貴路／10 樓／格局 2房2廳1衛／業務吻合"
-  },
-  "245": {
-   "houseId": "22032753",
-   "how": "link",
-   "why": "Ragic 連結欄直接指到這則現役廣告"
   },
   "25": {
    "houseId": "22057019",
@@ -458,6 +453,11 @@
    "houseId": "22148788",
    "how": "match",
    "why": "松山區南京東路五段／租金 32000／業務吻合"
+  },
+  "694": {
+   "houseId": "21871741",
+   "how": "match",
+   "why": "三重區光興街／4 樓／租金 10000"
   }
  },
  "source": "591-own-ads",
