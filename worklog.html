@@ -121,6 +121,14 @@
   .b-who .grp > span:first-child { font-size:13px; color:var(--b-muted); min-width:64px; }
   .b-pill { border-radius:999px; padding:2px 10px; font-size:14px; font-weight:500; }
   .b-sheet { position:fixed; left:0; right:0; bottom:0; max-height:80vh; overflow-y:auto; background:#fff; border-top:1px solid var(--b-line); box-shadow:0 -8px 30px rgba(0,0,0,.14); padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px)); z-index:50; }
+  .guide-body h1 { font-size:24px; font-weight:900; margin:4px 0; } .guide-body h2 { font-size:20px; font-weight:900; margin:28px 0 8px; padding-top:12px; border-top:2px solid #e1e4e2; }
+  .guide-body p, .guide-body li { font-size:16px; line-height:1.8; } .guide-body ul { list-style:disc; padding-left:22px; }
+  .guide-body .sub { color:#6a7472; } .guide-body .card { background:#fff; border:1px solid #e1e4e2; border-radius:14px; padding:12px 16px; margin:12px 0; }
+  .guide-body .step { display:flex; gap:12px; align-items:flex-start; margin:10px 0; } .guide-body .step b.n { flex:0 0 28px; height:28px; border-radius:50%; background:#0f6b5f; color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; margin-top:3px; }
+  .guide-body img { max-width:100%; border:1px solid #e1e4e2; border-radius:12px; display:block; margin:10px auto; } .guide-body img.phone { max-width:320px; }
+  .guide-body .c { display:inline-block; width:14px; height:14px; border-radius:3px; vertical-align:-2px; margin-right:4px; } .guide-body .c.out { background:#dde9f7; border-left:3px solid #2f6fb5; } .guide-body .c.in { background:#e6e9e8; border-left:3px solid #5e6664; } .guide-body .c.away { background:#f6ebd2; border-left:3px solid #8a5a00; } .guide-body .c.dash { border:1.5px dashed #b9c1bf; }
+  .guide-body .tip { background:#dcefeb; border-radius:10px; padding:10px 14px; margin:12px 0; } .guide-body .warn { background:#f9e8df; color:#8a3a18; border-radius:10px; padding:10px 14px; margin:12px 0; }
+  .guide-body table { border-collapse:collapse; width:100%; background:#fff; font-size:15px; margin:8px 0; } .guide-body td, .guide-body th { border:1px solid #e1e4e2; padding:8px 10px; text-align:left; vertical-align:top; } .guide-body th { background:#eef0ee; }
   .b-sheet .inner { max-width:620px; margin:0 auto; display:flex; flex-direction:column; gap:10px; }
   @media (prefers-reduced-motion: reduce) {
     * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
@@ -161,6 +169,7 @@
       <section id="view-board" class="mx-auto max-w-[1320px]" hidden></section>
       <section id="view-worklog" class="mx-auto max-w-2xl"></section>
       <section id="view-overview" class="mx-auto max-w-2xl" hidden></section>
+      <section id="view-help" class="mx-auto max-w-3xl" hidden></section>
     </main>
 
     <!-- 手機底部 tab bar：非 fixed，正常文件流最後一個 flex 項目（2026-07-25 沿用既驗證過的防遮擋結構） -->
@@ -422,7 +431,7 @@ function emptyNote(text) {
   return make('div', 'rounded-xl border border-line bg-white p-4 text-center text-sm text-inkmuted', text);
 }
 function renderFatalError(msg) {
-  ['board', 'worklog', 'overview'].forEach((v) => { const el = byId('view-' + v); if (el) el.hidden = (v !== 'worklog'); });
+  ['board', 'worklog', 'overview', 'help'].forEach((v) => { const el = byId('view-' + v); if (el) el.hidden = (v !== 'worklog'); });
   byId('view-worklog').replaceChildren(emptyNote(msg));
   byId('sidebarNav').replaceChildren();
   byId('sidebarPlanned').replaceChildren();
@@ -1458,10 +1467,11 @@ function renderBoardView() {
   boardCloseSheet();
   root.replaceChildren();
   // 使用手冊入口（2026-10-12 瓊安：新系統要附手冊，同仁版＋管理員版）
-  const help = make('div', 'mb-3 flex flex-wrap gap-x-4 gap-y-1 text-sm font-bold');
-  const helpLink = (href, text) => { const a = make('a', 'text-coral underline', text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; };
-  help.append(helpLink('guide/worklog-staff.html', '怎麼用？看說明'));
-  if (IDENTITY && IDENTITY.role === 'manager') help.append(helpLink('guide/worklog-admin.html', '管理員手冊'));
+  const help = make('div', 'mb-3 text-sm font-bold');
+  const helpBtn = make('button', 'text-coral underline', '怎麼用？看使用說明');
+  helpBtn.type = 'button';
+  helpBtn.addEventListener('click', () => { location.hash = 'help'; });
+  help.append(helpBtn);
   root.append(help);
   root.append(dateNavRow(BOARD_OFFSET, changeBoardOffset));
   if (boardState.status === 'loading' || boardState.offset !== BOARD_OFFSET) { root.append(emptyNote('載入中…')); return; }
@@ -1593,6 +1603,162 @@ function renderBoardView() {
     boardScrolled = true;
     requestAnimationFrame(() => { if (isToday) box.scrollLeft = Math.max(0, x(nowM) - box.clientWidth / 2); });
   }
+  setTimeout(maybeStartTour, 50);
+}
+
+// ================= 使用說明＋第一次引導（2026-10-12，瓊安要兩版說明；小特助定：做在網頁裡、同仁第一次打開跑最多 4 步引導） =================
+// 說明內容放在 guide/worklog-staff.html、guide/worklog-admin.html（同一個網站），這裡讀進來顯示在「使用說明」頁，
+// 兩邊改一處就好。同仁只看得到同仁版；主管連結預設管理員版，也能切去看同仁看到的樣子。
+const TOUR_DONE_KEY = 'wuohome_worklog_board_tour_v1';
+const HELP_SOURCES = { staff: 'guide/worklog-staff.html', admin: 'guide/worklog-admin.html' };
+const helpCache = {};
+let HELP_TAB = null;
+let TOUR_PENDING = false;
+
+async function loadHelpHtml(kind) {
+  if (helpCache[kind]) return helpCache[kind];
+  const res = await fetch(HELP_SOURCES[kind], { cache: 'no-cache' });
+  if (!res.ok) throw new Error('help_' + res.status);
+  const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+  const main = doc.querySelector('main');
+  main.querySelectorAll('img').forEach((img) => { img.setAttribute('src', 'guide/' + img.getAttribute('src')); });
+  helpCache[kind] = main.innerHTML;
+  return helpCache[kind];
+}
+async function renderHelpView() {
+  const root = byId('view-help');
+  const isManager = currentRole() === 'manager';
+  if (!isManager) HELP_TAB = 'staff';
+  else if (!HELP_TAB) HELP_TAB = 'admin';
+  root.replaceChildren();
+  const bar = make('div', 'mb-4 flex flex-wrap items-center gap-2');
+  if (isManager) {
+    const seg = make('div', 'inline-flex gap-1 rounded-xl border-2 border-line bg-white p-1');
+    [['admin', '管理員版'], ['staff', '同仁看到的版本']].forEach(([k, label]) => {
+      const b = make('button', `tap44 rounded-lg px-3 text-sm font-black ${HELP_TAB === k ? 'bg-coral text-white' : 'text-inkmuted hover:bg-paper'}`, label);
+      b.type = 'button';
+      b.addEventListener('click', () => { HELP_TAB = k; renderHelpView(); });
+      seg.append(b);
+    });
+    bar.append(seg);
+  }
+  if (HELP_TAB === 'staff') {
+    const again = make('button', 'tap44 rounded-lg bg-coral px-4 text-sm font-black text-white', '再看一次引導');
+    again.type = 'button';
+    again.addEventListener('click', () => { TOUR_PENDING = true; location.hash = 'board'; });
+    bar.append(again);
+  }
+  root.append(bar);
+  const body = make('div', 'guide-body');
+  body.append(emptyNote('載入中…'));
+  root.append(body);
+  const tab = HELP_TAB;
+  try {
+    const html = await loadHelpHtml(tab);
+    if (tab !== HELP_TAB || root.hidden) return;
+    body.innerHTML = html;
+    body.querySelectorAll('a[href$="worklog-staff.html"]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); HELP_TAB = 'staff'; renderHelpView(); }));
+  } catch {
+    body.replaceChildren(emptyNote('說明暫時讀不到，請重新整理頁面。'));
+  }
+}
+
+// ---- 第一次引導：直接指著看板上的位置 ----
+const TOUR_STEPS = [
+  { sel: ['.b-row.mine .b-name'], title: '這一排是你的', text: '標著「我」的這一排就是你，永遠在最上面。名字下面的百分比，是你 9 點到 18 點寫了多少。' },
+  { sel: ['.b-row.mine .b-gap', '.b-row.mine .b-track'], title: '點虛線空格就能填', text: '虛線框是還沒寫的時段。點「＋ 寫」會帶你到填寫畫面，時間已經幫你帶好，選項目、按儲存就完成。' },
+  { sel: ['#view-board .b-legend'], title: '顏色代表什麼', text: '藍色＝外出跑案，灰色＝在店裡，黃色＝請假、上課、活動。虛線＝還沒寫。' },
+  { sel: ['.b-row:not(.mine) .b-name'], title: '大家都看得到', text: '你填的內容，租賃部全員都看得到。別人的可以點開看，但每個人只能改自己那一排。' },
+];
+let tourIdx = -1;
+function tourTarget(step) {
+  for (const sel of step.sel) {
+    // 同類有好幾個時（例如自己那排的空格），指最寬的那個，不要指到 15 分鐘的小縫
+    const els = [...document.querySelectorAll(sel)];
+    if (els.length) return els.reduce((a, b) => (b.offsetWidth > a.offsetWidth ? b : a));
+  }
+  return null;
+}
+function tourEnd(done) {
+  tourIdx = -1;
+  ['tourShade', 'tourSpot', 'tourCard'].forEach((id) => { const el = byId(id); if (el) el.remove(); });
+  window.removeEventListener('resize', tourPlace);
+  document.removeEventListener('scroll', tourPlace, true);
+  if (done) { try { localStorage.setItem(TOUR_DONE_KEY, '1'); } catch {} }
+}
+function tourPlace() {
+  if (tourIdx < 0) return;
+  const el = tourTarget(TOUR_STEPS[tourIdx]);
+  const spot = byId('tourSpot'), card = byId('tourCard');
+  if (!el || !spot || !card) return;
+  const r = el.getBoundingClientRect();
+  const vw = window.innerWidth, vh = window.innerHeight, pad = 6;
+  const left = Math.max(4, r.left - pad), top = Math.max(4, r.top - pad);
+  const right = Math.min(vw - 4, r.right + pad), bottom = Math.min(vh - 4, r.bottom + pad);
+  Object.assign(spot.style, { left: `${left}px`, top: `${top}px`, width: `${Math.max(0, right - left)}px`, height: `${Math.max(0, bottom - top)}px` });
+  const cw = Math.min(340, vw - 24);
+  card.style.width = `${cw}px`;
+  card.style.left = `${Math.min(Math.max(12, left), vw - cw - 12)}px`;
+  const ch = card.offsetHeight;
+  const below = bottom + 12;
+  card.style.top = `${below + ch <= vh - 8 ? below : Math.max(8, top - ch - 12)}px`;
+}
+function tourShow(i) {
+  tourIdx = i;
+  const step = TOUR_STEPS[i];
+  const el = tourTarget(step);
+  if (!el) { if (i + 1 < TOUR_STEPS.length) tourShow(i + 1); else tourEnd(true); return; }
+  el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+  const card = byId('tourCard');
+  card.replaceChildren();
+  card.append(make('p', 'text-xs font-black text-inkfaint', `第 ${i + 1} 步，共 ${TOUR_STEPS.length} 步`));
+  card.append(make('p', 'mt-1 text-lg font-black text-ink', step.title));
+  card.append(make('p', 'mt-1 text-[15px] leading-7 text-ink', step.text));
+  const row = make('div', 'mt-3 flex items-center gap-2');
+  const skip = make('button', 'tap44 px-2 text-sm font-bold text-inkmuted underline', '略過');
+  skip.type = 'button';
+  skip.addEventListener('click', () => tourEnd(true));
+  row.append(skip, make('span', 'flex-1'));
+  if (i > 0) {
+    const prev = make('button', 'tap44 rounded-xl border-2 border-line px-3 text-sm font-bold text-ink', '上一步');
+    prev.type = 'button';
+    prev.addEventListener('click', () => tourShow(i - 1));
+    row.append(prev);
+  }
+  const last = i === TOUR_STEPS.length - 1;
+  const next = make('button', 'tap44 rounded-xl bg-coral px-4 text-sm font-black text-white', last ? '知道了，開始填' : '下一步');
+  next.type = 'button';
+  next.addEventListener('click', () => (last ? tourEnd(true) : tourShow(i + 1)));
+  row.append(next);
+  card.append(row);
+  requestAnimationFrame(tourPlace);
+}
+function tourStart() {
+  tourEnd(false);
+  const shade = make('div', 'fixed inset-0 z-[70]');
+  shade.id = 'tourShade'; // 擋住引導時誤點到後面的看板
+  const spot = make('div', 'pointer-events-none fixed z-[71] rounded-xl');
+  spot.id = 'tourSpot';
+  spot.style.boxShadow = '0 0 0 3px #e8b923, 0 0 0 9999px rgba(18, 38, 46, 0.6)';
+  spot.style.transition = 'all 180ms ease-out';
+  const card = make('div', 'fixed z-[72] rounded-2xl bg-white p-4 shadow-2xl');
+  card.id = 'tourCard';
+  card.setAttribute('role', 'dialog');
+  document.body.append(shade, spot, card);
+  window.addEventListener('resize', tourPlace);
+  document.addEventListener('scroll', tourPlace, true);
+  tourShow(0);
+}
+// 看板畫好後呼叫：同仁第一次打開自動跑；「再看一次引導」也走這裡
+function maybeStartTour() {
+  if (tourIdx >= 0 || byId('view-board').hidden) return;
+  let seen = false;
+  try { seen = localStorage.getItem(TOUR_DONE_KEY) === '1'; } catch {}
+  const auto = !seen && currentRole() !== 'manager';
+  if (!TOUR_PENDING && !auto) return;
+  if (!document.querySelector('.b-row.mine')) return; // 自己不在名單（例如主管）就沒有「你的那一排」可以指
+  TOUR_PENDING = false;
+  tourStart();
 }
 
 // ================= 平台外殼：側欄／底部 tab／路由 =================
@@ -1600,18 +1766,20 @@ function icon(name) {
   const paths = {
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2" fill="none" stroke-linecap="round"/>',
     clipboard: '<rect x="6" y="4" width="12" height="16" rx="2" fill="none"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1" fill="none"/><path d="M9 10h6M9 14h6M9 18h3" stroke-linecap="round"/>',
+    help: '<circle cx="12" cy="12" r="9" fill="none"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.6v.6" fill="none" stroke-linecap="round"/><circle cx="12" cy="17" r=".6"/>',
     grid: '<rect x="3" y="4" width="18" height="16" rx="2" fill="none"/><path d="M3 9h18M3 14h18M8 4v16" fill="none"/>',
     link: '<path d="M8 12.5l4.2-4.2" stroke-linecap="round"/><path d="M9.5 15.5A4 4 0 0 1 8 9.4l2-2a4 4 0 0 1 5.6 5.6l-.9.9" fill="none"/><path d="M14.5 8.5A4 4 0 0 1 16 14.6l-2 2a4 4 0 0 1-5.6-5.6l.9-.9" fill="none"/>',
   };
   return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">${paths[name] || ''}</svg>`;
 }
 // 2026-10-12：全員看板設為預設頁——同仁原本的連結（沒有 # 或舊的 #worklog）都照樣能用。
-const VALID_VIEWS = ['board', 'worklog', 'overview'];
-const VIEW_TITLES = { board: '全員看板', worklog: '我的日誌', overview: '主管總覽' };
+const VALID_VIEWS = ['board', 'worklog', 'overview', 'help'];
+const VIEW_TITLES = { board: '全員看板', worklog: '我的日誌', overview: '主管總覽', help: '使用說明' };
 const NAV_ITEMS = [
   { id: 'board', label: '全員看板', icon: 'grid' },
   { id: 'worklog', label: '我的日誌', icon: 'clock' },
   { id: 'overview', label: '主管總覽', icon: 'clipboard', managerOnly: true },
+  { id: 'help', label: '使用說明', icon: 'help' },
 ];
 const PLANNED_ITEMS = [
   { id: 'link', label: '案件正式關聯', icon: 'link', note: '工作日誌與工程案件的正式資料關聯規劃中，目前案名為文字＋自動建議，尚未串接。' },
@@ -1691,10 +1859,12 @@ function applyRoute() {
   byId('pageTitle').textContent = VIEW_TITLES[view];
   renderSidebarNav();
   renderBottomTabs();
+  if (view !== 'board' && tourIdx >= 0) tourEnd(false);
   if (view === 'board') {
     // 每次回到看板都重抓，剛在「我的日誌」存的那筆才會出現
     if (API_MODE) loadBoard(BOARD_OFFSET); else byId('view-board').replaceChildren(emptyNote('開發模式沒有連線，看板需要真實資料。'));
-  } else if (view === 'worklog') renderWorklogView();
+  } else if (view === 'help') renderHelpView();
+  else if (view === 'worklog') renderWorklogView();
   else renderOverviewView();
 }
 window.addEventListener('hashchange', applyRoute);
