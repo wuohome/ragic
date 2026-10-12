@@ -191,7 +191,7 @@
     <!-- 第一步：核對資料 -->
     <div id="step-1" class="hidden bg-white rounded-3xl md:rounded-[3rem] shadow-2xl p-5 md:p-14 border-t-[10px] md:border-t-[16px] border-blue-600">
       <h1 class="text-2xl md:text-5xl font-black text-blue-700 mb-3 md:mb-6 text-center md:text-left">請核對房客資料</h1>
-      <p class="text-slate-500 mb-6 md:mb-12 text-base md:text-2xl font-medium text-center md:text-left">房客您好，請確認以下資料正確無誤。如有問題請聯絡窩的家業務人員。</p>
+      <p class="text-slate-500 mb-6 md:mb-12 text-base md:text-2xl font-medium text-center md:text-left">房客您好，請確認以下資料，有錯可以直接點進去修改。</p>
       
       <!-- 
         表單設定：
@@ -201,18 +201,18 @@
       <form id="ragicForm" method="POST" target="hidden_iframe" accept-charset="UTF-8" enctype="multipart/form-data" class="space-y-6 md:space-y-10">
         <div>
           <label class="block text-lg md:text-3xl font-black text-slate-700 mb-2 md:mb-4">房客姓名</label>
-          <!-- 顯示 ID：1000792（唯讀，業務已填，客戶不可修改） -->
-          <input type="text" id="input_name" readonly class="grandpa-input w-full text-xl md:text-4xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-6 outline-none font-bold bg-slate-100 cursor-default select-none" placeholder="—">
+          <!-- 顯示 ID：1000792（業務預填，房客可修改；2026-10-12 瓊安要求恢復可改） -->
+          <input type="text" id="input_name" autocomplete="name" class="grandpa-input w-full text-xl md:text-4xl border-[3px] md:border-4 border-slate-300 rounded-2xl md:rounded-3xl p-3 md:p-6 outline-none font-bold bg-white" placeholder="—">
         </div>
         <div>
           <label class="block text-lg md:text-3xl font-black text-slate-700 mb-2 md:mb-4">聯絡電話</label>
-          <!-- 顯示 ID：1000808（唯讀，業務已填，客戶不可修改） -->
-          <input type="text" id="input_phone" readonly class="grandpa-input w-full text-xl md:text-4xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-6 outline-none font-bold bg-slate-100 cursor-default select-none" placeholder="—">
+          <!-- 顯示 ID：1000808（業務預填，房客可修改；2026-10-12 瓊安要求恢復可改） -->
+          <input type="tel" id="input_phone" inputmode="tel" autocomplete="tel" class="grandpa-input w-full text-xl md:text-4xl border-[3px] md:border-4 border-slate-300 rounded-2xl md:rounded-3xl p-3 md:p-6 outline-none font-bold bg-white" placeholder="—">
         </div>
         <div>
           <label class="block text-lg md:text-3xl font-black text-slate-700 mb-2 md:mb-4">房客職業</label>
-          <!-- 顯示 ID：1000837（唯讀，業務已填，客戶不可修改） -->
-          <input type="text" id="input_occ" readonly class="grandpa-input w-full text-xl md:text-4xl border-[3px] md:border-4 border-slate-200 rounded-2xl md:rounded-3xl p-3 md:p-6 outline-none font-bold bg-slate-100 cursor-default select-none" placeholder="—">
+          <!-- 顯示 ID：1000837（業務預填，房客可修改；2026-10-12 瓊安要求恢復可改） -->
+          <input type="text" id="input_occ" class="grandpa-input w-full text-xl md:text-4xl border-[3px] md:border-4 border-slate-300 rounded-2xl md:rounded-3xl p-3 md:p-6 outline-none font-bold bg-white" placeholder="—">
         </div>
         
         <!-- 簽名欄位 (Hidden) 寫入 ID：1000816 (Base64字串) -->
@@ -600,6 +600,8 @@
       return false;
     }
 
+    function tenantVal(id) { return $(id) ? $(id).value.trim() : ""; }
+
     function getValue(rec, keys) {
       if (!Array.isArray(keys)) keys = [keys];
       for (let k of keys) { if (rec[k] !== undefined && rec[k] !== null && rec[k] !== "") return rec[k]; }
@@ -773,11 +775,10 @@
     }
 
     function updatePreviewFromForm() {
-      // 【2026-06-20 唯讀改版】從 currentRecord 讀值（唯讀 input.value 亦相同，
-      // 但直接讀 source of truth 更安全，空值顯示「—」）
-      const name  = getValue(currentRecord, FIELDS.cust_name)  || "—";
-      const phone = getValue(currentRecord, FIELDS.cust_phone) || "—";
-      const occ   = getValue(currentRecord, FIELDS.cust_occ)   || "—";
+      // 【2026-10-12 恢復可改】三欄以房客在 step-1 輸入的值為準，空值顯示「—」
+      const name  = tenantVal("input_name")  || "—";
+      const phone = tenantVal("input_phone") || "—";
+      const occ   = tenantVal("input_occ")   || "—";
 
       if($("show_final_name")) $("show_final_name").innerText = name;
       if($("show_final_phone")) $("show_final_phone").innerText = phone;
@@ -852,6 +853,9 @@
 
     function goStep(n) {
       if (n === 2) {
+        const missing = [["input_name", "房客姓名"], ["input_phone", "聯絡電話"], ["input_occ", "房客職業"]]
+          .filter(([id]) => !tenantVal(id));
+        if (missing.length) { alert("請填寫：" + missing.map(([, label]) => label).join("、")); $(missing[0][0]).focus(); return; }
         updatePreviewFromForm();
         resetTerms(); // 每次進 step-2 重置確認狀態
         // initSignature 留給 checkAllTerms 在五條全勾後再觸發
@@ -999,11 +1003,10 @@
       const fd = new FormData();
       fd.append("rid", recordId);
       if (earnestToken) fd.append("token", earnestToken); // IDOR root-fix 2026-07-16：Worker 寫入前會交叉驗證此 token 是否對得上 rid
-      // 【2026-06-20 唯讀改版】三欄改從 currentRecord 讀 Ragic 已存值，
-      // 不從 input.value 讀（input 已改 readonly，value 仍可讀，但以 source of truth 為準）
-      fd.append("1000792", getValue(currentRecord, FIELDS.cust_name));
-      fd.append("1000808", getValue(currentRecord, FIELDS.cust_phone));
-      fd.append("1000837", getValue(currentRecord, FIELDS.cust_occ));
+      // 【2026-10-12 恢復可改】三欄送房客確認後的值（step-1 輸入框）
+      fd.append("1000792", tenantVal("input_name"));
+      fd.append("1000808", tenantVal("input_phone"));
+      fd.append("1000837", tenantVal("input_occ"));
       fd.append("1000816", sigData);
       fd.append("1001709", pdfFile, fileName);
       return fd;
