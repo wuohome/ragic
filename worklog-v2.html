@@ -65,6 +65,33 @@
   .timeline-now-marker { position: absolute; top: -5px; bottom: -5px; width: 2px; background: #1F3A44; z-index: 5; pointer-events: none; }
   .timeline-now-dot { position: absolute; top: -12px; height: 6px; width: 6px; border-radius: 999px; background: #1F3A44; transform: translateX(-2px); pointer-events: none; }
 
+  /* 全員看板（2026-10-12）：一排一個同仁、橫軸一格一小時；名字欄固定在左，手機左右滑看時段 */
+  .board-table { min-width: calc(88px + var(--board-hours) * 52px); }
+  @media (min-width: 1024px) { .board-table { min-width: calc(110px + var(--board-hours) * 64px); } }
+  .board-row { display: flex; align-items: stretch; border-top: 1px solid #E3ECEF; }
+  .board-row.board-head { border-top: none; background: #F0F8FA; }
+  .board-name { position: sticky; left: 0; z-index: 6; width: 88px; flex-shrink: 0; padding: 8px 10px; background: #fff; border-right: 2px solid #C3D6DB; display: flex; flex-direction: column; justify-content: center; }
+  @media (min-width: 1024px) { .board-name { width: 110px; } }
+  .board-head .board-name { background: #F0F8FA; }
+  .board-row.is-mine .board-name, .board-row.is-mine .board-track { background: #E1EEF8; }
+  .board-row.is-off { opacity: 0.6; }
+  .board-track { position: relative; flex: 1; min-height: 48px; }
+  .board-head .board-track { min-height: 36px; }
+  .board-hour { position: absolute; top: 0; bottom: 0; border: none; background: none; font-size: 12px; font-weight: 800; color: #4B6570; font-variant-numeric: tabular-nums; cursor: pointer; border-left: 1px solid #D5E3E7; }
+  .board-hour.is-selected { background: #004C8C; color: #fff; }
+  .board-selcol { position: absolute; top: 0; bottom: 0; background: rgba(0, 76, 140, 0.07); pointer-events: none; }
+  .board-cell, .board-block, .board-offbar { position: absolute; top: 6px; bottom: 6px; }
+  .board-blank { border: 2px dashed #B9CBD1; border-radius: 6px; margin-left: 2px; width: calc(100% - 4px); background: transparent; color: #7C9298; font-weight: 800; font-size: 14px; }
+  button.board-blank { cursor: pointer; } button.board-blank:hover { border-color: #004C8C; color: #004C8C; background: #fff; }
+  .board-block { border: none; border-radius: 8px; padding: 0 8px; margin-left: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; font-weight: 800; text-align: left; cursor: pointer; }
+  .board-out { background: #004C8C; color: #fff; }
+  .board-in { background: #DCE3E6; color: #1F3A44; box-shadow: inset 0 0 0 1px #A9B8BE; }
+  .board-leave { background: #FCE9D9; color: #8A4200; box-shadow: inset 0 0 0 1px #EFAF77; }
+  .board-offbar { left: 2px; right: 2px; border-radius: 8px; background: repeating-linear-gradient(135deg, #F0F3F4 0 8px, #E3E8EA 8px 16px); color: #7C9298; font-size: 12px; font-weight: 800; display: flex; align-items: center; padding-left: 10px; }
+  .board-offrow { background: repeating-linear-gradient(135deg, #F0F3F4 0 4px, #D5DCDF 4px 8px); }
+  span.board-blank { position: static; margin: 0; width: 24px; }
+  .board-now { position: absolute; top: 0; bottom: 0; width: 2px; background: #C81E1E; z-index: 4; pointer-events: none; }
+  .board-divider { padding: 6px 12px; font-size: 12px; font-weight: 800; color: #7C9298; background: #F7FAFB; border-top: 2px solid #C3D6DB; position: sticky; left: 0; }
   @media (prefers-reduced-motion: reduce) {
     * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
   }
@@ -101,6 +128,7 @@
     </header>
 
     <main id="mainRoot" class="flex-1 overflow-y-auto px-4 pb-6 pt-5 lg:px-6">
+      <section id="view-board" class="mx-auto max-w-6xl" hidden></section>
       <section id="view-worklog" class="mx-auto max-w-2xl"></section>
       <section id="view-overview" class="mx-auto max-w-2xl" hidden></section>
     </main>
@@ -364,7 +392,7 @@ function emptyNote(text) {
   return make('div', 'rounded-xl border border-line bg-white p-4 text-center text-sm text-inkmuted', text);
 }
 function renderFatalError(msg) {
-  ['worklog', 'overview'].forEach((v) => { const el = byId('view-' + v); if (el) el.hidden = (v !== 'worklog'); });
+  ['board', 'worklog', 'overview'].forEach((v) => { const el = byId('view-' + v); if (el) el.hidden = (v !== 'worklog'); });
   byId('view-worklog').replaceChildren(emptyNote(msg));
   byId('sidebarNav').replaceChildren();
   byId('sidebarPlanned').replaceChildren();
@@ -1278,19 +1306,264 @@ function renderOverviewView() {
   if (overviewState.status !== 'loading') refreshOverviewFromApi();
 }
 
+// ================= 全員看板（2026-10-12，規格書「2026-10-08 改版方向：全員公開看板」） =================
+// 一排一個同仁、一格一小時；連續同一件事合成一條長塊，藍＝外出／灰＝店內／虛線＝沒寫。
+// 名單與排休由 Worker worklogBoard 決定（人事表 租賃部・在職・承攬；排班表 排休／特休／請假 沉底）。
+// 哪些項目算「外出」是工程師依項目性質判斷（Joan 未逐項拍板），要改只改這一個集合。
+const BOARD_OUT_CATEGORIES = new Set(['帶看', '場勘', '驗收', '修繕', '退租點交', '開發', '活動']);
+const BOARD_LEAVE_CATEGORIES = new Set(['請假', '休假']);
+const BOARD_DEFAULT_START = 9 * 60;
+const BOARD_DEFAULT_END = 19 * 60;
+let BOARD_OFFSET = 0;
+let BOARD_HOUR = null; // 點選的時段（分鐘），null＝自動（今天＝現在這一小時）
+const boardState = { status: 'idle', offset: null, data: null, reqId: 0 };
+
+function boardKindOf(category) {
+  if (BOARD_LEAVE_CATEGORIES.has(category)) return 'leave';
+  return BOARD_OUT_CATEGORIES.has(category) ? 'out' : 'in';
+}
+// 同一人、時間相接（下一段開始 ≤ 上一段結束）且項目文字相同的紀錄合成一條長塊。
+function boardBlocksFor(entries) {
+  const list = entries
+    .map(parseApiEntry)
+    .filter((b) => b.start && b.end && timeToMinutes(b.end) > timeToMinutes(b.start))
+    .map((b) => ({ s: timeToMinutes(b.start), e: timeToMinutes(b.end), label: categoryLabelOf(b), kind: boardKindOf(b.category), items: [b] }))
+    .sort((a, b) => a.s - b.s);
+  const merged = [];
+  list.forEach((blk) => {
+    const last = merged[merged.length - 1];
+    if (last && last.label === blk.label && blk.s <= last.e) {
+      last.e = Math.max(last.e, blk.e);
+      last.items.push(...blk.items);
+    } else merged.push(blk);
+  });
+  return merged;
+}
+function boardWindow(rows) {
+  let s = BOARD_DEFAULT_START, e = BOARD_DEFAULT_END;
+  rows.forEach((r) => r.blocks.forEach((b) => { s = Math.min(s, floorHour(b.s)); e = Math.max(e, ceilHour(b.e)); }));
+  return { s: Math.max(0, s), e: Math.min(24 * 60, e) };
+}
+function boardRows(data) {
+  const byName = new Map();
+  (data.entries || []).forEach((rec) => {
+    if (!byName.has(rec.reporter)) byName.set(rec.reporter, []);
+    byName.get(rec.reporter).push(rec);
+  });
+  const rows = (data.members || []).map((m) => ({ ...m, blocks: boardBlocksFor(byName.get(m.name) || []) }));
+  // 自己那一排放在上班者最上面，方便填；排休者維持沉底（Worker 已排好其餘順序）
+  const me = IDENTITY && IDENTITY.name;
+  const idx = rows.findIndex((r) => r.name === me && !r.off);
+  if (idx > 0) rows.unshift(rows.splice(idx, 1)[0]);
+  return rows;
+}
+function boardStatusAt(row, h) {
+  if (row.off) return 'off';
+  const hit = row.blocks.filter((b) => b.s < h + 60 && b.e > h);
+  if (hit.length === 0) return 'blank';
+  if (hit.some((b) => b.kind === 'out')) return 'out';
+  if (hit.every((b) => b.kind === 'leave')) return 'off';
+  return 'in';
+}
+
+async function loadBoard(offset) {
+  const myReq = ++boardState.reqId;
+  boardState.status = 'loading';
+  boardState.offset = offset;
+  renderBoardView();
+  let result;
+  try {
+    const res = await fetch(`${WORKER_BASE}/worklogBoard?token=${encodeURIComponent(API_TOKEN)}&date=${encodeURIComponent(dateStrForOffset(offset))}`);
+    let json = null;
+    try { json = await res.json(); } catch { json = null; }
+    result = res.ok && json && json.ok === true ? json : null;
+  } catch { result = null; }
+  if (myReq !== boardState.reqId) return;
+  boardState.status = result ? 'ready' : 'error';
+  boardState.data = result;
+  renderBoardView();
+}
+function changeBoardOffset(next) {
+  BOARD_OFFSET = Math.max(NAV_MIN_OFFSET, Math.min(NAV_MAX_OFFSET, next));
+  BOARD_HOUR = null;
+  loadBoard(BOARD_OFFSET);
+}
+// 從看板跳去填自己那一排：切到「我的日誌」同一天，點的是空格就直接開一筆該小時的紀錄。
+async function boardGoFill(hourStart) {
+  const offset = BOARD_OFFSET;
+  if (offset < 0) { showToast('過去的日期不能再填寫'); return; }
+  await switchSelectedDate(offset);
+  location.hash = 'worklog';
+  applyRoute();
+  if (hourStart != null) addBlock(selectedDateStr(), { start: minutesToTime(hourStart), end: minutesToTime(Math.min(hourStart + 60, 23 * 60 + 45)) });
+}
+
+function boardLegend() {
+  const wrap = make('div', 'mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-bold text-inkmuted');
+  [['board-out', '外出'], ['board-in', '店內'], ['board-leave', '請假／休假'], ['board-blank', '沒寫'], ['board-offrow', '今天排休']].forEach(([cls, label]) => {
+    const item = make('span', 'inline-flex items-center gap-1.5');
+    item.append(make('span', `inline-block h-3.5 w-6 rounded ${cls}`), make('span', '', label));
+    wrap.append(item);
+  });
+  return wrap;
+}
+function boardHourSummary(rows, h) {
+  const groups = { in: [], out: [], blank: [], off: [] };
+  rows.forEach((r) => groups[boardStatusAt(r, h)].push(r.name));
+  const box = make('div', 'mt-4 rounded-2xl border-2 border-line bg-white p-4');
+  box.append(make('p', 'mb-3 text-sm font-black text-ink', `${minutesToTime(h)}–${minutesToTime(h + 60)} 這個時段`));
+  const grid = make('div', 'grid grid-cols-2 gap-3 sm:grid-cols-4');
+  [['in', '在店裡', 'text-ink'], ['out', '外出', 'text-coral'], ['blank', '沒寫', 'text-pending'], ['off', '休假／請假', 'text-inkfaint']].forEach(([k, label, cls]) => {
+    const col = make('div', 'rounded-xl bg-paper p-3');
+    col.append(make('p', `text-xs font-black ${cls}`, `${label}（${groups[k].length}）`));
+    col.append(make('p', 'mt-1 text-sm leading-6 text-ink', groups[k].length ? groups[k].join('、') : '—'));
+    grid.append(col);
+  });
+  box.append(grid);
+  return box;
+}
+function boardBlockDetail(row, blk) {
+  const lines = blk.items.map((b) => {
+    const parts = [`${b.start}–${b.end}`, categoryLabelOf(b)];
+    if (b.caseName) parts.push(b.caseName);
+    const text = b.note || b.plannedSchedule;
+    if (text) parts.push(text);
+    return parts.join('・');
+  });
+  showToast(`${row.name}：${lines.join('／')}`);
+}
+function renderBoardGrid(rows) {
+  const win = boardWindow(rows);
+  const hours = [];
+  for (let h = win.s; h < win.e; h += 60) hours.push(h);
+  const isToday = BOARD_OFFSET === 0;
+  const nowM = nowMinutes();
+  let selected = BOARD_HOUR;
+  if (selected == null || selected < win.s || selected >= win.e) {
+    selected = isToday && nowM >= win.s && nowM < win.e ? floorHour(nowM) : win.s;
+  }
+  const me = IDENTITY && IDENTITY.name;
+  const canFill = BOARD_OFFSET >= 0;
+  const span = win.e - win.s;
+  const pct = (m) => `${((m - win.s) / span) * 100}%`;
+
+  const scroller = make('div', 'board-scroll overflow-x-auto rounded-2xl border-2 border-line bg-white');
+  const table = make('div', 'board-table');
+  table.style.setProperty('--board-hours', hours.length);
+
+  const head = make('div', 'board-row board-head');
+  head.append(make('div', 'board-name text-xs font-black text-inkmuted', '同仁'));
+  const headTrack = make('div', 'board-track');
+  hours.forEach((h) => {
+    const btn = make('button', `board-hour ${h === selected ? 'is-selected' : ''}`, `${pad(h / 60)}`);
+    btn.type = 'button';
+    btn.style.left = pct(h);
+    btn.style.width = `${(60 / span) * 100}%`;
+    btn.title = `看 ${minutesToTime(h)} 誰在店裡`;
+    btn.addEventListener('click', () => { BOARD_HOUR = h; renderBoardView(); });
+    headTrack.append(btn);
+  });
+  head.append(headTrack);
+  table.append(head);
+
+  let offDividerDone = false;
+  rows.forEach((row) => {
+    if (row.off && !offDividerDone) {
+      offDividerDone = true;
+      table.append(make('div', 'board-divider', '今天排休'));
+    }
+    const mine = row.name === me;
+    const line = make('div', `board-row ${mine ? 'is-mine' : ''} ${row.off ? 'is-off' : ''}`);
+    const nameCell = make('div', 'board-name');
+    nameCell.append(make('span', 'block truncate text-sm font-black', row.name));
+    if (row.off) nameCell.append(make('span', 'block text-[11px] font-bold text-inkfaint', row.offType));
+    else if (mine) nameCell.append(make('span', 'block text-[11px] font-bold text-coral', '我'));
+    line.append(nameCell);
+
+    const track = make('div', 'board-track');
+    const sel = make('div', 'board-selcol');
+    sel.style.left = pct(selected);
+    sel.style.width = `${(60 / span) * 100}%`;
+    track.append(sel);
+    if (row.off && row.blocks.length === 0) {
+      track.append(make('div', 'board-offbar', row.offType));
+    } else {
+      hours.forEach((h) => {
+        // 整小時都被紀錄蓋滿才不畫虛線；只填一半的小時，紀錄長塊會疊在虛線上面
+        const filled = row.blocks.some((b) => b.s <= h && b.e >= h + 60);
+        if (filled) return;
+        const cell = make(mine && canFill ? 'button' : 'div', 'board-cell board-blank');
+        cell.style.left = pct(h);
+        cell.style.width = `${(60 / span) * 100}%`;
+        if (mine && canFill) {
+          cell.type = 'button';
+          cell.title = `填 ${minutesToTime(h)} 這一小時`;
+          cell.textContent = '＋';
+          cell.addEventListener('click', () => boardGoFill(h));
+        }
+        track.append(cell);
+      });
+      row.blocks.forEach((blk) => {
+        const s = Math.max(blk.s, win.s), e = Math.min(blk.e, win.e);
+        if (e <= s) return;
+        const el = make('button', `board-block board-${blk.kind}`, blk.label);
+        el.type = 'button';
+        el.style.left = pct(s);
+        el.style.width = `calc(${((e - s) / span) * 100}% - 3px)`;
+        el.title = `${minutesToTime(blk.s)}–${minutesToTime(blk.e)} ${blk.label}`;
+        el.addEventListener('click', () => boardBlockDetail(row, blk));
+        track.append(el);
+      });
+    }
+    if (isToday && nowM >= win.s && nowM < win.e) {
+      const now = make('div', 'board-now');
+      now.style.left = pct(nowM);
+      track.append(now);
+    }
+    line.append(track);
+    table.append(line);
+  });
+  scroller.append(table);
+  return { node: scroller, selected };
+}
+function renderBoardView() {
+  const root = byId('view-board');
+  if (!root || root.hidden) return;
+  root.replaceChildren();
+  root.append(make('p', 'mb-3 text-sm text-inkmuted', '租賃部全員今天的行程，大家互相看得到。點自己那一排的空格就能直接填。'));
+  root.append(dateNavRow(BOARD_OFFSET, changeBoardOffset));
+  if (boardState.status === 'loading' || boardState.offset !== BOARD_OFFSET) { root.append(emptyNote('載入中…')); return; }
+  if (boardState.status === 'error' || !boardState.data) { root.append(emptyNote('暫時讀不到看板，請確認網路後重新整理頁面。')); return; }
+  const rows = boardRows(boardState.data);
+  if (rows.length === 0) { root.append(emptyNote('這天沒有名單內的同仁。')); return; }
+  root.append(boardLegend());
+  const { node, selected } = renderBoardGrid(rows);
+  root.append(node);
+  root.append(boardHourSummary(rows, selected));
+  if (BOARD_OFFSET >= 0 && rows.some((r) => r.name === (IDENTITY && IDENTITY.name))) {
+    const btn = make('button', 'tap44 mt-4 w-full rounded-xl bg-coral px-4 text-base font-black text-white hover:bg-coraldark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '填我自己的日誌');
+    btn.type = 'button';
+    btn.addEventListener('click', () => boardGoFill(null));
+    root.append(btn);
+  }
+}
+
 // ================= 平台外殼：側欄／底部 tab／路由 =================
 function icon(name) {
   const paths = {
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2" fill="none" stroke-linecap="round"/>',
     clipboard: '<rect x="6" y="4" width="12" height="16" rx="2" fill="none"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1" fill="none"/><path d="M9 10h6M9 14h6M9 18h3" stroke-linecap="round"/>',
+    grid: '<rect x="3" y="4" width="18" height="16" rx="2" fill="none"/><path d="M3 9h18M3 14h18M8 4v16" fill="none"/>',
     link: '<path d="M8 12.5l4.2-4.2" stroke-linecap="round"/><path d="M9.5 15.5A4 4 0 0 1 8 9.4l2-2a4 4 0 0 1 5.6 5.6l-.9.9" fill="none"/><path d="M14.5 8.5A4 4 0 0 1 16 14.6l-2 2a4 4 0 0 1-5.6-5.6l.9-.9" fill="none"/>',
   };
   return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">${paths[name] || ''}</svg>`;
 }
-const VALID_VIEWS = ['worklog', 'overview'];
-const VIEW_TITLES = { worklog: '工作日誌', overview: '主管總覽' };
+// 2026-10-12：全員看板設為預設頁——同仁原本的連結（沒有 # 或舊的 #worklog）都照樣能用。
+const VALID_VIEWS = ['board', 'worklog', 'overview'];
+const VIEW_TITLES = { board: '全員看板', worklog: '我的日誌', overview: '主管總覽' };
 const NAV_ITEMS = [
-  { id: 'worklog', label: '工作日誌', icon: 'clock' },
+  { id: 'board', label: '全員看板', icon: 'grid' },
+  { id: 'worklog', label: '我的日誌', icon: 'clock' },
   { id: 'overview', label: '主管總覽', icon: 'clipboard', managerOnly: true },
 ];
 const PLANNED_ITEMS = [
@@ -1299,7 +1572,7 @@ const PLANNED_ITEMS = [
 function currentRole() { return IDENTITY ? IDENTITY.role : null; }
 function currentView() {
   const h = (location.hash || '').replace('#', '');
-  return VALID_VIEWS.includes(h) ? h : 'worklog';
+  return VALID_VIEWS.includes(h) ? h : 'board';
 }
 function sidebarNavButton(item) {
   const active = currentView() === item.id;
@@ -1371,7 +1644,10 @@ function applyRoute() {
   byId('pageTitle').textContent = VIEW_TITLES[view];
   renderSidebarNav();
   renderBottomTabs();
-  if (view === 'worklog') renderWorklogView();
+  if (view === 'board') {
+    // 每次回到看板都重抓，剛在「我的日誌」存的那筆才會出現
+    if (API_MODE) loadBoard(BOARD_OFFSET); else byId('view-board').replaceChildren(emptyNote('開發模式沒有連線，看板需要真實資料。'));
+  } else if (view === 'worklog') renderWorklogView();
   else renderOverviewView();
 }
 window.addEventListener('hashchange', applyRoute);
@@ -1390,7 +1666,7 @@ byId('resetButton').addEventListener('click', () => {
   MOCK_CASES.forEach((c) => { const opt = document.createElement('option'); opt.value = c; dl.append(opt); });
 
   const initHash = (location.hash || '').replace('#', '');
-  if (!VALID_VIEWS.includes(initHash)) replaceHashKeepingQuery('#worklog');
+  if (!VALID_VIEWS.includes(initHash)) replaceHashKeepingQuery('#board');
 
   // 無 token（連 localStorage 都沒有）一律整頁擋下，不提供「填得動、送出假成功」的模擬模式給
   // 正式使用者；開發除錯要用模擬模式，網址加 ?dev=1（比照 V1 worklog.html 既有防線）。
