@@ -80,7 +80,8 @@
   .b-legend i { display:inline-block; width:14px; height:14px; border-radius:3px; vertical-align:-2px; margin-right:5px; }
   .b-note { font-size:13px; color:var(--b-muted); background:#fff; border:1px dashed var(--b-line); border-radius:8px; padding:6px 10px; }
   .b-box { background:#fff; border:1px solid var(--b-line); border-radius:12px; overflow-x:auto; }
-  .b-board { display:grid; grid-template-columns:var(--namew) var(--trackw); min-width:100%; }
+  /* 寬度要撐到內容全寬，名字欄的固定（sticky）才不會在左右滑到底時被推出畫面 */
+  .b-board { display:grid; grid-template-columns:var(--namew) var(--trackw); width:max-content; min-width:100%; }
   .b-row { display:contents; }
   .b-name { position:sticky; left:0; z-index:5; background:#fff; border-right:1px solid var(--b-line); border-bottom:1px solid var(--b-line); padding:8px 10px 8px 14px; font-weight:700; white-space:nowrap; display:flex; flex-direction:column; justify-content:center; }
   .b-name .cnt { font-size:11px; font-weight:500; color:var(--b-muted); font-variant-numeric:tabular-nums; }
@@ -111,6 +112,7 @@
   .b-blk.away, .b-legend .away { background:var(--b-away-soft); color:var(--b-away); border-left-color:var(--b-away); }
   .b-blk.clash { box-shadow:inset 0 0 0 2px var(--b-clash); }
   .b-rowdim .b-blk { opacity:.3; }
+  .b-divider span { position:sticky; left:14px; }
   .b-divider { grid-column:1/-1; padding:14px 14px 6px; font-size:13px; color:var(--b-muted); font-weight:700; background:#F7F8F6; border-bottom:1px solid var(--b-line); }
   .b-offbar { position:sticky; left:calc(var(--namew) + 6px); margin:6px; height:36px; width:220px; max-width:calc(100% - 12px); background:var(--b-off); border-radius:7px; color:var(--b-muted); display:flex; align-items:center; padding-left:12px; font-weight:500; }
   .b-who { background:#fff; border:2px solid var(--b-accent); border-radius:12px; padding:14px 16px; }
@@ -1455,6 +1457,12 @@ function renderBoardView() {
   if (!root || root.hidden) return;
   boardCloseSheet();
   root.replaceChildren();
+  // 使用手冊入口（2026-10-12 瓊安：新系統要附手冊，同仁版＋管理員版）
+  const help = make('div', 'mb-3 flex flex-wrap gap-x-4 gap-y-1 text-sm font-bold');
+  const helpLink = (href, text) => { const a = make('a', 'text-coral underline', text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; };
+  help.append(helpLink('guide/worklog-staff.html', '怎麼用？看說明'));
+  if (IDENTITY && IDENTITY.role === 'manager') help.append(helpLink('guide/worklog-admin.html', '管理員手冊'));
+  root.append(help);
   root.append(dateNavRow(BOARD_OFFSET, changeBoardOffset));
   if (boardState.status === 'loading' || boardState.offset !== BOARD_OFFSET) { root.append(emptyNote('載入中…')); return; }
   if (boardState.status === 'error' || !boardState.data) { root.append(emptyNote('暫時讀不到看板，請確認網路後重新整理頁面。')); return; }
@@ -1564,7 +1572,7 @@ function renderBoardView() {
     html += '</div></div>';
   });
   if (resting.length) {
-    html += '<div class="b-divider">休假（排班表帶入，不用寫）</div>';
+    html += '<div class="b-divider"><span>休假（排班表帶入，不用寫）</span></div>';
     resting.forEach((r) => {
       html += `<div class="b-row"><div class="b-name">${boardEsc(r.name)}<span class="cnt">—</span></div><div class="b-track" style="height:48px"><div class="b-offbar">${boardEsc(r.offType)}</div></div></div>`;
     });
