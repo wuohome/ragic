@@ -1,0 +1,69 @@
+<!DOCTYPE html><html lang="zh-TW"><head><title>工作日誌看板｜管理員手冊</title>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow">
+<style>
+body{margin:0;background:#f4f5f2;color:#1c2626;font:17px/1.75 -apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",sans-serif}
+main{max-width:760px;margin:0 auto;padding:20px 18px 80px}
+h1{font-size:26px;margin:8px 0 4px}h2{font-size:21px;margin:34px 0 8px;padding-top:14px;border-top:2px solid #e1e4e2}
+.sub{color:#6a7472;margin:0 0 16px}
+.card{background:#fff;border:1px solid #e1e4e2;border-radius:14px;padding:14px 18px;margin:12px 0}
+.step{display:flex;gap:12px;align-items:flex-start;margin:10px 0}.step b.n{flex:0 0 30px;height:30px;border-radius:50%;background:#0f6b5f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;margin-top:2px}
+img{max-width:100%;border:1px solid #e1e4e2;border-radius:12px;display:block;margin:10px auto}
+img.phone{max-width:340px}
+.c{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:4px}
+.out{background:#dde9f7;border-left:3px solid #2f6fb5}.in{background:#e6e9e8;border-left:3px solid #5e6664}.away{background:#f6ebd2;border-left:3px solid #8a5a00}.dash{border:1.5px dashed #b9c1bf}
+.tip{background:#dcefeb;border-radius:10px;padding:10px 14px;margin:12px 0}.warn{background:#f9e8df;color:#8a3a18;border-radius:10px;padding:10px 14px;margin:12px 0}
+table{border-collapse:collapse;width:100%;background:#fff;font-size:16px}td,th{border:1px solid #e1e4e2;padding:8px 10px;text-align:left;vertical-align:top}th{background:#eef0ee}
+</style>
+
+</head><body><main>
+<h1>工作日誌看板｜管理員手冊</h1>
+<p class="sub">給瓊安、小吳哥、主管用。手冊裡的名字和行程都是假的。同仁怎麼填，看<a href="worklog-staff.html">同仁手冊</a>。</p>
+
+<div class="card"><b>一句話：</b>打開主管連結，最上面一行就告訴你「現在幾個人外出、幾個人在店裡、誰今天一筆都沒寫」。要派人時，點時間軸上的整點，看誰在店裡。</div>
+
+<h2>1. 每天看三個地方</h2>
+<img src="img/headline.png" alt="最上面的現況列">
+<div class="step"><b class="n">1</b><div><b>最上面那行</b>：現在外出／在店裡／不在崗／沒寫／休假各幾人。下面紅字是「今天 9:00–18:00 一筆都還沒寫」的名單——<b>催人就看這裡</b>。</div></div>
+<div class="step"><b class="n">2</b><div><b>名字下的百分比</b>：9 點到 18 點寫了多少。低於 40% 變紅。看板照這個排序，寫越少越下面。</div></div>
+<div class="step"><b class="n">3</b><div><b>最下面「休假」區</b>：排班表上當天排休、特休、請假的人，自動沉底、不算沒寫。</div></div>
+<img src="img/board-desk.png" alt="電腦上的全員看板">
+
+<h2>2. 要派人：這個時間找誰？</h2>
+<p>點看板上方的整點（例如「14:00」），會跳出：</p>
+<img src="img/who.png" alt="要派人找誰">
+<table>
+<tr><th>分組</th><th>意思</th></tr>
+<tr><td>在店裡</td><td>那個時間寫的是灰色項目（上廣告、其他），可以找</td></tr>
+<tr><td>不知道（沒寫）</td><td>那個時間沒填，要打電話問</td></tr>
+<tr><td>走不開</td><td>外出跑案或不在崗，旁邊寫他在做什麼</td></tr>
+</table>
+<p>再點一次同一個整點，或按「收起來」，就回到看「現在」。</p>
+
+<h2>3. 誰會出現在看板上（自動，不用手動加）</h2>
+<table>
+<tr><th>規則</th><th>資料從哪來</th></tr>
+<tr><td>部門＝租賃部、在職、聘雇類別＝承攬</td><td>Ragic 人事資料表</td></tr>
+<tr><td>兼職、離職、其他部門不列</td><td>同上（有人轉兼職或離職，隔天自動消失）</td></tr>
+<tr><td>當天排休／特休／請假 → 沉到最下面</td><td>Ragic 排班表（值日、值班不算休）</td></tr>
+</table>
+<div class="tip">工務部、買賣部、社宅部目前不列；設計部以後再加。要加部門，交給工程師。</div>
+
+<h2>4. 什麼事要找工程師</h2>
+<table>
+<tr><th>情況</th><th>工程師要做</th></tr>
+<tr><td>新同仁到職</td><td>開一條專屬連結＋掛進 Ragic 選單。新人沒連結的話，看板上會一直顯示「沒寫」</td></tr>
+<tr><td>某個項目顏色分錯（例如「簽約」其實多在店裡）</td><td>改一個設定就好，馬上生效</td></tr>
+<tr><td>要加部門到看板</td><td>改名單規則</td></tr>
+<tr><td>同仁說連結打不開</td><td>查他的連結</td></tr>
+</table>
+
+<h2>5. 主管總覽（舊功能，還在）</h2>
+<p>左邊（手機在下方）「主管總覽」：一人一張卡片，展開看他當天每一筆的細節。看板看全貌，總覽看細節。</p>
+
+<h2>6. 知道就好</h2>
+<ul>
+<li>同仁只能改自己的、只能改今天和明天；過去的紀錄鎖住不能改。</li>
+<li>所有紀錄存在 Ragic 原本那張「工作日誌」表，舊紀錄都在。</li>
+<li>主管連結能看全部人，<b>不要轉給同仁</b>。</li>
+</ul>
+</main></body></html>
