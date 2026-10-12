@@ -937,6 +937,13 @@ body {
     <div class="step-view" id="step4">
       <h1 class="step-title">怎麼收的錢？</h1>
 
+      <!-- 收付日期：預設今天，先收款後補單可改成實際收款日 -->
+      <div class="field-group">
+        <label class="field-label" for="receiveDate">收付日期<span class="field-required">＊</span></label>
+        <input type="date" class="field-input" id="receiveDate" min="2024-01-01">
+        <div style="margin-top:4px;font-size:.8rem;color:var(--gray-400);">預設今天；先收款後補單的，請改成實際收款那天</div>
+      </div>
+
       <!-- 租客流程 -->
       <div id="step4Tenant">
         <p class="step-hint">可以同時勾選現金和匯款</p>
@@ -1075,7 +1082,21 @@ const state = {
   depositEarnestAmt: 0,
   tenantNameManual: '',
   tenantPhoneManual: '',
+  receiveDate: '',   // yyyy-MM-dd，第 4 步「收付日期」
 };
+
+// 今天（本機時區）yyyy-MM-dd
+function todayISO() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+}
+
+function resetReceiveDate() {
+  const el = document.getElementById('receiveDate');
+  el.value = todayISO();
+  el.max = todayISO();
+  state.receiveDate = '';
+}
 
 /* ======================================================
    FAKE DATA
@@ -1485,8 +1506,9 @@ function handleUpload(input, who) {
 function buildSummary() {
   state.transferCode  = document.getElementById('transferCode').value.trim();
   state.transferCodeL = document.getElementById('transferCodeL').value.trim();
+  state.receiveDate   = document.getElementById('receiveDate').value;
 
-  const payer    = state.payer === 'tenant' ? '租客' : '房東';
+  const payer   = state.payer === 'tenant' ? '租客' : '房東';
   const caseLbl  = state.isManual
     ? (state.manualCaseName + '（手動輸入）')
     : state.caseName;
@@ -1545,6 +1567,10 @@ function buildSummary() {
     </div>
     <div class="summary-card">
       <div class="summary-section-title">付款資訊</div>
+      <div class="summary-row">
+        <span class="summary-row-key">收付日期</span>
+        <span class="summary-row-val">${state.receiveDate.replace(/-/g, '/')}</span>
+      </div>
       <div class="summary-row">
         <span class="summary-row-key">付款方式</span>
         <span class="summary-row-val">${payStr}</span>
@@ -1716,12 +1742,11 @@ function buildRagicFormData() {
   const isTenant = state.payer === 'tenant';
   const fd = new FormData();
 
-  // 今天日期（Ragic 格式 yyyy/MM/dd）
-  const now = new Date();
-  const today = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')}`;
+  // 收付日期（Ragic 格式 yyyy/MM/dd）：使用者在第 4 步選的日期，沒選才用今天
+  const receiveDate = (state.receiveDate || todayISO()).replace(/-/g, '/');
 
   fd.append('1000782', isTenant ? '租客' : '房東');
-  fd.append('1000772', today);
+  fd.append('1000772', receiveDate);
 
   // 案件
   if (state.isManual) {
@@ -1865,6 +1890,7 @@ function resetAll() {
     paymentMethods:[], transferCode:'', uploadFileTenant:null,
     paymentMethodLandlord:null, transferCodeL:'', uploadFileLandlord:null,
   });
+  resetReceiveDate();
   rowCounter = 0; selectedCaseId = null; caseFilter = '';
   Object.assign(state, { hasDeposit: null, depositNo: '', depositTenantName: '', depositTenantPhone: '', depositEarnestAmt: 0, tenantNameManual: '', tenantPhoneManual: '' });
   ['dep-yes','dep-no'].forEach(function(id) { var el = document.getElementById(id); if (el) el.classList.remove('selected'); });
@@ -1951,6 +1977,9 @@ function validate(step) {
     }
   }
   if (step === 4) {
+    const rd = document.getElementById('receiveDate').value;
+    if (!rd) { showToast('請選擇收付日期'); return false; }
+    if (rd < '2024-01-01' || rd > todayISO()) { showToast('收付日期不能是未來的日子，請重新選'); return false; }
     if (state.payer === 'tenant') {
       if (state.paymentMethods.length === 0) { showToast('請選擇付款方式'); return false; }
     } else {
@@ -1965,6 +1994,7 @@ function validate(step) {
    ====================================================== */
 renderCaseList('');
 loadRealStaff();
+resetReceiveDate();
 showStep(1);
 </script>
 </body>
