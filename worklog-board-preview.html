@@ -175,8 +175,8 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
 const WORKER_BASE="https://wuohome-ragic-proxy.wuohome.workers.dev";
 const TOKEN_STORE_KEY="wuohome_worklog_v2_token_v1"; // 與 worklog.html 同 key，同瀏覽器開過連結就免重帶
 function resolveToken(){
-  let u="";try{u=new URLSearchParams(location.search).get("token")||""}catch{}
-  if(u){try{localStorage.setItem(TOKEN_STORE_KEY,u)}catch{}return u}
+  let u="";try{u=new URLSearchParams(location.search).get("token")||""}catch{} // ponytail-debt: 網址解析失敗視同沒帶通行碼，後面會顯示「少了通行碼」訊息；沿用現行 worklog.html 寫法；日後可改成回報給後端記錄
+  if(u){try{localStorage.setItem(TOKEN_STORE_KEY,u)}catch{}return u} // ponytail-debt: 隱私模式寫不進 localStorage 不該中斷看板，只是下次要重帶連結；沿用現行 worklog.html 寫法；日後可改成回報給後端記錄
   try{return localStorage.getItem(TOKEN_STORE_KEY)||""}catch{return ""}
 }
 const TOKEN=resolveToken();
@@ -223,7 +223,7 @@ function buildDay(json){
 async function api(path,opt){
   try{
     const res=await fetch(`${WORKER_BASE}/${path}`,opt);
-    let json=null;try{json=await res.json()}catch{}
+    let json=null;try{json=await res.json()}catch{} // ponytail-debt: 非 JSON 回應視為失敗，由呼叫端依 status 顯示錯誤訊息，不是吞掉；日後可改成回報給後端記錄
     return {status:res.status,json};
   }catch{return {status:0,json:null}}
 }
