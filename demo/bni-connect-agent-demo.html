@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>【示範頁】BNI 員工替你登 BNI Connect</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;background:#313338;color:#dbdee1;font-size:15px;line-height:1.6}
+  .banner{background:#f0b232;color:#1e1f22;padding:8px 14px;font-weight:700;text-align:center}
+  .wrap{max-width:860px;margin:0 auto;padding:0 12px 40px}
+  header{padding:14px 0 6px}
+  header h1{font-size:20px;margin:0 0 4px;color:#f2f3f5}
+  header p{margin:0;color:#949ba4;font-size:14px}
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+  .tab{background:#2b2d31;border:1px solid #3f4147;color:#dbdee1;border-radius:18px;padding:6px 14px;cursor:pointer;min-height:36px;font-size:14px}
+  .tab.active{background:#5865f2;border-color:#5865f2;color:#fff}
+  .toggle{display:flex;align-items:center;gap:8px;margin:4px 0 10px;color:#b5bac1;font-size:14px;cursor:pointer;user-select:none}
+  .toggle input{width:18px;height:18px}
+  .chan{background:#2b2d31;border-radius:8px 8px 0 0;padding:8px 14px;color:#949ba4;font-weight:700;border-bottom:1px solid #1f2023}
+  .chat{background:#313338;border:1px solid #2b2d31;border-top:0;border-radius:0 0 8px 8px;padding:6px 0 10px;min-height:300px}
+  .msg{display:flex;gap:12px;padding:8px 14px;animation:fade .35s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+  .avatar{width:38px;height:38px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff}
+  .av-joan{background:#eb459e}.av-bot{background:#23a559}
+  .name{font-weight:700;color:#f2f3f5}.name .tag{font-size:11px;background:#5865f2;color:#fff;border-radius:3px;padding:0 4px;margin-left:6px;vertical-align:2px}
+  .time{color:#949ba4;font-size:12px;margin-left:6px;font-weight:400}
+  .body{white-space:pre-wrap;word-break:break-word}
+  .mention{background:rgba(88,101,242,.3);color:#c9cdfb;border-radius:3px;padding:0 2px}
+  .card{background:#2b2d31;border-left:4px solid #23a559;border-radius:4px;padding:8px 12px;margin-top:6px}
+  .card.warn{border-left-color:#f0b232}.card.err{border-left-color:#f23f43}
+  .card table{border-collapse:collapse;font-size:14px}
+  .card td{padding:1px 10px 1px 0;vertical-align:top}.card td:first-child{color:#949ba4;white-space:nowrap}
+  .behind{display:none;margin-top:6px;font-size:13px;color:#b5bac1;background:#1e1f22;border-radius:4px;padding:6px 10px}
+  .show-behind .behind{display:block}
+  .who{display:inline-block;border-radius:3px;padding:0 6px;margin:2px 4px 2px 0;font-size:12px;color:#1e1f22;font-weight:700}
+  .w-hi{background:#c9cdfb}.w-lo{background:#a6e3b8}.w-fix{background:#f6d58e}
+  .reply{padding:8px 14px 4px 64px}
+  .reply button{background:#4e5058;color:#fff;border:0;border-radius:4px;padding:8px 14px;cursor:pointer;min-height:36px;font-size:14px;text-align:left}
+  .reply button:hover{background:#6d6f78}
+  .reply .hint{color:#949ba4;font-size:12px;margin-bottom:4px}
+  .ask{margin-top:18px;background:#2b2d31;border-radius:8px;padding:14px;border:1px solid #5865f2}
+  .ask b{color:#f2f3f5}
+  .legend{font-size:13px;color:#b5bac1;margin:2px 0 8px}
+</style>
+</head>
+<body>
+<div class="banner">示範頁：資料全是假的，不會真的登入或送出任何東西</div>
+<div class="wrap">
+<header>
+  <h1>BNI 員工替你登 BNI Connect</h1>
+  <p>你平常只在 Discord 跟 BNI 員工講話，它登好後回你一行結果。點下面的情境看看，灰色按鈕是「你的回覆」，點了就會往下走。</p>
+</header>
+
+<div class="tabs" id="tabs"></div>
+<label class="toggle"><input type="checkbox" id="behind"> 顯示幕後是誰在做（你平常看不到這些）</label>
+<div class="legend" id="legend" style="display:none">
+  <span class="who w-hi">BNI 員工</span>聰明的那個：聽懂你的話、寫內容、送出前自己審
+  <span class="who w-lo">查人／記錄幫手</span>便宜的那個：對名冊、寫筆記
+  <span class="who w-fix">登打程式</span>不靠模型，照固定步驟填格子按送出
+</div>
+
+<div class="chan" id="chan"># bni華都更分會</div>
+<div class="chat" id="chat"></div>
+
+<div class="ask">
+  <b>這樣可以嗎？</b> 在串裡回「好」我就照這個開工；哪裡不對直接講哪一段要改。
+</div>
+</div>
+
+<script>
+const J = (t, time) => ({who:'joan', text:t, time});
+const B = (t, opt={}) => ({who:'bot', text:t, ...opt});
+
+// 每個情境：一串步驟；遇到 reply 會停下等她點
+const scenes = [
+ {key:'daily', name:'每天 18:00 一對一', chan:'# bni華都更分會', steps:[
+  B(`<span class="mention">@瓊安</span> 今天有 3 場一對一。我先進 BNI Connect 看過了：
+
+✔ 林小美（保險）那場她已經登了，不用你處理。
+
+還沒人登的 2 場：
+1. 10:00 王大明（會計師）在公司
+2. 14:30 陳志豪（水電，金鑽分會）在咖啡店
+
+各回一句聊了什麼就好。沒講的話「誰邀約」填你。`, {time:'18:00', behind:[['w-lo','查人幫手','從行事曆抓今天標「121」的行程，對名冊找出全名和分會'],['w-fix','登打程式','進 BNI Connect 看哪幾場對方已經登了']]}),
+  {reply:'1 他有房東客戶想找代管，下週帶他去看物件　2 聊老屋換水管，以後修繕案可以轉給他'},
+  B(`兩筆都送出了 ✅`, {time:'18:04', cards:[
+    {title:'一對一｜王大明', rows:[['分會','華都更分會'],['對象','王大明（會計師）'],['誰邀約','瓊安'],['地點','窩的家公司'],['日期','2026/10/13'],['聊了什麼','他手上有房東客戶想委託租屋代管，約好下週一起去看物件，評估是否適合交給窩的家管理。']]},
+    {title:'一對一｜陳志豪（跨分會）', rows:[['分會','金鑽分會（跨分會）'],['對象','陳志豪（水電）'],['誰邀約','瓊安'],['地點','咖啡店'],['日期','2026/10/13'],['聊了什麼','交流老屋換水管的經驗，之後窩的家代管物件有修繕需求可以轉介給他。']]}
+   ], after:'已記到王大明、陳志豪的人物筆記。', behind:[['w-hi','BNI 員工','把你的一句話寫成通順內容，送出前自己再審一次'],['w-fix','登打程式','一筆一筆填格子按送出，速度跟真人差不多'],['w-lo','記錄幫手','寫進兩人的人物筆記']]})
+ ]},
+ {key:'ref', name:'隨口叫它登引薦單', chan:'# bni華都更分會', steps:[
+  J('幫我登一張引薦給王大明，我朋友李先生要找會計師報稅，電話 0912-000-000，我跟他說王大明會打給他','11:20'),
+  B('引薦單送出了 ✅', {time:'11:21', cards:[{title:'引薦單｜給王大明', rows:[['給誰','王大明（會計師）'],['分會內／外','分會內'],['被引薦人','李先生'],['電話','0912-000-000'],['目前狀態','已告訴對方王大明會打給他'],['說明','李先生需要會計師協助今年報稅，請主動聯繫。']]}], after:'已記到王大明的人物筆記。', behind:[['w-lo','查人幫手','「王大明」對名冊 → 華都更分會、會計師'],['w-hi','BNI 員工','整理成引薦單內容並自己審過'],['w-fix','登打程式','填引薦單、按送出']]})
+ ]},
+ {key:'tyfcb', name:'感謝成交單（講不清楚會先問）', chan:'# bni華都更分會', steps:[
+  J('林小美介紹的那個房東簽約了，幫我開感謝單','15:02'),
+  B(`好，只差金額：這次成交多少錢？回數字就好。`, {time:'15:02', behind:[['w-hi','BNI 員工','金額沒講，不能亂填，先問你一題']]}),
+  {reply:'36000'},
+  B('感謝成交單送出了 ✅', {time:'15:05', cards:[{title:'感謝成交單｜謝謝林小美', rows:[['謝謝誰','林小美（保險）'],['金額','36,000 元'],['新客戶／老客戶','新客戶'],['說明','林小美引薦的房東已簽訂代管合約。']]}], after:'已記到林小美的人物筆記。', behind:[['w-fix','登打程式','填感謝成交單、按送出'],['w-lo','記錄幫手','寫進林小美的人物筆記']]})
+ ]},
+ {key:'ceu', name:'教育學分', chan:'# bni華都更分會', steps:[
+  J('今天早上聽了一小時 BNI 線上講座，講引薦技巧，幫我登教育學分','12:30'),
+  B('教育學分送出了 ✅', {time:'12:31', cards:[{title:'教育學分', rows:[['日期','2026/10/13'],['學分','1'],['內容','參加 BNI 線上講座「引薦技巧」，一小時。']]}], behind:[['w-hi','BNI 員工','整理內容並審過'],['w-fix','登打程式','填教育學分、按送出']]})
+ ]},
+ {key:'back', name:'第一次：補登最近 3 個月', chan:'# bni華都更分會', steps:[
+  B(`<span class="mention">@瓊安</span> 上線第一次，我把最近 3 個月對過一遍：
+
+行事曆上有 18 場一對一。
+BNI Connect 已經有人登的 15 場（你登 9 場、對方登 6 場），這些都不用管。
+
+<b>有約但沒人登的 3 場：</b>
+1. 8/20 張雅婷（室內設計）— 你的筆記有寫聊了什麼
+2. 9/03 吳建國（律師）— 你的筆記有寫聊了什麼
+3. 9/25 黃淑芬（攝影）— 沒有筆記
+
+回「補」我就把 1、2 照筆記補登；第 3 場要你回一句聊了什麼。`, {time:'18:00', behind:[['w-fix','登打程式','只讀你自己的一對一紀錄（含對方登的），不抓別人的資料'],['w-lo','查人幫手','跟行事曆、你的人物筆記對一遍']]}),
+  {reply:'補，3 是聊婚紗拍攝，她說可以幫我們拍物件照片'},
+  B('3 場都補登了 ✅ 最近 3 個月的一對一現在全部有紀錄。', {time:'18:06', cards:[
+    {title:'一對一｜張雅婷　8/20', rows:[['聊了什麼','（照你的筆記）老屋翻新設計，有代管物件要整修時可互相介紹。']]},
+    {title:'一對一｜吳建國　9/03', rows:[['聊了什麼','（照你的筆記）租賃糾紛處理，房東客戶需要法律諮詢可以轉介。']]},
+    {title:'一對一｜黃淑芬　9/25', rows:[['聊了什麼','她做婚紗攝影，也接物件拍攝，之後窩的家物件照片可以找她。']]}
+   ], after:'已記到三人的人物筆記。', behind:[['w-hi','BNI 員工','照你的筆記寫內容並審過'],['w-fix','登打程式','一次一筆補登'],['w-lo','記錄幫手','寫進人物筆記']]})
+ ]},
+ {key:'stuck', name:'卡住的時候', chan:'# bni華都更分會', steps:[
+  B(`王大明那筆 ✅ 送出了。
+
+陳志豪那筆 ⚠️ <b>沒送</b>：他是金鑽分會的，BNI Connect 跨分會搜尋找不到他（可能不同區域不給登）。我沒有硬送。
+你要自己登的話，內容幫你寫好了：`, {time:'18:04', cards:[{warn:true, title:'一對一｜陳志豪（沒送出）', rows:[['聊了什麼','交流老屋換水管的經驗，之後窩的家代管物件有修繕需求可以轉介給他。']]}], behind:[['w-fix','登打程式','跨分會搜尋找不到這個人 → 停下來回報']]}),
+  B(`⛔ 引薦單（給王大明）<b>沒送出</b>：BNI Connect 的畫面改了，送出按鈕找不到。
+我已經通知工程師修，修好會自動補送這一筆，不會重複送。你不用做任何事。`, {time:'11:21', err:true, behind:[['w-fix','登打程式','照固定步驟找不到按鈕'],['w-lo','看畫面的幫手','截圖判斷是網頁改版 → 通知工程師']]})
+ ]}
+];
+
+const chat = document.getElementById('chat');
+const tabs = document.getElementById('tabs');
+let cur = null, idx = 0;
+
+function esc(s){return s}
+function render(step){
+  if(step.reply!==undefined){
+    const d=document.createElement('div');d.className='reply';
+    d.innerHTML='<div class="hint">你的回覆（點一下）</div>';
+    const b=document.createElement('button');b.textContent=step.reply;
+    b.onclick=()=>{d.remove();addMsg(J(step.reply,''));idx++;play();};
+    d.appendChild(b);chat.appendChild(d);return false;
+  }
+  addMsg(step);return true;
+}
+function addMsg(m){
+  const d=document.createElement('div');d.className='msg';
+  const isBot=m.who==='bot';
+  let html=`<div class="avatar ${isBot?'av-bot':'av-joan'}">${isBot?'B':'瓊'}</div><div style="min-width:0;flex:1">
+   <div class="name">${isBot?'BNI 員工<span class="tag">BOT</span>':'瓊安'}<span class="time">${m.time?'今天 '+m.time:''}</span></div>
+   <div class="body">${m.text}</div>`;
+  (m.cards||[]).forEach(c=>{
+    html+=`<div class="card ${c.warn?'warn':''}"><div style="font-weight:700;color:#f2f3f5">${c.title}</div><table>${c.rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</table></div>`;
+  });
+  if(m.err) html=html.replace('<div class="body">','<div class="body" style="border-left:4px solid #f23f43;padding-left:8px">');
+  if(m.after) html+=`<div class="body" style="color:#b5bac1;margin-top:4px">${m.after}</div>`;
+  if(m.behind) html+=`<div class="behind">幕後：${m.behind.map(b=>`<div><span class="who ${b[0]}">${b[1]}</span>${b[2]}</div>`).join('')}</div>`;
+  html+='</div>';d.innerHTML=html;chat.appendChild(d);
+}
+function play(){
+  while(idx<cur.steps.length){ if(!render(cur.steps[idx])) return; idx++; }
+}
+function open(s){
+  cur=s;idx=0;chat.innerHTML='';
+  document.getElementById('chan').textContent=s.chan;
+  [...tabs.children].forEach(t=>t.classList.toggle('active',t.dataset.k===s.key));
+  play();
+}
+scenes.forEach(s=>{const b=document.createElement('button');b.className='tab';b.textContent=s.name;b.dataset.k=s.key;b.onclick=()=>open(s);tabs.appendChild(b);});
+document.getElementById('behind').onchange=e=>{
+  document.body.classList.toggle('show-behind',e.target.checked);
+  document.getElementById('legend').style.display=e.target.checked?'block':'none';
+};
+open(scenes[0]);
+</script>
+</body>
+</html>
