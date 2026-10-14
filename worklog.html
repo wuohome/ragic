@@ -212,6 +212,8 @@ const $=id=>document.getElementById(id);
 // ---------- 資料 ----------
 // 一筆 Ragic 紀錄 → 看板用的一段；舊格式（只有「HH:MM-HH:MM」小時格）也能畫，舊桶籃選項（0900之前／19:00之後）放進頭尾那一格
 function toRec(r){
+  if(r.source==="timetree"){const S=t(r.startTime),E=t(r.endTime);if(!(E>S))return null; // 行事曆自動帶入：標題、顏色由 Worker 決定，唯讀
+    return {id:r.rid,s:S,e:E,cat:r.title||"行程",rawCat:"",kind:r.kind||"in",place:"",raw:r}}
   let s=r.startTime,e=r.endTime;
   if(!(s&&e)){const h=(r.hour||"").trim();
     if(h==="0900之前"){s="08:00";e="09:00"}else if(h==="19:00之後"){s="19:00";e="20:00"}
@@ -301,7 +303,8 @@ function render(){
   if(!data.members.length){showMsg("這天沒有名單內的同仁。");return}
   const working=data.members.filter(m=>!m.off).map(m=>m.name), resting=data.members.filter(m=>m.off);
   working.sort((a,b)=>(b===me)-(a===me)||coreMinutes(D.get(b))-coreMinutes(D.get(a)));
-  const canWrite=working.includes(me);
+  const ro=new Set(data.members.filter(m=>m.source).map(m=>m.name)); // 行事曆帶入的成員：唯讀、不列入催填統計
+  const canWrite=working.includes(me)&&!ro.has(me);
   const isToday=day===0, NOW=nowMin();
 
   const x=m=>HW+(Math.min(Math.max(m,MID[0]),MID[1])-MID[0])/60*HW;
@@ -310,11 +313,11 @@ function render(){
   board.style.setProperty("--trackw",trackW+"px");board.style.setProperty("--hw",HW+"px");
   board.style.setProperty("--namew",window.innerWidth<520?"96px":"124px");
   const nowX=NOW<MID[0]?HW/2:NOW>MID[1]?11.5*HW:x(NOW);
-  $("rangeNote").textContent=`9 點以前、19 點以後各收成一格（「~09:00前」「19:00~後」），點進去看實際時間。虛線框只標 9:00–18:00 的空檔。`+(canWrite?"":me&&data.members.some(m=>m.name===me)?"你今天排休，這頁只能看。":(VIEWER&&VIEWER.role==="manager"?"你是主管身分（不在同仁名單上），這頁只能看。":"你今天不在看板名單上（人事表要是租賃部・在職・承攬），這頁只能看；有問題請跟主管說。"));
+  $("rangeNote").textContent=`9 點以前、19 點以後各收成一格（「~09:00前」「19:00~後」），點進去看實際時間。虛線框只標 9:00–18:00 的空檔。`+(canWrite?"":ro.has(me)?"你這一排是從你的行事曆（TimeTree）自動帶入的，這頁只能看。":me&&data.members.some(m=>m.name===me)?"你今天排休，這頁只能看。":(VIEWER&&VIEWER.role==="manager"?"你是主管身分（不在同仁名單上），這頁只能看。":"你今天不在看板名單上（人事表要是租賃部・在職・承攬），這頁只能看；有問題請跟主管說。"));
 
   const m=focus??NOW;let o=0,i=0,a=0,u=0;
-  working.forEach(n=>{const k=at(D.get(n),m);if(!k.length)u++;else{const kd=k[0].kind;kd==="out"?o++:kd==="away"?a++:i++}});
-  const zero=working.filter(n=>!coreMinutes(D.get(n)));
+  working.forEach(n=>{const k=at(D.get(n),m);if(!k.length){if(!ro.has(n))u++}else{const kd=k[0].kind;kd==="out"?o++:kd==="away"?a++:i++}});
+  const zero=working.filter(n=>!ro.has(n)&&!coreMinutes(D.get(n)));
   const dayWord=day?"明天":"今天";
   const when=day?`明天 ${fmt(m)} 預計`:(focus==null?`現在 ${fmt(m)}`:fmt(m));
   $("headline").innerHTML=`<span class="time">${when}</span>
@@ -336,15 +339,15 @@ function render(){
     const list=D.get(n), pct=Math.round(coreMinutes(list)/(CORE[1]-CORE[0])*100), cl=clashes(list);
     const k=focus!=null?at(list,focus):[];
     const dim=focus!=null&&k.length&&k[0].kind!=="in";
-    const mine=n===me;
+    const mine=n===me, own=mine&&!ro.has(n); // own＝這排我自己能寫
     html+=`<div class="row ${mine?"mine":""} ${dim?"rowdim":""}">
-      <div class="cellname"><span>${esc(n)}${mine?`<span class="me">我</span>`:""}</span><span class="cnt ${pct<40?"low":""}">9–18 點寫了 ${pct}%</span></div>
+      <div class="cellname"><span>${esc(n)}${mine?`<span class="me">我</span>`:""}</span><span class="cnt ${!ro.has(n)&&pct<40?"low":""}">${ro.has(n)?"行事曆自動帶入":`9–18 點寫了 ${pct}%`}</span></div>
       <div class="track">`;
-    coreGaps(list).forEach(([s,e])=>{
+    if(!ro.has(n))coreGaps(list).forEach(([s,e])=>{
       html+=`<div class="core" style="left:${x(s)+2}px;width:${x(e)-x(s)-4}px"></div>`;
-      if(mine)html+=`<button class="gap" data-s="${s}" data-e="${e}" style="left:${x(s)+2}px;width:${x(e)-x(s)-4}px">${e-s>=45?"＋ 寫":"＋"}</button>`;
+      if(own)html+=`<button class="gap" data-s="${s}" data-e="${e}" style="left:${x(s)+2}px;width:${x(e)-x(s)-4}px">${e-s>=45?"＋ 寫":"＋"}</button>`;
     });
-    const blk=(r,L,W,more)=>{const tag=mine?"button":"div", idx=mine?REFS.push({n,r})-1:-1; // 別人的方塊只顯示、不能點
+    const blk=(r,L,W,more)=>{const tag=own?"button":"div", idx=own?REFS.push({n,r})-1:-1; // 別人的方塊只顯示、不能點
       return `<${tag} class="blk ${r.kind} ${cl.has(r.id)?"clash":""} ${W<64?"xs":W<110?"sm":""}" data-i="${idx}" style="left:${L+1}px;width:${Math.max(W-2,18)}px" title="${fmt(r.s)}–${fmt(r.e)} ${esc(r.cat)} ${esc(r.place)}">
         <span class="t">${esc(r.cat)}${more?` +${more}`:""}</span><span class="p">${esc(r.place)}</span><span class="tm">${fmt(r.s)}–${fmt(r.e)}</span></${tag}>`};
     list.forEach(r=>{const a=Math.max(r.s,MID[0]),b=Math.min(r.e,MID[1]);if(b>a)html+=blk(r,x(a),x(b)-x(a))});
