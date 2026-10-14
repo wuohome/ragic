@@ -304,14 +304,16 @@ function render(){
   if(STATE.status==="error"){showMsg(STATE.code===404?"這個連結已失效或不存在，請向管理者重新取得連結。":"暫時讀不到看板，請確認網路後重新整理頁面。");return}
   const data=STATE.data,D=STATE.D,me=VIEWER&&VIEWER.name;
   if(!data.members.length){showMsg("這天沒有名單內的同仁。");return}
-  const working=data.members.filter(m=>!m.off).map(m=>m.name), resting=data.members.filter(m=>m.off);
+  const isDesign=m=>m.group==="design"; // 設計部：行事曆自動帶入、只能看，不列入催填與現況統計（那些是租賃部的）
+  const working=data.members.filter(m=>!isDesign(m)&&!m.off).map(m=>m.name), resting=data.members.filter(m=>m.off);
+  const designWorking=data.members.filter(m=>isDesign(m)&&!m.off).map(m=>m.name);
   working.sort((a,b)=>(b===me)-(a===me)||coreMinutes(D.get(b))-coreMinutes(D.get(a)));
   const ro=new Set(data.members.filter(m=>m.source).map(m=>m.name)); // 行事曆帶入的成員：唯讀、不列入催填統計
   const canWrite=working.includes(me)&&!ro.has(me);
   const isToday=day===0, NOW=nowMin();
 
   // 時間軸：9–19 點固定；9 點前／19 點後依當天全部人最早出門、最晚回來的行程自動拉長（以整點為界），沒人就縮成一小格
-  const allRecs=working.flatMap(n=>D.get(n));
+  const allRecs=[...working,...designWorking].flatMap(n=>D.get(n)); // 時間軸範圍要看到所有人的實際行程（含設計部）
   const minS=Math.min(MID[0],...allRecs.map(r=>r.s)), maxE=Math.max(MID[1],...allRecs.map(r=>r.e));
   const early=minS<MID[0], late=maxE>MID[1], COLL=64;
   const lo=early?Math.floor(minS/60)*60:MID[0], hi=late?Math.ceil(maxE/60)*60:MID[1];
@@ -338,7 +340,7 @@ function render(){
    <span><span class="n">${i}</span><span class="lbl">人在店裡</span></span>
    <span><span class="n">${a}</span><span class="lbl">人不在崗</span></span>
    <span><span class="n warnN">${u}</span><span class="lbl">人沒寫</span></span>
-   <span><span class="n">${resting.length}</span><span class="lbl">人休假</span></span>
+   <span><span class="n">${resting.filter(m=>!isDesign(m)).length}</span><span class="lbl">人休假</span></span>
    <div class="missing">${zero.length?`${dayWord} 9:00–18:00 一筆都還沒寫：<b>${zero.map(esc).join("、")}</b>`:"有上班的人都已經寫了"}</div>`;
 
   REFS=[];
@@ -347,13 +349,13 @@ function render(){
   for(let h=lo/60;h<hi/60;h++)if(h>=9&&h<19||(h<9&&early)||(h>=19&&late))html+=`<button class="h ${focus===h*60?"focus":""}" data-m="${h*60}" style="left:${x(h*60)}px">${pad(h)}:00</button>`;
   if(isToday)html+=`<span class="nowtag" style="left:${nowX}px">現在</span>`;
   html+=`</div>`;
-  working.forEach(n=>{
+  const rowOf=n=>{
     const list=D.get(n), pct=Math.round(coreMinutes(list)/(CORE[1]-CORE[0])*100), cl=clashes(list);
     const k=focus!=null?at(list,focus):[];
     const dim=focus!=null&&k.length&&k[0].kind!=="in";
     const mine=n===me, own=mine&&!ro.has(n); // own＝這排我自己能寫
     html+=`<div class="row ${mine?"mine":""} ${dim?"rowdim":""}">
-      <div class="cellname"><span>${esc(n)}${mine?`<span class="me">我</span>`:""}</span><span class="cnt ${!ro.has(n)&&pct<40?"low":""}">${ro.has(n)?"行事曆自動帶入":`9–18 點寫了 ${pct}%`}</span></div>
+      <div class="cellname"><span>${esc(n)}${mine?`<span class="me">我</span>`:""}</span><span class="cnt ${!ro.has(n)&&pct<40?"low":""}">${ro.has(n)?"設計部・行事曆":`9–18 點寫了 ${pct}%`}</span></div>
       <div class="track"><div class="zone" style="left:0;width:${preW}px"></div><div class="zone" style="left:${preW+10*H}px;width:${postW}px"></div>`;
     if(!ro.has(n))coreGaps(list).forEach(([s,e])=>{
       html+=`<div class="core" style="left:${x(s)+2}px;width:${x(e)-x(s)-4}px"></div>`;
@@ -367,7 +369,9 @@ function render(){
     if(focus!=null)html+=`<div class="focusline" style="left:${x(focus)}px"></div>`;
     html+=`</div></div>`;
     if(mine&&working.length>1)html+=`<div class="divider"><span>其他同仁（只能看）</span></div>`;
-  });
+  };
+  working.forEach(rowOf);
+  if(designWorking.length){html+=`<div class="divider"><span>設計部（行事曆自動帶入，只能看）</span></div>`;designWorking.forEach(rowOf)}
   if(resting.length){
     html+=`<div class="divider"><span>休假（排班表帶入，不用寫）</span></div>`;
     resting.forEach(r=>{html+=`<div class="row"><div class="cellname">${esc(r.name)}<span class="cnt">—</span></div><div class="track" style="height:48px"><div class="offbar">${esc(r.offType)}</div></div></div>`});

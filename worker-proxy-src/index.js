@@ -733,66 +733,77 @@ const WORKLOG_ACTIONS = new Set(['worklogCreate', 'worklogListMine', 'worklogLis
 const WORKLOG_BOARD_DEPTS = new Set(['租賃部']);
 const WORKLOG_BOARD_OFF_TYPES = new Set(['排休', '特休', '請假']);
 const WORKLOG_EMP_F = Object.freeze({ name: '3000933', dept: '3000937', status: '3000945', hire: '3000955', email: '3000976' });
-// 額外成員（2026-10-14 Joan：「我其實覺得我也可以秀我的工作日誌」）：不屬租賃部也上看板的人，依人事表
-// email 對到那一筆，在職才列；不會把整個部門拉進來。值＝這排的資料來源：'timetree'＝自動帶入她的
-// TimeTree 行程（唯讀，不能在看板上寫，也不列入「9–18 點寫了 X%」與「一筆都還沒寫」催填名單）。
-// 目前只支援一位 timetree 來源的人（同步 KV 只存一份）。
-// 值＝{ source, categoryGroup? }：source 'timetree'＝行事曆自動帶入（唯讀）；'self'＝跟租賃部同仁一樣自己填、可寫
-// （categoryGroup 給 Google 路徑用，token 路徑的分組仍由 WORKLOG_TOKENS_JSON 決定）。
-// 黃帟潔：2026-10-13 從租賃部調買賣部，Joan 10/14「也加進看板」，排班與值日條件與租賃部相同，比照自填。
+// 額外成員：不屬租賃部也上看板、而且跟租賃部同仁一樣自己填的人，依人事表 email 點名，在職才列；不會把
+// 整個部門拉進來。值＝{ source:'self', categoryGroup }（categoryGroup 給 Google 路徑用，token 路徑的分組仍由
+// WORKLOG_TOKENS_JSON 決定）。黃帟潔：2026-10-13 從租賃部調買賣部，Joan 10/14「也加進看板」，排班與值日條件與
+// 租賃部相同，比照自填。（2026-10-14 晚 Joan 自己那排已拿掉：「我只是想看會怎麼呈現」。）
 const WORKLOG_BOARD_EXTRA_MEMBERS = new Map([
-  ['qiongan0208@gmail.com', { source: 'timetree' }],
   ['skyeagleisme@gmail.com', { source: 'self', categoryGroup: '租賃' }],
 ]);
 function worklogExtraMember(rec) { return WORKLOG_BOARD_EXTRA_MEMBERS.get(worklogClean(rec[WORKLOG_EMP_F.email]).toLowerCase()) || null; }
-// 回傳 'regular'（租賃部・在職・承攬，可在看板寫）、'extra'（額外成員，唯讀）、或 null（不在看板）
+// 回傳 'regular'（可在看板寫：租賃部・在職・承攬，或額外成員）或 null（不在可寫名單）
 function worklogBoardKind(rec) {
   if (worklogClean(rec[WORKLOG_EMP_F.status]) !== '在職') return null;
-  const extra = worklogExtraMember(rec);
-  if (extra) return extra.source === 'self' ? 'regular' : 'extra';
+  if (worklogExtraMember(rec)) return 'regular';
   return WORKLOG_BOARD_DEPTS.has(worklogClean(rec[WORKLOG_EMP_F.dept])) && worklogClean(rec[WORKLOG_EMP_F.hire]) === '承攬' ? 'regular' : null;
 }
+// 設計部（2026-10-14 Joan：要呈現設計部的行程）：名單＝人事表 設計部・在職（聘雇類別不限），內容全部來自 TimeTree
+// 「窩的家設計 - 客戶端」行事曆（Mac Mini 排程把 TimeTree user_id 對成人事表姓名後推來），看板上唯讀。
+const WORKLOG_DESIGN_DEPT = '設計部';
 
 // ── TimeTree 行程同步（Mac Mini 排程推來，存 KV；Worker 與前端都不碰 TimeTree 憑證）──
 // 推進來的原始事件在這裡就做隱私處理與分類，KV 裡只留可公開顯示的欄位（候選人姓名永不落地）。
 const WORKLOG_TT_KV_KEY = 'worklog:timetree:v1';
 const WORKLOG_TT_LEAVE_RE = /休假|請假|特休/;
-const WORKLOG_TT_OUT_RE = /拜訪|簽約|帶看|看屋|現場|勘/;
+const WORKLOG_TT_INSIDE_RE = /會議|公司|內勤|辦公室/;
 function worklogTaipeiDayStartMs(date) { // 'YYYY/MM/DD' 台北當天 00:00 的 epoch ms
   const [y, m, d] = date.split('/').map(Number);
   return Date.UTC(y, m - 1, d) - 8 * 3600 * 1000;
 }
 function worklogMinToHHMM(min) { return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`; }
+// events: [{ person, title, start, end, allday }]（person＝人事表姓名，由 Mac 同步腳本對好；沒有 person 的略過）。
+// 設計部規則：休假類→黃(away)；標題含 會議／公司／內勤／辦公室→灰(in)；其餘→藍(out)。
+// 全天事件（TimeTree 的全天事件日期是 UTC 午夜，以 UTC 日期區間含頭尾比對）：休假類＝9:00–18:00 黃；
+// 非休假的當天合併成一段 9:00–18:00，標題用「、」串起來。標題空白（生日等）一律略過。
 function worklogTimetreeToEntries(events, dates) {
   const out = [];
+  const merged = new Map(); // `${person}|${date}` → { person, date, titles[], allInside }
+  const push = (person, date, s, e, kind, title) => out.push({
+    rid: `tt-${out.length}`, date, startTime: worklogMinToHHMM(s), endTime: worklogMinToHHMM(e),
+    category: '', caseName: '', repairReason: '', plannedSchedule: '', note: '', source: 'timetree', kind, title, person,
+  });
   for (const ev of Array.isArray(events) ? events : []) {
     if (!ev || typeof ev !== 'object') continue;
+    const person = worklogClean(ev.person).slice(0, 30);
     let title = worklogClean(ev.title).slice(0, 60);
-    if (!title) continue;
+    if (!person || !title) continue;
     const sMs = Date.parse(ev.start), eMs = Date.parse(ev.end);
     if (!Number.isFinite(sMs) || !Number.isFinite(eMs) || eMs < sMs) continue;
     const isLeave = WORKLOG_TT_LEAVE_RE.test(title);
     if (/^面試[：:]/.test(title)) title = '面試'; // 隱私：不顯示候選人姓名與部門
-    const kind = isLeave ? 'away' : WORKLOG_TT_OUT_RE.test(title) ? 'out' : 'in';
+    const inside = WORKLOG_TT_INSIDE_RE.test(title);
+    const kind = isLeave ? 'away' : inside ? 'in' : 'out';
     for (const date of dates) {
-      const dayStart = worklogTaipeiDayStartMs(date), dayEnd = dayStart + 24 * 3600 * 1000;
-      // 全天事件的 start/end 格式未知（TimeTree 近 3 個月 150 筆內沒有全天事件可實測），以台北日期區間比對
-      const inRange = ev.allday
-        ? (date >= worklogTaipeiDateFromMs(sMs) && date <= worklogTaipeiDateFromMs(Math.max(sMs, eMs - 60000)))
-        : (sMs < dayEnd && eMs > dayStart);
-      if (!inRange) continue;
-      let s, e;
       if (ev.allday) {
-        if (!isLeave) continue; // 全天且非休假（生日、提醒…）不上看板
-        s = 9 * 60; e = 18 * 60; // 全天休假＝不在崗 9:00–18:00
-      } else {
-        s = Math.max(0, Math.round((Math.max(sMs, dayStart) - dayStart) / 60000));
-        e = Math.min(24 * 60 - 1, Math.round((Math.min(eMs, dayEnd) - dayStart) / 60000));
-        if (e <= s) continue;
+        const fromD = new Date(sMs).toISOString().slice(0, 10).replace(/-/g, '/');
+        const toD = new Date(Math.max(sMs, eMs)).toISOString().slice(0, 10).replace(/-/g, '/');
+        if (date < fromD || date > toD) continue;
+        if (isLeave) { push(person, date, 9 * 60, 18 * 60, 'away', title); continue; }
+        const key = `${person}|${date}`;
+        const m = merged.get(key) || { person, date, titles: [], allInside: true };
+        if (!m.titles.includes(title)) m.titles.push(title);
+        if (!inside) m.allInside = false;
+        merged.set(key, m);
+        continue;
       }
-      out.push({ rid: `tt-${out.length}`, date, startTime: worklogMinToHHMM(s), endTime: worklogMinToHHMM(e), category: '', caseName: '', repairReason: '', plannedSchedule: '', note: '', source: 'timetree', kind, title });
+      const dayStart = worklogTaipeiDayStartMs(date), dayEnd = dayStart + 24 * 3600 * 1000;
+      if (!(sMs < dayEnd && eMs > dayStart)) continue;
+      const s = Math.max(0, Math.round((Math.max(sMs, dayStart) - dayStart) / 60000));
+      const e = Math.min(24 * 60 - 1, Math.round((Math.min(eMs, dayEnd) - dayStart) / 60000));
+      if (e > s) push(person, date, s, e, kind, title);
     }
   }
+  for (const m of merged.values()) push(m.person, m.date, 9 * 60, 18 * 60, m.allInside ? 'in' : 'out', m.titles.join('、').slice(0, 120));
   return out;
 }
 async function handleWorklogTimetreeSync(request, env, origin) {
@@ -939,31 +950,33 @@ async function handleWorklogBoard(url, env, identity, origin) {
     if (WORKLOG_BOARD_OFF_TYPES.has(t)) offType.set(worklogClean(rec[SCHEDULE_F_LEAVE_EMP]), t);
   }
   const names = [];
-  const sourceOf = new Map(); // 額外成員 name → 資料來源（唯讀）
-  let ttName = '';
+  const designNames = [];
   for (const [, rec] of rows(emp.data).sort((a, b) => Number(a[0]) - Number(b[0]))) {
     const name = worklogClean(rec[WORKLOG_EMP_F.name]);
-    if (!name || names.includes(name)) continue;
-    const kind = worklogBoardKind(rec);
-    if (!kind) continue;
-    names.push(name);
-    if (kind === 'extra') {
-      const src = worklogExtraMember(rec).source;
-      sourceOf.set(name, src);
-      if (src === 'timetree') ttName = name;
-    }
+    if (!name || names.includes(name) || designNames.includes(name)) continue;
+    if (worklogBoardKind(rec)) names.push(name);
+    else if (worklogClean(rec[WORKLOG_EMP_F.dept]) === WORKLOG_DESIGN_DEPT && worklogClean(rec[WORKLOG_EMP_F.status]) === '在職') designNames.push(name);
   }
-  const members = names.map((name) => ({ name, off: offType.has(name), offType: offType.get(name) || '', ...(sourceOf.has(name) ? { source: sourceOf.get(name) } : {}) }));
-  members.sort((a, b) => Number(a.off) - Number(b.off)); // 穩定排序：上班的保持人事表順序在上
+  const mk = (name) => ({ name, off: offType.has(name), offType: offType.get(name) || '' });
+  const rental = names.map(mk);
+  const design = designNames.map((name) => ({ ...mk(name), source: 'timetree', group: 'design' })); // 唯讀、行事曆帶入
+  rental.sort((a, b) => Number(a.off) - Number(b.off)); // 穩定排序：上班的保持人事表順序在上
+  design.sort((a, b) => Number(a.off) - Number(b.off));
+  const members = [...rental, ...design];
   const roster = new Set(names);
   const entries = rows(logs.data)
     .map(([rid, rec]) => worklogPublicRecord(rid, rec))
     .filter((e) => roster.has(e.reporter))
     .sort((a, b) => worklogSortKey(a).localeCompare(worklogSortKey(b)));
-  if (ttName) { // TimeTree 行程併進該成員那排（KV 讀失敗不影響看板本身）
+  if (designNames.length) { // TimeTree 行程併進設計部各人那排（KV 讀失敗不影響看板本身）
     try {
       const kv = env.EARNEST_QUEUE && JSON.parse(await env.EARNEST_QUEUE.get(WORKLOG_TT_KV_KEY));
-      for (const e of (kv && Array.isArray(kv.entries) ? kv.entries : [])) if (e.date === date) entries.push({ ...e, reporter: ttName });
+      const set = new Set(designNames);
+      for (const e of (kv && Array.isArray(kv.entries) ? kv.entries : [])) {
+        if (e.date !== date || !set.has(e.person)) continue;
+        const { person, ...rest } = e;
+        entries.push({ ...rest, reporter: person });
+      }
     } catch { /* ponytail-debt: KV 讀失敗只是這排暫時沒行程，不該讓整個看板 502；日後可在回應加 timetreeStale 旗標讓前端提示 */ }
   }
   return jsonResp({
