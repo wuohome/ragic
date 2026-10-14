@@ -122,6 +122,8 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
 .btn{font:inherit;font-weight:700;border-radius:8px;padding:9px 18px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn.ghost{color:var(--warn)}
+/* 填寫框開著時把「問題回報」按鈕藏起來，免得蓋住「存起來」 */
+.sheet:not([hidden]) ~ #wh-bug-report-btn{display:none}
 .toast{position:fixed;left:50%;top:16px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:999px;font-weight:500;z-index:20}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(20px);opacity:.6}}}
 @media (max-width:520px){h1{font-size:21px}.headline .n{font-size:22px}.cats{grid-template-columns:repeat(3,1fr)}}
@@ -177,6 +179,7 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
 
 <div class="sheet" id="sheet" hidden><div class="in" id="sheetIn"></div></div>
 <div class="toast" id="toast" hidden></div>
+<script src="bug-report.js" defer></script>
 
 <script>
 // 動態看板（照 2026-10-08 示範頁；資料接 Worker worklogBoard／worklogCreate）。
