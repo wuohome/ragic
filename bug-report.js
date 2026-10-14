@@ -5,6 +5,16 @@ const BUG_REPORT_ENDPOINT = 'https://wuohome-ragic-proxy.wuohome.workers.dev/rep
 (function () {
   'use strict';
 
+  // 回報裡不能帶同仁的專屬通行碼（?token=…），只保留其他參數
+  function safeSearch() {
+    try {
+      var q = new URLSearchParams(location.search);
+      ['token', 't', 'key'].forEach(function (k) { if (q.has(k)) q.set(k, '***'); });
+      var s = q.toString();
+      return s ? '?' + s : '';
+    } catch (e) { return ''; } // ponytail-debt: 網址解析失敗就不附參數，寧可少資訊也不外洩通行碼
+  }
+
   // ── 防重複掛載 ──
   if (document.getElementById('wh-bug-report-btn')) return;
 
@@ -375,7 +385,7 @@ const BUG_REPORT_ENDPOINT = 'https://wuohome-ragic-proxy.wuohome.workers.dev/rep
         modal.classList.add('wh-open');
       });
     });
-    document.getElementById('wh-page-path').value = location.pathname + location.search;
+    document.getElementById('wh-page-path').value = location.pathname + safeSearch();
     document.getElementById('wh-bug-desc').value = '';
     document.getElementById('wh-desc-err').style.display = 'none';
     document.getElementById('wh-bug-type').value = '功能異常';
@@ -481,7 +491,7 @@ const BUG_REPORT_ENDPOINT = 'https://wuohome-ragic-proxy.wuohome.workers.dev/rep
     var payload = {
       description: desc,
       type: document.getElementById('wh-bug-type').value,
-      url: location.href,
+      url: location.origin + location.pathname + safeSearch() + location.hash.replace(/token=[^&]*/gi, 'token=***'),
       title: document.title,
       userAgent: navigator.userAgent,
       screenshot: screenshotDataUrl || '',
