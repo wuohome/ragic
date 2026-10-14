@@ -374,6 +374,7 @@ const ALLOWED_ACTIONS = {
   worklogListAll:        { method: 'GET' },
   // 2026-10-12 全員公開看板：任何有效工作日誌 token 都可讀（同仁互相看得到才會填，小吳哥提案）
   worklogBoard:          { method: 'GET' },
+  worklogTimetreeSync:   { method: 'POST' },
   // Group V: 修繕報價單產生器 → Ragic 化（maintenance-management/15，2026-07-24）。無固定
   // WORKER secret token gate（不像 Group S/T/U）——rqGet 的守門是「建單當下產生、僅該筆記錄
   // 持有」的分享token 逐筆交叉比對，token-only IDOR 防護見下方 handler 註解。
@@ -731,7 +732,81 @@ const WORKLOG_ACTIONS = new Set(['worklogCreate', 'worklogListMine', 'worklogLis
 // 欄位 ID 與 schedule-guard fallback-constants.js 的 F_EMP 同一批。
 const WORKLOG_BOARD_DEPTS = new Set(['租賃部']);
 const WORKLOG_BOARD_OFF_TYPES = new Set(['排休', '特休', '請假']);
-const WORKLOG_EMP_F = Object.freeze({ name: '3000933', dept: '3000937', status: '3000945', hire: '3000955' });
+const WORKLOG_EMP_F = Object.freeze({ name: '3000933', dept: '3000937', status: '3000945', hire: '3000955', email: '3000976' });
+// 額外成員（2026-10-14 Joan：「我其實覺得我也可以秀我的工作日誌」）：不屬租賃部也上看板的人，依人事表
+// email 對到那一筆，在職才列；不會把整個部門拉進來。值＝這排的資料來源：'timetree'＝自動帶入她的
+// TimeTree 行程（唯讀，不能在看板上寫，也不列入「9–18 點寫了 X%」與「一筆都還沒寫」催填名單）。
+// 目前只支援一位 timetree 來源的人（同步 KV 只存一份）。
+const WORKLOG_BOARD_EXTRA_MEMBERS = new Map([['qiongan0208@gmail.com', 'timetree']]);
+// 回傳 'regular'（租賃部・在職・承攬，可在看板寫）、'extra'（額外成員，唯讀）、或 null（不在看板）
+function worklogBoardKind(rec) {
+  if (worklogClean(rec[WORKLOG_EMP_F.status]) !== '在職') return null;
+  const extra = WORKLOG_BOARD_EXTRA_MEMBERS.get(worklogClean(rec[WORKLOG_EMP_F.email]).toLowerCase());
+  if (extra) return 'extra';
+  return WORKLOG_BOARD_DEPTS.has(worklogClean(rec[WORKLOG_EMP_F.dept])) && worklogClean(rec[WORKLOG_EMP_F.hire]) === '承攬' ? 'regular' : null;
+}
+
+// ── TimeTree 行程同步（Mac Mini 排程推來，存 KV；Worker 與前端都不碰 TimeTree 憑證）──
+// 推進來的原始事件在這裡就做隱私處理與分類，KV 裡只留可公開顯示的欄位（候選人姓名永不落地）。
+const WORKLOG_TT_KV_KEY = 'worklog:timetree:v1';
+const WORKLOG_TT_LEAVE_RE = /休假|請假|特休/;
+const WORKLOG_TT_OUT_RE = /拜訪|簽約|帶看|看屋|現場|勘/;
+function worklogTaipeiDayStartMs(date) { // 'YYYY/MM/DD' 台北當天 00:00 的 epoch ms
+  const [y, m, d] = date.split('/').map(Number);
+  return Date.UTC(y, m - 1, d) - 8 * 3600 * 1000;
+}
+function worklogMinToHHMM(min) { return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`; }
+function worklogTimetreeToEntries(events, dates) {
+  const out = [];
+  for (const ev of Array.isArray(events) ? events : []) {
+    if (!ev || typeof ev !== 'object') continue;
+    let title = worklogClean(ev.title).slice(0, 60);
+    if (!title) continue;
+    const sMs = Date.parse(ev.start), eMs = Date.parse(ev.end);
+    if (!Number.isFinite(sMs) || !Number.isFinite(eMs) || eMs < sMs) continue;
+    const isLeave = WORKLOG_TT_LEAVE_RE.test(title);
+    if (/^面試[：:]/.test(title)) title = '面試'; // 隱私：不顯示候選人姓名與部門
+    const kind = isLeave ? 'away' : WORKLOG_TT_OUT_RE.test(title) ? 'out' : 'in';
+    for (const date of dates) {
+      const dayStart = worklogTaipeiDayStartMs(date), dayEnd = dayStart + 24 * 3600 * 1000;
+      // 全天事件的 start/end 格式未知（TimeTree 近 3 個月 150 筆內沒有全天事件可實測），以台北日期區間比對
+      const inRange = ev.allday
+        ? (date >= worklogTaipeiDateFromMs(sMs) && date <= worklogTaipeiDateFromMs(Math.max(sMs, eMs - 60000)))
+        : (sMs < dayEnd && eMs > dayStart);
+      if (!inRange) continue;
+      let s, e;
+      if (ev.allday) {
+        if (!isLeave) continue; // 全天且非休假（生日、提醒…）不上看板
+        s = 9 * 60; e = 18 * 60; // 全天休假＝不在崗 9:00–18:00
+      } else {
+        s = Math.max(0, Math.round((Math.max(sMs, dayStart) - dayStart) / 60000));
+        e = Math.min(24 * 60 - 1, Math.round((Math.min(eMs, dayEnd) - dayStart) / 60000));
+        if (e <= s) continue;
+      }
+      out.push({ rid: `tt-${out.length}`, date, startTime: worklogMinToHHMM(s), endTime: worklogMinToHHMM(e), category: '', caseName: '', repairReason: '', plannedSchedule: '', note: '', source: 'timetree', kind, title });
+    }
+  }
+  return out;
+}
+async function handleWorklogTimetreeSync(request, env, origin) {
+  const provided = request.headers.get('X-Service-Key') || '';
+  const expected = env.WORKLOG_SYNC_KEY || '';
+  if (!expected || !provided || !pcTimingSafeEqual(provided, expected)) return jsonResp({ error: 'not_found' }, 404, origin);
+  if (!env.EARNEST_QUEUE || typeof env.EARNEST_QUEUE.put !== 'function') return jsonResp({ error: 'kv_unavailable' }, 500, origin);
+  let body;
+  try { body = await request.json(); } catch { return jsonResp({ error: 'bad_json' }, 400, origin); }
+  if (!Array.isArray(body?.events) || body.events.length > 500) return jsonResp({ error: 'bad_events' }, 400, origin);
+  const today = worklogTodayDate();
+  const tomorrow = worklogTaipeiDateFromMs(worklogTaipeiDayStartMs(today) + 36 * 3600 * 1000);
+  const entries = worklogTimetreeToEntries(body.events, [today, tomorrow]);
+  await env.EARNEST_QUEUE.put(WORKLOG_TT_KV_KEY, JSON.stringify({ updatedAt: new Date().toISOString(), entries }), { expirationTtl: 172800 });
+  return jsonResp({ ok: true, count: entries.length, dates: [today, tomorrow] }, 200, origin);
+}
+function worklogTaipeiDateFromMs(ms) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(new Date(ms)).reduce((o, p) => { o[p.type] = p.value; return o; }, {});
+  return `${parts.year}/${parts.month}/${parts.day}`;
+}
 
 function parseWorklogTokenConfig(env) {
   let tokens;
@@ -857,20 +932,33 @@ async function handleWorklogBoard(url, env, identity, origin) {
     if (WORKLOG_BOARD_OFF_TYPES.has(t)) offType.set(worklogClean(rec[SCHEDULE_F_LEAVE_EMP]), t);
   }
   const names = [];
+  const sourceOf = new Map(); // 額外成員 name → 資料來源（唯讀）
+  let ttName = '';
   for (const [, rec] of rows(emp.data).sort((a, b) => Number(a[0]) - Number(b[0]))) {
     const name = worklogClean(rec[WORKLOG_EMP_F.name]);
     if (!name || names.includes(name)) continue;
-    if (!WORKLOG_BOARD_DEPTS.has(worklogClean(rec[WORKLOG_EMP_F.dept]))) continue;
-    if (worklogClean(rec[WORKLOG_EMP_F.status]) !== '在職' || worklogClean(rec[WORKLOG_EMP_F.hire]) !== '承攬') continue;
+    const kind = worklogBoardKind(rec);
+    if (!kind) continue;
     names.push(name);
+    if (kind === 'extra') {
+      const src = WORKLOG_BOARD_EXTRA_MEMBERS.get(worklogClean(rec[WORKLOG_EMP_F.email]).toLowerCase());
+      sourceOf.set(name, src);
+      if (src === 'timetree') ttName = name;
+    }
   }
-  const members = names.map((name) => ({ name, off: offType.has(name), offType: offType.get(name) || '' }));
+  const members = names.map((name) => ({ name, off: offType.has(name), offType: offType.get(name) || '', ...(sourceOf.has(name) ? { source: sourceOf.get(name) } : {}) }));
   members.sort((a, b) => Number(a.off) - Number(b.off)); // 穩定排序：上班的保持人事表順序在上
   const roster = new Set(names);
   const entries = rows(logs.data)
     .map(([rid, rec]) => worklogPublicRecord(rid, rec))
     .filter((e) => roster.has(e.reporter))
     .sort((a, b) => worklogSortKey(a).localeCompare(worklogSortKey(b)));
+  if (ttName) { // TimeTree 行程併進該成員那排（KV 讀失敗不影響看板本身）
+    try {
+      const kv = env.EARNEST_QUEUE && JSON.parse(await env.EARNEST_QUEUE.get(WORKLOG_TT_KV_KEY));
+      for (const e of (kv && Array.isArray(kv.entries) ? kv.entries : [])) if (e.date === date) entries.push({ ...e, reporter: ttName });
+    } catch { /* ponytail-debt: KV 讀失敗只是這排暫時沒行程，不該讓整個看板 502；日後可在回應加 timetreeStale 旗標讓前端提示 */ }
+  }
   return jsonResp({
     ok: true, date, members, entries,
     viewer: { role: identity.role, name: identity.name, categoryGroup: identity.categoryGroup ?? null },
@@ -2064,18 +2152,18 @@ async function authenticateWorklogGoogle(request, env, origin) {
   const name = rec ? pcClean(rec[PC_STAFF_NAME_FIELD]) : '';
   const department = rec ? pcClean(rec[PC_STAFF_DEPT_FIELD]) : '';
   const status = rec ? pcClean(rec[PC_STAFF_STATUS_FIELD]) : '';
-  const hire = rec ? pcClean(rec[WORKLOG_EMP_F.hire]) : '';
   if (!rec || !name || status !== '在職') return fail(403, 'not_whitelisted');
 
   const isManager = department === '經營階層' ||
     parsePettyCashFinanceEmails(env).has(email) || parsePettyCashViewerEmails(env).has(email);
-  if (!WORKLOG_VIEW_DEPTS.has(department) && !isManager) return fail(403, 'not_whitelisted');
+  const boardKind = worklogBoardKind(rec);
+  if (!WORKLOG_VIEW_DEPTS.has(department) && !isManager && !boardKind) return fail(403, 'not_whitelisted');
 
   return {
     role: isManager ? 'manager' : 'staff',
     name,
     categoryGroup: WORKLOG_DEPT_GROUP[department] ?? null,
-    canWrite: WORKLOG_BOARD_DEPTS.has(department) && hire === '承攬',
+    canWrite: boardKind === 'regular', // 額外成員（來源 TimeTree）唯讀
     department,
     email,
   };
@@ -5518,6 +5606,7 @@ export default {
 
     // Group U: 工作日誌 — 固定連結 token 驗證（token→{role,name}，WORKLOG_TOKENS_JSON）。
     // 失敗一律同型 404（不分因由防列舉），比照上方 P5 / Group T / v29 / v30 手法。
+    if (action === 'worklogTimetreeSync') return handleWorklogTimetreeSync(request, env, allowedOrigin);
     let worklogIdentity = null;
     if (WORKLOG_ACTIONS.has(action)) {
       // 2026-10-14 雙軌：看板兩支 action 帶 Authorization header 走 Google（見
