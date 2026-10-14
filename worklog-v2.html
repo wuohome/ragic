@@ -159,6 +159,7 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
       <li><b>日期</b>：只能寫今天和明天，過去的日子不能再改。</li>
       <li><b>休假</b>：排班表有排休、特休、請假的人，會自動放在最下面，不用寫。</li>
       <li><b>誰看得到</b>：租賃部同仁和主管用自己的專屬連結打開，或直接用公司登記的 Google 帳號登入，都看得到整個看板。</li>
+      <li><button type="button" class="helpbtn" id="tourBtn" style="padding:0">再看一次操作教學</button></li>
       <li><a href="guide/worklog-staff.html" target="_blank" rel="noopener">完整說明</a>（主管看<a href="guide/worklog-admin.html" target="_blank" rel="noopener">這份</a>）</li>
     </ul>
   </section>
@@ -180,6 +181,8 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
 
 <div class="sheet" id="sheet" hidden><div class="in" id="sheetIn"></div></div>
 <div class="toast" id="toast" hidden></div>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
+<script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js" defer></script>
 <script src="bug-report.js" defer></script>
 
 <script>
@@ -388,6 +391,7 @@ function render(){
   board.querySelectorAll(".gap").forEach(b=>b.onclick=()=>openNew(+b.dataset.s,+b.dataset.e));
   board.querySelectorAll(".axis button.h").forEach(b=>b.onclick=()=>{const v=+b.dataset.m;focus=focus===v?null:v;render()});
   renderWho(working);
+  maybeTour();
   if(!scrolled){scrolled=true;const fits=trackW<=avail;const box=document.querySelector(".boardbox");requestAnimationFrame(()=>{box.scrollLeft=isToday&&!fits?Math.max(0,nowX-(box.clientWidth-parseInt(board.style.getPropertyValue("--namew")))/2):0})}
 }
 
@@ -475,6 +479,41 @@ function closeSheet(){$("sheet").hidden=true;draft=null}
 let tt;function toast(m){const el=$("toast");el.textContent=m;el.hidden=false;clearTimeout(tt);tt=setTimeout(()=>el.hidden=true,1800)}
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheet()});
 $("d0").onclick=()=>setDay(0);$("d1").onclick=()=>setDay(1);
+$("tourBtn").onclick=()=>{$("help").hidden=true;$("helpBtn").setAttribute("aria-expanded",false);startTour()};
+
+// ---------- 第一次打開的操作教學（同小吳哥工具箱：driver.js 逐步框出畫面區塊）----------
+// 換 TOUR_ID 會讓大家再自動看一次；看過記在這支手機／電腦的瀏覽器裡
+const TOUR_ID="board-v1", TOUR_KEY="wuohome_board_tour_seen";
+let touring=false;
+function tourSteps(){
+  const st=[], q=sel=>document.querySelector(sel);
+  st.push({element:"#headline",popover:{title:"一眼看現在",description:"最上面這行是「現在」幾個人外出、在店裡、還沒寫；下面紅字是今天一筆都還沒寫的人。"}});
+  if(q(".row.mine"))st.push({element:".row.mine",popover:{title:"這排是你",description:"你自己那一排永遠在最上面。藍＝外出跑案、灰＝在店裡、黃＝不在崗。"}});
+  if(q(".row.mine .gap"))st.push({element:".row.mine .gap",popover:{title:"點「＋」就能寫",description:"點虛線框，下面會跳出填寫框：選時間、選項目、寫案名或地址，按「存起來」大家就看得到。點自己已寫的色塊可以改。"}});
+  if(q(".axis .zl"))st.push({element:".axis .zl",popover:{title:"早出晚歸也寫得進去",description:"「~09:00前」「19:00~後」會照當天最早出門、最晚回來的行程自動拉長。早上 BNI、晚上簽約都照實際時間寫。"}});
+  if(q(".axis button.h"))st.push({element:".axis button.h",popover:{title:"要派人？點整點",description:"點上面任一個整點（例如 14:00），會列出那個時間誰在店裡、誰沒寫、誰走不開。"}});
+  const others=[...document.querySelectorAll(".divider")].find(d=>/其他同仁/.test(d.textContent));
+  if(others)st.push({element:others,popover:{title:"其他同仁只能看",description:"下面是大家今天的行程，只能看、不能點、不能改。"}});
+  const design=[...document.querySelectorAll(".divider")].find(d=>/設計部/.test(d.textContent));
+  if(design)st.push({element:design,popover:{title:"設計部在哪",description:"設計部的工地行程從他們的行事曆自動帶進來，想知道設計師在哪直接看這裡。"}});
+  st.push({element:"#d1",popover:{title:"先排明天",description:"按「明天」可以先把明天要去哪裡排上。過去的日子不能改，當天記得寫完。"}});
+  if(q("#wh-bug-report-btn"))st.push({element:"#wh-bug-report-btn",popover:{title:"有問題按這裡",description:"畫面怪怪的、按了沒反應，按這顆橘色按鈕回報，會自動附上截圖。"}});
+  st.push({element:"#helpBtn",popover:{title:"想再看一次",description:"按「怎麼用？」裡的「再看一次操作教學」。"}});
+  return st;
+}
+function startTour(){
+  if(touring||!(window.driver&&window.driver.js))return;
+  touring=true;
+  const d=window.driver.js.driver({showProgress:true,progressText:"{{current}} / {{total}}",nextBtnText:"下一步",prevBtnText:"上一步",doneBtnText:"開始用",allowClose:true,
+    steps:tourSteps(),onDestroyStarted:()=>{touring=false;try{localStorage.setItem(TOUR_KEY,TOUR_ID)}catch{} /* ponytail-debt: 存不了就下次再自動跑一次，不影響使用 */ d.destroy()}});
+  d.drive();
+}
+function maybeTour(){
+  let seen="";try{seen=localStorage.getItem(TOUR_KEY)||""}catch{} // ponytail-debt: 讀不到就當沒看過
+  if(seen===TOUR_ID||touring)return;
+  const go=()=>setTimeout(startTour,600);
+  if(window.driver&&window.driver.js)go();else window.addEventListener("load",go,{once:true});
+}
 $("helpBtn").onclick=()=>{const h=$("help");h.hidden=!h.hidden;$("helpBtn").setAttribute("aria-expanded",!h.hidden)};
 // 切回這個分頁時，資料超過一分鐘就重抓（別人剛寫的才看得到）；填寫框開著時不動它
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&STATE.status==="ready"&&$("sheet").hidden&&Date.now()-lastLoad>60000)load()});
