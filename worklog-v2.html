@@ -283,7 +283,7 @@ function render(){
   const extra=[];
   if(lo<DEF_RANGE[0])extra.push(`最早 ${fmt(Math.min(...all.map(r=>r.s)))} 就有人出門`);
   if(hi>DEF_RANGE[1])extra.push(`最晚到 ${fmt(Math.max(...all.map(r=>r.e)))} 還有人在外面`);
-  $("rangeNote").textContent=`時間軸：${lo}:00–${hi}:00。`+(extra.length?`${extra.join("，")}，所以自動拉長。`:"")+`可填 00:00–23:45，每 15 分鐘一格；虛線框只標 9:00–18:00 的空檔。`+(canWrite?"":me&&data.members.some(m=>m.name===me)?"你今天排休，這頁只能看。":"你是主管連結（不在同仁名單上），這頁只能看。");
+  $("rangeNote").textContent=`時間軸：${lo}:00–${hi}:00。`+(extra.length?`${extra.join("，")}，所以自動拉長。`:"")+`可填 00:00–23:45，每 15 分鐘一格；虛線框只標 9:00–18:00 的空檔。`+(canWrite?"":me&&data.members.some(m=>m.name===me)?"你今天排休，這頁只能看。":(VIEWER&&VIEWER.role==="manager"?"你是主管連結（不在同仁名單上），這頁只能看。":"你今天不在看板名單上（人事表要是租賃部・在職・承攬），這頁只能看；有問題請跟主管說。"));
 
   const m=focus??NOW;let o=0,i=0,a=0,u=0;
   working.forEach(n=>{const k=at(D.get(n),m);if(!k.length)u++;else{const kd=k[0].kind;kd==="out"?o++:kd==="away"?a++:i++}});
