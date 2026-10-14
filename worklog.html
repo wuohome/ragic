@@ -55,7 +55,8 @@ select{font:inherit;padding:5px 8px;border-radius:8px;border:1px solid var(--lin
 .note{font-size:13px;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:8px;padding:6px 10px}
 
 /* 時間軸看板 */
-.boardbox{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
+/* 看板自己捲：上下滑時時間列凍結在上面、左右滑時名字凍結在左邊 */
+.boardbox{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:auto;max-height:calc(100dvh - 16px)}
 .board{display:grid;grid-template-columns:var(--namew) var(--trackw);min-width:100%;width:max-content}
 /* 「~09:00前」「19:00~後」兩段：依當天最早／最晚的行程自動拉長，沒人早出晚歸時縮成一小格 */
 .zone{position:absolute;top:0;bottom:0;background:var(--grid);opacity:.55;pointer-events:none;z-index:0}
@@ -96,7 +97,7 @@ div.blk{cursor:default}
 .rowdim .blk{opacity:.3}
 .divider>span{position:sticky;left:14px}
 .divider{grid-column:1/-1;padding:14px 14px 6px;font-size:13px;color:var(--muted);font-weight:700;background:var(--bg);border-bottom:1px solid var(--line)}
-.offbar{position:sticky;left:calc(var(--namew) + 6px);margin:6px;height:36px;width:220px;max-width:calc(100% - 12px);background:var(--off);border-radius:7px;color:var(--muted);display:flex;align-items:center;padding-left:12px;font-weight:500}
+.offbar{margin:6px;height:36px;background:var(--off);border-radius:7px;color:var(--muted);display:flex;align-items:center;padding-left:12px;font-weight:500}
 
 .who{background:var(--surface);border:2px solid var(--accent);border-radius:12px;padding:14px 16px}
 .who h3{margin:0 0 8px;font-size:16px}
