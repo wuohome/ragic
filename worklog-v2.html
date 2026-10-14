@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name="robots" content="noindex, nofollow"><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>租賃部動態看板</title>
+<title>動態看板</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500&display=swap">
@@ -136,7 +136,7 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
 
 <div class="wrap">
   <header>
-    <h1>租賃部動態看板<small id="dateline"></small></h1>
+    <h1>動態看板<small id="dateline"></small></h1>
     <div class="controls">
       <div class="seg" role="group" aria-label="日期">
         <button id="d0" aria-pressed="true">今天</button>
@@ -178,7 +178,7 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
 <div class="toast" id="toast" hidden></div>
 
 <script>
-// 租賃部動態看板（照 2026-10-08 示範頁；資料接 Worker worklogBoard／worklogCreate）。
+// 動態看板（照 2026-10-08 示範頁；資料接 Worker worklogBoard／worklogCreate）。
 // 身分由網址通行碼決定（同現行 worklog.html：?token= 或 localStorage 同一個 key），沒有「我是」下拉。
 const WORKER_BASE="https://wuohome-ragic-proxy.wuohome.workers.dev";
 const TOKEN_STORE_KEY="wuohome_worklog_v2_token_v1"; // 與 worklog.html 同 key，同瀏覽器開過連結就免重帶
@@ -286,7 +286,7 @@ function showGate(){
   const k=STATE.kind;
   const head={out:"請先登入",badlink:"這個連結已失效",expired:"登入已過期",denied:"此帳號尚未獲得授權"}[k];
   const text={
-    out:"租賃部動態看板僅供窩的家同仁使用，請用公司登記的 Google 帳號登入。",
+    out:"動態看板僅供窩的家同仁使用，請用公司登記的 Google 帳號登入。",
     badlink:"請改用公司登記的 Google 帳號登入，不需要連結。",
     expired:"請重新登入一次。",
     denied:`目前登入的是 ${STATE.email||""}，不在使用名單內。如果你是租賃部或社宅部同仁，請聯絡管理部確認 Google 帳號與部門設定。`}[k];
