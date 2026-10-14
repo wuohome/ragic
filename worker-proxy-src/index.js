@@ -737,12 +737,19 @@ const WORKLOG_EMP_F = Object.freeze({ name: '3000933', dept: '3000937', status: 
 // email 對到那一筆，在職才列；不會把整個部門拉進來。值＝這排的資料來源：'timetree'＝自動帶入她的
 // TimeTree 行程（唯讀，不能在看板上寫，也不列入「9–18 點寫了 X%」與「一筆都還沒寫」催填名單）。
 // 目前只支援一位 timetree 來源的人（同步 KV 只存一份）。
-const WORKLOG_BOARD_EXTRA_MEMBERS = new Map([['qiongan0208@gmail.com', 'timetree']]);
+// 值＝{ source, categoryGroup? }：source 'timetree'＝行事曆自動帶入（唯讀）；'self'＝跟租賃部同仁一樣自己填、可寫
+// （categoryGroup 給 Google 路徑用，token 路徑的分組仍由 WORKLOG_TOKENS_JSON 決定）。
+// 黃帟潔：2026-10-13 從租賃部調買賣部，Joan 10/14「也加進看板」，排班與值日條件與租賃部相同，比照自填。
+const WORKLOG_BOARD_EXTRA_MEMBERS = new Map([
+  ['qiongan0208@gmail.com', { source: 'timetree' }],
+  ['skyeagleisme@gmail.com', { source: 'self', categoryGroup: '租賃' }],
+]);
+function worklogExtraMember(rec) { return WORKLOG_BOARD_EXTRA_MEMBERS.get(worklogClean(rec[WORKLOG_EMP_F.email]).toLowerCase()) || null; }
 // 回傳 'regular'（租賃部・在職・承攬，可在看板寫）、'extra'（額外成員，唯讀）、或 null（不在看板）
 function worklogBoardKind(rec) {
   if (worklogClean(rec[WORKLOG_EMP_F.status]) !== '在職') return null;
-  const extra = WORKLOG_BOARD_EXTRA_MEMBERS.get(worklogClean(rec[WORKLOG_EMP_F.email]).toLowerCase());
-  if (extra) return 'extra';
+  const extra = worklogExtraMember(rec);
+  if (extra) return extra.source === 'self' ? 'regular' : 'extra';
   return WORKLOG_BOARD_DEPTS.has(worklogClean(rec[WORKLOG_EMP_F.dept])) && worklogClean(rec[WORKLOG_EMP_F.hire]) === '承攬' ? 'regular' : null;
 }
 
@@ -941,7 +948,7 @@ async function handleWorklogBoard(url, env, identity, origin) {
     if (!kind) continue;
     names.push(name);
     if (kind === 'extra') {
-      const src = WORKLOG_BOARD_EXTRA_MEMBERS.get(worklogClean(rec[WORKLOG_EMP_F.email]).toLowerCase());
+      const src = worklogExtraMember(rec).source;
       sourceOf.set(name, src);
       if (src === 'timetree') ttName = name;
     }
@@ -2162,7 +2169,7 @@ async function authenticateWorklogGoogle(request, env, origin) {
   return {
     role: isManager ? 'manager' : 'staff',
     name,
-    categoryGroup: WORKLOG_DEPT_GROUP[department] ?? null,
+    categoryGroup: worklogExtraMember(rec)?.categoryGroup ?? WORKLOG_DEPT_GROUP[department] ?? null,
     canWrite: boardKind === 'regular', // 額外成員（來源 TimeTree）唯讀
     department,
     email,
