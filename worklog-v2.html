@@ -71,6 +71,7 @@ select{font:inherit;padding:5px 8px;border-radius:8px;border:1px solid var(--lin
 .axis.name{left:0;z-index:4;font-size:13px;color:var(--muted);padding:10px 14px 6px;font-weight:500}
 .axis.hours{position:sticky;height:34px}
 .axis .h{position:absolute;top:10px;font-family:var(--mono);font-size:12px;color:var(--muted);transform:translateX(3px);cursor:pointer;white-space:nowrap;border:0;background:none;padding:0}
+.axis .h.bucket{transform:none;text-align:center;cursor:default;color:var(--ink);font-weight:700;background:var(--grid)}
 .axis .h.focus{color:var(--accent);text-decoration:underline;font-weight:700}
 .nowline{position:absolute;top:0;bottom:0;width:2px;background:var(--now);z-index:1;pointer-events:none}
 .nowtag{position:absolute;top:0;font-size:11px;background:var(--now);color:#1c2626;border-radius:3px;padding:0 5px;transform:translateX(-50%);white-space:nowrap}
@@ -86,6 +87,7 @@ select{font:inherit;padding:5px 8px;border-radius:8px;border:1px solid var(--lin
 .blk.in{background:var(--in-soft);color:var(--in);border-left-color:var(--in)}
 .blk.away{background:var(--away-soft);color:var(--away);border-left-color:var(--away)}
 .blk.clash{box-shadow:inset 0 0 0 2px var(--clash)}
+div.blk{cursor:default}
 .blk:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .rowdim .blk{opacity:.3}
 .divider{grid-column:1/-1;padding:14px 14px 6px;font-size:13px;color:var(--muted);font-weight:700;background:var(--bg);border-bottom:1px solid var(--line)}
@@ -144,7 +146,7 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
     <ul>
       <li><b>看</b>：每個人一條時間軸，藍＝外出跑案、灰＝在店裡、黃＝不在崗。點上面的整點（例如 14:00），會列出那個時間「在店裡／沒寫／走不開」的人。</li>
       <li><b>寫</b>：只能寫自己那一排。點虛線空格（＋）或自己已寫的方塊，下面會滑出填寫框：選時間、選項目、寫案名或地址，按「存起來」，大家馬上看得到。</li>
-      <li><b>改</b>：點自己的方塊就能改時間、項目、地點。別人的方塊只能看。</li>
+      <li><b>改</b>：點自己的方塊就能改時間、項目、地點。自己那排在最上面，下面其他同仁的只能看、不能點。</li>
       <li><b>日期</b>：只能寫今天和明天，過去的日子不能再改。</li>
       <li><b>休假</b>：排班表有排休、特休、請假的人，會自動放在最下面，不用寫。</li>
       <li><b>誰看得到</b>：租賃部同仁和主管用自己的專屬連結打開，都看得到整個看板。</li>
@@ -191,7 +193,7 @@ const OUT_EXTRA=["場勘","驗收"];
 const kindOf=c=>(GROUPS.out.includes(c)||OUT_EXTRA.includes(c))?"out":GROUPS.away.includes(c)?"away":"in";
 const OTHER="其他";
 const CORE=[9*60,18*60];
-const DEF_RANGE=[9,19];
+const MID=[9*60,19*60]; // 時間軸固定「~09:00前｜09–19 點每小時｜19:00~後」，頭尾各收成一格（同舊工作日誌的 0900之前／19:00之後）
 const HW=84;
 const STEP=15;
 const LAST_END=23*60+45; // Worker 只收 00:00–23:59，所以結束時間最晚 23:45
@@ -206,10 +208,12 @@ let day=0, focus=null, VIEWER=null, STATE={status:"loading",data:null}, reqId=0,
 const $=id=>document.getElementById(id);
 
 // ---------- 資料 ----------
-// 一筆 Ragic 紀錄 → 看板用的一段；舊格式（只有「HH:MM-HH:MM」小時格）也能畫，桶籃選項（0900之前／19:00之後）畫不出來就略過
+// 一筆 Ragic 紀錄 → 看板用的一段；舊格式（只有「HH:MM-HH:MM」小時格）也能畫，舊桶籃選項（0900之前／19:00之後）放進頭尾那一格
 function toRec(r){
   let s=r.startTime,e=r.endTime;
-  if(!(s&&e)){const m=/^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/.exec((r.hour||"").trim());if(!m)return null;s=`${m[1]}:${m[2]}`;e=`${m[3]}:${m[4]}`}
+  if(!(s&&e)){const h=(r.hour||"").trim();
+    if(h==="0900之前"){s="08:00";e="09:00"}else if(h==="19:00之後"){s="19:00";e="20:00"}
+    else{const m=/^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/.exec(h);if(!m)return null;s=`${m[1]}:${m[2]}`;e=`${m[3]}:${m[4]}`}}
   const S=t(s),E=t(e);if(!(E>S))return null;
   let label=r.category||"未填項目",note=r.note||"";
   const om=r.category===OTHER?/^【([^】]*)】([\s\S]*)$/.exec(note):null;
@@ -272,18 +276,13 @@ function render(){
   const canWrite=working.includes(me);
   const isToday=day===0, NOW=nowMin();
 
-  let lo=DEF_RANGE[0],hi=DEF_RANGE[1];
-  working.forEach(n=>D.get(n).forEach(r=>{lo=Math.min(lo,Math.floor(r.s/60));hi=Math.max(hi,Math.ceil(r.e/60))}));
-  const x=m=>(m-lo*60)/60*HW;
-  const trackW=(hi-lo)*HW;
+  const x=m=>HW+(Math.min(Math.max(m,MID[0]),MID[1])-MID[0])/60*HW;
+  const trackW=12*HW;
   const board=$("board");
   board.style.setProperty("--trackw",trackW+"px");board.style.setProperty("--hw",HW+"px");
   board.style.setProperty("--namew",window.innerWidth<520?"96px":"124px");
-  const all=working.flatMap(n=>D.get(n));
-  const extra=[];
-  if(lo<DEF_RANGE[0])extra.push(`最早 ${fmt(Math.min(...all.map(r=>r.s)))} 就有人出門`);
-  if(hi>DEF_RANGE[1])extra.push(`最晚到 ${fmt(Math.max(...all.map(r=>r.e)))} 還有人在外面`);
-  $("rangeNote").textContent=`時間軸：${lo}:00–${hi}:00。`+(extra.length?`${extra.join("，")}，所以自動拉長。`:"")+`可填 00:00–23:45，每 15 分鐘一格；虛線框只標 9:00–18:00 的空檔。`+(canWrite?"":me&&data.members.some(m=>m.name===me)?"你今天排休，這頁只能看。":(VIEWER&&VIEWER.role==="manager"?"你是主管連結（不在同仁名單上），這頁只能看。":"你今天不在看板名單上（人事表要是租賃部・在職・承攬），這頁只能看；有問題請跟主管說。"));
+  const nowX=NOW<MID[0]?HW/2:NOW>MID[1]?11.5*HW:x(NOW);
+  $("rangeNote").textContent=`9 點以前、19 點以後各收成一格（「~09:00前」「19:00~後」），點進去看實際時間。虛線框只標 9:00–18:00 的空檔。`+(canWrite?"":me&&data.members.some(m=>m.name===me)?"你今天排休，這頁只能看。":(VIEWER&&VIEWER.role==="manager"?"你是主管連結（不在同仁名單上），這頁只能看。":"你今天不在看板名單上（人事表要是租賃部・在職・承攬），這頁只能看；有問題請跟主管說。"));
 
   const m=focus??NOW;let o=0,i=0,a=0,u=0;
   working.forEach(n=>{const k=at(D.get(n),m);if(!k.length)u++;else{const kd=k[0].kind;kd==="out"?o++:kd==="away"?a++:i++}});
@@ -300,8 +299,10 @@ function render(){
 
   REFS=[];
   let html=`<div class="axis name">同仁</div><div class="axis hours" style="width:${trackW}px">`;
-  for(let h=lo;h<hi;h++)html+=`<button class="h ${focus===h*60?"focus":""}" data-m="${h*60}" style="left:${x(h*60)}px">${pad(h)}:00</button>`;
-  if(isToday&&NOW>=lo*60&&NOW<=hi*60)html+=`<span class="nowtag" style="left:${x(NOW)}px">現在</span>`;
+  html+=`<span class="h bucket" style="left:0;width:${HW}px">~09:00前</span>`;
+  for(let h=9;h<19;h++)html+=`<button class="h ${focus===h*60?"focus":""}" data-m="${h*60}" style="left:${x(h*60)}px">${pad(h)}:00</button>`;
+  html+=`<span class="h bucket" style="left:${11*HW}px;width:${HW}px">19:00~後</span>`;
+  if(isToday)html+=`<span class="nowtag" style="left:${nowX}px">現在</span>`;
   html+=`</div>`;
   working.forEach(n=>{
     const list=D.get(n), pct=Math.round(coreMinutes(list)/(CORE[1]-CORE[0])*100), cl=clashes(list);
@@ -315,25 +316,30 @@ function render(){
       html+=`<div class="core" style="left:${x(s)+2}px;width:${x(e)-x(s)-4}px"></div>`;
       if(mine)html+=`<button class="gap" data-s="${s}" data-e="${e}" style="left:${x(s)+2}px;width:${x(e)-x(s)-4}px">${e-s>=45?"＋ 寫":"＋"}</button>`;
     });
-    list.forEach(r=>{
-      const bw=x(r.e)-x(r.s), idx=REFS.push({n,r})-1;
-      html+=`<button class="blk ${r.kind} ${cl.has(r.id)?"clash":""} ${bw<64?"xs":bw<110?"sm":""}" data-i="${idx}" style="left:${x(r.s)+1}px;width:${Math.max(bw-2,18)}px" title="${fmt(r.s)}–${fmt(r.e)} ${esc(r.cat)} ${esc(r.place)}">
-        <span class="t">${esc(r.cat)}</span><span class="p">${esc(r.place)}</span><span class="tm">${fmt(r.s)}–${fmt(r.e)}</span></button>`;
-    });
-    if(isToday&&NOW>=lo*60&&NOW<=hi*60)html+=`<div class="nowline" style="left:${x(NOW)}px"></div>`;
+    const blk=(r,L,W,more)=>{const tag=mine?"button":"div", idx=mine?REFS.push({n,r})-1:-1; // 別人的方塊只顯示、不能點
+      return `<${tag} class="blk ${r.kind} ${cl.has(r.id)?"clash":""} ${W<64?"xs":W<110?"sm":""}" data-i="${idx}" style="left:${L+1}px;width:${Math.max(W-2,18)}px" title="${fmt(r.s)}–${fmt(r.e)} ${esc(r.cat)} ${esc(r.place)}">
+        <span class="t">${esc(r.cat)}${more?` +${more}`:""}</span><span class="p">${esc(r.place)}</span><span class="tm">${fmt(r.s)}–${fmt(r.e)}</span></${tag}>`};
+    list.forEach(r=>{const a=Math.max(r.s,MID[0]),b=Math.min(r.e,MID[1]);if(b>a)html+=blk(r,x(a),x(b)-x(a))});
+    const pre=list.filter(r=>r.s<MID[0]), post=list.filter(r=>r.e>MID[1]);
+    // 頭尾那格只顯示一筆；「+N」只算整段都落在格內的其他筆（跨進 9–19 的那段已畫在中間）
+    const extraIn=(arr,inside,keep)=>arr.filter(r=>r!==keep&&inside(r)).length;
+    if(pre.length)html+=blk(pre[0],0,HW,extraIn(pre,r=>r.e<=MID[0],pre[0]));
+    if(post.length){const p=post[post.length-1];html+=blk(p,11*HW,HW,extraIn(post,r=>r.s>=MID[1],p))}
+    if(isToday)html+=`<div class="nowline" style="left:${nowX}px"></div>`;
     if(focus!=null)html+=`<div class="focusline" style="left:${x(focus)}px"></div>`;
     html+=`</div></div>`;
+    if(mine&&working.length>1)html+=`<div class="divider">其他同仁（只能看）</div>`;
   });
   if(resting.length){
     html+=`<div class="divider">休假（排班表帶入，不用寫）</div>`;
     resting.forEach(r=>{html+=`<div class="row"><div class="cellname">${esc(r.name)}<span class="cnt">—</span></div><div class="track" style="height:48px"><div class="offbar">${esc(r.offType)}</div></div></div>`});
   }
   board.innerHTML=html;
-  board.querySelectorAll(".blk").forEach(b=>b.onclick=()=>{const f=REFS[+b.dataset.i];openEntry(f.n,f.r)});
+  board.querySelectorAll("button.blk").forEach(b=>b.onclick=()=>{const f=REFS[+b.dataset.i];openEntry(f.n,f.r)});
   board.querySelectorAll(".gap").forEach(b=>b.onclick=()=>openNew(+b.dataset.s,+b.dataset.e));
-  board.querySelectorAll(".axis .h").forEach(b=>b.onclick=()=>{const v=+b.dataset.m;focus=focus===v?null:v;render()});
+  board.querySelectorAll(".axis button.h").forEach(b=>b.onclick=()=>{const v=+b.dataset.m;focus=focus===v?null:v;render()});
   renderWho(working);
-  if(!scrolled){scrolled=true;const box=document.querySelector(".boardbox");requestAnimationFrame(()=>{box.scrollLeft=isToday?Math.max(0,x(NOW)-box.clientWidth/2):0})}
+  if(!scrolled){scrolled=true;const box=document.querySelector(".boardbox");requestAnimationFrame(()=>{box.scrollLeft=isToday?Math.max(0,nowX-box.clientWidth/2):0})}
 }
 
 function renderWho(working){
