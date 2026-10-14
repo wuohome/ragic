@@ -326,7 +326,7 @@ function render(){
   board.style.setProperty("--trackw",trackW+"px");board.style.setProperty("--hw",H+"px");
   board.style.setProperty("--namew",namew+"px");board.style.setProperty("--gx",(preW%H)+"px");
   const nowX=NOW<MID[0]&&!early?preW/2:NOW>MID[1]&&!late?preW+10*H+postW/2:x(NOW);
-  $("rangeNote").textContent=`「~09:00前」「19:00~後」兩段會照當天最早出門、最晚回來的行程自動拉長`+(early||late?`（${day?"明天":"今天"} ${early?fmt(minS)+" 就有人出門":""}${early&&late?"，":""}${late?"到 "+fmt(maxE)+" 還有人在外面":""}）`:"")+`；虛線框只標 9:00–18:00 的空檔。`+(canWrite?"":ro.has(me)?"你這一排是從你的行事曆（TimeTree）自動帶入的，這頁只能看。":me&&data.members.some(m=>m.name===me)?"你今天排休，這頁只能看。":(VIEWER&&VIEWER.role==="manager"?"你是主管身分（不在同仁名單上），這頁只能看。":"你今天不在看板名單上（人事表要是租賃部・在職・承攬），這頁只能看；有問題請跟主管說。"));
+  $("rangeNote").textContent=`「~09:00前」「19:00~後」兩段會照當天最早出門、最晚回來的行程自動拉長`+(early||late?`（${day?"明天":"今天"}${early?fmt(minS)+" 就有人出門":""}${early&&late?"，":""}${late?"到 "+fmt(maxE)+" 還有人在外面":""}）`:"")+`；虛線框只標 9:00–18:00 的空檔。`+(canWrite?"":ro.has(me)?"你這一排是從你的行事曆（TimeTree）自動帶入的，這頁只能看。":me&&data.members.some(m=>m.name===me)?"你今天排休，這頁只能看。":(VIEWER&&VIEWER.role==="manager"?"你是主管身分（不在同仁名單上），這頁只能看。":"你今天不在看板名單上（人事表要是租賃部・在職・承攬），這頁只能看；有問題請跟主管說。"));
 
   const m=focus??NOW;let o=0,i=0,a=0,u=0;
   working.forEach(n=>{const k=at(D.get(n),m);if(!k.length){if(!ro.has(n))u++}else{const kd=k[0].kind;kd==="out"?o++:kd==="away"?a++:i++}});
