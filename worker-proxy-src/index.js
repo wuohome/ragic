@@ -375,6 +375,8 @@ const ALLOWED_ACTIONS = {
   // 2026-10-12 全員公開看板：任何有效工作日誌 token 都可讀（同仁互相看得到才會填，小吳哥提案）
   worklogBoard:          { method: 'GET' },
   worklogTimetreeSync:   { method: 'POST' },
+  worklogSession:        { method: 'POST' },
+  worklogLogout:         { method: 'POST' },
   // Group V: 修繕報價單產生器 → Ragic 化（maintenance-management/15，2026-07-24）。無固定
   // WORKER secret token gate（不像 Group S/T/U）——rqGet 的守門是「建單當下產生、僅該筆記錄
   // 持有」的分享token 逐筆交叉比對，token-only IDOR 防護見下方 handler 註解。
@@ -2139,6 +2141,8 @@ async function authenticateWorklogGoogle(request, env, origin) {
   const idToken = m ? m[1].trim() : '';
   if (!idToken) return null; // 沒帶 Authorization → 呼叫端 fallback 舊 `?token=` 路徑
 
+  if (idToken.startsWith(WORKLOG_SESSION_PREFIX)) return worklogAuthenticateSession(request, env, origin, idToken);
+
   const fail = (status, error) => ({ __authError: jsonResp({ error }, status, origin) });
 
   // 只快取「這顆 ID token 驗過是誰」；人事表判斷每次走 pcGetStaffRecords（60 秒快取），
@@ -2166,6 +2170,12 @@ async function authenticateWorklogGoogle(request, env, origin) {
     worklogGoogleEmailCache.set(cacheKey, { expiresAt: Date.now() + Math.max(0, Math.min(5 * 60 * 1000, remainingMs)), email });
   }
 
+  return worklogIdentityFromEmail(env, email, origin);
+}
+
+// email → 看板身分（人事表即時反查；失敗回 { __authError: 403 not_whitelisted }）
+async function worklogIdentityFromEmail(env, email, origin) {
+  const fail = (status, error) => ({ __authError: jsonResp({ error }, status, origin) });
   const records = await pcGetStaffRecords(env);
   if (!records) return fail(403, 'not_whitelisted');
   const rec = records.find((r) => pcClean(r[PC_STAFF_EMAIL_FIELD]).toLowerCase() === email);
@@ -2187,6 +2197,61 @@ async function authenticateWorklogGoogle(request, env, origin) {
     department,
     email,
   };
+}
+
+// ── 看板自家 session（2026-10-14，照標準接法 2026-08-19 更新版：Google 只負責第一次證明身分）──
+// Google ID token 驗過（worklogSession）→ 發一顆不透明 token `wls_<64 hex>`，KV 只存它的 sha256
+// （key `worklog:sess:<hash>` → { email, createdAt, touchedAt }），所以 KV 外洩也拿不到可用 token。
+// 30 天效期、每次使用滾動延長（為省 KV 寫入，距上次延長超過 6 小時才重寫）、伺服器端可撤銷
+// （worklogLogout 刪 key；要踢人直接刪 KV 那筆）。session 只記「是誰」，角色與名單資格每次即時反查
+// 人事表（離職／轉部門最多 60 秒生效，查到不合格就順手撤銷）。
+// 帶 `Authorization: Bearer wls_…` 的 worklogBoard／worklogCreate 走這條；帶 JWT 的 ID token 仍可直接用
+// （已開著的舊頁面不受影響）。舊 `?token=` 路徑完全不動。
+const WORKLOG_SESSION_PREFIX = 'wls_';
+const WORKLOG_SESSION_TTL_S = 30 * 24 * 3600;
+const WORKLOG_SESSION_TOUCH_MS = 6 * 3600 * 1000;
+const worklogSessionKey = async (tok) => 'worklog:sess:' + await pcSha256Hex(tok);
+function worklogBearer(request) {
+  const m = /^Bearer\s+(.+)$/i.exec((request.headers.get('Authorization') || '').trim());
+  return m ? m[1].trim() : '';
+}
+async function worklogAuthenticateSession(request, env, origin, tok) {
+  const fail = (status, error) => ({ __authError: jsonResp({ error }, status, origin) });
+  if (!env.EARNEST_QUEUE || typeof env.EARNEST_QUEUE.get !== 'function') return fail(401, 'invalid_session');
+  const key = await worklogSessionKey(tok);
+  let rec;
+  try { rec = JSON.parse(await env.EARNEST_QUEUE.get(key)); } catch { rec = null; }
+  if (!rec || typeof rec.email !== 'string') return fail(401, 'invalid_session');
+  const identity = await worklogIdentityFromEmail(env, rec.email, origin);
+  if (identity.__authError) {
+    try { await env.EARNEST_QUEUE.delete(key); } catch { /* ponytail-debt: 撤銷失敗只是這顆 session 多活到自然過期；每次使用仍會即時反查人事表，不會放行 */ }
+    return identity;
+  }
+  const now = Date.now();
+  if (now - (rec.touchedAt || 0) > WORKLOG_SESSION_TOUCH_MS) {
+    try { await env.EARNEST_QUEUE.put(key, JSON.stringify({ ...rec, touchedAt: now }), { expirationTtl: WORKLOG_SESSION_TTL_S }); } catch { /* ponytail-debt: 滾動延長失敗不影響本次使用，下次請求會再試 */ }
+  }
+  return identity;
+}
+async function handleWorklogSession(request, env, origin) {
+  const tok = worklogBearer(request);
+  if (!tok || tok.startsWith(WORKLOG_SESSION_PREFIX)) return jsonResp({ error: 'invalid_session' }, 401, origin); // 只能用 Google ID token 換，不能拿 session 換 session
+  const identity = await authenticateWorklogGoogle(request, env, origin);
+  if (!identity) return jsonResp({ error: 'invalid_session' }, 401, origin);
+  if (identity.__authError) return identity.__authError;
+  if (!env.EARNEST_QUEUE || typeof env.EARNEST_QUEUE.put !== 'function') return jsonResp({ error: 'kv_unavailable' }, 500, origin);
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const session = WORKLOG_SESSION_PREFIX + [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const now = Date.now();
+  await env.EARNEST_QUEUE.put(await worklogSessionKey(session), JSON.stringify({ email: identity.email, createdAt: now, touchedAt: now }), { expirationTtl: WORKLOG_SESSION_TTL_S });
+  return jsonResp({ ok: true, session, expiresInDays: 30, viewer: { role: identity.role, name: identity.name, categoryGroup: identity.categoryGroup ?? null } }, 200, origin);
+}
+async function handleWorklogLogout(request, env, origin) {
+  const tok = worklogBearer(request);
+  if (tok.startsWith(WORKLOG_SESSION_PREFIX) && env.EARNEST_QUEUE && typeof env.EARNEST_QUEUE.delete === 'function') {
+    try { await env.EARNEST_QUEUE.delete(await worklogSessionKey(tok)); } catch { return jsonResp({ error: 'kv_unavailable' }, 500, origin); }
+  }
+  return jsonResp({ ok: true }, 200, origin); // 冪等：不論 session 存不存在都回 ok，不洩漏有效性
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -5627,6 +5692,8 @@ export default {
     // Group U: 工作日誌 — 固定連結 token 驗證（token→{role,name}，WORKLOG_TOKENS_JSON）。
     // 失敗一律同型 404（不分因由防列舉），比照上方 P5 / Group T / v29 / v30 手法。
     if (action === 'worklogTimetreeSync') return handleWorklogTimetreeSync(request, env, allowedOrigin);
+    if (action === 'worklogSession') return handleWorklogSession(request, env, allowedOrigin);
+    if (action === 'worklogLogout') return handleWorklogLogout(request, env, allowedOrigin);
     let worklogIdentity = null;
     if (WORKLOG_ACTIONS.has(action)) {
       // 2026-10-14 雙軌：看板兩支 action 帶 Authorization header 走 Google（見

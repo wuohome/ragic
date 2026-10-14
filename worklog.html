@@ -143,6 +143,7 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
         <button id="d1" aria-pressed="false">明天</button>
       </div>
       <button class="helpbtn" id="helpBtn" aria-expanded="false">怎麼用？</button>
+      <button class="helpbtn" id="logoutBtn" hidden style="font-size:12px;font-weight:400;color:var(--muted)">登出</button>
     </div>
   </header>
 
@@ -248,10 +249,10 @@ async function load(){
   if(my!==reqId)return;
   if(r.status===404&&TOKEN){ // 通行碼連結失效：改走 Google 登入（不動 localStorage，下次開連結仍先試一次）
     TOKEN="";startGoogle("badlink");return}
-  if(!TOKEN&&r.status===401){ // Google 憑證過期或被拒：清掉快取，重新登入
-    ID_TOKEN=null;clearGid();STATE={status:"auth",kind:"expired"};render();gsiPrompt();return}
+  if(!TOKEN&&r.status===401){ // 看板 session 失效（過期／被撤銷）：清掉，回登入閘；已授權過的人 auto_select 會一鍵／靜默換新 session
+    clearSession();STATE={status:"auth",kind:"expired"};render();gsiPrompt();return}
   if(!TOKEN&&r.status===403&&r.json&&(r.json.error==="not_whitelisted"||r.json.error==="email_unverified")){
-    const email=jwtPayload(ID_TOKEN).email||"";ID_TOKEN=null;clearGid(); // 沒資格的憑證不落地，換帳號才不會卡住
+    const email=SESS_EMAIL;clearSession(); // 沒資格的登入態不留，換帳號才不會卡住
     STATE={status:"auth",kind:"denied",email};render();return}
   if(r.status===200&&r.json&&r.json.ok===true){
     VIEWER=r.json.viewer;lastLoad=Date.now();
@@ -284,20 +285,22 @@ function showGate(){
   $("headline").innerHTML="";$("rangeNote").textContent="";$("who").hidden=true;
   $("board").style.removeProperty("--trackw");
   const k=STATE.kind;
-  const head={out:"請先登入",badlink:"這個連結已失效",expired:"登入已過期",denied:"此帳號尚未獲得授權"}[k];
+  const head={out:"請先登入",badlink:"這個連結已失效",expired:"登入已過期",denied:"此帳號尚未獲得授權",fail:"登入沒成功"}[k];
   const text={
     out:"動態看板僅供窩的家同仁使用，請用公司登記的 Google 帳號登入。",
     badlink:"請改用公司登記的 Google 帳號登入，不需要連結。",
     expired:"請重新登入一次。",
+    fail:"暫時連不上登入服務，請再按一次登入。",
     denied:`目前登入的是 ${STATE.email||""}，不在使用名單內。如果你是租賃部或社宅部同仁，請聯絡管理部確認 Google 帳號與部門設定。`}[k];
   $("board").innerHTML=`<div class="msg" style="grid-column:1/-1"><h2 style="margin:0 0 6px;color:var(--ink);font-size:17px">${esc(head)}</h2><p style="margin:0 0 12px">${esc(text)}</p>`+
     (k==="denied"?`<button class="btn" id="gateOut">登出，換帳號再試</button>`:`<div id="gsiBtn" style="display:flex;justify-content:center;min-height:44px"></div>`)+`</div>`;
-  if(k==="denied")$("gateOut").onclick=()=>{ID_TOKEN=null;clearGid();if(window.google&&google.accounts)google.accounts.id.disableAutoSelect();STATE={status:"auth",kind:"out"};render()};
+  if(k==="denied")$("gateOut").onclick=()=>{clearSession();NOPROMPT=true;if(window.google&&google.accounts)google.accounts.id.disableAutoSelect();STATE={status:"auth",kind:"out"};render()};
   else renderGsi(0);
 }
 let REFS=[];
 function render(){
   const base=new Date();base.setDate(base.getDate()+day);
+  $("logoutBtn").hidden=!(ID_TOKEN&&!TOKEN); // 登出只給 Google 登入的人（通行碼連結沒有登入態）
   $("dateline").textContent=`${base.getMonth()+1}/${base.getDate()}（${"日一二三四五六"[base.getDay()]}）`;
   if(STATE.status==="loading"){showMsg("載入中…");return}
   if(STATE.status==="auth"){showGate();return}
@@ -473,46 +476,59 @@ $("helpBtn").onclick=()=>{const h=$("help");h.hidden=!h.hidden;$("helpBtn").setA
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&STATE.status==="ready"&&$("sheet").hidden&&Date.now()-lastLoad>60000)load()});
 setInterval(()=>{if(!document.hidden&&STATE.status==="ready"&&$("sheet").hidden&&day===0)render()},60000); // 現在時間線往前走
 
-// ---------- Google 登入（2026-10-14；與通行碼連結並存，照 Google登入_標準接法）----------
+// ---------- Google 登入（2026-10-14；與通行碼連結並存，照 Google登入_標準接法 2026-08-19 更新版）----------
+// Google 只負責「第一次證明你是誰」：ID token 換成 Worker 發的看板 session（30 天、每次使用滾動延長、伺服器端可撤銷），
+// 之後開頁面直接用 session 進看板、零互動；session 失效才回登入閘，auto_select 讓已授權過的人一鍵／靜默換新。
 const GOOGLE_CLIENT_ID="18499630691-mi617tp07ptq943nlkhslf7bfu27j6cn.apps.googleusercontent.com";
-const GID_KEY="wuohome_gid_v1"; // 全公司系統同一個 key
-let ID_TOKEN=null, GSI_READY=false;
+const GID_KEY="wuohome_gid_v1"; // 全公司系統共用的舊 ID token 快取：這裡只讀（舊版頁面留下的有效 token 可直接換 session），不再寫入
+const SESS_KEY="wuohome_worklog_session_v1";
+let ID_TOKEN=null, SESS_EMAIL="", GSI_READY=false, EXCHANGING=false, NOPROMPT=false; // ID_TOKEN＝目前帶給 Worker 的看板 session
 function jwtPayload(t){try{return JSON.parse(atob(String(t).split(".")[1].replace(/-/g,"+").replace(/_/g,"/")))}catch{return {}}} // ponytail-debt: 解不開的憑證視同無效（回空物件），由 Worker 驗簽把關；日後可回報後端記錄
 function readGid(){try{const g=JSON.parse(localStorage.getItem(GID_KEY)||"null");return g&&g.idToken&&g.exp?g:null}catch{return null}} // ponytail-debt: 無痕模式讀不到快取就退回按按鈕登入，標準接法明文允許
-function writeGid(idToken,exp){try{localStorage.setItem(GID_KEY,JSON.stringify({idToken,exp}))}catch{}} // ponytail-debt: 同上，寫不進去只是下次要重新登入
-function clearGid(){try{localStorage.removeItem(GID_KEY)}catch{}} // ponytail-debt: 同上
-function gsiPrompt(){if(GSI_READY)google.accounts.id.prompt()}
+function readSess(){try{const o=JSON.parse(localStorage.getItem(SESS_KEY)||"null");return o&&o.session?o:null}catch{return null}} // ponytail-debt: 同上
+function saveSess(session,email){try{localStorage.setItem(SESS_KEY,JSON.stringify({session,email}))}catch{}} // ponytail-debt: 寫不進去只是下次開頁要重新登入（auto_select 通常一鍵就好）
+function clearSession(){ID_TOKEN=null;SESS_EMAIL="";try{localStorage.removeItem(SESS_KEY)}catch{}} // ponytail-debt: 同上
+function gsiPrompt(){if(GSI_READY&&!NOPROMPT)google.accounts.id.prompt()}
 function renderGsi(n){
   const el=$("gsiBtn");if(!el)return;
   if(GSI_READY){google.accounts.id.renderButton(el,{theme:"outline",size:"large",text:"signin_with",locale:"zh_TW"});return}
   if(n<60)setTimeout(()=>renderGsi(n+1),200);
   else el.textContent="Google 登入載入失敗，請重新整理頁面"; // 約 12 秒仍沒載入（被擋或斷網）
 }
-let renewTimer;
-function scheduleRenew(exp){clearTimeout(renewTimer);renewTimer=setTimeout(gsiPrompt,Math.max(0,exp-Date.now()-5*60*1000))} // 到期前 5 分鐘靜默續期
+async function exchange(idToken){ // Google ID token → 看板 session
+  if(EXCHANGING)return;EXCHANGING=true;TOKEN="";
+  STATE={status:"loading",data:null};render();
+  const email=jwtPayload(idToken).email||"";
+  const r=await api("worklogSession",{method:"POST",headers:{Authorization:`Bearer ${idToken}`}});
+  EXCHANGING=false;
+  if(r.status===200&&r.json&&r.json.session){ID_TOKEN=r.json.session;SESS_EMAIL=email;saveSess(ID_TOKEN,email);load();return}
+  if(r.status===403&&r.json&&(r.json.error==="not_whitelisted"||r.json.error==="email_unverified")){STATE={status:"auth",kind:"denied",email};render();return}
+  STATE={status:"auth",kind:"fail"};render();
+}
 function onCred(resp){
-  const idToken=resp&&resp.credential;if(!idToken)return;
-  const exp=(jwtPayload(idToken).exp||0)*1000;
-  ID_TOKEN=idToken;TOKEN="";if(exp){writeGid(idToken,exp);scheduleRenew(exp)}
-  if(STATE.status!=="ready")load(); // 已在看板上的靜默續期只換憑證，不重畫畫面
+  const idToken=resp&&resp.credential;if(!idToken||ID_TOKEN)return; // 已有 session 就忽略（Google 的自動回呼不必處理）
+  NOPROMPT=false;exchange(idToken);
 }
 function initGsi(n){
   if(!(window.google&&google.accounts&&google.accounts.id)){if(n<150)setTimeout(()=>initGsi(n+1),200);return}
   google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,auto_select:true,use_fedcm_for_prompt:true,callback:onCred});
   GSI_READY=true;
-  if(!ID_TOKEN&&STATE.status==="auth"&&STATE.kind!=="denied")google.accounts.id.prompt();
+  if(!ID_TOKEN&&!NOPROMPT&&STATE.status==="auth"&&STATE.kind!=="denied")google.accounts.id.prompt();
 }
 function startGoogle(kind){
-  const c=readGid();
-  if(c&&c.exp-Date.now()>2*60*1000){ID_TOKEN=c.idToken;scheduleRenew(c.exp);load()}
+  const sv=readSess(), c=readGid();
+  if(sv){ID_TOKEN=sv.session;SESS_EMAIL=sv.email||"";load()} // 有 session：直接進看板，零互動
+  else if(c&&c.exp-Date.now()>2*60*1000){exchange(c.idToken)} // 舊版頁面留下的有效 ID token：換成 session，也是零互動
   else{STATE={status:"auth",kind:kind||"out"};render()}
   if(!GSI_READY)initGsi(0);
 }
-document.addEventListener("visibilitychange",()=>{ // 分頁在背景時計時器會被凍結，回前景補查一次效期
-  if(document.hidden||!ID_TOKEN)return;
-  const c=readGid();if(!c||c.exp-Date.now()<5*60*1000)gsiPrompt();
-});
-window.addEventListener("storage",e=>{if(e.key===GID_KEY&&!e.newValue&&ID_TOKEN){ID_TOKEN=null;STATE={status:"auth",kind:"out"};render()}}); // 別的分頁登出
+$("logoutBtn").onclick=()=>{
+  const t=ID_TOKEN;clearSession();NOPROMPT=true; // 登出：清本機、通知 Worker 撤銷這顆 session、停用 auto_select 才不會立刻又自動登入
+  if(window.google&&google.accounts&&google.accounts.id)google.accounts.id.disableAutoSelect();
+  STATE={status:"auth",kind:"out"};render();
+  if(t)api("worklogLogout",{method:"POST",headers:{Authorization:`Bearer ${t}`}});
+};
+window.addEventListener("storage",e=>{if(e.key===SESS_KEY&&!e.newValue&&ID_TOKEN){ID_TOKEN=null;STATE={status:"auth",kind:"out"};render()}}); // 別的分頁登出
 
 if(TOKEN)load();else startGoogle("out");
 </script>
