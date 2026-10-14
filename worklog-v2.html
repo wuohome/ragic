@@ -56,18 +56,10 @@ select{font:inherit;padding:5px 8px;border-radius:8px;border:1px solid var(--lin
 
 /* 時間軸看板 */
 .boardbox{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
-.board{display:grid;grid-template-columns:var(--namew) var(--bw) var(--trackw) var(--bw);min-width:100%;width:max-content}
-/* 「~09:00前」「19:00~後」兩格固定在左右兩邊，左右滑也一直看得到 */
-.bucketcell{position:sticky;z-index:3;background:var(--surface);border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:3px;padding:6px 3px;overflow:hidden}
-.bucketcell.pre{left:var(--namew);border-right:1px solid var(--line)}
-.bucketcell.post{right:0;border-left:1px solid var(--line)}
-.bucketcell .blk{position:static;flex:1 1 0;min-height:0;width:auto;padding:2px 5px;border-left-width:3px}
-.bucketcell .blk .t{font-size:12px;white-space:nowrap;line-height:1.25}
-.bucketcell .blk .tm{display:none}.bucketcell .blk .p{font-size:11px;line-height:1.2}
-.bucketcell.multi .blk .p{display:none}
-.bucketcell .more{font-size:11px;color:var(--muted);text-align:center}
-.axis.bucketcell{top:0;z-index:5;padding:0;justify-content:center;align-items:center;font-size:12px;font-weight:700;color:var(--ink);background:var(--grid)}
-.axis.bucketcell.now{background:var(--now)}
+.board{display:grid;grid-template-columns:var(--namew) var(--trackw);min-width:100%;width:max-content}
+/* 「~09:00前」「19:00~後」兩段：依當天最早／最晚的行程自動拉長，沒人早出晚歸時縮成一小格 */
+.zone{position:absolute;top:0;bottom:0;background:var(--grid);opacity:.55;pointer-events:none;z-index:0}
+.axis .zl{position:absolute;top:3px;font-size:11px;font-weight:700;color:var(--ink);text-align:center;white-space:nowrap;overflow:hidden;background:var(--grid);border-radius:4px;padding:1px 0}
 .cellname{position:sticky;left:0;z-index:3;background:var(--surface);border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px 10px 8px 14px;font-weight:700;white-space:nowrap;display:flex;flex-direction:column;justify-content:center}
 .cellname .cnt{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--muted)}
 .cellname .cnt.low{color:var(--warn)}
@@ -75,16 +67,15 @@ select{font:inherit;padding:5px 8px;border-radius:8px;border:1px solid var(--lin
 .cellname .me{font-size:10px;background:var(--accent);color:#fff;border-radius:3px;padding:0 5px;margin-left:5px;vertical-align:2px}
 .row.mine .cellname{background:var(--accent-soft)}
 .row{display:contents}
-.track{position:relative;height:74px;border-bottom:1px solid var(--line);background-image:repeating-linear-gradient(90deg,var(--grid) 0 1px,transparent 1px var(--hw))}
+.track{position:relative;height:74px;border-bottom:1px solid var(--line);background-image:repeating-linear-gradient(90deg,var(--grid) 0 1px,transparent 1px var(--hw));background-position:var(--gx,0) 0}
 .core{position:absolute;top:6px;bottom:6px;border:1.5px dashed var(--empty-line);border-radius:7px;pointer-events:none}
 .row.mine .core{border-color:var(--accent)}
 .gap{position:absolute;top:6px;bottom:6px;border:0;background:transparent;cursor:pointer;border-radius:7px;color:var(--accent);font:inherit;font-size:13px;font-weight:700}
 .gap:hover,.gap:focus-visible{background:var(--accent-soft)}
 .axis{position:sticky;top:0;z-index:3;background:var(--surface);border-bottom:1px solid var(--line)}
 .axis.name{left:0;z-index:4;font-size:13px;color:var(--muted);padding:10px 14px 6px;font-weight:500}
-.axis.hours{position:sticky;height:34px}
-.axis .h{position:absolute;top:10px;font-family:var(--mono);font-size:12px;color:var(--muted);transform:translateX(3px);cursor:pointer;white-space:nowrap;border:0;background:none;padding:0}
-.axis .h.bucket{transform:none;text-align:center;cursor:default;color:var(--ink);font-weight:700;background:var(--grid)}
+.axis.hours{position:sticky;height:46px}
+.axis .h{position:absolute;top:24px;font-family:var(--mono);font-size:12px;color:var(--muted);transform:translateX(3px);cursor:pointer;white-space:nowrap;border:0;background:none;padding:0}
 .axis .h.focus{color:var(--accent);text-decoration:underline;font-weight:700}
 .nowline{position:absolute;top:0;bottom:0;width:2px;background:var(--now);z-index:1;pointer-events:none}
 .nowtag{position:absolute;top:0;font-size:11px;background:var(--now);color:#1c2626;border-radius:3px;padding:0 5px;transform:translateX(-50%);white-space:nowrap}
@@ -103,6 +94,7 @@ select{font:inherit;padding:5px 8px;border-radius:8px;border:1px solid var(--lin
 div.blk{cursor:default}
 .blk:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .rowdim .blk{opacity:.3}
+.divider>span{position:sticky;left:14px}
 .divider{grid-column:1/-1;padding:14px 14px 6px;font-size:13px;color:var(--muted);font-weight:700;background:var(--bg);border-bottom:1px solid var(--line)}
 .offbar{position:sticky;left:calc(var(--namew) + 6px);margin:6px;height:36px;width:220px;max-width:calc(100% - 12px);background:var(--off);border-radius:7px;color:var(--muted);display:flex;align-items:center;padding-left:12px;font-weight:500}
 
@@ -318,13 +310,23 @@ function render(){
   const canWrite=working.includes(me)&&!ro.has(me);
   const isToday=day===0, NOW=nowMin();
 
-  const x=m=>(Math.min(Math.max(m,MID[0]),MID[1])-MID[0])/60*HW;
-  const trackW=10*HW, BW=window.innerWidth<520?64:HW;
+  // 時間軸：9–19 點固定；9 點前／19 點後依當天全部人最早出門、最晚回來的行程自動拉長（以整點為界），沒人就縮成一小格
+  const allRecs=working.flatMap(n=>D.get(n));
+  const minS=Math.min(MID[0],...allRecs.map(r=>r.s)), maxE=Math.max(MID[1],...allRecs.map(r=>r.e));
+  const early=minS<MID[0], late=maxE>MID[1], COLL=64;
+  const lo=early?Math.floor(minS/60)*60:MID[0], hi=late?Math.ceil(maxE/60)*60:MID[1];
+  // 每小時寬度：電腦上整天塞得進就不捲動（最寬 84、最窄 56）；手機固定 64，照舊捲到「現在」
+  const namew=window.innerWidth<520?96:124, avail=(document.querySelector(".boardbox").clientWidth||window.innerWidth)-namew-2;
+  const nHours=10+(early?(MID[0]-lo)/60:0)+(late?(hi-MID[1])/60:0);
+  const H=window.innerWidth<520?64:Math.max(56,Math.min(HW,Math.floor((avail-(early?0:COLL)-(late?0:COLL))/nHours)));
+  const preW=early?(MID[0]-lo)/60*H:COLL, postW=late?(hi-MID[1])/60*H:COLL;
+  const x=m=>m<MID[0]?(early?Math.max(0,(m-lo)/60*H):preW):m<=MID[1]?preW+(m-MID[0])/60*H:preW+10*H+(late?Math.min(m-MID[1],hi-MID[1])/60*H:0);
+  const trackW=preW+10*H+postW;
   const board=$("board");
-  board.style.setProperty("--trackw",trackW+"px");board.style.setProperty("--hw",HW+"px");board.style.setProperty("--bw",BW+"px");
-  board.style.setProperty("--namew",window.innerWidth<520?"96px":"124px");
-  const nowIn=NOW>=MID[0]&&NOW<=MID[1], nowX=x(NOW);
-  $("rangeNote").textContent=`9 點以前、19 點以後各收成一格（「~09:00前」「19:00~後」），固定在左右兩邊。虛線框只標 9:00–18:00 的空檔。`+(canWrite?"":ro.has(me)?"你這一排是從你的行事曆（TimeTree）自動帶入的，這頁只能看。":me&&data.members.some(m=>m.name===me)?"你今天排休，這頁只能看。":(VIEWER&&VIEWER.role==="manager"?"你是主管身分（不在同仁名單上），這頁只能看。":"你今天不在看板名單上（人事表要是租賃部・在職・承攬），這頁只能看；有問題請跟主管說。"));
+  board.style.setProperty("--trackw",trackW+"px");board.style.setProperty("--hw",H+"px");
+  board.style.setProperty("--namew",namew+"px");board.style.setProperty("--gx",(preW%H)+"px");
+  const nowX=NOW<MID[0]&&!early?preW/2:NOW>MID[1]&&!late?preW+10*H+postW/2:x(NOW);
+  $("rangeNote").textContent=`「~09:00前」「19:00~後」兩段會照當天最早出門、最晚回來的行程自動拉長`+(early||late?`（${day?"明天":"今天"} ${early?fmt(minS)+" 就有人出門":""}${early&&late?"，":""}${late?"到 "+fmt(maxE)+" 還有人在外面":""}）`:"")+`；虛線框只標 9:00–18:00 的空檔。`+(canWrite?"":ro.has(me)?"你這一排是從你的行事曆（TimeTree）自動帶入的，這頁只能看。":me&&data.members.some(m=>m.name===me)?"你今天排休，這頁只能看。":(VIEWER&&VIEWER.role==="manager"?"你是主管身分（不在同仁名單上），這頁只能看。":"你今天不在看板名單上（人事表要是租賃部・在職・承攬），這頁只能看；有問題請跟主管說。"));
 
   const m=focus??NOW;let o=0,i=0,a=0,u=0;
   working.forEach(n=>{const k=at(D.get(n),m);if(!k.length){if(!ro.has(n))u++}else{const kd=k[0].kind;kd==="out"?o++:kd==="away"?a++:i++}});
@@ -340,10 +342,11 @@ function render(){
    <div class="missing">${zero.length?`${dayWord} 9:00–18:00 一筆都還沒寫：<b>${zero.map(esc).join("、")}</b>`:"有上班的人都已經寫了"}</div>`;
 
   REFS=[];
-  let html=`<div class="axis name">同仁</div><div class="axis bucketcell pre ${isToday&&NOW<MID[0]?"now":""}">~09:00前</div><div class="axis hours" style="width:${trackW}px">`;
-  for(let h=9;h<19;h++)html+=`<button class="h ${focus===h*60?"focus":""}" data-m="${h*60}" style="left:${x(h*60)}px">${pad(h)}:00</button>`;
-  if(isToday&&nowIn)html+=`<span class="nowtag" style="left:${nowX}px">現在</span>`;
-  html+=`</div><div class="axis bucketcell post ${isToday&&NOW>MID[1]?"now":""}">19:00~後</div>`;
+  let html=`<div class="axis name">同仁</div><div class="axis hours" style="width:${trackW}px">`;
+  html+=`<span class="zl" style="left:2px;width:${preW-4}px">~09:00前</span><span class="zl" style="left:${preW+10*H+2}px;width:${postW-4}px">19:00~後</span>`;
+  for(let h=lo/60;h<hi/60;h++)if(h>=9&&h<19||(h<9&&early)||(h>=19&&late))html+=`<button class="h ${focus===h*60?"focus":""}" data-m="${h*60}" style="left:${x(h*60)}px">${pad(h)}:00</button>`;
+  if(isToday)html+=`<span class="nowtag" style="left:${nowX}px">現在</span>`;
+  html+=`</div>`;
   working.forEach(n=>{
     const list=D.get(n), pct=Math.round(coreMinutes(list)/(CORE[1]-CORE[0])*100), cl=clashes(list);
     const k=focus!=null?at(list,focus):[];
@@ -351,34 +354,30 @@ function render(){
     const mine=n===me, own=mine&&!ro.has(n); // own＝這排我自己能寫
     html+=`<div class="row ${mine?"mine":""} ${dim?"rowdim":""}">
       <div class="cellname"><span>${esc(n)}${mine?`<span class="me">我</span>`:""}</span><span class="cnt ${!ro.has(n)&&pct<40?"low":""}">${ro.has(n)?"行事曆自動帶入":`9–18 點寫了 ${pct}%`}</span></div>
-      ${"<!--PRE-->"}<div class="track">`;
+      <div class="track"><div class="zone" style="left:0;width:${preW}px"></div><div class="zone" style="left:${preW+10*H}px;width:${postW}px"></div>`;
     if(!ro.has(n))coreGaps(list).forEach(([s,e])=>{
       html+=`<div class="core" style="left:${x(s)+2}px;width:${x(e)-x(s)-4}px"></div>`;
       if(own)html+=`<button class="gap" data-s="${s}" data-e="${e}" style="left:${x(s)+2}px;width:${x(e)-x(s)-4}px">${e-s>=45?"＋ 寫":"＋"}</button>`;
     });
-    const blk=(r,L,W,more,inBucket)=>{const tag=own?"button":"div", idx=own?REFS.push({n,r})-1:-1; // 別人的方塊只顯示、不能點
-      return `<${tag} class="blk ${r.kind} ${cl.has(r.id)?"clash":""} ${W<64?"xs":W<110?"sm":""}" data-i="${idx}" ${inBucket?"":`style="left:${L+1}px;width:${Math.max(W-2,18)}px"`} title="${fmt(r.s)}–${fmt(r.e)} ${esc(r.cat)} ${esc(r.place)}">
-        <span class="t">${esc(r.cat)}${more?` +${more}`:""}</span><span class="p">${esc(r.place)}</span><span class="tm">${fmt(r.s)}–${fmt(r.e)}</span></${tag}>`};
-    list.forEach(r=>{const a=Math.max(r.s,MID[0]),b=Math.min(r.e,MID[1]);if(b>a)html+=blk(r,x(a),x(b)-x(a))});
-    // 頭尾兩格：落在 9 點前／19 點後的每一筆都列出來（最多 3 筆，其餘「還有 N 筆」）
-    const bucket=(arr,cls)=>`<div class="bucketcell ${cls} ${arr.length>1?"multi":""}">`+arr.slice(0,3).map(r=>blk(r,0,BW,0,true)).join("")+(arr.length>3?`<span class="more">還有 ${arr.length-3} 筆</span>`:"")+`</div>`;
-    const preCell=bucket(list.filter(r=>r.s<MID[0]),"pre"), postCell=bucket(list.filter(r=>r.e>MID[1]),"post");
-    if(isToday&&nowIn)html+=`<div class="nowline" style="left:${nowX}px"></div>`;
+    const blk=(r,L,W)=>{const tag=own?"button":"div", idx=own?REFS.push({n,r})-1:-1; // 別人的方塊只顯示、不能點
+      return `<${tag} class="blk ${r.kind} ${cl.has(r.id)?"clash":""} ${W<64?"xs":W<110?"sm":""}" data-i="${idx}" style="left:${L+1}px;width:${Math.max(W-2,18)}px" title="${fmt(r.s)}–${fmt(r.e)} ${esc(r.cat)} ${esc(r.place)}">
+        <span class="t">${esc(r.cat)}</span><span class="p">${esc(r.place)}</span><span class="tm">${fmt(r.s)}–${fmt(r.e)}</span></${tag}>`};
+    list.forEach(r=>html+=blk(r,x(r.s),x(r.e)-x(r.s)));
+    if(isToday)html+=`<div class="nowline" style="left:${nowX}px"></div>`;
     if(focus!=null)html+=`<div class="focusline" style="left:${x(focus)}px"></div>`;
-    html+=`</div>${postCell}</div>`;
-    html=html.replace("<!--PRE-->",preCell);
-    if(mine&&working.length>1)html+=`<div class="divider">其他同仁（只能看）</div>`;
+    html+=`</div></div>`;
+    if(mine&&working.length>1)html+=`<div class="divider"><span>其他同仁（只能看）</span></div>`;
   });
   if(resting.length){
-    html+=`<div class="divider">休假（排班表帶入，不用寫）</div>`;
-    resting.forEach(r=>{html+=`<div class="row"><div class="cellname">${esc(r.name)}<span class="cnt">—</span></div><div class="bucketcell pre"></div><div class="track" style="height:48px"><div class="offbar">${esc(r.offType)}</div></div><div class="bucketcell post"></div></div>`});
+    html+=`<div class="divider"><span>休假（排班表帶入，不用寫）</span></div>`;
+    resting.forEach(r=>{html+=`<div class="row"><div class="cellname">${esc(r.name)}<span class="cnt">—</span></div><div class="track" style="height:48px"><div class="offbar">${esc(r.offType)}</div></div></div>`});
   }
   board.innerHTML=html;
   board.querySelectorAll("button.blk").forEach(b=>b.onclick=()=>{const f=REFS[+b.dataset.i];openEntry(f.n,f.r)});
   board.querySelectorAll(".gap").forEach(b=>b.onclick=()=>openNew(+b.dataset.s,+b.dataset.e));
   board.querySelectorAll(".axis button.h").forEach(b=>b.onclick=()=>{const v=+b.dataset.m;focus=focus===v?null:v;render()});
   renderWho(working);
-  if(!scrolled){scrolled=true;const box=document.querySelector(".boardbox");requestAnimationFrame(()=>{box.scrollLeft=isToday&&nowIn?Math.max(0,nowX-(box.clientWidth-parseInt(board.style.getPropertyValue("--namew"))-BW*2)/2):0})}
+  if(!scrolled){scrolled=true;const fits=trackW<=avail;const box=document.querySelector(".boardbox");requestAnimationFrame(()=>{box.scrollLeft=isToday&&!fits?Math.max(0,nowX-(box.clientWidth-parseInt(board.style.getPropertyValue("--namew")))/2):0})}
 }
 
 function renderWho(working){
