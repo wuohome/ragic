@@ -372,6 +372,8 @@ const ALLOWED_ACTIONS = {
   worklogCreate:         { method: 'POST' },
   worklogListMine:       { method: 'GET' },
   worklogListAll:        { method: 'GET' },
+  // 2026-10-12 全員公開看板：任何有效工作日誌 token 都可讀（同仁互相看得到才會填，小吳哥提案）
+  worklogBoard:          { method: 'GET' },
   // Group V: 修繕報價單產生器 → Ragic 化（maintenance-management/15，2026-07-24）。無固定
   // WORKER secret token gate（不像 Group S/T/U）——rqGet 的守門是「建單當下產生、僅該筆記錄
   // 持有」的分享token 逐筆交叉比對，token-only IDOR 防護見下方 handler 註解。
@@ -723,7 +725,13 @@ const WORKLOG_CATEGORY_GROUPS = new Set(['工務', '租賃', '社宅']);
 // 避免擋到合理輸入，同時防止異常超長字串灌入）。
 const WORKLOG_TEXT_MAX = { caseName: 200, repairReason: 300, plannedSchedule: 300, note: 500 };
 const WORKLOG_MAX_BATCH = 13; // 一天最多 11 小時格＋前後桶籃，批次上限比欄位數再留餘裕
-const WORKLOG_ACTIONS = new Set(['worklogCreate', 'worklogListMine', 'worklogListAll']);
+const WORKLOG_ACTIONS = new Set(['worklogCreate', 'worklogListMine', 'worklogListAll', 'worklogBoard']);
+// 全員公開看板（2026-10-12，規格書「2026-10-08 改版方向」）：名單＝人事表 租賃部・在職・承攬
+// （兼職不用填，Joan 2026-07-28）；當天排班表有 排休／特休／請假 的人整排沉底。
+// 欄位 ID 與 schedule-guard fallback-constants.js 的 F_EMP 同一批。
+const WORKLOG_BOARD_DEPTS = new Set(['租賃部']);
+const WORKLOG_BOARD_OFF_TYPES = new Set(['排休', '特休', '請假']);
+const WORKLOG_EMP_F = Object.freeze({ name: '3000933', dept: '3000937', status: '3000945', hire: '3000955' });
 
 function parseWorklogTokenConfig(env) {
   let tokens;
@@ -828,8 +836,51 @@ async function findWorklogRowByTime(env, name, date, startTime, endTime) {
   return entries.length > 0 ? entries[0][0] : null;
 }
 
+async function handleWorklogBoard(url, env, identity, origin) {
+  const rawDate = url.searchParams.get('date');
+  const date = rawDate ? worklogNormalizeDate(rawDate) : worklogTodayDate();
+  if (!date) return jsonResp({ error: 'invalid_date' }, 400, origin);
+  const enc = encodeURIComponent;
+  const [emp, leave, logs] = await Promise.all([
+    getFromRagic(env, 'ragicforms4/20004', `naming=EID&limit=0,500&where=${enc(`${WORKLOG_EMP_F.status},eq,在職`)}`),
+    getFromRagic(env, 'ragicforms4/2', `naming=EID&limit=0,500&where=${enc(`${SCHEDULE_F_LEAVE_DATE},eq,${date}`)}`),
+    getFromRagic(env, WORKLOG_SHEET, `naming=EID&limit=0,1000&where=${WF.date},eq,${enc(date)}`),
+  ]);
+  for (const r of [emp, leave, logs]) {
+    const fail = detectUpstreamFailure(r.upstream, r.data);
+    if (fail) return jsonResp(fail, 502, origin);
+  }
+  const rows = (data) => Object.entries(data || {}).filter(([k]) => /^\d+$/.test(k));
+  const offType = new Map();
+  for (const [, rec] of rows(leave.data)) {
+    const t = worklogClean(rec[SCHEDULE_F_LEAVE_TYPE]);
+    if (WORKLOG_BOARD_OFF_TYPES.has(t)) offType.set(worklogClean(rec[SCHEDULE_F_LEAVE_EMP]), t);
+  }
+  const names = [];
+  for (const [, rec] of rows(emp.data).sort((a, b) => Number(a[0]) - Number(b[0]))) {
+    const name = worklogClean(rec[WORKLOG_EMP_F.name]);
+    if (!name || names.includes(name)) continue;
+    if (!WORKLOG_BOARD_DEPTS.has(worklogClean(rec[WORKLOG_EMP_F.dept]))) continue;
+    if (worklogClean(rec[WORKLOG_EMP_F.status]) !== '在職' || worklogClean(rec[WORKLOG_EMP_F.hire]) !== '承攬') continue;
+    names.push(name);
+  }
+  const members = names.map((name) => ({ name, off: offType.has(name), offType: offType.get(name) || '' }));
+  members.sort((a, b) => Number(a.off) - Number(b.off)); // 穩定排序：上班的保持人事表順序在上
+  const roster = new Set(names);
+  const entries = rows(logs.data)
+    .map(([rid, rec]) => worklogPublicRecord(rid, rec))
+    .filter((e) => roster.has(e.reporter))
+    .sort((a, b) => worklogSortKey(a).localeCompare(worklogSortKey(b)));
+  return jsonResp({
+    ok: true, date, members, entries,
+    viewer: { role: identity.role, name: identity.name, categoryGroup: identity.categoryGroup ?? null },
+  }, 200, origin);
+}
+
 async function handleWorklogAction(action, request, env, identity, origin) {
   const url = new URL(request.url);
+
+  if (action === 'worklogBoard') return handleWorklogBoard(url, env, identity, origin);
 
   if (action === 'worklogListMine' || action === 'worklogListAll') {
     if (action === 'worklogListAll' && identity.role !== 'manager') {
@@ -857,6 +908,8 @@ async function handleWorklogAction(action, request, env, identity, origin) {
   }
 
   if (action === 'worklogCreate') {
+    // Google 身分只有看板名單內的人能寫（token 身分沒有 canWrite 欄位，行為不變）
+    if (identity.canWrite === false) return jsonResp({ error: 'not_on_board' }, 403, origin);
     let body;
     try { body = await request.json(); } catch { return jsonResp({ error: 'bad_json' }, 400, origin); }
     const rows = Array.isArray(body?.entries) ? body.entries : null;
@@ -998,7 +1051,6 @@ async function handleWorklogAction(action, request, env, identity, origin) {
 // 呼叫前的舊 rid 再打第二次。
 // ═══════════════════════════════════════════════════════════════════════════════
 const PETTY_CASH_STAFF_SHEET = 'ragicforms4/20004';
-const PC_STAFF_TOKEN_FIELD = '1003215';
 const PC_STAFF_NAME_FIELD = '3000933';
 const PC_STAFF_DEPT_FIELD = '3000937';
 const PC_STAFF_TITLE_FIELD = '3000939'; // 職稱（同一次人事表查詢一併取回，見 authenticateRepairConsoleGoogle）
@@ -1652,23 +1704,8 @@ function ssPublicRecord(entry, includeDeleteInfo = false, includeSignature = fal
   };
 }
 
-// A：同仁身分，`?token=` 反查人事表。失敗（不存在／格式錯／離職／非在職試用狀態）一律回 null，
-// 呼叫端統一映射同型 404（不分因由防列舉）。【與 finance2/14 資料層無關，完全不動】
-async function authenticatePettyCashStaff(url, env) {
-  const token = url.searchParams.get('token') || '';
-  if (!validUuid(token)) return null;
-  const qs = `naming=EID&limit=0,1&where=${PC_STAFF_TOKEN_FIELD},eq,${encodeURIComponent(token)}`;
-  const { upstream, data } = await getFromRagic(env, PETTY_CASH_STAFF_SHEET, qs);
-  if (!upstream.ok || !data) return null;
-  const records = Object.values(data).filter((r) => r && typeof r === 'object');
-  if (records.length === 0) return null;
-  const rec = records[0];
-  const status = pcClean(rec[PC_STAFF_STATUS_FIELD]);
-  if (!PC_ACTIVE_STATUSES.has(status)) return null;
-  const name = pcClean(rec[PC_STAFF_NAME_FIELD]);
-  if (!name) return null;
-  return { role: 'staff', name, department: pcClean(rec[PC_STAFF_DEPT_FIELD]) };
-}
+// A（同仁 `?token=`，反查人事表 1003215）2026-10-06 移除：同仁一律 Google 登入，
+// Joan 拍板拿掉零用金請款Token 欄位。`?token=` 現在只剩 B（財務）。
 
 // B：財務身分，`?token=` 比對 Worker secret（比照 parseWorklogTokenConfig 手法）。
 function parsePettyCashFinanceTokens(env) {
@@ -1698,8 +1735,6 @@ function authenticatePettyCashFinance(url, env) {
 // 不符也回同型 404（見路由段落）。**TODO: Google 登入穩定後移除**（見下方 C，2026-08-03
 // 起這條只在請求沒帶 Authorization header 時才會被呼叫，是 fallback 路徑，本身不動）。
 async function authenticatePettyCash(url, env) {
-  const staff = await authenticatePettyCashStaff(url, env);
-  if (staff) return staff;
   return authenticatePettyCashFinance(url, env);
 }
 
@@ -1968,6 +2003,82 @@ async function authenticateRepairConsoleGoogle(request, env, origin) {
   const ttlMs = Math.max(0, Math.min(5 * 60 * 1000, remainingMs));
   repairConsoleGoogleAuthCache.set(cacheKey, { expiresAt: Date.now() + ttlMs, identity });
   return identity;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Group U 追加：租賃部動態看板（worklogBoard／worklogCreate）Google 登入（2026-10-14，
+// 51 條同仁連結改 Google 登入第 3 批）。與舊 WORKLOG_TOKENS_JSON `?token=` 並存，不關閉。
+// 驗證鏈同第 1、2 批（tokeninfo + aud + email_verified）；身分一律由 Worker 反查人事表：
+//   可看：在職 且（部門 ∈ {租賃部, 社宅部} 或 管理者）。管理者＝部門「經營階層」或 email 在
+//        PETTY_CASH_FINANCE_EMAILS／PETTY_CASH_VIEWER_EMAILS（既有系統判主管的同一份名單，
+//        Joan 本人部門是管理部，所以不能只看部門）。其他人 403 not_whitelisted。
+//   可寫（canWrite）：看板名單內的人＝部門 ∈ WORKLOG_BOARD_DEPTS・在職・承攬（與
+//        handleWorklogBoard 名單規則同一組常數）。填寫人用人事表姓名，須與 Ragic 使用者顯示
+//        名稱逐字一致，否則會被靜默清空（開發紀錄 2026-07-22）。
+// categoryGroup 由部門推導（租賃部→租賃、社宅部→社宅，其餘 null＝不分組），不經
+// WORKLOG_CATEGORY_GROUPS fail-closed 的 token 設定解析，所以不會有「一筆壞全壞」風險。
+// viewer 格式與 token 路徑完全相同（role／name／categoryGroup），前端不用分支。
+// 只開給 worklogBoard／worklogCreate；其他 worklog action 帶 Authorization 仍走 token 判斷。
+// ─────────────────────────────────────────────────────────────────────────────
+const WORKLOG_GOOGLE_ACTIONS = new Set(['worklogBoard', 'worklogCreate']);
+const WORKLOG_VIEW_DEPTS = new Set(['租賃部', '社宅部']);
+const WORKLOG_DEPT_GROUP = Object.freeze({ '租賃部': '租賃', '社宅部': '社宅' });
+const worklogGoogleEmailCache = new Map(); // sha256(idToken) → { expiresAt, email }
+
+async function authenticateWorklogGoogle(request, env, origin) {
+  const authHeader = request.headers.get('Authorization') || '';
+  const m = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
+  const idToken = m ? m[1].trim() : '';
+  if (!idToken) return null; // 沒帶 Authorization → 呼叫端 fallback 舊 `?token=` 路徑
+
+  const fail = (status, error) => ({ __authError: jsonResp({ error }, status, origin) });
+
+  // 只快取「這顆 ID token 驗過是誰」；人事表判斷每次走 pcGetStaffRecords（60 秒快取），
+  // 離職／轉部門最多延遲 60 秒生效。
+  const cacheKey = await pcSha256Hex(idToken);
+  let email;
+  const cached = worklogGoogleEmailCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    email = cached.email;
+  } else {
+    let info;
+    try {
+      const res = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken));
+      if (!res.ok) return fail(401, 'invalid_session');
+      info = await res.json();
+    } catch {
+      return fail(401, 'invalid_session');
+    }
+    if (!info || info.aud !== PC_GOOGLE_CLIENT_ID) return fail(401, 'wrong_audience');
+    if (info.email_verified === 'false') return fail(403, 'email_unverified');
+    email = pcClean(info.email).toLowerCase();
+    if (!email) return fail(401, 'invalid_session');
+    const expSeconds = Number(info.exp);
+    const remainingMs = Number.isFinite(expSeconds) ? (expSeconds * 1000 - Date.now()) : 0;
+    worklogGoogleEmailCache.set(cacheKey, { expiresAt: Date.now() + Math.max(0, Math.min(5 * 60 * 1000, remainingMs)), email });
+  }
+
+  const records = await pcGetStaffRecords(env);
+  if (!records) return fail(403, 'not_whitelisted');
+  const rec = records.find((r) => pcClean(r[PC_STAFF_EMAIL_FIELD]).toLowerCase() === email);
+  const name = rec ? pcClean(rec[PC_STAFF_NAME_FIELD]) : '';
+  const department = rec ? pcClean(rec[PC_STAFF_DEPT_FIELD]) : '';
+  const status = rec ? pcClean(rec[PC_STAFF_STATUS_FIELD]) : '';
+  const hire = rec ? pcClean(rec[WORKLOG_EMP_F.hire]) : '';
+  if (!rec || !name || status !== '在職') return fail(403, 'not_whitelisted');
+
+  const isManager = department === '經營階層' ||
+    parsePettyCashFinanceEmails(env).has(email) || parsePettyCashViewerEmails(env).has(email);
+  if (!WORKLOG_VIEW_DEPTS.has(department) && !isManager) return fail(403, 'not_whitelisted');
+
+  return {
+    role: isManager ? 'manager' : 'staff',
+    name,
+    categoryGroup: WORKLOG_DEPT_GROUP[department] ?? null,
+    canWrite: WORKLOG_BOARD_DEPTS.has(department) && hire === '承攬',
+    department,
+    email,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -5409,7 +5520,14 @@ export default {
     // 失敗一律同型 404（不分因由防列舉），比照上方 P5 / Group T / v29 / v30 手法。
     let worklogIdentity = null;
     if (WORKLOG_ACTIONS.has(action)) {
-      worklogIdentity = authenticateWorklog(url, env);
+      // 2026-10-14 雙軌：看板兩支 action 帶 Authorization header 走 Google（見
+      // authenticateWorklogGoogle），驗證失敗回該錯誤本身、不 fallback；沒帶才走舊 `?token=`。
+      if (WORKLOG_GOOGLE_ACTIONS.has(action)) {
+        const wlGoogle = await authenticateWorklogGoogle(request, env, allowedOrigin);
+        if (wlGoogle && wlGoogle.__authError) return wlGoogle.__authError;
+        worklogIdentity = wlGoogle;
+      }
+      if (!worklogIdentity) worklogIdentity = authenticateWorklog(url, env);
       if (!worklogIdentity) return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
     }
 
@@ -5718,9 +5836,6 @@ export default {
             newForm.append(outKey, value);
           }
         }
-        // 零用金請款Token（PC_STAFF_TOKEN_FIELD）在 Ragic 設為必填，新人填表沒有這欄會整筆被退（2026-10-06）。
-        // 比照 2026-07-28 既有同仁的做法發一組 UUID v4；伺服器端產生、不在白名單內，前端無法指定。
-        newForm.append(PC_STAFF_TOKEN_FIELD, crypto.randomUUID());
         const upstream = await ragicFetch(`${env.RAGIC_BASE}/ragicforms4/20004?api`, {
           method: 'POST', headers: { 'Authorization': 'Basic ' + env.RAGIC_KEY }, body: newForm,
         });
@@ -5898,6 +6013,13 @@ export default {
           const { upstream: tu, data: td } = await getFromRagic(env, 'payments/2', tokenQs);
           if (!tu.ok) return jsonResp({ error: 'upstream_error', code: tu.status }, 502, allowedOrigin);
           if (Object.keys(td || {}).length === 0) return jsonResp({ error: 'record_not_found' }, 404, allowedOrigin);
+          // 2026-10-07：Ragic 清單查詢（where=）不回簽名欄 1000786/1000787，驗證永遠判成「沒簽名」
+          // → 客戶簽收明明存進去了卻看到 VERIFY_MISSING_SIG。改用單筆 GET 取完整欄位再回傳。
+          const tokRid = Object.keys(td)[0];
+          if (validRid(tokRid)) {
+            const { upstream: fu, data: fd } = await getFromRagic(env, `payments/2/${tokRid}`, 'naming=EID');
+            if (fu.ok && fd && Object.keys(fd).length > 0) return jsonResp(fd, 200, allowedOrigin);
+          }
           return jsonResp(td || {}, 200, allowedOrigin);
         }
 
