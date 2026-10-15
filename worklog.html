@@ -189,11 +189,14 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
 // 動態看板（照 2026-10-08 示範頁；資料接 Worker worklogBoard／worklogCreate）。
 // 身分由網址通行碼決定（同現行 worklog.html：?token= 或 localStorage 同一個 key），沒有「我是」下拉。
 const WORKER_BASE="https://wuohome-ragic-proxy.wuohome.workers.dev";
-const TOKEN_STORE_KEY="wuohome_worklog_v2_token_v1"; // 與 worklog.html 同 key，同瀏覽器開過連結就免重帶
+const TOKEN_STORE_KEY="wuohome_worklog_v2_token_v1"; // 舊版存通行碼的 key，現在只用來清掉
 function resolveToken(){
-  let u="";try{u=new URLSearchParams(location.search).get("token")||""}catch{} // ponytail-debt: 網址解析失敗視同沒帶通行碼，後面會顯示「少了通行碼」訊息；沿用現行 worklog.html 寫法；日後可改成回報給後端記錄
-  if(u){try{localStorage.setItem(TOKEN_STORE_KEY,u)}catch{}return u} // ponytail-debt: 隱私模式寫不進 localStorage 不該中斷看板，只是下次要重帶連結；沿用現行 worklog.html 寫法；日後可改成回報給後端記錄
-  try{return localStorage.getItem(TOKEN_STORE_KEY)||""}catch{return ""}
+  // 身分只認「這次網址帶的」通行碼。不再沿用瀏覽器裡存過的別人通行碼——共用電腦或手機上，
+  // 前一個人點過他的專屬連結，後一個人開共用網址會被當成他（2026-10-15 WeiWei 開到張忠豪）。
+  // 沒帶通行碼就走 Google 登入；順手清掉舊版存下的通行碼。
+  try{localStorage.removeItem(TOKEN_STORE_KEY)}catch{} // ponytail-debt: 清不掉也無妨，下面已不再讀它
+  let u="";try{u=new URLSearchParams(location.search).get("token")||""}catch{} // ponytail-debt: 網址解析失敗視同沒帶通行碼，改走 Google 登入
+  return u;
 }
 let TOKEN=resolveToken();
 
