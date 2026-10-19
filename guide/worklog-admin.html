@@ -10,7 +10,7 @@ h1{font-size:26px;margin:8px 0 4px}h2{font-size:21px;margin:34px 0 8px;padding-t
 img{max-width:100%;border:1px solid #e1e4e2;border-radius:12px;display:block;margin:10px auto}
 img.phone{max-width:340px}
 .c{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:4px}
-.out{background:#dde9f7;border-left:3px solid #2f6fb5}.in{background:#e6e9e8;border-left:3px solid #5e6664}.away{background:#f6ebd2;border-left:3px solid #8a5a00}.dash{border:1.5px dashed #b9c1bf}
+.out{background:#dde9f7;border-left:3px solid #2f6fb5}.in{background:#e6e9e8;border-left:3px solid #5e6664}.away{background:#f6ebd2;border-left:3px solid #8a5a00}.dash{border:1.5px dashed #b9c1bf}.meet{background:#dcf2e3;border-left:3px solid #1f6b3a}.q{background:#fff3e2;border:1.5px dashed #e08a1e}
 .tip{background:#dcefeb;border-radius:10px;padding:10px 14px;margin:12px 0}.warn{background:#f9e8df;color:#8a3a18;border-radius:10px;padding:10px 14px;margin:12px 0}
 table{border-collapse:collapse;width:100%;background:#fff;font-size:16px}td,th{border:1px solid #e1e4e2;padding:8px 10px;text-align:left;vertical-align:top}th{background:#eef0ee}
 </style>
@@ -23,12 +23,14 @@ table{border-collapse:collapse;width:100%;background:#fff;font-size:16px}td,th{b
 <div class="step"><b class="n">1</b><div>用主管連結打開（網址跟以前一樣）。主管連結不要轉給同仁。<b>也可以用 Google 登入</b>：開看板網址，按「Google 登入」，選公司登記的帳號即可（經營階層和管理帳號都看得到整個看板）。</div></div>
 <div class="step"><b class="n">2</b><div>整頁就是看板，沒有其他分頁。主管不在同仁名單上，只能看不能寫。</div></div>
 <h2>2. 看板上每一塊是什麼</h2>
-<p><b>最上面那行</b>：現在外出／在店裡／不在崗／沒寫／休假各幾人；下面是「今天 9:00–18:00 一筆都還沒寫」的名單，催人看這裡。</p>
+<p><b>最上面那行</b>：「此刻」店內／外出／開會／不在崗／不確定在哪／沒填／休假各幾人，並列出外出和不確定在哪的人名（點時間刻度可換成別的時間）；下面是「今天 9:00–18:00 一筆都還沒寫」的名單，催人看這裡。</p>
 <table><tr><th>看到</th><th>意思</th></tr>
-<tr><td><span class="c out"></span>藍色</td><td>外出跑案：開發、委託、帶看、簽約、修繕、續約、議價、退租點交（場勘、驗收也算）</td></tr>
-<tr><td><span class="c in"></span>灰色</td><td>在店裡：上廣告、其他</td></tr>
+<tr><td><span class="c in"></span>灰色</td><td>店內：寫這一段時，同仁自己選「店內」</td></tr>
+<tr><td><span class="c out"></span>藍色</td><td>外出：同仁自己選「外出」（外出一定要寫地點）</td></tr>
+<tr><td><span class="c meet"></span>綠色</td><td>例會／開會（顏色看項目，不管選店內或外出）</td></tr>
 <tr><td><span class="c away"></span>黃色</td><td>不在崗：請假、休假、上課、活動</td></tr>
-<tr><td><span class="c dash"></span>虛線框「＋」</td><td>9:00–18:00 之間還沒寫的空檔</td></tr>
+<tr><td><span class="c q"></span>橘色虛框</td><td>缺資訊、看不出人在哪：舊紀錄的「開發」「簽約」沒有店內／外出、外出沒寫地點、「其他」沒寫做什麼。請本人點進去補</td></tr>
+<tr><td><span class="c dash"></span>灰色虛線「＋」</td><td>9:00–18:00 之間還沒填的空檔（沒填不會當成在店內）</td></tr>
 <tr><td>紅框</td><td>同一個人兩段時間重疊了</td></tr>
 <tr><td>直線「現在」</td><td>目前時間</td></tr>
 <tr><td>名字下的百分比</td><td>9 點到 18 點寫了多少；低於 40% 會變紅</td></tr>
@@ -38,9 +40,9 @@ table{border-collapse:collapse;width:100%;background:#fff;font-size:16px}td,th{b
 <h2>3. 要派人：這個時間找誰？</h2>
 <p>點看板上方的整點（例如 14:00）：</p>
 <table><tr><th>分組</th><th>意思</th></tr>
-<tr><td>在店裡</td><td>那個時間寫的是灰色項目，可以找</td></tr>
-<tr><td>不知道</td><td>那個時間沒寫，要打電話問</td></tr>
-<tr><td>走不開</td><td>外出跑案或不在崗，旁邊寫他在做什麼</td></tr></table>
+<tr><td>在店裡</td><td>那個時間是灰色（店內），可以找</td></tr>
+<tr><td>不知道</td><td>那個時間沒填，或橘色缺資訊，要打電話問</td></tr>
+<tr><td>走不開</td><td>外出、開會或不在崗，旁邊寫他在做什麼</td></tr></table>
 <p>按上方「明天」看同仁先排好的行程，可以拿來預先派案。過去的日子看板不顯示，舊紀錄都還存在 Ragic，要查找工程師。</p>
 <h2>4. 誰看得到、誰能改</h2>
 <table><tr><th>誰</th><th>看得到</th><th>能改</th></tr>

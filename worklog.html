@@ -12,6 +12,8 @@
   --out:#2f6fb5; --out-soft:#dde9f7;     /* 外出跑案 */
   --in:#5e6664;  --in-soft:#e6e9e8;      /* 在店裡 */
   --away:#8a5a00; --away-soft:#f6ebd2;   /* 不在崗：請假、上課、活動 */
+  --meet:#1f6b3a; --meet-soft:#dcf2e3;   /* 例會／開會（顏色以項目為準，優先於店內／外出） */
+  --q:#9a5200; --q-soft:#fff3e2; --q-edge:#e08a1e; /* 缺資訊：不確定在哪、外出沒寫地點、其他沒寫內容 */
   --clash:#c81e1e;
   --display:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
@@ -21,12 +23,14 @@
   --accent:#53c4b0; --accent-soft:#1c3934; --empty-line:#3c4643;
   --warn:#f09a72; --warn-soft:#3b261b; --now:#d9ae2c; --off:#202625;
   --out:#8ab8ee; --out-soft:#1d2f47; --in:#b9c1bf; --in-soft:#262c2b; --away:#e8c06a; --away-soft:#3a2f17; --clash:#ff7a7a;
+  --meet:#9fdcb5; --meet-soft:#17382a; --q:#f3b866; --q-soft:#3a2a14; --q-edge:#d8892a;
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#121716; --surface:#1a201f; --ink:#e7ecea; --muted:#9ca6a3; --line:#2b3331; --grid:#222a28;
   --accent:#53c4b0; --accent-soft:#1c3934; --empty-line:#3c4643;
   --warn:#f09a72; --warn-soft:#3b261b; --now:#d9ae2c; --off:#202625;
   --out:#8ab8ee; --out-soft:#1d2f47; --in:#b9c1bf; --in-soft:#262c2b; --away:#e8c06a; --away-soft:#3a2f17; --clash:#ff7a7a;
+  --meet:#9fdcb5; --meet-soft:#17382a; --q:#f3b866; --q-soft:#3a2a14; --q-edge:#d8892a;
   color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--display);font-size:15px;line-height:1.5}
@@ -91,6 +95,8 @@ select{font:inherit;padding:5px 8px;border-radius:8px;border:1px solid var(--lin
 .blk.out{background:var(--out-soft);color:var(--out);border-left-color:var(--out)}
 .blk.in{background:var(--in-soft);color:var(--in);border-left-color:var(--in)}
 .blk.away{background:var(--away-soft);color:var(--away);border-left-color:var(--away)}
+.blk.meet{background:var(--meet-soft);color:var(--meet);border-left-color:var(--meet)}
+.blk.q{background:var(--q-soft);color:var(--q);border-left-color:var(--q-edge);outline:1.5px dashed var(--q-edge);outline-offset:-1.5px}
 .blk.clash{box-shadow:inset 0 0 0 2px var(--clash)}
 div.blk{cursor:default}
 .blk:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
@@ -114,6 +120,14 @@ div.blk{cursor:default}
 .cats button.out{background:var(--out-soft);color:var(--out)}
 .cats button.in{background:var(--in-soft);color:var(--in)}
 .cats button.away{background:var(--away-soft);color:var(--away)}
+.cats button.meet{background:var(--meet-soft);color:var(--meet)}
+.cats button.new::after{content:"新";font-size:10px;margin-left:3px;opacity:.8}
+.locs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.locs button{border:2px solid var(--line);border-radius:8px;padding:10px 2px;font:inherit;font-weight:700;cursor:pointer;background:var(--surface);color:var(--ink)}
+.locs button[aria-pressed="true"]{border-color:var(--ink);background:var(--accent-soft)}
+.fld{display:flex;flex-direction:column;gap:4px}.fld label{font-size:12px;color:var(--muted)}
+.hintline{font-size:13px;color:var(--q);margin:0}
+.pill.q{background:var(--q-soft);color:var(--q)}.pill.meet{background:var(--meet-soft);color:var(--meet)}
 .cats button[aria-pressed="true"]{border-color:var(--ink)}
 .times{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--muted)}
 .times select{font-family:var(--mono)}
@@ -153,8 +167,9 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
   <section class="help" id="help" hidden>
     <h3>怎麼用</h3>
     <ul>
-      <li><b>看</b>：每個人一條時間軸，藍＝外出跑案、灰＝在店裡、黃＝不在崗。點上面的整點（例如 14:00），會列出那個時間「在店裡／沒寫／走不開」的人。</li>
-      <li><b>寫</b>：只能寫自己那一排。點虛線空格（＋）或自己已寫的方塊，下面會滑出填寫框：選時間、選項目、寫案名或地址，按「存起來」，大家馬上看得到。</li>
+      <li><b>看</b>：每個人一條時間軸，顏色看「人在哪」：灰＝店內、藍＝外出、綠＝例會／開會、黃＝不在崗、橘虛框＝缺資訊（不知道人在哪）、灰虛線＝還沒填。最上面那行是「此刻」各有幾人；點上面的整點（例如 14:00），可以換成那個時間，並列出「在店裡／不確定／走不開」的人。</li>
+      <li><b>寫</b>：只能寫自己那一排。點虛線空格（＋）或自己已寫的方塊，下面會滑出填寫框：選時間、選項目、選「店內」或「外出」（選項目時會自動帶入，可以改），按「存起來」，大家馬上看得到。</li>
+      <li><b>一定要寫的</b>：選「其他」要寫一句做什麼；選「外出」要寫地點。沒寫就存不了，框裡會用一句話告訴你少了什麼。</li>
       <li><b>改</b>：點自己的方塊就能改時間、項目、地點。自己那排在最上面，下面其他同仁的只能看、不能點。</li>
       <li><b>日期</b>：只能寫今天和明天，過去的日子不能再改。</li>
       <li><b>休假</b>：排班表有排休、特休、請假的人，會自動放在最下面，不用寫。</li>
@@ -167,10 +182,12 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
   <section class="headline" id="headline" aria-live="polite"></section>
 
   <div class="legend">
-    <span><i style="background:var(--out-soft);border-left:3px solid var(--out)"></i>藍＝外出跑案</span>
-    <span><i style="background:var(--in-soft);border-left:3px solid var(--in)"></i>灰＝在店裡</span>
-    <span><i style="background:var(--away-soft);border-left:3px solid var(--away)"></i>黃＝不在崗（請假、上課、活動）</span>
-    <span><i style="border:1.5px dashed var(--empty-line)"></i>虛線框＝9:00–18:00 還沒寫的空檔</span>
+    <span><i style="background:var(--in-soft);border-left:3px solid var(--in)"></i>灰＝店內</span>
+    <span><i style="background:var(--out-soft);border-left:3px solid var(--out)"></i>藍＝外出</span>
+    <span><i style="background:var(--meet-soft);border-left:3px solid var(--meet)"></i>綠＝例會／開會</span>
+    <span><i style="background:var(--away-soft);border-left:3px solid var(--away)"></i>黃＝不在崗（請假、休假、上課、活動）</span>
+    <span><i style="background:var(--q-soft);border:1.5px dashed var(--q-edge)"></i>橘虛框＝缺資訊，不知道人在哪</span>
+    <span><i style="border:1.5px dashed var(--empty-line)"></i>灰虛線＝9:00–18:00 還沒填的空檔</span>
   </div>
   <div class="note" id="rangeNote"></div>
 
@@ -186,7 +203,7 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
 <script src="bug-report.js" defer></script>
 
 <script>
-// 動態看板（照 2026-10-08 示範頁；資料接 Worker worklogBoard／worklogCreate）。
+// 每日工作行程（照 2026-10-08 示範頁、2026-10-19 改版示範頁：顏色看「人在哪」；資料接 Worker worklogBoard／worklogCreate）。
 // 身分由網址通行碼決定（同現行 worklog.html：?token= 或 localStorage 同一個 key），沒有「我是」下拉。
 const WORKER_BASE="https://wuohome-ragic-proxy.wuohome.workers.dev";
 const TOKEN_STORE_KEY="wuohome_worklog_v2_token_v1"; // 舊版存通行碼的 key，現在只用來清掉
@@ -200,13 +217,20 @@ function resolveToken(){
 }
 let TOKEN=resolveToken();
 
-// 租賃部 14 個項目，依「人在哪」分三組（工務舊項目場勘、驗收也歸外出，只為了讀舊資料時上色）
+// 項目依性質分四組（2026-10-19 起顏色看同仁自己選的「人在哪」，項目只決定預設值）：
+// 外出跑案／在店裡／例會（綠，顏色以項目為準）／不在崗（黃）。「開發」已拆成電話開發、拜訪屋主，新填選單不再有它，舊紀錄照常顯示。
 const GROUPS={
-  out:["開發","委託","帶看","簽約","修繕","續約","議價","退租點交"],
-  in:["上廣告","其他"],
+  out:["拜訪屋主","帶看","委託","簽約","修繕","續約","議價","退租點交"],
+  in:["電話開發","上廣告","文書／資料整理","其他"],
+  meet:["例會／開會"],
   away:["請假","休假","上課","活動"]};
-const OUT_EXTRA=["場勘","驗收"];
-const kindOf=c=>(GROUPS.out.includes(c)||OUT_EXTRA.includes(c))?"out":GROUPS.away.includes(c)?"away":"in";
+const NEW_CATS=["電話開發","拜訪屋主","例會／開會","文書／資料整理"];
+const OLD_OUT=["開發","委託","帶看","簽約","修繕","續約","議價","退租點交","場勘","驗收"]; // 舊紀錄沒有「人在哪」時，照項目推
+const AMBIG=["開發","簽約"];        // 舊紀錄沒有「人在哪」時，這兩項分不出在店內或外出 → 顯示「不確定在哪」
+const chipKind=c=>GROUPS.out.includes(c)?"out":GROUPS.meet.includes(c)?"meet":GROUPS.away.includes(c)?"away":"in";
+const defaultLoc=c=>(GROUPS.out.includes(c)||["場勘","驗收"].includes(c))?"外出":"店內"; // 選項目時自動帶入的店內／外出，同仁可改
+const PLACE_JUNK=["","未寫地點"];           // 外出時這兩種等於沒寫地點
+const WHAT_JUNK=["","店內","未寫地點"];     // 舊的「其他」只寫了這些字，等於沒寫做什麼
 const OTHER="其他";
 const CORE=[9*60,18*60];
 const MID=[9*60,19*60]; // 時間軸固定「~09:00前｜09–19 點每小時｜19:00~後」，頭尾各收成一格（同舊工作日誌的 0900之前／19:00之後）
@@ -233,10 +257,25 @@ function toRec(r){
     if(h==="0900之前"){s="08:00";e="09:00"}else if(h==="19:00之後"){s="19:00";e="20:00"}
     else{const m=/^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/.exec(h);if(!m)return null;s=`${m[1]}:${m[2]}`;e=`${m[3]}:${m[4]}`}}
   const S=t(s),E=t(e);if(!(E>S))return null;
-  let label=r.category||"未填項目",note=r.note||"";
-  const om=r.category===OTHER?/^【([^】]*)】([\s\S]*)$/.exec(note):null;
-  if(om)label=om[1]||OTHER;
-  return {id:r.rid,s:S,e:E,cat:label,rawCat:r.category,kind:kindOf(r.category),place:r.caseName||"",raw:r};
+  const cat=r.category||"未填項目", note=r.note||"", loc=r.location||"", caseName=(r.caseName||"").trim();
+  // 「其他」寫了什麼：新紀錄在 note 開頭 【做什麼】；舊紀錄是把字寫在案名／地址欄
+  let label=cat, place=caseName, hint="", missing=false;
+  if(cat===OTHER){
+    const om=/^【([^】]*)】/.exec(note);
+    if(om&&om[1].trim())label=om[1].trim();
+    else if(!WHAT_JUNK.includes(caseName)){label=caseName;place=""}
+    else{label=OTHER;hint="沒寫做什麼";missing=true}
+  }
+  let kind;
+  if(GROUPS.away.includes(cat))kind="away";
+  else if(cat==="例會／開會")kind="meet";
+  else if(missing)kind="q";
+  else if(loc==="外出"&&PLACE_JUNK.includes(place)){kind="q";hint="外出但沒寫地點";missing=true}
+  else if(loc)kind=loc==="外出"?"out":"in";
+  else if(AMBIG.includes(cat)){kind="q";hint=cat==="開發"?"電話還是拜訪？":"店內還是外出？";missing=true}
+  else if(cat===OTHER&&/開會|會議/.test(label))kind="meet"; // 舊紀錄：其他寫「開會」→ 綠
+  else kind=OLD_OUT.includes(cat)?"out":"in";
+  return {id:r.rid,s:S,e:E,cat:label,rawCat:cat,kind,place,hint,loc,missing,raw:r};
 }
 function buildDay(json){
   const by=new Map();(json.entries||[]).forEach(r=>{const x=toRec(r);if(!x)return;if(!by.has(r.reporter))by.set(r.reporter,[]);by.get(r.reporter).push(x)});
@@ -341,19 +380,23 @@ function render(){
   board.style.setProperty("--trackw",trackW+"px");board.style.setProperty("--hw",H+"px");
   board.style.setProperty("--namew",namew+"px");board.style.setProperty("--gx",(preW%H)+"px");
   const nowX=NOW<MID[0]&&!early?preW/2:NOW>MID[1]&&!late?preW+10*H+postW/2:x(NOW);
-  $("rangeNote").textContent=`「~09:00前」「19:00~後」兩段會照當天最早出門、最晚回來的行程自動拉長`+(early||late?`（${day?"明天":"今天"}${early?fmt(minS)+" 就有人出門":""}${early&&late?"，":""}${late?"到 "+fmt(maxE)+" 還有人在外面":""}）`:"")+`；虛線框只標 9:00–18:00 的空檔。`+(canWrite?"":ro.has(me)?"你這一排是從你的行事曆（TimeTree）自動帶入的，這頁只能看。":me&&data.members.some(m=>m.name===me)?"你今天排休，這頁只能看。":(VIEWER&&VIEWER.role==="manager"?"你是主管身分（不在同仁名單上），這頁只能看。":"你今天不在看板名單上（人事表要是租賃部・在職・承攬），這頁只能看；有問題請跟主管說。"));
+  $("rangeNote").textContent=`「~09:00前」「19:00~後」兩段會照當天最早出門、最晚回來的行程自動拉長`+(early||late?`（${day?"明天":"今天"}${early?fmt(minS)+" 就有人出門":""}${early&&late?"，":""}${late?"到 "+fmt(maxE)+" 還有人在外面":""}）`:"")+`；灰虛線只標 9:00–18:00 還沒填的空檔。`+(canWrite?"":ro.has(me)?"你這一排是從你的行事曆（TimeTree）自動帶入的，這頁只能看。":me&&data.members.some(m=>m.name===me)?"你今天排休，這頁只能看。":(VIEWER&&VIEWER.role==="manager"?"你是主管身分（不在同仁名單上），這頁只能看。":"你今天不在看板名單上（人事表要是租賃部・在職・承攬），這頁只能看；有問題請跟主管說。"));
 
-  const m=focus??NOW;let o=0,i=0,a=0,u=0;
-  working.forEach(n=>{const k=at(D.get(n),m);if(!k.length){if(!ro.has(n))u++}else{const kd=k[0].kind;kd==="out"?o++:kd==="away"?a++:i++}});
+  const m=focus??NOW;let o=0,i=0,a=0,u=0,mt=0,q=0;const outN=[],qN=[];
+  working.forEach(n=>{const k=at(D.get(n),m);if(!k.length){if(!ro.has(n))u++}else{const kd=k[0].kind;
+    if(kd==="out"){o++;outN.push(n)}else if(kd==="away")a++;else if(kd==="meet")mt++;else if(kd==="q"){q++;qN.push(n)}else i++}});
   const zero=working.filter(n=>!ro.has(n)&&!coreMinutes(D.get(n)));
   const dayWord=day?"明天":"今天";
   const when=day?`明天 ${fmt(m)} 預計`:(focus==null?`現在 ${fmt(m)}`:fmt(m));
   $("headline").innerHTML=`<span class="time">${when}</span>
-   <span><span class="n">${o}</span><span class="lbl">人外出</span></span>
-   <span><span class="n">${i}</span><span class="lbl">人在店裡</span></span>
-   <span><span class="n">${a}</span><span class="lbl">人不在崗</span></span>
-   <span><span class="n warnN">${u}</span><span class="lbl">人沒寫</span></span>
-   <span><span class="n">${resting.filter(m=>!isDesign(m)).length}</span><span class="lbl">人休假</span></span>
+   <span><span class="n">${i}</span><span class="lbl">店內</span></span>
+   <span><span class="n">${o}</span><span class="lbl">外出</span></span>
+   <span><span class="n">${mt}</span><span class="lbl">開會</span></span>
+   <span><span class="n">${a}</span><span class="lbl">不在崗</span></span>
+   <span><span class="n warnN">${q}</span><span class="lbl">不確定在哪</span></span>
+   <span><span class="n warnN">${u}</span><span class="lbl">沒填</span></span>
+   <span><span class="n">${resting.filter(m=>!isDesign(m)).length}</span><span class="lbl">休假</span></span>
+   ${o||q?`<div class="missing">${o?`外出：<b style="color:var(--out)">${outN.map(esc).join("、")}</b>`:""}${o&&q?"　":""}${q?`不確定在哪：<b>${qN.map(esc).join("、")}</b>`:""}</div>`:""}
    <div class="missing">${zero.length?`${dayWord} 9:00–18:00 一筆都還沒寫：<b>${zero.map(esc).join("、")}</b>`:"有上班的人都已經寫了"}</div>`;
 
   REFS=[];
@@ -365,7 +408,7 @@ function render(){
   const rowOf=n=>{
     const list=D.get(n), pct=Math.round(coreMinutes(list)/(CORE[1]-CORE[0])*100), cl=clashes(list);
     const k=focus!=null?at(list,focus):[];
-    const dim=focus!=null&&k.length&&k[0].kind!=="in";
+    const dim=focus!=null&&k.length&&k[0].kind!=="in"&&k[0].kind!=="q";
     const mine=n===me, own=mine&&!ro.has(n); // own＝這排我自己能寫
     html+=`<div class="row ${mine?"mine":""} ${dim?"rowdim":""}">
       <div class="cellname"><span>${esc(n)}${mine?`<span class="me">我</span>`:""}</span><span class="cnt ${!ro.has(n)&&pct<40?"low":""}">${ro.has(n)?"設計部・行事曆":`9–18 點寫了 ${pct}%`}</span></div>
@@ -375,8 +418,8 @@ function render(){
       if(own)html+=`<button class="gap" data-s="${s}" data-e="${e}" style="left:${x(s)+2}px;width:${x(e)-x(s)-4}px">${e-s>=45?"＋ 寫":"＋"}</button>`;
     });
     const blk=(r,L,W)=>{const tag=own?"button":"div", idx=own?REFS.push({n,r})-1:-1; // 別人的方塊只顯示、不能點
-      return `<${tag} class="blk ${r.kind} ${cl.has(r.id)?"clash":""} ${W<64?"xs":W<110?"sm":""}" data-i="${idx}" style="left:${L+1}px;width:${Math.max(W-2,18)}px" title="${fmt(r.s)}–${fmt(r.e)} ${esc(r.cat)} ${esc(r.place)}">
-        <span class="t">${esc(r.cat)}</span><span class="p">${esc(r.place)}</span><span class="tm">${fmt(r.s)}–${fmt(r.e)}</span></${tag}>`};
+      return `<${tag} class="blk ${r.kind} ${cl.has(r.id)?"clash":""} ${W<64?"xs":W<110?"sm":""}" data-i="${idx}" style="left:${L+1}px;width:${Math.max(W-2,18)}px" title="${fmt(r.s)}–${fmt(r.e)} ${esc(r.cat)} ${esc(r.place)} ${esc(r.hint)}">
+        <span class="t">${esc(r.cat)}</span><span class="p">${esc(r.missing?r.hint:r.place)}</span><span class="tm">${fmt(r.s)}–${fmt(r.e)}</span></${tag}>`};
     list.forEach(r=>html+=blk(r,x(r.s),x(r.e)-x(r.s)));
     if(isToday)html+=`<div class="nowline" style="left:${nowX}px"></div>`;
     if(focus!=null)html+=`<div class="focusline" style="left:${x(focus)}px"></div>`;
@@ -402,12 +445,12 @@ function renderWho(working){
   const w=$("who");if(focus==null){w.hidden=true;return}
   const D=STATE.D, k=n=>at(D.get(n),focus)[0];
   const inShop=working.filter(n=>k(n)&&k(n).kind==="in");
-  const unknown=working.filter(n=>!k(n));
-  const out=working.filter(n=>k(n)&&k(n).kind!=="in");
+  const unknown=working.filter(n=>!k(n)||k(n).kind==="q");
+  const out=working.filter(n=>k(n)&&k(n).kind!=="in"&&k(n).kind!=="q");
   w.hidden=false;
   w.innerHTML=`<h3>${fmt(focus)} 要派人，找誰？</h3>
    <div class="grp"><span>在店裡</span>${inShop.map(n=>`<span class="pill" style="background:var(--accent-soft);color:var(--accent)">${esc(n)}</span>`).join("")||"—"}</div>
-   <div class="grp"><span>不知道</span>${unknown.map(n=>`<span class="pill" style="background:var(--warn-soft);color:var(--warn)">${esc(n)}（沒寫）</span>`).join("")||"—"}</div>
+   <div class="grp"><span>不知道</span>${unknown.map(n=>`<span class="pill" style="background:var(--warn-soft);color:var(--warn)">${esc(n)}（${k(n)?"不確定在哪":"沒填"}）</span>`).join("")||"—"}</div>
    <div class="grp"><span>走不開</span>${out.map(n=>`<span class="pill" style="background:var(--off);color:var(--muted)">${esc(n)}・${esc(k(n).cat)}</span>`).join("")||"—"}</div>
    <div class="row2" style="justify-content:flex-start"><button class="btn" id="unfocus">收起來</button></div>`;
   $("unfocus").onclick=()=>{focus=null;render()};
@@ -422,28 +465,63 @@ const withVal=(html,v)=>html.includes(`value="${v}"`)?html:`<option value="${v}"
 
 function openEntry(n,r){
   if(n!==(VIEWER&&VIEWER.name)){
+    const where=r.kind==="out"?"外出":r.kind==="in"?"店內":r.kind==="meet"?"例會／開會":r.kind==="away"?"不在崗":"不確定在哪";
     $("sheetIn").innerHTML=`<h2>${esc(n)}・${fmt(r.s)}–${fmt(r.e)}</h2><p style="margin:0"><b>${esc(r.cat)}</b>　${esc(r.place)}</p>
+      <p style="margin:0;font-size:13px">${esc(where)}${r.hint?`（${esc(r.hint)}）`:""}</p>
       <p style="margin:0;font-size:13px;color:var(--muted)">只有 ${esc(n)} 自己可以改自己這一排。</p>
       <div class="row2"><button class="btn" id="close">關閉</button></div>`;
     $("close").onclick=closeSheet;$("sheet").hidden=false;return}
-  draft={id:r.id,s:r.s,e:r.e,cat:r.rawCat,place:r.place,raw:r.raw};showForm(true);
+  // 舊紀錄「開發」已拆成電話開發、拜訪屋主：要改就得重選；其他舊紀錄沒有「人在哪」時，先帶項目的預設值，同仁可改
+  const cat=r.rawCat==="開發"?null:r.rawCat;
+  let what="",place=r.place;
+  if(r.rawCat===OTHER){what=r.cat===OTHER?"":r.cat}
+  draft={id:r.id,s:r.s,e:r.e,cat,place,what,loc:r.loc||(cat&&!AMBIG.includes(r.rawCat)?defaultLoc(cat):null),raw:r.raw};showForm(true);
 }
-function openNew(s,e){draft={id:null,s,e:Math.min(e,s+60),cat:null,place:"",raw:null};showForm(false)}
+function openNew(s,e){draft={id:null,s,e:Math.min(e,s+60),cat:null,place:"",what:"",loc:null,raw:null};showForm(false)}
+// 填寫規則：沒選項目、沒選人在哪、「其他」沒寫做什麼、外出沒寫地點，都不能存；回一句講原因
+function draftProblem(){
+  if(!draft.cat)return draft.rawWas==="開發"?"「開發」已拆成電話開發和拜訪屋主，請選一個。":"先選一個項目。";
+  if(!draft.loc)return "選一下人是在店內還是外出。";
+  if(draft.cat===OTHER&&!(draft.what||"").trim())return "選「其他」要寫一句做什麼。";
+  if(draft.loc==="外出"&&PLACE_JUNK.includes((draft.place||"").trim()))return "外出要寫地點。";
+  return "";
+}
 function showForm(editing){
-  const btn=c=>`<button data-c="${c}" class="${kindOf(c)}" aria-pressed="${draft.cat===c}">${c}</button>`;
+  const btn=c=>`<button data-c="${c}" class="${chipKind(c)}${NEW_CATS.includes(c)?" new":""}" aria-pressed="${draft.cat===c}">${c}</button>`;
+  // 正在改的舊紀錄若是已不在選單的項目（場勘、驗收…），補一顆讓它維持選取
+  const legacy=draft.cat&&![...GROUPS.out,...GROUPS.in,...GROUPS.meet,...GROUPS.away].includes(draft.cat)?`<div class="cats"><button data-c="${esc(draft.cat)}" class="${OLD_OUT.includes(draft.cat)?"out":"in"}" aria-pressed="true">${esc(draft.cat)}（舊）</button></div>`:"";
   $("sheetIn").innerHTML=`<h2>${editing?"改這一段":"新增一段"}</h2>
     <div class="times">從 <select id="sSel">${withVal(timeOpts(draft.s),draft.s)}</select> 到 <select id="eSel">${withVal(endOpts(draft.e,draft.s),draft.e)}</select>
       <span>（00:00–23:45 都可以，每 15 分鐘一格）</span></div>
+    ${legacy?`<div class="grouplbl">原本的項目</div>${legacy}`:""}
     <div class="grouplbl">外出跑案</div><div class="cats">${GROUPS.out.map(btn).join("")}</div>
     <div class="grouplbl">在店裡</div><div class="cats">${GROUPS.in.map(btn).join("")}</div>
+    <div class="grouplbl">例會</div><div class="cats">${GROUPS.meet.map(btn).join("")}</div>
     <div class="grouplbl">不在崗</div><div class="cats">${GROUPS.away.map(btn).join("")}</div>
-    <input type="text" id="place" placeholder="案名或地址（例：三重 重新路 3 段）" maxlength="200">
+    <div class="grouplbl">人在哪（選了項目會自動帶入，可以改）</div>
+    <div class="locs" id="locs"><button data-l="店內" aria-pressed="false">店內</button><button data-l="外出" aria-pressed="false">外出</button></div>
+    <div class="fld" id="whatBox" hidden><label for="what" id="whatLbl">做什麼（必填）</label><input type="text" id="what" placeholder="例：整理買賣資料" maxlength="60"></div>
+    <div class="fld"><label for="place" id="placeLbl">案名或地址</label><input type="text" id="place" maxlength="200"></div>
+    <p class="hintline" id="problem" aria-live="polite"></p>
     <div class="warnbox" id="clashWarn" hidden></div>
     <div class="warnbox err" id="saveErr" hidden></div>
     <div class="row2"><button class="btn" id="close">取消</button><button class="btn primary" id="save">存起來</button></div>`;
-  $("place").value=draft.place;
+  draft.rawWas=editing&&draft.raw&&draft.raw.category;
+  $("place").value=draft.place;$("what").value=draft.what||"";
   const s=$("sheetIn"), mineList=STATE.D.get(VIEWER.name)||[];
-  s.querySelectorAll(".cats button").forEach(b=>b.onclick=()=>{draft.cat=b.dataset.c;s.querySelectorAll(".cats button").forEach(y=>y.setAttribute("aria-pressed",y===b))});
+  const sync=()=>{
+    s.querySelectorAll(".cats button").forEach(y=>y.setAttribute("aria-pressed",y.dataset.c===draft.cat));
+    s.querySelectorAll("#locs button").forEach(y=>y.setAttribute("aria-pressed",y.dataset.l===draft.loc));
+    $("whatBox").hidden=draft.cat!==OTHER;
+    const out=draft.loc==="外出";
+    $("placeLbl").textContent=out?"地點（外出必填）":"案名或地址（選填）";
+    $("place").placeholder=out?"例：化成路764巷4樓":"例：三重 重新路 3 段";
+    const pr=draftProblem();$("problem").textContent=pr;$("save").disabled=!!pr||saving;$("saveErr").hidden=true;
+  };
+  s.querySelectorAll(".cats button").forEach(b=>b.onclick=()=>{draft.cat=b.dataset.c;if(!b.textContent.endsWith("（舊）"))draft.loc=defaultLoc(draft.cat);sync()});
+  s.querySelectorAll("#locs button").forEach(b=>b.onclick=()=>{draft.loc=b.dataset.l;sync()});
+  $("what").oninput=()=>{draft.what=$("what").value;sync()};
+  $("place").oninput=()=>{draft.place=$("place").value;sync()};
   const checkClash=()=>{
     const S=+$("sSel").value,E=+$("eSel").value;
     const hit=mineList.filter(r=>r.id!==draft.id&&r.s<E&&S<r.e);
@@ -454,20 +532,22 @@ function showForm(editing){
   $("eSel").onchange=checkClash;checkClash();
   $("close").onclick=closeSheet;
   $("save").onclick=save;
+  sync();
   $("sheet").hidden=false;
 }
-const ERR_TEXT={not_on_board:"你不在名單上，這頁只能看",invalid_session:"登入已過期，請重新整理頁面再登入一次",not_whitelisted:"這個帳號沒有寫入權限",date_locked_past:"過去的日期不能再填寫",record_locked_cross_day:"這一筆是過去的紀錄，不能再改",not_found:"找不到這一筆（可能已被改動），請重新整理頁面",invalid_category:"這個項目目前不能存，請改選別的項目",value_too_long:"案名或地址太長了，請縮短"};
+const ERR_TEXT={not_on_board:"你不在名單上，這頁只能看",invalid_session:"登入已過期，請重新整理頁面再登入一次",not_whitelisted:"這個帳號沒有寫入權限",date_locked_past:"過去的日期不能再填寫",record_locked_cross_day:"這一筆是過去的紀錄，不能再改",not_found:"找不到這一筆（可能已被改動），請重新整理頁面",invalid_category:"這個項目目前不能存，請改選別的項目",value_too_long:"案名或地址太長了，請縮短",location_required:"頁面是舊版，請重新整理頁面再填",invalid_location:"請重新整理頁面再填",other_text_required:"選「其他」要寫一句做什麼",place_required:"外出要寫地點"};
 async function save(){
   if(saving)return;
   const showErr=m=>{const e=$("saveErr");e.textContent=m;e.hidden=false};
-  if(!draft.cat){toast("先選一個項目");return}
+  const pr=draftProblem();if(pr){showErr(pr);return}
   const S=+$("sSel").value,E=+$("eSel").value;
-  const place=$("place").value.trim()||(kindOf(draft.cat)==="out"?"未寫地點":"店內");
+  const place=draft.place.trim(), what=(draft.what||"").trim();
   const raw=draft.raw||{};
   // 改既有一段時，Worker 會整列覆寫；沒在畫面上的欄位（報修原因、預排行程、紀錄內容）要原樣帶回，不能洗掉
-  let note=raw.note||"";
-  if(draft.cat!==OTHER)note=note.replace(/^【[^】]*】/,"").trim(); // 「其他」的自訂名稱前綴只屬於「其他」
-  const entry={startTime:fmt(S),endTime:fmt(E),category:draft.cat,caseName:place,repairReason:raw.repairReason||"",plannedSchedule:raw.plannedSchedule||"",note};
+  // 「其他」寫了什麼放在紀錄內容最前面的【】裡；換成別的項目就拿掉
+  let note=(raw.note||"").replace(/^【[^】]*】/,"").trim();
+  if(draft.cat===OTHER)note=`【${what}】`+note;
+  const entry={startTime:fmt(S),endTime:fmt(E),category:draft.cat,location:draft.loc,caseName:place,repairReason:raw.repairReason||"",plannedSchedule:raw.plannedSchedule||"",note};
   if(draft.id)entry.rid=draft.id;
   saving=true;const b=$("save");b.disabled=true;b.textContent="儲存中…";
   const r=await api("worklogCreate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({entries:[entry],date:dateStr(day)})});
@@ -490,9 +570,9 @@ const TOUR_ID="board-v1", TOUR_KEY="wuohome_board_tour_seen";
 let touring=false;
 function tourSteps(){
   const st=[], q=sel=>document.querySelector(sel);
-  st.push({element:"#headline",popover:{title:"一眼看現在",description:"最上面這行是「現在」幾個人外出、在店裡、還沒寫；下面紅字是今天一筆都還沒寫的人。"}});
-  if(q(".row.mine"))st.push({element:".row.mine",popover:{title:"這排是你",description:"你自己那一排永遠在最上面。藍＝外出跑案、灰＝在店裡、黃＝不在崗。"}});
-  if(q(".row.mine .gap"))st.push({element:".row.mine .gap",popover:{title:"點「＋」就能寫",description:"點虛線框，下面會跳出填寫框：選時間、選項目、寫案名或地址，按「存起來」大家就看得到。點自己已寫的色塊可以改。"}});
+  st.push({element:"#headline",popover:{title:"一眼看現在",description:"最上面這行是「此刻」幾個人在店內、外出、開會、不確定在哪、還沒填；下面是今天一筆都還沒寫的人。"}});
+  if(q(".row.mine"))st.push({element:".row.mine",popover:{title:"這排是你",description:"你自己那一排永遠在最上面。灰＝店內、藍＝外出、綠＝例會／開會、黃＝不在崗。"}});
+  if(q(".row.mine .gap"))st.push({element:".row.mine .gap",popover:{title:"點「＋」就能寫",description:"點虛線框，下面會跳出填寫框：選時間、選項目、選店內或外出、寫地點，按「存起來」大家就看得到。點自己已寫的色塊可以改。"}});
   if(q(".axis .zl"))st.push({element:".axis .zl",popover:{title:"早出晚歸也寫得進去",description:"「~09:00前」「19:00~後」會照當天最早出門、最晚回來的行程自動拉長。早上 BNI、晚上簽約都照實際時間寫。"}});
   if(q(".axis button.h"))st.push({element:".axis button.h",popover:{title:"要派人？點整點",description:"點上面任一個整點（例如 14:00），會列出那個時間誰在店裡、誰沒寫、誰走不開。"}});
   const others=[...document.querySelectorAll(".divider")].find(d=>/其他同仁/.test(d.textContent));
