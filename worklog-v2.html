@@ -305,15 +305,15 @@ function perfOf(n){
   if(!PERF)return null;
   const p=PERF.byName[n];if(p)return p;
   const k=Object.keys(PERF.byName).find(k=>k.includes("&")&&k.split("&").map(s=>s.trim()).includes(n));if(!k)return null;
-  const q=PERF.byName[k];return {...q,total:Math.round(q.total/2),avg:Math.round(q.avg/2),shared:true};
+  const q=PERF.byName[k];return {...q,total:Math.round(q.total/2),avg:Math.round(q.avg/2),shared:true,teamTotal:q.total};
 }
 const perfRank=n=>{const p=perfOf(n);return p?p.avg:-1}; // 排序用平均每月（Joan：用月均排才公平，年中加入的人不吃虧）
 function perfLine(n){
   if(!perfVisible())return "";
   const pn=$("perfNote");if(pn)pn.hidden=false;
-  const p=perfOf(n);if(!p)return "";const team=p.shared?"兩人業績各半":"";
+  const p=perfOf(n);if(!p)return "";const W0=WorklogPerf.fmtWan, team=p.shared?`兩人合計 ${W0(p.teamTotal)}`:""; // Joan：忠豪＋WeiWei 個人顯示各半，另列兩人合計
   const W=WorklogPerf.fmtWan, tip=`今年（115 年）${p.firstYm}月到${PERF.lastYm}月，共 ${p.months} 個月；平均每月＝今年業績 ÷ ${p.months} 個月`;
-  return `<span class="perf" title="${esc(tip)}"><span>今年業績 ${W(p.total)}</span>${team?`<span>${team}</span>`:""}<span>平均每月 ${W(p.avg)}</span></span>`;
+  return `<span class="perf" title="${esc(tip)}"><span>今年業績 ${W(p.total)}</span><span>平均每月 ${W(p.avg)}</span>${team?`<span>${team}</span>`:""}</span>`;
 }
 if(window.WorklogPerf)WorklogPerf.load().then(p=>{PERF=p;if(p&&STATE&&STATE.status==="ready")render()});
 async function load(){
