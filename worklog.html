@@ -68,6 +68,9 @@ select{font:inherit;padding:5px 8px;border-radius:8px;border:1px solid var(--lin
 .cellname{position:sticky;left:0;z-index:3;background:var(--surface);border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px 10px 8px 14px;font-weight:700;white-space:nowrap;display:flex;flex-direction:column;justify-content:center}
 .cellname .cnt{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--muted)}
 .cellname .cnt.low{color:var(--warn)}
+.cellname .perf{font-size:11px;font-weight:500;color:var(--accent);line-height:1.35}
+.cellname .perf span{display:block;white-space:nowrap}
+@media (max-width:520px){.cellname .perf{font-size:10px;line-height:1.25}}
 @media (max-width:520px){.cellname{white-space:normal;overflow:hidden;padding-left:10px}.cellname .cnt{font-size:10px;line-height:1.3}}
 .cellname .me{font-size:10px;background:var(--accent);color:#fff;border-radius:3px;padding:0 5px;margin-left:5px;vertical-align:2px}
 .row.mine .cellname{background:var(--accent-soft)}
@@ -190,6 +193,7 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
     <span><i style="border:1.5px dashed var(--empty-line)"></i>灰虛線＝9:00–18:00 還沒填的空檔</span>
   </div>
   <div class="note" id="rangeNote"></div>
+  <div class="note" id="perfNote" hidden>名字下方的業績數字只有公司管理層看得到，其他同仁的畫面不會出現。</div>
 
   <section class="who" id="who" hidden></section>
 
@@ -201,6 +205,7 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
 <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js" defer></script>
 <script src="bug-report.js" defer></script>
+<script src="js/worklog-perf.js"></script>
 
 <script>
 // 每日工作行程（照 2026-10-08 示範頁、2026-10-19 改版示範頁：顏色看「人在哪」；資料接 Worker worklogBoard／worklogCreate）。
@@ -291,6 +296,20 @@ async function api(path,opt={}){
     return {status:res.status,json};
   }catch{return {status:0,json:null}}
 }
+// ---------- 今年業績（累計／月均）：資料來自 data/perf.md，抓不到或表裡沒有這個人就不顯示，絕不顯示 0 ----------
+let PERF=null;
+const PERF_MGR=new Set(["吳彥廷","蕭靜芳","張瓊安","韓珊珊"]); // Joan 2026-10-20：業績數字只給管理層看
+const perfVisible=()=>!!(VIEWER&&(VIEWER.role==="manager"||PERF_MGR.has(VIEWER.name)));
+function perfLine(n){
+  if(!perfVisible())return "";
+  const pn=$("perfNote");if(pn)pn.hidden=false;
+  let p=PERF&&PERF.byName[n],team="";
+  if(!p&&PERF){const k=Object.keys(PERF.byName).find(k=>k.includes("&")&&k.split("&").map(s=>s.trim()).includes(n));if(k){p=PERF.byName[k];team="兩人合計";}}
+  if(!p)return "";
+  const W=WorklogPerf.fmtWan, tip=`今年（115 年）${p.firstYm}月到${PERF.lastYm}月，共 ${p.months} 個月；平均每月＝今年業績 ÷ ${p.months} 個月`;
+  return `<span class="perf" title="${esc(tip)}"><span>今年業績 ${W(p.total)}</span>${team?`<span>${team}</span>`:""}<span>平均每月 ${W(p.avg)}</span></span>`;
+}
+if(window.WorklogPerf)WorklogPerf.load().then(p=>{PERF=p;if(p&&STATE&&STATE.status==="ready")render()});
 async function load(){
   if(!TOKEN&&!ID_TOKEN){STATE={status:"auth",kind:"out"};render();return}
   const my=++reqId;STATE={status:"loading",data:null};render();
@@ -411,7 +430,7 @@ function render(){
     const dim=focus!=null&&k.length&&k[0].kind!=="in"&&k[0].kind!=="q";
     const mine=n===me, own=mine&&!ro.has(n); // own＝這排我自己能寫
     html+=`<div class="row ${mine?"mine":""} ${dim?"rowdim":""}">
-      <div class="cellname"><span>${esc(n)}${mine?`<span class="me">我</span>`:""}</span><span class="cnt ${!ro.has(n)&&pct<40?"low":""}">${ro.has(n)?"設計部・行事曆":`9–18 點寫了 ${pct}%`}</span></div>
+      <div class="cellname"><span>${esc(n)}${mine?`<span class="me">我</span>`:""}</span>${perfLine(n)}<span class="cnt ${!ro.has(n)&&pct<40?"low":""}">${ro.has(n)?"設計部・行事曆":`9–18 點寫了 ${pct}%`}</span></div>
       <div class="track"><div class="zone" style="left:0;width:${preW}px"></div><div class="zone" style="left:${preW+10*H}px;width:${postW}px"></div>`;
     if(!ro.has(n))coreGaps(list).forEach(([s,e])=>{
       html+=`<div class="core" style="left:${x(s)+2}px;width:${x(e)-x(s)-4}px"></div>`;
@@ -430,7 +449,7 @@ function render(){
   if(designWorking.length){html+=`<div class="divider"><span>設計部（行事曆自動帶入，只能看）</span></div>`;designWorking.forEach(rowOf)}
   if(resting.length){
     html+=`<div class="divider"><span>休假（排班表帶入，不用寫）</span></div>`;
-    resting.forEach(r=>{html+=`<div class="row"><div class="cellname">${esc(r.name)}<span class="cnt">—</span></div><div class="track" style="height:48px"><div class="offbar">${esc(r.offType)}</div></div></div>`});
+    resting.forEach(r=>{html+=`<div class="row"><div class="cellname">${esc(r.name)}${perfLine(r.name)}<span class="cnt">—</span></div><div class="track" style="height:48px"><div class="offbar">${esc(r.offType)}</div></div></div>`});
   }
   board.innerHTML=html;
   board.querySelectorAll("button.blk").forEach(b=>b.onclick=()=>{const f=REFS[+b.dataset.i];openEntry(f.n,f.r)});
