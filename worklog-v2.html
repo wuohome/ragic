@@ -301,8 +301,8 @@ function perfLine(n){
   let p=PERF&&PERF.byName[n],team="";
   if(!p&&PERF){const k=Object.keys(PERF.byName).find(k=>k.includes("&")&&k.split("&").map(s=>s.trim()).includes(n));if(k){p=PERF.byName[k];team="兩人合計";}}
   if(!p)return "";
-  const W=WorklogPerf.fmtWan, tip=`今年（115 年）${p.firstYm}月到${PERF.lastYm}月，共 ${p.months} 個月；月均＝累計 ÷ ${p.months}`;
-  return `<span class="perf" title="${esc(tip)}"><span>累計 ${W(p.total)}</span>${team?`<span>${team}</span>`:""}<span>月均 ${W(p.avg)}</span></span>`;
+  const W=WorklogPerf.fmtWan, tip=`今年（115 年）${p.firstYm}月到${PERF.lastYm}月，共 ${p.months} 個月；平均每月＝今年業績 ÷ ${p.months} 個月`;
+  return `<span class="perf" title="${esc(tip)}"><span>今年業績 ${W(p.total)}</span>${team?`<span>${team}</span>`:""}<span>平均每月 ${W(p.avg)}</span></span>`;
 }
 if(window.WorklogPerf)WorklogPerf.load().then(p=>{PERF=p;if(p&&STATE&&STATE.status==="ready")render()});
 async function load(){
