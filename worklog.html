@@ -298,9 +298,11 @@ async function api(path,opt={}){
 // ---------- 今年業績（累計／月均）：資料來自 data/perf.md，抓不到或表裡沒有這個人就不顯示，絕不顯示 0 ----------
 let PERF=null;
 function perfLine(n){
-  const p=PERF&&PERF.byName[n];if(!p)return "";
+  let p=PERF&&PERF.byName[n],team="";
+  if(!p&&PERF){const k=Object.keys(PERF.byName).find(k=>k.includes("&")&&k.split("&").map(s=>s.trim()).includes(n));if(k){p=PERF.byName[k];team="兩人合計";}}
+  if(!p)return "";
   const W=WorklogPerf.fmtWan, tip=`今年（115 年）${p.firstYm}月到${PERF.lastYm}月，共 ${p.months} 個月；月均＝累計 ÷ ${p.months}`;
-  return `<span class="perf" title="${esc(tip)}"><span>累計 ${W(p.total)}</span><span>月均 ${W(p.avg)}</span></span>`;
+  return `<span class="perf" title="${esc(tip)}"><span>累計 ${W(p.total)}</span>${team?`<span>${team}</span>`:""}<span>月均 ${W(p.avg)}</span></span>`;
 }
 if(window.WorklogPerf)WorklogPerf.load().then(p=>{PERF=p;if(p&&STATE&&STATE.status==="ready")render()});
 async function load(){
