@@ -300,12 +300,18 @@ async function api(path,opt={}){
 let PERF=null;
 const PERF_MGR=new Set(["吳彥廷","蕭靜芳","張瓊安","韓珊珊"]); // Joan 2026-10-20：業績數字只給管理層看
 const perfVisible=()=>!!(VIEWER&&(VIEWER.role==="manager"||PERF_MGR.has(VIEWER.name)));
+// 個人今年業績；「A&B」合夥登記的兩人各算一半（Joan 2026-10-20：忠豪、WeiWei 的業績除以 2）
+function perfOf(n){
+  if(!PERF)return null;
+  const p=PERF.byName[n];if(p)return p;
+  const k=Object.keys(PERF.byName).find(k=>k.includes("&")&&k.split("&").map(s=>s.trim()).includes(n));if(!k)return null;
+  const q=PERF.byName[k];return {...q,total:Math.round(q.total/2),avg:Math.round(q.avg/2),shared:true};
+}
+const perfTotal=n=>{const p=perfOf(n);return p?p.total:-1};
 function perfLine(n){
   if(!perfVisible())return "";
   const pn=$("perfNote");if(pn)pn.hidden=false;
-  let p=PERF&&PERF.byName[n],team="";
-  if(!p&&PERF){const k=Object.keys(PERF.byName).find(k=>k.includes("&")&&k.split("&").map(s=>s.trim()).includes(n));if(k){p=PERF.byName[k];team="兩人合計";}}
-  if(!p)return "";
+  const p=perfOf(n);if(!p)return "";const team=p.shared?"兩人業績各半":"";
   const W=WorklogPerf.fmtWan, tip=`今年（115 年）${p.firstYm}月到${PERF.lastYm}月，共 ${p.months} 個月；平均每月＝今年業績 ÷ ${p.months} 個月`;
   return `<span class="perf" title="${esc(tip)}"><span>今年業績 ${W(p.total)}</span>${team?`<span>${team}</span>`:""}<span>平均每月 ${W(p.avg)}</span></span>`;
 }
@@ -378,7 +384,8 @@ function render(){
   const isDesign=m=>m.group==="design"; // 設計部：行事曆自動帶入、只能看，不列入催填與現況統計（那些是租賃部的）
   const working=data.members.filter(m=>!isDesign(m)&&!m.off).map(m=>m.name), resting=data.members.filter(m=>m.off);
   const designWorking=data.members.filter(m=>isDesign(m)&&!m.off).map(m=>m.name);
-  working.sort((a,b)=>(b===me)-(a===me)||coreMinutes(D.get(b))-coreMinutes(D.get(a)));
+  working.sort((a,b)=>(b===me)-(a===me)||perfTotal(b)-perfTotal(a)||coreMinutes(D.get(b))-coreMinutes(D.get(a))); // Joan 2026-10-20：照今年業績由高到低排（自己那排仍固定最上方便填寫）；沒業績資料的照填寫多寡排在後面
+  resting.sort((a,b)=>perfTotal(b.name)-perfTotal(a.name));
   const ro=new Set(data.members.filter(m=>m.source).map(m=>m.name)); // 行事曆帶入的成員：唯讀、不列入催填統計
   const canWrite=working.includes(me)&&!ro.has(me);
   const isToday=day===0, NOW=nowMin();
