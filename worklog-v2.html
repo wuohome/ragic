@@ -307,7 +307,7 @@ function perfOf(n){
   const k=Object.keys(PERF.byName).find(k=>k.includes("&")&&k.split("&").map(s=>s.trim()).includes(n));if(!k)return null;
   const q=PERF.byName[k];return {...q,total:Math.round(q.total/2),avg:Math.round(q.avg/2),shared:true};
 }
-const perfTotal=n=>{const p=perfOf(n);return p?p.total:-1};
+const perfRank=n=>{const p=perfOf(n);return p?p.avg:-1}; // 排序用平均每月（Joan：用月均排才公平，年中加入的人不吃虧）
 function perfLine(n){
   if(!perfVisible())return "";
   const pn=$("perfNote");if(pn)pn.hidden=false;
@@ -384,8 +384,8 @@ function render(){
   const isDesign=m=>m.group==="design"; // 設計部：行事曆自動帶入、只能看，不列入催填與現況統計（那些是租賃部的）
   const working=data.members.filter(m=>!isDesign(m)&&!m.off).map(m=>m.name), resting=data.members.filter(m=>m.off);
   const designWorking=data.members.filter(m=>isDesign(m)&&!m.off).map(m=>m.name);
-  working.sort((a,b)=>(b===me)-(a===me)||perfTotal(b)-perfTotal(a)||coreMinutes(D.get(b))-coreMinutes(D.get(a))); // Joan 2026-10-20：照今年業績由高到低排（自己那排仍固定最上方便填寫）；沒業績資料的照填寫多寡排在後面
-  resting.sort((a,b)=>perfTotal(b.name)-perfTotal(a.name));
+  working.sort((a,b)=>(b===me)-(a===me)||perfRank(b)-perfRank(a)||coreMinutes(D.get(b))-coreMinutes(D.get(a))); // Joan 2026-10-20：照平均每月業績由高到低排（自己那排仍固定最上方便填寫）；沒業績資料的照填寫多寡排在後面
+  resting.sort((a,b)=>perfRank(b.name)-perfRank(a.name));
   const ro=new Set(data.members.filter(m=>m.source).map(m=>m.name)); // 行事曆帶入的成員：唯讀、不列入催填統計
   const canWrite=working.includes(me)&&!ro.has(me);
   const isToday=day===0, NOW=nowMin();
