@@ -193,6 +193,7 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
     <span><i style="border:1.5px dashed var(--empty-line)"></i>灰虛線＝9:00–18:00 還沒填的空檔</span>
   </div>
   <div class="note" id="rangeNote"></div>
+  <div class="note" id="perfNote" hidden>名字下方的業績數字只有公司管理層（小吳哥、Tina、瓊安、珊珊）看得到，其他同仁的畫面不會出現。</div>
 
   <section class="who" id="who" hidden></section>
 
@@ -297,7 +298,11 @@ async function api(path,opt={}){
 }
 // ---------- 今年業績（累計／月均）：資料來自 data/perf.md，抓不到或表裡沒有這個人就不顯示，絕不顯示 0 ----------
 let PERF=null;
+const PERF_MGR=new Set(["吳彥廷","蕭靜芳","張瓊安","韓珊珊"]); // Joan 2026-10-20：業績數字只給管理層看
+const perfVisible=()=>!!(VIEWER&&(VIEWER.role==="manager"||PERF_MGR.has(VIEWER.name)));
 function perfLine(n){
+  if(!perfVisible())return "";
+  const pn=$("perfNote");if(pn)pn.hidden=false;
   let p=PERF&&PERF.byName[n],team="";
   if(!p&&PERF){const k=Object.keys(PERF.byName).find(k=>k.includes("&")&&k.split("&").map(s=>s.trim()).includes(n));if(k){p=PERF.byName[k];team="兩人合計";}}
   if(!p)return "";
