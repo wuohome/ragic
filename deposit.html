@@ -1501,6 +1501,7 @@ input[type="date"] {
      DATA LAYER CONTRACT
      把所有 API 邏輯集中在這一個區塊，方便微調
 ═══════════════════════════════════════════════ -->
+<script src="js/staff-gate.js"></script>
 <script>
 /* ── Data Layer Contract ───────────────────────────────────────────── */
 
@@ -1522,7 +1523,7 @@ async function fetchCases(keyword) {
 // 回傳 { ok: true, staff: [{ rid, name, englishName, dept, email }] }
 // client-side 過濾 keyword
 async function fetchStaff(keyword) {
-  const r = await fetch(`${WORKER_BASE}/searchStaff`);
+  const r = await StaffGate.fetch('/searchStaff'); // 2026-10-21 需同仁 Google 登入
   const data = await r.json();
   if (!data.ok) throw new Error(data.msg || "searchStaff failed");
   if (!keyword) return data.staff;
@@ -2530,6 +2531,8 @@ function showToast(msg, duration = 2000) {
 
 /* ── Init ──────────────────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", () => {
+  StaffGate.init(WORKER_BASE);
+  StaffGate.require(); // 開頁先登入（30 天內有 session 就零互動）
   updateProgress();
   // Default: today for 定金收款日期
   document.getElementById("eid1000798").value = todayISO();
