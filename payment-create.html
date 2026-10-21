@@ -1056,6 +1056,7 @@ body {
 
 <div class="toast" id="toast"></div>
 
+<script src="js/staff-gate.js"></script>
 <script>
 /* ======================================================
    STATE
@@ -1146,7 +1147,7 @@ async function loadRealStaff() {
   if (hint) hint.style.display = 'block';
   try {
     const BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
-    const resp = await fetch(BASE + '/searchStaff', { method: 'GET' });
+    const resp = await StaffGate.fetch('/searchStaff', { method: 'GET' }); // 2026-10-21 需同仁 Google 登入
     const json = await resp.json().catch(() => ({}));
     if (!resp.ok || !json.ok) throw new Error(json.error || 'load_fail');
     realStaff = json.staff || [];
@@ -1160,6 +1161,10 @@ async function loadRealStaff() {
         opt.textContent = s.name + (s.englishName ? ` (${s.englishName})` : '') + (s.dept ? ` — ${s.dept}` : '');
         sel.appendChild(opt);
       });
+      // 已用 Google 登入，經辦人員直接帶入本人（仍可改選）
+      const me = StaffGate.email();
+      const mine = me && realStaff.find(s => (s.email || '').toLowerCase() === me);
+      if (mine) { sel.value = mine.email; selectStaff(mine.email); }
     }
   } catch (e) {
     if (sel) sel.innerHTML = '<option value="">載入失敗，請重新整理</option>';
@@ -1638,7 +1643,7 @@ async function autoLookupDepositsByCase(caseName) {
   hint.style.display = 'none';
   const BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
   try {
-    const resp = await fetch(BASE + '/searchDeposits?caseName=' + encodeURIComponent(caseName));
+    const resp = await StaffGate.fetch('/searchDeposits?caseName=' + encodeURIComponent(caseName));
     const json = await resp.json().catch(() => ({}));
     if (!resp.ok || !json.ok) { list.innerHTML = '<li style="padding:8px;color:#c00">自動查詢失敗，請手動搜尋</li>'; return; }
     const deps = json.deposits || [];
@@ -1672,7 +1677,7 @@ function handleDepositSearch(val) {
   depositSearchTimeout = setTimeout(async () => {
     const BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
     try {
-      const resp = await fetch(BASE + '/searchDeposits?q=' + encodeURIComponent(val.trim()));
+      const resp = await StaffGate.fetch('/searchDeposits?q=' + encodeURIComponent(val.trim()));
       const json = await resp.json().catch(() => ({}));
       hint.style.display = 'none';
       if (!resp.ok || !json.ok) { list.innerHTML = '<li style="padding:8px;color:#c00">搜尋失敗，請重試</li>'; return; }
@@ -1992,6 +1997,8 @@ function validate(step) {
 /* ======================================================
    INIT
    ====================================================== */
+StaffGate.init('https://wuohome-ragic-proxy.wuohome.workers.dev');
+StaffGate.require(); // 開頁先登入（30 天內有 session 就零互動）
 renderCaseList('');
 loadRealStaff();
 resetReceiveDate();
