@@ -1,0 +1,3655 @@
+﻿<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>窩的家｜租賃部業績儀表板（新版）</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="js/worklog-perf.js"></script>
+<style>
+  body{font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;}
+  .medal-1{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#78350f;}
+  .medal-2{background:linear-gradient(135deg,#e5e7eb,#9ca3af);color:#374151;}
+  .medal-3{background:linear-gradient(135deg,#fdba74,#c2410c);color:#fff;}
+  .bar{transition:width .7s cubic-bezier(.4,0,.2,1);}
+  .chip{cursor:pointer;transition:all .15s;}
+  .chip:hover{background:#dbeafe;}
+  .chip.active{background:#2563eb;color:white;}
+  .tab{cursor:pointer;transition:all .2s;border-bottom:3px solid transparent;white-space:nowrap;flex-shrink:0;}
+  .tab.active{border-bottom-color:#2563eb;color:#2563eb;font-weight:700;}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+  /* Dual-handle range slider（單條軌雙手柄）—— 起球在軌道上方、迄球在軌道下方，永遠看得到是兩顆球 */
+  .dual-range{position:relative;height:44px;}
+  .dual-range .track{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:6px;background:#e2e8f0;border-radius:9999px;}
+  .dual-range .highlight{position:absolute;top:50%;transform:translateY(-50%);height:6px;background:linear-gradient(90deg,#3b82f6,#10b981);border-radius:9999px;}
+  .dual-range input[type=range]{position:absolute;left:0;right:0;width:100%;height:20px;-webkit-appearance:none;appearance:none;background:transparent;pointer-events:none;outline:none;margin:0;}
+  /* 起球：黏在軌道上方 */
+  .dual-range input[type=range]:not(.end-slider){top:4px;}
+  /* 迄球：黏在軌道下方 */
+  .dual-range input[type=range].end-slider{top:20px;}
+  .dual-range input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:18px;height:18px;background:#fff;border:3px solid #3b82f6;border-radius:50%;cursor:grab;box-shadow:0 2px 6px rgba(0,0,0,.15);}
+  .dual-range input[type=range]::-moz-range-thumb{pointer-events:auto;width:18px;height:18px;background:#fff;border:3px solid #3b82f6;border-radius:50%;cursor:grab;box-shadow:0 2px 6px rgba(0,0,0,.15);}
+  .dual-range input[type=range].end-slider::-webkit-slider-thumb{border-color:#10b981;}
+  .dual-range input[type=range].end-slider::-moz-range-thumb{border-color:#10b981;}
+  #loadingOverlay{position:fixed;inset:0;background:rgba(248,250,252,.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;transition:opacity .4s;}
+  #loadingOverlay.fade-out{opacity:0;pointer-events:none;}
+  /* 背景資料還沒到的分頁：先藏內容、顯示一行載入中 */
+  .tab-panel.rest-wait>*{display:none;}
+  .tab-panel.rest-wait::before{content:'資料載入中…';display:block;text-align:center;padding:48px 0;color:#94a3b8;}
+  .tab-panel.rest-wait.rest-fail::before{content:'這部分資料沒載到，請按上方「重新整理」';color:#e11d48;}
+</style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay">
+  <div class="text-4xl mb-4">🏠</div>
+  <div id="loadingText" class="text-slate-600 text-sm font-semibold mb-3">正在從 Ragic 抓取即時資料…</div>
+  <div class="w-64 h-2.5 bg-slate-200 rounded-full overflow-hidden mb-2">
+    <div id="progressBar" class="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-300 ease-out" style="width:0%"></div>
+  </div>
+  <div id="loadingDetail" class="text-slate-400 text-xs"></div>
+</div>
+
+<div class="max-w-5xl mx-auto px-6 py-10">
+
+  <header class="mb-8">
+    <h1 class="text-4xl font-black text-slate-900">🏠 窩的家 租賃部業績儀表板 <span class="align-middle text-base font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">新版試用</span></h1>
+    <p class="text-slate-500 mt-2">
+      <span id="updateStatus">載入中…</span>
+      <button id="refreshBtn" onclick="location.reload()" class="ml-3 px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition hidden">🔄 重新整理</button>
+    </p>
+  </header>
+
+  <!-- ── 當月業績目標（動態，由 ragicFetch('listGoals') 填入） ── -->
+  <details id="goalPanelDetails" hidden class="mb-8 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+    <summary class="cursor-pointer select-none px-6 py-4 flex items-center justify-between">
+      <span id="goalPanelTitle" class="text-xl font-black text-amber-900">📋 業績目標</span>
+      <span id="goalPanelSummary" class="text-sm text-amber-700">載入中…</span>
+    </summary>
+    <div class="px-6 pb-6">
+      <div id="goalPanelTable" class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-amber-800 border-b border-amber-200">
+              <th class="text-left py-2 pr-4 font-semibold">姓名</th>
+              <th class="text-right py-2 px-4 font-semibold">業績目標</th>
+              <th class="text-right py-2 pl-4 font-semibold">新進案件</th>
+            </tr>
+          </thead>
+          <tbody id="goalTableBody" class="divide-y divide-amber-100"></tbody>
+          <tfoot>
+            <tr id="goalTableFoot" class="border-t-2 border-amber-300 font-black text-amber-900">
+              <td class="py-2 pr-4">合計</td>
+              <td id="goalTotalPerf" class="text-right py-2 px-4">—</td>
+              <td id="goalTotalCases" class="text-right py-2 pl-4">—</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div id="goalPanelEmpty" class="hidden text-center py-6">
+        <div class="text-3xl mb-2">📋</div>
+        <div id="goalPanelEmptyMsg" class="text-amber-900 font-semibold"></div>
+        <div class="text-amber-700 text-sm mt-1">請至 LINE 填報當月目標</div>
+      </div>
+      <!-- 尚未填目標名單（2026-08-03 新增，解決「看不出誰沒填」） -->
+      <div id="goalUnfilledSection" class="mt-4 pt-4 border-t border-amber-200">
+        <div id="goalUnfilledTitle" class="text-sm font-bold text-orange-700 mb-2"></div>
+        <div id="goalUnfilledList" class="flex flex-wrap gap-2"></div>
+      </div>
+    </div>
+  </details>
+
+
+  <!-- Tabs -->
+  <div class="sticky top-0 z-30 bg-slate-50/95 backdrop-blur flex gap-6 border-b border-slate-200 overflow-x-auto scrollbar-thin pt-2">
+    <div class="tab active pb-3 text-lg px-1" data-tab="month">📦 進案量 &amp; 業績</div>
+    <div class="tab pb-3 text-lg px-1" data-tab="recurring">續約業績&amp;代管</div>
+    <div class="tab pb-3 text-lg px-1" data-tab="inventory">📦 庫存統計</div>
+    <div class="tab pb-3 text-lg px-1" data-tab="ad591">📢 591 廣告</div>
+    <div class="tab pb-3 text-lg px-1" data-tab="outreach">📞 開發追蹤</div>
+    <div class="tab pb-3 text-lg px-1" data-tab="clients">👥 客戶來源</div>
+    <div class="tab pb-3 text-lg px-1" data-tab="analysis">🔬 業務分析</div>
+    <div class="tab pb-3 text-lg px-1 admin-only hidden" data-tab="compare">⚖️ 資料比對</div>
+    <div class="tab pb-3 text-lg px-1" data-tab="sources">📑 數字來源</div>
+  </div>
+  <div id="tabDesc" class="text-sm text-slate-400 mb-6 mt-3">各業務在選定期間內新接了多少委託案件，以及距上次進案多久</div>
+
+  <!-- ── 進案量 & 業績 ── -->
+  <div class="tab-panel active" id="panel-month">
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-500">起</label>
+          <input id="mStart" type="date" class="border border-slate-200 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-500">迄</label>
+          <input id="mEnd" type="date" class="border border-slate-200 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div class="flex flex-wrap gap-2 ml-auto">
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-m="thisWeek">本週</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-m="lastWeek">上週</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-m="thisMonth">本月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-m="lastMonth">上月</span>
+          <span id="mMonthChips" class="contents"></span>
+        </div>
+      </div>
+      <p id="mSourceNote" class="text-xs text-slate-400 mt-3"></p>
+    </section>
+
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-5 mb-6">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">📦 進案件數</div>
+        <div class="flex items-baseline gap-2">
+          <div id="mKpiIntake" class="text-4xl font-black text-purple-600">0</div>
+          <div class="text-slate-400">件</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">👥 參與開發人員</div>
+        <div class="flex items-baseline gap-2">
+          <div id="mKpiIntakePpl" class="text-4xl font-black text-indigo-600">0</div>
+          <div class="text-slate-400">人</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">💰 全店業績</div>
+        <div class="flex items-baseline gap-2">
+          <div id="mKpiPerf" class="text-4xl font-black text-blue-600">0</div>
+          <div class="text-slate-400">元</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">🏅 有業績人員</div>
+        <div class="flex items-baseline gap-2">
+          <div id="mKpiPerfPpl" class="text-4xl font-black text-emerald-600">0</div>
+          <div class="text-slate-400">人</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 全店達成總覽（五月目標期間才顯示） ── -->
+    <section id="mStoreGoalSection" class="hidden mb-6">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="flex items-center justify-between mb-5">
+          <h2 id="mStoreGoalTitle" class="text-lg font-bold text-slate-900">🏁 全店目標達成</h2>
+          <span id="mStoreGoalBadge" class="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-500"></span>
+        </div>
+        <!-- 業績總進度 -->
+        <div class="mb-5">
+          <div class="flex justify-between items-baseline mb-2">
+            <span class="text-sm font-semibold text-slate-600">💰 業績</span>
+            <div class="text-right">
+              <span id="mStorePerfActual" class="text-2xl font-black text-slate-900">—</span>
+              <span id="mStorePerfTargetLabel" class="text-slate-400 text-sm"> / — 萬</span>
+              <span id="mStorePerfPct" class="ml-2 text-base font-bold text-slate-500"></span>
+            </div>
+          </div>
+          <div class="relative h-4 bg-slate-100 rounded-full overflow-hidden">
+            <div id="mStorePerfBar" class="bar absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500" style="width:0%"></div>
+            <div class="absolute right-0 top-0 h-full w-0.5 bg-slate-400 opacity-60"></div>
+          </div>
+          <div class="flex justify-between mt-1">
+            <span id="mStorePerfGap" class="text-xs text-slate-500"></span>
+            <span id="mStorePerfTargetNote" class="text-xs text-slate-400">目標 — 萬</span>
+          </div>
+        </div>
+        <!-- 委託間數總進度 -->
+        <div>
+          <div class="flex justify-between items-baseline mb-2">
+            <span class="text-sm font-semibold text-slate-600">📦 委託間數</span>
+            <div class="text-right">
+              <span id="mStoreCasesActual" class="text-2xl font-black text-slate-900">—</span>
+              <span id="mStoreCasesTargetLabel" class="text-slate-400 text-sm"> / — 間</span>
+              <span id="mStoreCasesPct" class="ml-2 text-base font-bold text-slate-500"></span>
+            </div>
+          </div>
+          <div class="relative h-4 bg-slate-100 rounded-full overflow-hidden">
+            <div id="mStoreCasesBar" class="bar absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-500" style="width:0%"></div>
+            <div class="absolute right-0 top-0 h-full w-0.5 bg-slate-400 opacity-60"></div>
+          </div>
+          <div class="flex justify-between mt-1">
+            <span id="mStoreCasesGap" class="text-xs text-slate-500"></span>
+            <span id="mStoreCasesTargetNote" class="text-xs text-slate-400">目標 — 間</span>
+          </div>
+        </div>
+        <!-- 人員達標小計 -->
+        <div id="mStoreAchieverLine" class="mt-4 pt-4 border-t border-slate-100 text-sm text-slate-500"></div>
+        <!-- 目標尚未填報提示 -->
+        <div id="mStoreNoGoalMsg" class="hidden mt-4 pt-4 border-t border-slate-100 text-sm text-amber-600 text-center">⚠️ 本月目標尚未填報，達成率暫不顯示</div>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <!-- 進案量排行卡 -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-slate-900">📦 進案量排行</h2>
+          <!-- pill tabs：五月目標期間才顯示「達成率」tab -->
+          <div id="intakeTabBar" class="hidden flex bg-slate-100 rounded-full p-0.5 gap-0.5 text-xs font-semibold">
+            <button id="intakeTabRank" onclick="switchRankTab('intake','rank')"
+              class="rank-tab-btn px-3 py-1 rounded-full bg-white text-slate-900 shadow-sm transition-all">排行</button>
+            <button id="intakeTabGoal" onclick="switchRankTab('intake','goal')"
+              class="rank-tab-btn px-3 py-1 rounded-full text-slate-500 transition-all">達成率</button>
+          </div>
+        </div>
+        <div id="mIntakeRanking" class="space-y-3"></div>
+      </div>
+      <!-- 業績排行卡 -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-slate-900">💰 業績排行</h2>
+          <div id="perfTabBar" class="hidden flex bg-slate-100 rounded-full p-0.5 gap-0.5 text-xs font-semibold">
+            <button id="perfTabRank" onclick="switchRankTab('perf','rank')"
+              class="rank-tab-btn px-3 py-1 rounded-full bg-white text-slate-900 shadow-sm transition-all">排行</button>
+            <button id="perfTabGoal" onclick="switchRankTab('perf','goal')"
+              class="rank-tab-btn px-3 py-1 rounded-full text-slate-500 transition-all">達成率</button>
+          </div>
+        </div>
+        <div id="mPerfRanking" class="space-y-3"></div>
+      </div>
+    </section>
+
+    <!-- ── 今年業績排行（瓊安 10/20：依全年度月均由上往下排；口徑同每日工作行程） ── -->
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+      <div class="flex items-baseline justify-between flex-wrap gap-2 mb-1">
+        <h2 class="text-lg font-bold text-slate-900">🏆 今年業績排行</h2>
+        <span id="yRankRange" class="text-xs text-slate-400"></span>
+      </div>
+      <p class="text-xs text-slate-400 mb-4">依平均每月業績排序（今年累計 ÷ 從第一個有業績的月份算到最新月份），年中加入的人不吃虧；不含續約；忠豪與頤臻合登的業績各算一半</p>
+      <div id="yRankBody" class="overflow-x-auto"></div>
+    </section>
+
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+      <div class="mb-4">
+        <h2 class="text-xl font-bold text-slate-900">⏱️ 最後進案距今</h2>
+        <p class="text-slate-500 text-sm mt-0.5">不受月份篩選影響，計算到今天為止</p>
+      </div>
+      <div id="mLastCase" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"></div>
+    </section>
+
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">📋 進案明細</h2>
+      <div id="mDetail" class="overflow-x-auto"></div>
+    </section>
+  </div>
+
+  <!-- ── 年度總覽 ── -->
+  <!-- ── 業務分析 ── -->
+  <div class="tab-panel" id="panel-analysis">
+
+    <!-- 人員篩選器（僅在業務分析 tab 顯示） -->
+    <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 mb-6">
+      <div class="flex items-center gap-3">
+        <span class="text-sm font-medium text-slate-500">👤 檢視對象</span>
+        <select id="staffSelector" class="border border-slate-200 rounded-lg px-4 py-2 text-sm font-medium bg-white min-w-[160px]">
+          <option value="">請選擇業務…</option>
+        </select>
+        <span id="staffLabel" class="text-sm text-slate-400"></span>
+      </div>
+    </section>
+
+    <div id="anaEmpty" class="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">
+      <div class="text-4xl mb-3">👆</div>
+      <p class="text-amber-900 font-semibold text-lg">請選擇一位業務</p>
+      <p class="text-amber-700 text-sm mt-1">業務分析頁必須選定特定人員才能計算個人戰力側寫</p>
+    </div>
+
+    <div id="anaContent" class="hidden">
+
+      <!-- Tier 0 個人簡介卡 -->
+      <section id="anaBioCard" class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+        <div class="grid grid-cols-3 gap-6">
+          <div class="text-center">
+            <div class="text-slate-400 text-xs mb-1">到職日</div>
+            <div id="anaBioOnboard" class="text-xl font-black text-slate-800">—</div>
+          </div>
+          <div class="text-center">
+            <div class="text-slate-400 text-xs mb-1">在職年資</div>
+            <div id="anaBioTenure" class="text-xl font-black text-blue-700">—</div>
+          </div>
+          <div class="text-center">
+            <div class="text-slate-400 text-xs mb-1">累積總業績（含三類，自入職）</div>
+            <div id="anaBioTotal" class="text-xl font-black text-emerald-700">—</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 時間範圍：起始 / 結束 雙滑軌 -->
+      <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+        <div class="flex items-center gap-4 mb-4">
+          <div class="text-slate-500 text-sm">📅 時間範圍</div>
+          <div id="anaRangeLabel" class="text-lg font-bold text-slate-900">—</div>
+          <div id="anaRangeStat" class="text-xs text-slate-400 ml-auto"></div>
+        </div>
+
+        <div class="mb-4">
+          <div class="flex justify-between text-xs text-slate-500 mb-1.5 px-1">
+            <span><span class="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1"></span>起始 <span id="anaStartLabel" class="font-mono text-slate-700 ml-1">—</span></span>
+            <span>結束 <span id="anaEndLabel" class="font-mono text-slate-700 ml-1">—</span><span class="inline-block w-2 h-2 rounded-full bg-emerald-500 ml-1"></span></span>
+          </div>
+          <div class="dual-range">
+            <div class="track"></div>
+            <div id="anaRangeHighlight" class="highlight" style="left:0;width:0%;"></div>
+            <input id="anaStartSlider" type="range" min="0" max="0" value="0" step="1" />
+            <input id="anaEndSlider" type="range" min="0" max="0" value="0" step="1" class="end-slider" />
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-ana-preset="thisMonth">本月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-ana-preset="lastMonth">上月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-ana-preset="3M">近 3 個月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-ana-preset="6M">近 6 個月</span>
+          <span id="anaMonthChips" class="contents"></span>
+        </div>
+      </section>
+
+      <!-- Tier 1 北極星（6 卡） -->
+      <section class="grid grid-cols-2 md:grid-cols-3 gap-5 mb-6">
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="text-slate-500 text-sm mb-1">📦 進案件數</div>
+          <div class="flex items-baseline gap-2">
+            <div id="anaKpiIntake" class="text-4xl font-black text-blue-600">0</div>
+            <div class="text-slate-400">件</div>
+          </div>
+          <div id="anaKpiIntakeAvg" class="text-xs text-slate-400 mt-1">月均 — 件</div>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="text-slate-500 text-sm mb-1">💰 新開發業績</div>
+          <div class="flex items-baseline gap-2">
+            <div id="anaKpiPerf" class="text-4xl font-black text-blue-600">0</div>
+            <div class="text-slate-400">元</div>
+          </div>
+          <div id="anaKpiPerfAvg" class="text-xs text-slate-400 mt-1">月均 — 元</div>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="text-slate-500 text-sm mb-1">🔄 續約業績</div>
+          <div class="flex items-baseline gap-2">
+            <div id="anaKpiRenewal" class="text-4xl font-black text-emerald-600">0</div>
+            <div class="text-slate-400">元</div>
+          </div>
+          <div id="anaKpiRenewalAvg" class="text-xs text-slate-400 mt-1">月均 — 元</div>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="text-slate-500 text-sm mb-1">🏠 代管業績</div>
+          <div class="flex items-baseline gap-2">
+            <div id="anaKpiMgmt" class="text-4xl font-black text-violet-600">0</div>
+            <div class="text-slate-400">元</div>
+          </div>
+          <div id="anaKpiMgmtAvg" class="text-xs text-slate-400 mt-1">月均 — 元</div>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="text-slate-500 text-sm mb-1">💎 業績總和</div>
+          <div class="flex items-baseline gap-2">
+            <div id="anaKpiTotal" class="text-4xl font-black text-amber-600">0</div>
+            <div class="text-slate-400">元</div>
+          </div>
+          <div id="anaKpiTotalAvg" class="text-xs text-slate-400 mt-1">月均 — 元</div>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="text-slate-500 text-sm mb-1">⚡ 最近進案距今</div>
+          <div class="flex items-baseline gap-2">
+            <div id="anaKpiActive" class="text-4xl font-black text-purple-600">—</div>
+            <div class="text-slate-400">天前</div>
+          </div>
+          <div id="anaKpiSilence" class="text-xs text-slate-400 mt-1">歷史最長空窗 — 天</div>
+        </div>
+      </section>
+
+      <!-- Tier 2 時序曲線 -->
+      <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-xl font-bold text-slate-900">📈 月度業績結構 × 進案趨勢</h2>
+            <p id="anaOnboardNote" class="text-xs text-slate-500 mt-1"></p>
+          </div>
+          <p class="text-xs text-slate-400">堆疊長條=業績（新開發/續約/代管）　折線=進案件數</p>
+        </div>
+        <div class="relative" style="height:320px"><canvas id="anaTrendChart"></canvas></div>
+      </section>
+
+      <!-- Tier 3 偏好側寫 -->
+      <section class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+          <h2 class="text-xl font-bold text-slate-900 mb-4">🏠 房型偏好</h2>
+          <div class="relative" style="height:240px"><canvas id="anaLayoutChart"></canvas></div>
+        </div>
+        <div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+          <h2 class="text-xl font-bold text-slate-900 mb-4">📍 區域熱度 TOP 5</h2>
+          <div id="anaDistrict" class="space-y-2"></div>
+        </div>
+        <div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+          <h2 class="text-xl font-bold text-slate-900 mb-4">💵 價格帶分布</h2>
+          <div id="anaPriceBand" class="space-y-2"></div>
+        </div>
+        <div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+          <h2 class="text-xl font-bold text-slate-900 mb-4">📋 委託類別</h2>
+          <div class="relative" style="height:240px"><canvas id="anaLeaseChart"></canvas></div>
+        </div>
+      </section>
+
+      <!-- Tier 3 月租卡 -->
+      <section class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="text-slate-500 text-sm mb-1">平均月租（算術平均）</div>
+          <div class="flex items-baseline gap-2">
+            <div id="anaRentAvg" class="text-3xl font-black text-blue-600">0</div>
+            <div class="text-slate-400">元</div>
+          </div>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="text-slate-500 text-sm mb-1">中位數月租（抗離群值）</div>
+          <div class="flex items-baseline gap-2">
+            <div id="anaRentMed" class="text-3xl font-black text-indigo-600">0</div>
+            <div class="text-slate-400">元</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tier 5 協作動態 -->
+      <section class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+          <h2 class="text-xl font-bold text-slate-900 mb-4">🤝 最佳拍檔 TOP 3</h2>
+          <div id="anaPartners" class="space-y-3"></div>
+        </div>
+        <div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+          <h2 class="text-xl font-bold text-slate-900 mb-4">🎯 獨立 vs 協作</h2>
+          <div class="relative" style="height:240px"><canvas id="anaCollabChart"></canvas></div>
+          <p id="anaCollabNote" class="text-xs text-slate-400 text-center mt-2"></p>
+        </div>
+      </section>
+
+      <!-- Tier 6 零紀錄告警 -->
+      <section id="anaAlertSection" class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hidden">
+        <h2 class="text-xl font-bold text-slate-900 mb-3">🚨 預警</h2>
+        <div id="anaAlerts" class="space-y-2"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ── 資料比對 ── -->
+  <div class="tab-panel" id="panel-compare">
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 text-sm text-amber-800">
+      ⚠️ 比對 <strong>Ragic 收款紀錄</strong> vs <strong>珊珊 GSheet（OB 業績表）</strong>，找出漏填或資料不一致。<br>
+      <span class="text-amber-600 text-xs mt-1 block">📊 Ragic 多 = 有收款但珊珊表未更新 ／ 📋 GSheet 多 = 有業績但未 key in Ragic ／ ❌ 未 key in = 僅在 GSheet，Ragic 完全缺失</span>
+    </div>
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+      <div class="flex flex-wrap gap-2" id="cMonthChips"></div>
+    </section>
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-slate-900">⚖️ 比對結果</h2>
+        <div id="cSummary" class="text-sm text-slate-500"></div>
+      </div>
+      <div id="cTable" class="overflow-x-auto"></div>
+    </section>
+  </div>
+
+  <!-- ── 續約業績 & 代管 ── -->
+  <div class="tab-panel" id="panel-recurring">
+
+    <!-- 說明卡 -->
+    <div class="bg-blue-50 border border-blue-100 rounded-2xl p-5 mb-6 text-sm text-slate-600 leading-relaxed">
+      業績排行榜只算新開發業績。窩的家還有續約（維護舊客）＋ 代管（包租代管）2 條業務線。上方 chips 切換「看哪個月」的單月排行；最底部固定顯示全年度累積排行。
+    </div>
+
+    <!-- 時間範圍 chips -->
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="text-slate-500 text-sm">📅 時間範圍</div>
+        <div id="recRangeLabel" class="text-lg font-bold text-slate-900">—</div>
+        <div class="flex flex-wrap gap-2 ml-auto">
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-rec-preset="thisMonth">本月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium active" data-rec-preset="lastMonth">上月</span>
+          <span id="recMonthChips" class="contents"></span>
+        </div>
+      </div>
+      <p id="recSourceNote" class="text-xs text-slate-400 mt-3"></p>
+    </section>
+
+    <!-- 個人續約業績表 -->
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">個人該月續約業績</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-100 text-slate-500 text-left">
+              <th class="pb-2 w-10">排名</th>
+              <th class="pb-2">姓名</th>
+              <th class="pb-2">年資</th>
+              <th class="pb-2 text-right">該月續約業績</th>
+            </tr>
+          </thead>
+          <tbody id="recurringRenewalBody" class="divide-y divide-slate-50"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 個人代管業績表 -->
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">個人該月代管業績</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-100 text-slate-500 text-left">
+              <th class="pb-2 w-10">排名</th>
+              <th class="pb-2">姓名</th>
+              <th class="pb-2">年資</th>
+              <th class="pb-2 text-right">該月代管業績</th>
+            </tr>
+          </thead>
+          <tbody id="recurringMgmtBody" class="divide-y divide-slate-50"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 年資 × 業績散點圖 -->
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-2">年資 × 續約＋代管業績合計</h2>
+      <p class="text-sm text-slate-400 mb-4">x 軸 = 年資（月數），y 軸 = 該月續約 ＋ 代管業績合計；hover 看姓名</p>
+      <div class="relative" style="height:340px"><canvas id="recurringScatterChart"></canvas></div>
+    </section>
+
+    <!-- 年度業績累積（固定，不受 chips 影響） -->
+    <section class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-8 shadow-sm border border-amber-200 mt-8 mb-6">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="text-2xl">🏆</span>
+        <h2 class="text-xl font-bold text-slate-900">今年續約／代管累積</h2>
+      </div>
+      <p class="text-sm text-slate-600 mb-6">今年 1 月到最新月份加總（不受上方時間範圍影響）</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <h3 class="text-base font-semibold text-slate-800 mb-3">累積續約業績</h3>
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-amber-200 text-slate-500 text-left">
+                <th class="pb-2 w-10">排名</th>
+                <th class="pb-2">姓名</th>
+                <th class="pb-2">年資</th>
+                <th class="pb-2 text-right">累積續約業績</th>
+              </tr>
+            </thead>
+            <tbody id="yearlyRenewalBody" class="divide-y divide-amber-100"></tbody>
+          </table>
+        </div>
+        <div>
+          <h3 class="text-base font-semibold text-slate-800 mb-3">累積代管業績</h3>
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-amber-200 text-slate-500 text-left">
+                <th class="pb-2 w-10">排名</th>
+                <th class="pb-2">姓名</th>
+                <th class="pb-2">年資</th>
+                <th class="pb-2 text-right">累積代管業績</th>
+              </tr>
+            </thead>
+            <tbody id="yearlyMgmtBody" class="divide-y divide-amber-100"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ── 數字來源（每個數字從哪張表、怎麼算） ── -->
+  <div class="tab-panel" id="panel-sources">
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+      <h2 class="text-xl font-bold text-slate-900 mb-1">📑 數字來源對照</h2>
+      <p id="srcRange" class="text-sm text-slate-500 mb-4"></p>
+      <div id="srcBody" class="overflow-x-auto"></div>
+    </section>
+  </div>
+
+  <!-- ── 庫存統計 ── -->
+  <div class="tab-panel" id="panel-inventory">
+    <section class="grid grid-cols-2 md:grid-cols-6 gap-5 mb-6">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 col-span-2 md:col-span-1">
+        <div class="text-slate-500 text-sm mb-1">全店總庫存</div>
+        <div class="flex items-baseline gap-2">
+          <div id="invTotal" class="text-5xl font-black text-blue-600">0</div>
+          <div class="text-slate-400">件</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">專任出租案</div>
+        <div class="flex items-baseline gap-2">
+          <div id="invExcl" class="text-4xl font-black text-indigo-600">0</div>
+          <div class="text-slate-400">件</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">一般出租案</div>
+        <div class="flex items-baseline gap-2">
+          <div id="invGenl" class="text-4xl font-black text-emerald-600">0</div>
+          <div class="text-slate-400">件</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">包租案</div>
+        <div class="flex items-baseline gap-2">
+          <div id="invLease" class="text-4xl font-black text-amber-600">0</div>
+          <div class="text-slate-400">件</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">代管案</div>
+        <div class="flex items-baseline gap-2">
+          <div id="invMgmt" class="text-4xl font-black text-purple-600">0</div>
+          <div class="text-slate-400">件</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-rose-200">
+        <div class="text-rose-500 text-sm mb-1">類型未填</div>
+        <div class="flex items-baseline gap-2">
+          <div id="invUntyped" class="text-4xl font-black text-rose-600">0</div>
+          <div class="text-slate-400">件</div>
+        </div>
+        <div class="text-xs text-slate-400 mt-1">Ragic 委託類型空白，請補</div>
+      </div>
+    </section>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+        <div class="flex items-baseline justify-between mb-6 flex-wrap gap-2">
+          <h2 class="text-xl font-bold text-slate-900">🎯 新進案件排行　<span class="text-sm font-normal text-slate-400">自己接來的（不含包租/代管）</span></h2>
+          <span id="invNewKpi" class="text-sm font-semibold text-slate-500"></span>
+        </div>
+        <div id="invRanking" class="space-y-3"></div>
+      </section>
+      <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+        <h2 class="text-xl font-bold text-slate-900 mb-6">📊 委託類型分佈</h2>
+        <div class="relative" style="height:260px"><canvas id="invTypeChart"></canvas></div>
+      </section>
+    </div>
+
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-6">📦 包租/代管案件排行　<span class="text-sm font-normal text-slate-400">公司案源</span></h2>
+      <div id="invMgmtRanking" class="space-y-3"></div>
+    </section>
+
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+      <div class="flex flex-wrap items-center gap-3 mb-4">
+        <h2 class="text-xl font-bold text-slate-900">📋 庫存明細</h2>
+        <div class="flex flex-wrap gap-2 ml-auto">
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium active" data-inv-type="all">全部</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="專任出租案">專任</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="一般出租案">一般</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="包租案">包租</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="代管案">代管</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="帶看同意">帶看同意</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-inv-type="社會住宅">社會住宅</span>
+        </div>
+      </div>
+      <p class="text-sm text-slate-400 mb-4">依上架天數排序，超過 90 天標橘色</p>
+      <div id="invDetail" class="overflow-x-auto"></div>
+    </section>
+  </div>
+
+  <!-- ── 開發追蹤 ── -->
+  <div class="tab-panel" id="panel-outreach">
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-500">起</label>
+          <input id="oStart" type="date" class="border border-slate-200 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-500">迄</label>
+          <input id="oEnd" type="date" class="border border-slate-200 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div class="flex flex-wrap gap-2 ml-auto">
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="thisWeek">本週</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="lastWeek">上週</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="thisMonth">本月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="lastMonth">上個月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-o="all">全部</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">區間開發總數</div>
+        <div class="flex items-baseline gap-2">
+          <div id="oTotal" class="text-5xl font-black text-blue-600">0</div>
+          <div class="text-slate-400">筆</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">已接委託</div>
+        <div class="flex items-baseline gap-2">
+          <div id="oAccepted" class="text-5xl font-black text-emerald-600">0</div>
+          <div class="text-slate-400">筆</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">轉化率</div>
+        <div class="flex items-baseline gap-2">
+          <div id="oRate" class="text-5xl font-black text-purple-600">0</div>
+          <div class="text-slate-400">%</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+        <h2 class="text-xl font-bold text-slate-900 mb-6">🏆 開發王</h2>
+        <div id="oDevRanking" class="space-y-3"></div>
+      </section>
+      <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+        <h2 class="text-xl font-bold text-slate-900 mb-6">🏆 轉化王　<span class="text-sm font-normal text-slate-400">開發→接案轉化率</span></h2>
+        <div id="oConvRanking" class="space-y-3"></div>
+      </section>
+    </div>
+
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">📋 開發明細　<span class="text-sm font-normal text-slate-400">🟢 資料完整 🟡 部分 🔴 待補</span></h2>
+      <div id="oDetail" class="overflow-x-auto"></div>
+    </section>
+  </div>
+
+  <!-- ── 客戶來源 ── -->
+  <div class="tab-panel" id="panel-clients">
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-500">起</label>
+          <input id="clStart" type="date" class="border border-slate-200 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-500">迄</label>
+          <input id="clEnd" type="date" class="border border-slate-200 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div class="flex flex-wrap gap-2 ml-auto">
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="thisWeek">本週</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="lastWeek">上週</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="thisMonth">本月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="lastMonth">上個月</span>
+          <span class="chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium" data-cl="all">全部</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">區間客戶總數</div>
+        <div class="flex items-baseline gap-2">
+          <div id="clTotal" class="text-5xl font-black text-blue-600">0</div>
+          <div class="text-slate-400">人</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">參與業務</div>
+        <div class="flex items-baseline gap-2">
+          <div id="clStaff" class="text-5xl font-black text-emerald-600">0</div>
+          <div class="text-slate-400">人</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+        <h2 class="text-xl font-bold text-slate-900 mb-6">🏆 客戶王</h2>
+        <div id="clRanking" class="space-y-3"></div>
+      </section>
+      <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+        <h2 class="text-xl font-bold text-slate-900 mb-6">📊 來源分佈</h2>
+        <div class="relative" style="height:260px"><canvas id="clSourceChart"></canvas></div>
+      </section>
+    </div>
+
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">📋 客戶明細</h2>
+      <div id="clDetail" class="overflow-x-auto"></div>
+    </section>
+  </div>
+
+  <!-- ── 591 廣告 ── -->
+  <div class="tab-panel" id="panel-ad591">
+    <!-- Hero 單卡 -->
+    <section class="mb-6">
+      <div class="bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-50 rounded-2xl p-6 shadow-sm border border-sky-200 relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-48 h-48 bg-sky-400/10 rounded-full blur-3xl -mr-24 -mt-24"></div>
+        <div class="relative flex items-center gap-2 mb-2">
+          <span class="text-2xl">⏳</span>
+          <span class="font-bold text-lg text-sky-900">今日到期（24h 內）</span>
+        </div>
+        <div class="relative flex items-baseline gap-2 mb-2">
+          <div id="adHeroExpiring" class="text-7xl font-black text-sky-700 leading-none">—</div>
+          <div class="text-sky-800 font-semibold text-lg">筆</div>
+        </div>
+        <p class="relative text-xs text-sky-700/80 mb-2">系統到期時會自動下架，看看要不要主動續刊或改補新</p>
+        <div id="adHeroExpiringOwners" class="relative text-sky-900 text-sm font-medium min-h-[1.5rem]"></div>
+      </div>
+    </section>
+
+    <!-- KPI 4 格 -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-5 mb-6">
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">🏠 在刊</div>
+        <div id="adKpiActive" class="text-5xl font-black text-blue-600">0</div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">🪹 空位</div>
+        <div id="adKpiVacant" class="text-5xl font-black text-amber-600">0</div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">⭐ 精選</div>
+        <div id="adKpiFeatured" class="text-5xl font-black text-amber-500">0</div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+        <div class="text-slate-500 text-sm mb-1">⚡ 置頂</div>
+        <div id="adKpiTopped" class="text-5xl font-black text-pink-600">0</div>
+      </div>
+    </section>
+
+    <!-- 套餐版位 -->
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-slate-900">📦 套餐版位</h2>
+        <span class="text-xs text-slate-500">在刊 / 容量</span>
+      </div>
+      <div id="adPackageList" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+    </section>
+
+    <!-- 負責人記分板 -->
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">🏆 負責人記分板</h2>
+          <p class="text-xs text-slate-500 mt-0.5">按在刊數排序，呈現當下各業務的版位使用情況</p>
+        </div>
+        <span id="adOwnerCount" class="text-xs text-slate-500 font-semibold"></span>
+      </div>
+      <div class="hidden md:grid grid-cols-[48px_1fr_96px_112px] items-center gap-3 pb-2 mb-1 border-b-2 border-slate-100 text-xs text-slate-500 font-bold uppercase tracking-wider">
+        <div></div>
+        <div>負責人</div>
+        <div class="text-center">在刊</div>
+        <div class="text-center">今日到期</div>
+      </div>
+      <div id="adOwnerBoard" class="divide-y divide-slate-100"></div>
+    </section>
+
+    <!-- 24h 到期明細 -->
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-slate-900">⏳ 今日到期明細</h2>
+        <span id="adExpiringCount" class="text-xs text-slate-500 font-semibold"></span>
+      </div>
+      <div id="adExpiringGroups" class="space-y-5"></div>
+    </section>
+
+    <!-- 全部在刊 -->
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-slate-900">📑 全部在刊物件</h2>
+        <span id="adAllItemsCount" class="text-xs text-slate-500 font-semibold"></span>
+      </div>
+      <div id="adOwnerFilter" class="flex flex-wrap gap-1.5 mb-4"></div>
+      <div id="adAllItemsList" class="space-y-1"></div>
+    </section>
+
+    <!-- 精選置頂 -->
+    <section class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-slate-900">⭐ 精選 / 置頂明細</h2>
+        <span id="adFeaturedCount" class="text-xs text-slate-500 font-semibold"></span>
+      </div>
+      <div id="adToppedSection" class="mb-4"></div>
+      <div id="adFeaturedSection"></div>
+    </section>
+  </div>
+
+  <footer class="text-center text-slate-400 text-xs py-6">
+    即時資料 — 每次開啟頁面自動從 Ragic 抓取　•　窩的家系統部
+  </footer>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════
+// CONFIG
+// ════════════════════════════════════════════════════════════════════
+const WORKER_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+const LOOKBACK_DAYS = 365;
+
+const PERF_SERVICE_TYPES_LANDLORD = new Set(['房東服務費', '退房東服務費']);
+const PERF_SERVICE_TYPES_TENANT   = new Set(['服務費', '定金轉服務費', '退定金', '退服務費']);
+
+const EXCLUDE_DEVS     = new Set(['張瓊安', 'minor', '孟書', '廖崇勝', '陳泳竹']);
+const EXCLUDE_KEYWORDS = ['測試'];
+
+const NAME_ALIASES = {
+  'TINA':'蕭靜芳','TINA（蕭靜芳）':'蕭靜芳',
+  // 2026-05-19 蕭眞儀改名蕭頤臻；舊名+合併 key 全 alias 到新合併 key「張忠豪&蕭頤臻」
+  '蕭頤臻':'張忠豪&蕭頤臻','頤臻':'張忠豪&蕭頤臻',
+  '蕭眞儀':'張忠豪&蕭頤臻','眞儀':'張忠豪&蕭頤臻','蕭真儀':'張忠豪&蕭頤臻',
+  '張忠豪':'張忠豪&蕭頤臻','忠豪':'張忠豪&蕭頤臻',
+  'WEIWEI':'張忠豪&蕭頤臻','Weiwei':'張忠豪&蕭頤臻','weiwei':'張忠豪&蕭頤臻',
+  '忠豪&眞儀':'張忠豪&蕭頤臻','忠豪&頤臻':'張忠豪&蕭頤臻',
+  '張忠豪、蕭眞儀':'張忠豪&蕭頤臻','蕭眞儀、張忠豪':'張忠豪&蕭頤臻',
+  '張忠豪、蕭頤臻':'張忠豪&蕭頤臻','蕭頤臻、張忠豪':'張忠豪&蕭頤臻',
+  '張忠豪&蕭眞儀':'張忠豪&蕭頤臻',  // 舊合併 key 兼容
+  '宣佑':'林宣佑','惠慈':'吳惠慈','張傳':'詹張傳','小碩':'劉子碩','小鐘':'鐘晟鈺',
+  '炫儒':'吳炫儒','佳燕':'林佳燕','心瑜':'陳心瑜','kelly':'陳心瑜','Kelly':'陳心瑜','則泓':'張則泓','薇雅':'陳薇雅',
+  '卓威':'李卓威','小方':'方鼎文','馬丁':'關宗宇','小吳哥':'吳彥廷','兆傑':'劉兆傑',
+  '恩廷':'葉恩廷',  // 2026-07-08 到職，補上漏掉的小名對照
+  '欣宜':'白欣宜',  // 2026-10 業績表寫小名，補對照
+  '20011205xiluo@gmail.com':'曾宇謙',
+};
+
+const TYPE_MAP = {
+  '專任':'專任出租案','一般':'一般出租案',
+  '包租':'包租案','包租代管':'包租案',
+  '代管':'代管案','專任(含代管)':'代管案','一般(含代管)':'代管案',
+  '帶看同意':'帶看同意','社會住宅':'社會住宅',
+};
+
+
+// ═══════════════════════════════════════════════════════════════════���
+// DATA TRANSFORMATION (ported from Python)
+// ════════════════════════════════════════════════════════════════════
+function normalizeName(name) {
+  if (!name) return name;
+  // 防禦：剝掉殘留的 wikilink markdown `[[X|Y]]` → 取 Y（display alias）；單純 `[[X]]` → X
+  const m = name.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/);
+  if (m) name = (m[2] || m[1]).trim();
+  return NAME_ALIASES[name] || name;
+}
+function normalizeDistrict(d) { return (d && d.includes('|')) ? d.split('|')[1] : (d || ''); }
+function fmtRent(v) {
+  try { const n = parseInt(parseFloat(v)); return isNaN(n) ? (v||'—') : n.toLocaleString(); }
+  catch(e) { return v || '—'; }
+}
+function isExcluded(name) {
+  return EXCLUDE_DEVS.has(name) || EXCLUDE_KEYWORDS.some(k => name.includes(k));
+}
+
+function extractDevs(record) {
+  const sub = record['_subtable_1000254'] || {};
+  const merged = {};
+  const listed = new Set();
+  for (const row of Object.values(sub)) {
+    let name = (row['開發人員'] || '').trim();
+    if (!name || isExcluded(name)) continue;
+    const norm = normalizeName(name);
+    listed.add(norm);
+    const ratio = parseFloat(row['比例'] || 0) || 0;
+    if (ratio > 0) merged[norm] = (merged[norm] || 0) + ratio;
+  }
+  // v2：Ragic 比例全填 0 但有列開發人員時，舊版整件消失（#686 雙園街）；改為平分並標「比例未填」
+  if (!Object.keys(merged).length && listed.size) {
+    return [...listed].map(name => ({ name, ratio: 1 / listed.size, ratioMissing: true }));
+  }
+  return Object.entries(merged).map(([name, ratio]) => ({ name, ratio }));
+}
+
+function toIntakeRecords(rawData) {
+  const out = [];
+  for (const c of Object.values(rawData)) {
+    // 排除永策（別店）經 n8n sync 從 ap16 同步來的物件，不計入本店進案
+    if (c['sync_來源'] === 'sync_ap16') continue;
+    const d = (c['委託時間(起)'] || '').trim();
+    if (!d) continue;
+    const devs = extractDevs(c);
+    const peopleStr = (devs.map(x => `${x.name}(${Math.round(x.ratio*100)}%)`).join('、')
+                      || (c['開發人員'] || '')) + (devs.some(x => x.ratioMissing) ? ' ⚠️比例未填' : '');
+    out.push({
+      date: d.replaceAll('/', '-'),
+      name: c['案名'] || '',
+      city: c['縣市'] || '',
+      district: normalizeDistrict(c['鄉鎮市區'] || ''),
+      rent: fmtRent(c['月租金']),
+      rentNum: parseInt(parseFloat(c['月租金'] || 0)) || 0,
+      layout: (c['格局'] || '').trim(),
+      leaseType: (c['委託類別'] || '').trim(),
+      people: peopleStr,
+      devs: devs,
+      status: (c['狀態'] || '').trim(),
+    });
+  }
+  out.sort((a, b) => a.date.localeCompare(b.date));
+  return out;
+}
+
+function toPerfRecords(rawData) {
+  const records = [];
+  for (const rec of Object.values(rawData)) {
+    let staff = normalizeName((rec['經辦人員'] || '').trim());
+    if (!staff || isExcluded(staff)) continue;
+    const dateStr = (rec['收款日期'] || '').trim();
+    if (!dateStr) continue;
+    const parts = dateStr.split('/');
+    if (parts.length < 2) continue;
+    const ym = `${parts[0]}-${String(parseInt(parts[1])).padStart(2, '0')}`;
+    const date = dateStr.slice(0,10).replaceAll('/', '-');
+    // 業績 = 所有相關類型加總（含負數沖銷）：
+    //   房東端：房東服務費
+    //   租客端：服務費 / 定金轉服務費(負數沖銷) / 退定金(負數)
+    // 拿掉 amt > 0 過濾讓負數生效，業績才會正確扣除退定與沖銷
+    for (const row of Object.values(rec['_subtable_1001701'] || {})) {
+      if (PERF_SERVICE_TYPES_LANDLORD.has((row['類型']||'').trim())) {
+        const amt = parseInt(parseFloat(row['金額'] || 0)) || 0;
+        if (amt !== 0) records.push({ date, ym, name: staff, perf: amt });
+      }
+    }
+    for (const row of Object.values(rec['_subtable_1000777'] || {})) {
+      if (PERF_SERVICE_TYPES_TENANT.has((row['類型']||'').trim())) {
+        const amt = parseInt(parseFloat(row['金額'] || 0)) || 0;
+        if (amt !== 0) records.push({ date, ym, name: staff, perf: amt });
+      }
+    }
+  }
+  return records;
+}
+
+function toInventoryRecords(rawData) {
+  const todayStr = ymd(new Date());  // 本地日期；toISOString 是 UTC，台北 08:00 前會少一天
+  const out = [];
+  for (const c of Object.values(rawData)) {
+    if (c['sync_來源'] === 'sync_ap16') continue;  // 永策同步物件不算窩的家庫存（與進案口徑一致，2026-10-06 小特助決定）
+    const status = (c['狀態'] || '').trim();
+    if (status === '下架' || !status) continue;
+    let d = (c['委託時間(起)'] || '').replaceAll('/', '-').trim();
+    let dateSource = '';
+    if (!d) dateSource = '未填委託日';
+    const typeRaw = (c['委託類型'] || '').trim();
+    const mapped = TYPE_MAP[typeRaw];
+    const caseType = typeRaw ? (mapped || (/^[\u4e00-\u9fff()\uff08\uff09]+$/.test(typeRaw) ? typeRaw : '未分類')) : '未分類';
+    const devs = extractDevs(c);
+    const peopleStr = (devs.map(x => `${x.name}(${Math.round(x.ratio*100)}%)`).join('、')
+                      || (c['開發人員'] || '')) + (devs.some(x => x.ratioMissing) ? ' ⚠️比例未填' : '');
+    let daysOn = 0;
+    if (d) {
+      try { daysOn = Math.max(0, Math.round((new Date(todayStr) - new Date(d)) / 86400000)); } catch(e) {}
+    }
+    out.push({
+      date: d || '—', dateSource, name: c['案名']||'', city: c['縣市']||'',
+      district: normalizeDistrict(c['鄉鎮市區']||''), rent: fmtRent(c['月租金']),
+      people: peopleStr, devs, type: caseType, typeRaw, daysOn, status,
+    });
+  }
+  out.sort((a, b) => {
+    if (a.dateSource === '未填委託日' && b.dateSource !== '未填委託日') return 1;
+    if (a.dateSource !== '未填委託日' && b.dateSource === '未填委託日') return -1;
+    return b.daysOn - a.daysOn;
+  });
+  return out;
+}
+
+function toOutreachRecords(rawData) {
+  const out = [];
+  for (const c of Object.values(rawData)) {
+    const created = (c['建立日期'] || '').trim();
+    if (!created) continue;
+    const createdDate = created.slice(0, 10).replaceAll('/', '-');
+    let devName = normalizeName((c['開發人員'] || '').trim());
+    if (!devName) devName = normalizeName((c['主要開發人'] || '').trim());
+    if (isExcluded(devName)) continue;
+    const ownerName = (c['屋主姓名'] || '').trim();
+    const phone = (c['手機號碼'] || '').trim();
+    const status = (c['屋主狀態'] || '').trim();
+    const accepted = parseInt(parseFloat(c['已接委託數量'] || 0)) || 0;
+    const logs = c['_subtable_1000271'] || {};
+    const logCount = Object.keys(logs).length;
+    const listings = Object.values(c['_subtable_1000637'] || {});
+    const emojis = listings.map(r => (r['完整度'] || '').trim()).filter(Boolean);
+    const completeness = emojis.includes('🟢') ? 'green' : emojis.includes('🟡') ? 'yellow' : 'red';
+    const addresses = listings.map(r => (r['地址'] || '').trim()).filter(Boolean);
+    out.push({ date: createdDate, dev: devName, owner: ownerName, rawPhone: phone, phone: phone?'有':'', status, accepted, logCount, completeness, addresses });
+  }
+  out.sort((a, b) => b.date.localeCompare(a.date));
+  return out;
+}
+
+function toClientRecords(rawData) {
+  const out = [];
+  for (const c of Object.values(rawData)) {
+    const ts = (c['時間'] || '').trim();
+    if (!ts) continue;
+    const tsDate = ts.slice(0, 10).replaceAll('/', '-');
+    const staff = normalizeName((c['服務人員'] || '').trim());
+    if (isExcluded(staff)) continue;
+    const clientName = (c['租客姓名 / line名稱'] || '').trim();
+    const sourceRaw = (c['來源標記'] || '').trim();
+    const source = (!sourceRaw || sourceRaw.startsWith('wizard_v1_')) ? '未標記' : sourceRaw;
+    out.push({ date: tsDate, staff, client: clientName, source });
+  }
+  out.sort((a, b) => b.date.localeCompare(a.date));
+  return out;
+}
+
+function getInactiveStaff(rawData) {
+  const inactive = new Set();
+  for (const c of Object.values(rawData)) {
+    const status = (c['在職狀態'] || '').trim();
+    const name = (c['姓名'] || '').trim();
+    if (name && status && status !== '在職' && status !== '試用') inactive.add(name);
+  }
+  return inactive;
+}
+
+function rocToIso(rocStr) {
+  const parts = rocStr.trim().split('/');
+  const year = parseInt(parts[0]) + 1911;
+  const month = parseInt(parts[1]);
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+function parsePerfMd(text) {
+  const raw = [];
+  let curYm = null;
+  for (const line of text.split('\n')) {
+    const m = line.match(/^##\s+(\d{3}\/\d{2})\s*$/);
+    if (m) { curYm = rocToIso(m[1]); continue; }
+    if (!curYm) continue;
+    if (!line.startsWith('|')) continue;
+    const cols = line.split('|').map(c => c.trim());
+    if (cols.length < 5) continue;
+    const rank = cols[1].replace(/\*/g, '').trim();
+    if (!/^\d+$/.test(rank)) continue;
+    const name = normalizeName(cols[2].replace(/\*/g, '').trim());
+    if (!name || name === '合計' || isExcluded(name)) continue;
+    // v2：「—」／空白／0 一律當沒資料；不再退讀 cols[3]（那欄是業務獎金，不是業績）
+    const perf = parseInt(parseFloat(cols[4].replace(/,/g, '').replace(/\*/g, '').trim()));
+    if (!perf || perf <= 0) continue;
+    raw.push({ ym: curYm, name, perf });
+  }
+  // Bug A fix: 同月同人取最大值 dedup — 避免 NAME_ALIASES 把舊名 alias 後與直寫新名那行重複計算
+  const dedupMap = {};
+  for (const r of raw) {
+    const k = `${r.ym}|${r.name}`;
+    if (dedupMap[k] === undefined || r.perf > dedupMap[k]) dedupMap[k] = r.perf;
+  }
+  return Object.entries(dedupMap).map(([k, perf]) => {
+    const [ym, name] = k.split('|');
+    return { ym, name, perf };
+  });
+}
+
+function buildCompare(ragicPerf, obPerf) {
+  const ragicMap = {}, obMap = {};
+  for (const r of ragicPerf) { const k = `${r.ym}|${r.name}`; ragicMap[k] = (ragicMap[k]||0) + r.perf; }
+  for (const r of obPerf)    { const k = `${r.ym}|${r.name}`; obMap[k]    = (obMap[k]||0)    + r.perf; }
+  const allKeys = new Set([...Object.keys(ragicMap), ...Object.keys(obMap)]);
+  const result = {};
+  for (const k of [...allKeys].sort()) {
+    const [ym, name] = k.split('|');
+    const ragicAmt = ragicMap[k] || 0;
+    const obAmt    = obMap[k]    || 0;
+    const diff     = ragicAmt - obAmt;
+    let status;
+    if      (ragicAmt === 0) status = 'only_ob';
+    else if (obAmt    === 0) status = 'only_ragic';
+    else if (diff     === 0) status = 'match';
+    else if (diff      > 0)  status = 'ragic_more';
+    else                      status = 'ob_more';
+    if (!result[ym]) result[ym] = [];
+    result[ym].push({ name, ragic: ragicAmt, ob: obAmt, diff, status });
+  }
+  return result;
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// API FETCH — routes through Cloudflare Worker proxy (no API key in frontend)
+// ════════════════════════════════════════════════════════════════════
+async function ragicFetch(action, params = '') {
+  // params is a raw query string (may contain multiple &where=... segments)
+  const qs = params ? '?' + params : '';
+  const url = `${WORKER_BASE}/${action}${qs}`;
+  const RETRY_DELAYS = [500, 1200]; // ms before attempt 2, attempt 3
+  let lastErr;
+  for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
+    if (attempt > 0) {
+      console.warn(`[ragicFetch] retrying ${action} (attempt ${attempt + 1})…`);
+      await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt - 1]));
+    }
+    let res;
+    try {
+      res = await fetch(url);
+    } catch (networkErr) {
+      // fetch() rejected — pure network failure, always retry
+      lastErr = networkErr;
+      continue;
+    }
+    // 4xx = caller error, retrying won't help — fail immediately
+    if (res.status >= 400 && res.status < 500) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(`Worker ${action} ${res.status}: ${data?.error || res.statusText}`);
+    }
+    if (!res.ok) {
+      // 5xx or other server-side transient error — retry
+      lastErr = new Error(`Worker ${action} ${res.status}: ${res.statusText}`);
+      continue;
+    }
+    const data = await res.json();
+    return data;
+  }
+  throw lastErr;
+}
+
+let _loadDone = 0;
+const _loadTotal = 6;  // 只算首頁要等的；庫存／開發／客戶在首頁出來後背景接著載（fetchRestData）
+function setProgress(label) {
+  _loadDone++;
+  const pct = Math.round(_loadDone / _loadTotal * 100);
+  const bar = document.getElementById('progressBar');
+  const detail = document.getElementById('loadingDetail');
+  if (bar) bar.style.width = pct + '%';
+  if (detail) detail.textContent = `✓ ${label}（${_loadDone}/${_loadTotal}）`;
+}
+
+async function fetchAllData() {
+  const today = new Date();
+  const dataStart = new Date(today);
+  dataStart.setDate(dataStart.getDate() - LOOKBACK_DAYS);
+  const dataEnd = new Date(today);
+  dataEnd.setDate(dataEnd.getDate() + 30);
+  const fmtDate = d => `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+
+  const intakeParams = `subtables=true&where=${encodeURIComponent(`1000260,gte,${fmtDate(dataStart)}`)}&where=${encodeURIComponent(`1000260,lte,${fmtDate(dataEnd)}`)}&limit=10000`;
+
+  // 首頁（進案量&業績）只需要這 6 項；其餘 4 張大表（合計約 10MB）由 fetchRestData 在首頁出來後再抓。
+  // Ragic 對同時請求會排隊，全部一起抓首頁要等 9～11 秒，拆開後首頁約 2～3 秒（2026-10-06 實測）。
+  const [rawIntake, rawPayments, rawHr, perfMdText, perfCommits, rawGoals] = await Promise.all([
+    ragicFetch('listIntake', intakeParams).then(r => { setProgress('進案量'); return r; }),
+    ragicFetch('listPayments', 'subtables=true&limit=10000').then(r => { setProgress('業績'); return r; }),
+    ragicFetch('listStaff', 'limit=200').then(r => { setProgress('人事資料'); return r; }),
+    fetch('data/perf.md').then(r => r.ok ? r.text() : '').catch(() => '').then(r => { setProgress('業績比對'); return r; }),
+    fetch('https://api.github.com/repos/wuohome/ragic/commits?path=data/perf.md&per_page=1')
+      .then(r => r.ok ? r.json() : null).catch(() => null)
+      .then(r => { setProgress('GSheet時間'); return r; }),
+    ragicFetch('listGoals', 'limit=200').then(r => { setProgress('業績目標'); return r; }).catch(() => ({})),
+  ]);
+  // 591 廣告另外抓（arch: vault md 已含當月 GSheet）
+  // FIX-2026-04-28-591-render-guard: fetch 完成後 trigger render，否則資料來了 panel 也不更新
+  fetch('data/591-dashboard.json?v=' + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null).then(r => { AD591 = r; if (typeof renderAd591 === 'function') try { renderAd591(); } catch(_) {} });
+
+  document.getElementById('loadingText').textContent = '資料轉換中…';
+  document.getElementById('progressBar').style.width = '100%';
+
+  INTAKE    = toIntakeRecords(rawIntake);
+  PERF_RAGIC = toPerfRecords(rawPayments);
+
+  const inactive = getInactiveStaff(rawHr);
+  // perf.md 最後 commit 時間 = GSheet 快照時間（Mac Mini launchd 每日 20:00 push）
+  if (perfCommits && perfCommits[0]?.commit?.committer?.date) {
+    const d = new Date(perfCommits[0].commit.committer.date);
+    PERF_GSHEET_UPDATED = d.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\//g, '-');
+  }
+  const perfOb   = parsePerfMd(perfMdText);
+  window._perfOb = perfOb;
+  YEAR_PERF = WorklogPerf.parse(perfMdText);
+
+  // For month perf tab + year tab: prefer OB perf (has historical data), fallback to Ragic
+  PERF    = perfOb.length > 0 ? perfOb : PERF_RAGIC;
+  COMPARE = buildCompare(PERF_RAGIC, perfOb);
+
+  // 當月業績：perf.md 直接包含當月 GSheet 資料（Mac Mini launchd 每天 20:00 更新）
+  PERF_GSHEET_AVAILABLE = true;
+  window._rawHr = rawHr;  // 供 renderAnalysis Tier 0 讀精確到職日
+
+  rebuildActiveStaff();  // 先用進案＋業績建；fetchRestData 補齊庫存／開發／客戶後再建一次
+
+  // 建立到職月份 map（供業務分析頁的時序曲線 x 軸起點用）
+  STAFF_ONBOARD_MONTH = {};
+  for (const rec of Object.values(rawHr)) {
+    const name = (rec['姓名'] || '').trim();
+    const onboard = (rec['到職日期'] || rec['到職日'] || rec['入職日'] || '').trim();
+    if (name && onboard && onboard.length >= 7) {
+      STAFF_ONBOARD_MONTH[name] = onboard.slice(0,7).replaceAll('/', '-');
+    }
+  }
+  // 夫妻檔合併：取較早到職（蕭頤臻舊名「蕭眞儀」，HR record 可能仍為舊名）
+  const a = STAFF_ONBOARD_MONTH['張忠豪'];
+  const b = STAFF_ONBOARD_MONTH['蕭頤臻'] || STAFF_ONBOARD_MONTH['蕭眞儀'];
+  if (a && b) STAFF_ONBOARD_MONTH['張忠豪&蕭頤臻'] = a <= b ? a : b;
+  else if (a) STAFF_ONBOARD_MONTH['張忠豪&蕭頤臻'] = a;
+  else if (b) STAFF_ONBOARD_MONTH['張忠豪&蕭頤臻'] = b;
+
+  // 解析 extras（續約/代管業績）並掛到 window 供 renderRecurring 使用
+  window.PERF_EXTRAS = parseExtrasFromPerfMd(perfMdText);
+
+  // 儲存 rawGoals 供全店達成區塊達標人員計算使用
+  window._rawGoals = rawGoals || {};
+
+  // 渲染當月業績目標面板
+  renderGoalPanel(rawGoals || {});
+}
+
+// 首頁出來之後才抓的 4 張大表：庫存、開發募集、委託屋主、客戶來源
+async function fetchRestData() {
+  const [rawInventory, rawOutreach, rawCommission, rawClients] = await Promise.all([
+    ragicFetch('listInventory', 'subtables=true&limit=10000'),
+    ragicFetch('listOutreach', 'subtables=true&limit=10000'),
+    ragicFetch('listCommission', 'subtables=true&limit=10000'),
+    ragicFetch('listClients', 'limit=10000'),
+  ]);
+  INVENTORY = toInventoryRecords(rawInventory);
+  OUTREACH  = toOutreachRecords(rawOutreach);
+  CLIENTS   = toClientRecords(rawClients);
+
+  // ════════════════════════════════════════════════════════════════
+  // 開發募集資料組合（2026-04 重構，不再用手機/地址互相配對）：
+  //   潛在屋主 ← property-data-kept/17（只含此狀態 + 記錄級 開發人員 欄位）
+  //   已接委託 ← property-data-kept/25（完整屋主表 + _subtable_1000121 委託物件）
+  //   點連結的 rid  ← operation/4 案名 查表
+  // ════════════════════════════════════════════════════════════════
+  const nameToPropRid = {};
+  for (const [rid, c] of Object.entries(rawInventory)) {
+    const name = (c['案名']||'').trim();
+    if (name) nameToPropRid[name] = rid;
+  }
+
+  for (const [rid, c] of Object.entries(rawCommission)) {
+    if ((c['屋主狀態']||'').trim() !== '已接委託') continue;
+    const commissioned = Object.values(c['_subtable_1000121'] || {});
+    if (!commissioned.length) continue;  // 狀態是已接委託但沒委託物件 → 跳過
+    // 開發人員從子表取（sheet 25 記錄級沒此欄位；子表的 開發人員/負責人1 才有）
+    const firstSub = commissioned[0];
+    let devName = normalizeName((firstSub['開發人員']||'').trim());
+    if (!devName) devName = normalizeName((firstSub['負責人1']||'').trim());
+    if (!devName || isExcluded(devName)) continue;
+    const ownerName = (c['屋主姓名']||'').trim();
+    const phone = (c['手機號碼']||'').trim();
+    // 日期優先用委託起始日，fallback 建立日期
+    const commitStart = (firstSub['委託時間(起)']||'').trim();
+    const created = (c['建立日期']||'').trim();
+    const date = (commitStart || created).slice(0,10).replaceAll('/','-');
+    const caseName = (firstSub['案名']||'').trim();
+    const logCount = Object.keys(c['_subtable_1000271'] || {}).length;
+    OUTREACH.push({
+      date, dev: devName, owner: ownerName, rawPhone: phone,
+      phone: phone ? '有' : '', status: '已接委託',
+      accepted: 1, logCount, completeness: 'green', addresses: [],
+      matchedName: caseName, matchedRid: nameToPropRid[caseName] || null,
+      extraCount: commissioned.length > 1 ? commissioned.length - 1 : 0,
+    });
+  }
+  OUTREACH.sort((a, b) => (b.date||'').localeCompare(a.date||''));
+
+  rebuildActiveStaff();
+  renderGoalPanel(window._rawGoals || {});  // 「尚未填目標」名單依完整在職名單重算
+}
+
+// 在職名單：只接受 HR 在職員工本名 + 白名單合併名，且在任一份資料出現過
+// 避免下拉選單出現「吳惠慈、關宗宇」「張忠豪、蕭眞儀、詹張傳」這種混合字串
+function rebuildActiveStaff() {
+  const hrValid = new Set();
+  for (const rec of Object.values(window._rawHr || {})) {
+    const name = (rec['姓名'] || '').trim();
+    const status = (rec['在職狀態'] || rec['狀態'] || '').trim();
+    if (name && (status === '在職' || status === '試用')) hrValid.add(name);
+  }
+  const MERGED_NAMES = new Set(['張忠豪&蕭頤臻']);  // 合法合併
+  const validNames = new Set([...hrValid, ...MERGED_NAMES]);
+
+  const allStaff = new Set();
+  const addIfValid = (n) => {
+    if (!n) return;
+    const norm = normalizeName(String(n).trim());
+    if (validNames.has(norm)) allStaff.add(norm);
+  };
+  for (const r of INTAKE) for (const d of (r.devs||[])) addIfValid(d.name);
+  for (const r of (window._perfOb || [])) addIfValid(r.name);
+  for (const r of INVENTORY) for (const d of (r.devs||[])) addIfValid(d.name);
+  for (const r of OUTREACH) addIfValid(r.dev);
+  for (const r of CLIENTS) addIfValid(r.staff);
+  for (const n of EXCLUDE_DEVS) allStaff.delete(n);
+  ACTIVE_STAFF = allStaff;
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// 當月業績目標面板
+// ════════════════════════════════════════════════════════════════════
+function renderGoalPanel(raw) {
+  const now = new Date();
+  const monthNum = now.getMonth() + 1;
+  const ym = `${now.getFullYear()}-${String(monthNum).padStart(2, '0')}`;
+
+  const titleEl    = document.getElementById('goalPanelTitle');
+  const summaryEl  = document.getElementById('goalPanelSummary');
+  const tbodyEl    = document.getElementById('goalTableBody');
+  const tableDiv   = document.getElementById('goalPanelTable');
+  const emptyDiv   = document.getElementById('goalPanelEmpty');
+  const emptyMsg   = document.getElementById('goalPanelEmptyMsg');
+  const totalPerf  = document.getElementById('goalTotalPerf');
+  const totalCases = document.getElementById('goalTotalCases');
+
+  if (!titleEl) return;
+  titleEl.textContent = `📋 ${monthNum}月業績目標`;
+
+  // 過濾當月資料
+  const recs = Object.values(raw || {}).filter(r => {
+    const m = (r['月份'] || '').trim();
+    return m === ym || m.startsWith(ym);
+  });
+
+  // 已填目標者姓名集合（含合併筆「張忠豪&蕭頤臻」＝兩人皆已填，須拆開分別標記）
+  const filledNames = new Set();
+  recs.forEach(r => {
+    const raw = (r['員工姓名'] || r['_index_title_'] || '').trim();
+    if (!raw) return;
+    const norm = normalizeName(raw);
+    filledNames.add(norm);
+    // 合併筆用 & 拆開，raw／norm 兩邊都拆：涵蓋「本就寫合併名」與「寫舊名/單名被 alias 成合併名」兩種情況，
+    // 確保 ACTIVE_STAFF 不論存的是合併鍵還是拆開的個別姓名都比得到
+    [raw, norm].forEach(s => {
+      if (!s.includes('&')) return;
+      s.split('&').forEach(part => {
+        const p = part.trim();
+        if (!p) return;
+        filledNames.add(p);
+        filledNames.add(normalizeName(p));
+      });
+    });
+  });
+  renderGoalUnfilled(filledNames, monthNum);
+
+  if (recs.length === 0) {
+    // 無資料：隱藏表格，顯示提示；重設全域目標為未填報
+    CURRENT_MONTH_GOAL = { perfWan: 0, cases: 0, filled: false };
+    tableDiv.classList.add('hidden');
+    emptyDiv.classList.remove('hidden');
+    emptyMsg.textContent = `${monthNum}月業績目標尚未填報`;
+    summaryEl.textContent = '尚未填報';
+    return;
+  }
+
+  // 有資料：依業績目標(萬)由大到小排序
+  recs.sort((a, b) => {
+    const av = parseFloat(a['業績目標(萬)']) || 0;
+    const bv = parseFloat(b['業績目標(萬)']) || 0;
+    return bv - av;
+  });
+
+  let totalPerfSum  = 0;
+  let totalCasesSum = 0;
+
+  const rows = recs.map(r => {
+    const name  = normalizeName((r['員工姓名'] || r['_index_title_'] || '').trim());
+    const perf  = parseFloat(r['業績目標(萬)']) || 0;
+    const cases = parseFloat(r['新進案件量(間)']) || 0;
+    totalPerfSum  += perf;
+    totalCasesSum += cases;
+    const perfStr  = perf  % 1 === 0 ? `${perf} 萬`  : `${perf} 萬`;
+    const casesStr = cases % 1 === 0 ? `${cases} 間` : `${cases} 間`;
+    return `<tr>` +
+      `<td class="py-2 pr-4 text-slate-700">${name}</td>` +
+      `<td class="text-right py-2 px-4 text-slate-900 font-medium">${perfStr}</td>` +
+      `<td class="text-right py-2 pl-4 text-slate-600">${casesStr}</td>` +
+      `</tr>`;
+  }).join('');
+
+  tbodyEl.innerHTML = rows;
+
+  const perfDisplay  = totalPerfSum  % 1 === 0 ? `${totalPerfSum} 萬`  : `${totalPerfSum} 萬`;
+  const casesDisplay = totalCasesSum % 1 === 0 ? `${totalCasesSum} 間` : `${totalCasesSum} 間`;
+  totalPerf.textContent  = perfDisplay;
+  totalCases.textContent = casesDisplay;
+  summaryEl.innerHTML    = `合計 <b>${perfDisplay}</b> ／ <b>${casesDisplay}</b>　大家加油 💪`;
+
+  tableDiv.classList.remove('hidden');
+  emptyDiv.classList.add('hidden');
+
+  // 寫入全域，讓 renderPerfIntake 全店達成區塊讀取
+  CURRENT_MONTH_GOAL = { perfWan: totalPerfSum, cases: totalCasesSum, filled: true };
+}
+
+// 「尚未填目標」名單：ACTIVE_STAFF（在職員工）扣掉當月已填目標者
+// 合併筆「張忠豪&蕭頤臻」在 ACTIVE_STAFF 中本就只算一個 entry，已填視為兩人都填
+function renderGoalUnfilled(filledNames, monthNum) {
+  const titleEl = document.getElementById('goalUnfilledTitle');
+  const listEl  = document.getElementById('goalUnfilledList');
+  if (!titleEl || !listEl) return;
+
+  const unfilled = [...ACTIVE_STAFF].filter(n => !filledNames.has(n)).sort();
+
+  if (unfilled.length === 0) {
+    titleEl.className = 'text-sm font-bold text-emerald-700 mb-2';
+    titleEl.textContent = `✅ 全員已填寫${monthNum}月目標`;
+    listEl.innerHTML = '';
+  } else {
+    titleEl.className = 'text-sm font-bold text-orange-700 mb-2';
+    titleEl.textContent = `⚠️ 尚未填寫 ${monthNum}月目標（${unfilled.length} 人）`;
+    listEl.innerHTML = unfilled
+      .map(n => `<span class="px-2.5 py-1 bg-orange-100 text-orange-800 text-xs font-semibold rounded-full">${esc(n)}</span>`)
+      .join('');
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// GLOBAL DATA (populated by fetchAllData)
+// ════════════════════════════════════════════════════════════════════
+let INTAKE = [], PERF = [], PERF_RAGIC = [], COMPARE = {}, INVENTORY = [], OUTREACH = [], CLIENTS = [];
+let ACTIVE_STAFF = new Set();
+let YEAR_PERF = null;  // WorklogPerf.parse(perf.md)：今年業績口徑，與每日工作行程共用同一支
+let AD591 = null;
+let PERF_GSHEET_AVAILABLE = false;
+let PERF_GSHEET_UPDATED = '';
+
+let STAFF_ONBOARD_MONTH = {};  // { name: 'YYYY-MM' } 從 HR 到職日
+
+// 當月業績目標加總（由 renderGoalPanel 計算後寫入，供 renderPerfIntake 全店達成區塊讀取）
+// { perfWan: 0, cases: 0, filled: false }  filled=false 代表本月尚未填報
+let CURRENT_MONTH_GOAL = { perfWan: 0, cases: 0, filled: false };
+
+// ── 珊珊 GSheet CSV 解析（2026-04 起為當月業績事實來源）
+// 格式：英雄A班,業績,VS,英雄B班,業績 兩欄並排（歷史遺留 A/B PK 格式，實為個人累計）
+function parsePerfCSV(text) {
+  if (!text || !text.trim()) return [];
+  const thisYm = ym(new Date());
+  const out = [];
+  const SKIP = /^(總計|合計|平均|本次|英雄)/;  // 小計/未參與列跳過
+  for (const line of text.split(/\r?\n/).slice(1)) {  // 跳過表頭
+    if (!line.trim()) continue;
+    const cols = line.split(',').map(s => s.trim());
+    // 攤平 A 欄 + B 欄（第 0、3 欄為姓名；1、4 欄為業績）
+    for (const [nameIdx, perfIdx] of [[0, 1], [3, 4]]) {
+      const rawName = cols[nameIdx] || '';
+      if (!rawName || SKIP.test(rawName)) continue;
+      const name = normalizeName(rawName);
+      if (!name || isExcluded(name)) continue;
+      const amount = parseInt((cols[perfIdx] || '0').replace(/[,\s]/g, '')) || 0;
+      out.push({ ym: thisYm, name, perf: amount });
+    }
+  }
+  // 同人合併（夫妻檔 normalize 成同名 → 業績加總）
+  const merged = {};
+  for (const r of out) merged[r.name] = (merged[r.name] || 0) + r.perf;
+  return Object.entries(merged).map(([name, perf]) => ({ ym: thisYm, name, perf }));
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// RENDERING (same as original)
+// ════════════════════════════════════════════════════════════════════
+function ymd(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;}
+function ym(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}`;}
+function thisMonday(){const d=new Date();const w=(d.getDay()+6)%7;d.setDate(d.getDate()-w);return d;}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x;}
+function fmtN(n){return Number.isInteger(n)?n.toLocaleString():n.toFixed(2).replace(/\.?0+$/,'');}
+function fmtMoney(n){return Number(n).toLocaleString();}
+function esc(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+const datePresets = {
+  thisWeek:()=>{const m=thisMonday();return [m,addDays(m,6)];},
+  lastWeek:()=>{const m=addDays(thisMonday(),-7);return [m,addDays(m,6)];},
+  thisMonth:()=>{const d=new Date();return [new Date(d.getFullYear(),d.getMonth(),1),new Date(d.getFullYear(),d.getMonth()+1,0)];},
+  lastMonth:()=>{const d=new Date();return [new Date(d.getFullYear(),d.getMonth()-1,1),new Date(d.getFullYear(),d.getMonth(),0)];},
+  last30:()=>{const d=new Date();return [addDays(d,-29),d];},
+  last90:()=>{const d=new Date();return [addDays(d,-89),d];},
+  all:()=>[new Date(2020,0,1),new Date()],
+};
+
+function rankHtml(items, fmtVal, unit){
+  if(!items.length) return '<div class="text-center text-slate-400 py-8">此區間無資料</div>';
+  const top = items[0][1]||1;
+  const medals=['medal-1','medal-2','medal-3'];
+  const icons=['🥇','🥈','🥉'];
+  return items.map(([name,n],i)=>{
+    const pct=Math.round(n/top*100);
+    const badge = i<3
+      ? `<span class="${medals[i]} w-10 h-10 rounded-full flex items-center justify-center font-black text-lg">${icons[i]}</span>`
+      : `<span class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-slate-400 bg-slate-100">${i+1}</span>`;
+    return `<div class="flex items-center gap-4">${badge}<div class="flex-1"><div class="flex justify-between mb-1"><span class="font-bold text-slate-800">${esc(name)}</span><span class="font-black text-slate-900">${fmtVal(n)} <span class="text-sm text-slate-400 font-normal">${unit}</span></span></div><div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="bar h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" style="width:${pct}%"></div></div></div></div>`;
+  }).join('');
+}
+
+// NOTE: MAY_TARGET hardcode removed 2026-06-10.
+// Monthly targets are now loaded dynamically from Ragic shanshans/5 via ragicFetch('listGoals').
+// Individual targets read from window._rawGoals; store totals from CURRENT_MONTH_GOAL.
+
+// 判斷日期範圍是否與當月有交集（用於顯示全店目標達成區塊）
+function isMayPeriod(start, end){
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const monthStart = ym + '-01';
+  const monthEnd   = ym + '-31';
+  return start <= monthEnd && end >= monthStart;
+}
+
+// ── 名次牌 helper ──
+function _rankBadge(i){
+  const medals=['medal-1','medal-2','medal-3'];
+  const icons=['🥇','🥈','🥉'];
+  return i < 3
+    ? `<span class="${medals[i]} w-10 h-10 rounded-full flex items-center justify-center font-black text-lg">${icons[i]}</span>`
+    : `<span class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-slate-400 bg-slate-100 text-sm">${i+1}</span>`;
+}
+
+// ── 子分頁 1「排行」：純比大小，單色 blue→indigo 漸層，相對寬度 ──
+function rankHtmlIntakeRank(items){
+  if(!items.length) return '<div class="text-center text-slate-400 py-8">此區間無資料</div>';
+  const top = items[0][1]||1;
+  return items.map(([name,n],i)=>{
+    const pct = Math.round(n / top * 100);
+    return `<div class="flex items-center gap-3">
+      ${_rankBadge(i)}
+      <div class="flex-1 min-w-0">
+        <div class="flex justify-between mb-1">
+          <span class="font-semibold text-slate-800 truncate">${esc(name)}</span>
+          <span class="font-black text-slate-900 ml-2 shrink-0">${fmtN(n)} <span class="text-xs text-slate-400 font-normal">間</span></span>
+        </div>
+        <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div class="bar h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" style="width:${pct}%"></div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── 子分頁 2「委託達成率」：進度條寬度 = 達成率（capped 100%），語意三色 ──
+function rankHtmlIntakeGoal(items){
+  // 取當月個人委託目標（來源：listGoals rawGoals）
+  const nowYm = (()=>{ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
+  const goalMap = {}; // { name: cases }
+  Object.values(window._rawGoals || {}).forEach(r => {
+    const m = (r['月份']||'').trim();
+    if (m !== nowYm && !m.startsWith(nowYm)) return;
+    const nm = normalizeName((r['員工姓名']||r['_index_title_']||'').trim());
+    if (nm) goalMap[nm] = (goalMap[nm] || 0) + (parseFloat(r['新進案件量(間)']) || 0);
+  });
+  // 補進：有填目標但當月無委託件（items 裡不存在）的人，以 0 值 union 進來，避免消失於榜上
+  const itemNames = new Set(items.map(([name])=>name));
+  const unionedItems = items.slice();
+  Object.keys(goalMap).forEach(name => { if (!itemNames.has(name)) unionedItems.push([name, 0]); });
+
+  if(!unionedItems.length) return '<div class="text-center text-slate-400 py-8">此區間無資料</div>';
+
+  // 分成：有目標（照達成率排序）、無目標（排最後灰字）
+  const withTarget = unionedItems.filter(([name])=> goalMap[name] > 0);
+  const noTarget   = unionedItems.filter(([name])=> !goalMap[name] || goalMap[name] === 0);
+  // 有目標者依達成率排序
+  withTarget.sort(([na,a],[nb,b])=>{
+    const ra = a / goalMap[na];
+    const rb = b / goalMap[nb];
+    return rb - ra;
+  });
+  const rows = [];
+  withTarget.forEach(([name,n], i)=>{
+    const tCases = goalMap[name];
+    const pctAch = Math.min(Math.round(n / tCases * 100), 100);
+    const over = n >= tCases;
+    const near = !over && pctAch >= 70;
+    const barColor = over ? 'from-emerald-400 to-emerald-500' : near ? 'from-amber-400 to-amber-500' : 'from-rose-400 to-rose-500';
+    const badgeCls = over ? 'bg-emerald-100 text-emerald-700' : near ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700';
+    rows.push(`<div class="flex items-center gap-3">
+      ${_rankBadge(i)}
+      <div class="flex-1 min-w-0">
+        <div class="flex justify-between items-center mb-1">
+          <span class="font-semibold text-slate-800 truncate">${esc(name)}</span>
+          <div class="flex items-center gap-1.5 ml-2 shrink-0">
+            <span class="font-black text-slate-900">${fmtN(n)}<span class="text-xs text-slate-400 font-normal"> / ${fmtN(tCases)} 間</span></span>
+            <span class="text-xs font-bold px-2 py-0.5 rounded-full ${badgeCls}">${pctAch}%</span>
+          </div>
+        </div>
+        <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+          <div class="bar h-full bg-gradient-to-r ${barColor} rounded-full" style="width:${pctAch}%"></div>
+        </div>
+      </div>
+    </div>`);
+  });
+  if(noTarget.length){
+    rows.push(`<div class="mt-3 pt-3 border-t border-slate-100">`);
+    noTarget.forEach(([name,n])=>{
+      rows.push(`<div class="flex items-center gap-3 opacity-50 py-1">
+        <span class="w-10 h-10 shrink-0"></span>
+        <div class="flex-1 min-w-0 flex justify-between items-center">
+          <span class="text-sm text-slate-500 truncate">${esc(name)}</span>
+          <span class="text-xs text-slate-400">${fmtN(n)} 間・無目標</span>
+        </div>
+      </div>`);
+    });
+    rows.push(`</div>`);
+  }
+  return rows.join('');
+}
+
+// ── 子分頁 1「業績排行」：純比金額高低，單色 blue→indigo，相對寬度 ──
+function rankHtmlPerfRank(items){
+  if(!items.length) return '<div class="text-center text-slate-400 py-8">此區間無資料</div>';
+  const top = items[0][1]||1;
+  const fmtWan = v => (v / 10000).toFixed(1).replace(/\.0$/,'') + ' 萬';
+  return items.map(([name,n],i)=>{
+    const pct = Math.round(n / top * 100);
+    return `<div class="flex items-center gap-3">
+      ${_rankBadge(i)}
+      <div class="flex-1 min-w-0">
+        <div class="flex justify-between mb-1">
+          <span class="font-semibold text-slate-800 truncate">${esc(name)}</span>
+          <span class="font-black text-slate-900 ml-2 shrink-0">${fmtWan(n)}</span>
+        </div>
+        <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div class="bar h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" style="width:${pct}%"></div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── 子分頁 2「業績達成率」：進度條寬度 = 達成率（capped 100%），語意三色 ──
+function rankHtmlPerfGoal(items){
+  const fmtWan = v => (v / 10000).toFixed(1).replace(/\.0$/,'') + ' 萬';
+  // 取當月個人業績目標（來源：listGoals rawGoals）
+  const nowYm = (()=>{ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
+  const goalMap = {}; // { name: revenue_wan }
+  Object.values(window._rawGoals || {}).forEach(r => {
+    const m = (r['月份']||'').trim();
+    if (m !== nowYm && !m.startsWith(nowYm)) return;
+    const nm = normalizeName((r['員工姓名']||r['_index_title_']||'').trim());
+    if (nm) goalMap[nm] = (goalMap[nm] || 0) + (parseFloat(r['業績目標(萬)']) || 0);
+  });
+  // 補進：有填目標但當月業績為 0（items 裡不存在）的人，以 0 值 union 進來，避免消失於榜上
+  const itemNames = new Set(items.map(([name])=>name));
+  const unionedItems = items.slice();
+  Object.keys(goalMap).forEach(name => { if (!itemNames.has(name)) unionedItems.push([name, 0]); });
+
+  if(!unionedItems.length) return '<div class="text-center text-slate-400 py-8">此區間無資料</div>';
+
+  const withTarget = unionedItems.filter(([name])=> goalMap[name] > 0);
+  const noTarget   = unionedItems.filter(([name])=> !goalMap[name] || goalMap[name] === 0);
+  withTarget.sort(([na,a],[nb,b])=>{
+    const ra = a / (goalMap[na] * 10000);
+    const rb = b / (goalMap[nb] * 10000);
+    return rb - ra;
+  });
+  const rows = [];
+  withTarget.forEach(([name,n], i)=>{
+    const tRevWan = goalMap[name];
+    const target = tRevWan * 10000;
+    const pctAch = Math.min(Math.round(n / target * 100), 100);
+    const over = n >= target;
+    const near = !over && pctAch >= 70;
+    const barColor = over ? 'from-emerald-400 to-emerald-500' : near ? 'from-amber-400 to-amber-500' : 'from-rose-400 to-rose-500';
+    const badgeCls = over ? 'bg-emerald-100 text-emerald-700' : near ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700';
+    rows.push(`<div class="flex items-center gap-3">
+      ${_rankBadge(i)}
+      <div class="flex-1 min-w-0">
+        <div class="flex justify-between items-center mb-1">
+          <span class="font-semibold text-slate-800 truncate">${esc(name)}</span>
+          <div class="flex items-center gap-1.5 ml-2 shrink-0">
+            <span class="font-black text-slate-900">${fmtWan(n)}<span class="text-xs text-slate-400 font-normal"> / ${tRevWan} 萬</span></span>
+            <span class="text-xs font-bold px-2 py-0.5 rounded-full ${badgeCls}">${pctAch}%</span>
+          </div>
+        </div>
+        <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+          <div class="bar h-full bg-gradient-to-r ${barColor} rounded-full" style="width:${pctAch}%"></div>
+        </div>
+      </div>
+    </div>`);
+  });
+  if(noTarget.length){
+    rows.push(`<div class="mt-3 pt-3 border-t border-slate-100">`);
+    noTarget.forEach(([name,n])=>{
+      rows.push(`<div class="flex items-center gap-3 opacity-50 py-1">
+        <span class="w-10 h-10 shrink-0"></span>
+        <div class="flex-1 min-w-0 flex justify-between items-center">
+          <span class="text-sm text-slate-500 truncate">${esc(name)}</span>
+          <span class="text-xs text-slate-400">${fmtWan(n)}・無目標</span>
+        </div>
+      </div>`);
+    });
+    rows.push(`</div>`);
+  }
+  return rows.join('');
+}
+
+// ── 舊的合體函式保留為包裝（向下相容，目前已不被呼叫）──
+function rankHtmlIntakeWithTarget(items, showTarget){ return showTarget ? rankHtmlIntakeGoal(items) : rankHtmlIntakeRank(items); }
+function rankHtmlPerfWithTarget(items, showTarget){ return showTarget ? rankHtmlPerfGoal(items) : rankHtmlPerfRank(items); }
+
+// ── 子分頁狀態（intake / perf 各自記錄） ──
+const _rankTabState = { intake: 'rank', perf: 'rank' };
+
+// ── 切換子分頁並重渲染 ──
+function switchRankTab(card, tab){
+  _rankTabState[card] = tab;
+  // 更新 pill 樣式
+  const active   = document.getElementById(card + 'Tab' + (tab==='rank'?'Rank':'Goal'));
+  const inactive = document.getElementById(card + 'Tab' + (tab==='rank'?'Goal':'Rank'));
+  if(active){   active.className   = 'rank-tab-btn px-3 py-1 rounded-full bg-white text-slate-900 shadow-sm transition-all'; }
+  if(inactive){ inactive.className = 'rank-tab-btn px-3 py-1 rounded-full text-slate-500 transition-all'; }
+  // 重渲染對應排行榜
+  _rerenderRankCard(card);
+}
+
+// ── 重渲染單張排行卡（不重跑整個 renderPerfIntake） ──
+function _rerenderRankCard(card){
+  const state = _rankTabState[card];
+  if(card === 'intake'){
+    const el = document.getElementById('mIntakeRanking');
+    if(!el._rankItems) return;
+    el.innerHTML = state === 'rank'
+      ? rankHtmlIntakeRank(el._rankItems)
+      : rankHtmlIntakeGoal(el._rankItems);
+  } else {
+    const el = document.getElementById('mPerfRanking');
+    if(!el._rankItems) return;
+    el.innerHTML = state === 'rank'
+      ? rankHtmlPerfRank(el._rankItems)
+      : rankHtmlPerfGoal(el._rankItems);
+  }
+}
+
+// ── 全域人員篩選 ──
+let curStaff = '';
+function buildStaffSelector(){
+  const sel = document.getElementById('staffSelector');
+  [...ACTIVE_STAFF].sort().forEach(n=>{
+    const opt = document.createElement('option');
+    opt.value = n; opt.textContent = n;
+    sel.appendChild(opt);
+  });
+  const urlStaff = new URLSearchParams(window.location.search).get('staff');
+  if(urlStaff && ACTIVE_STAFF.has(urlStaff)){
+    sel.value = urlStaff;
+    curStaff = urlStaff;
+  }
+  sel.addEventListener('change',()=>{
+    curStaff = sel.value;
+    document.getElementById('staffLabel').textContent = curStaff ? `🔬 業務分析選定：${curStaff}` : '';
+    refreshAll();
+    const url = new URL(window.location);
+    if(curStaff) url.searchParams.set('staff', curStaff);
+    else url.searchParams.delete('staff');
+    history.replaceState(null, '', url);
+  });
+  if(curStaff) document.getElementById('staffLabel').textContent = `🔬 業務分析選定：${curStaff}`;
+}
+
+function refreshAll(){
+  const d=new Date();
+  renderPerfIntake();
+  renderAnalysis();
+  renderInventory();
+  renderOutreach();
+  renderClients();
+}
+
+// ════════════════════════════════════════
+// 591 廣告
+// ════════════════════════════════════════
+function renderAd591(){
+  // FIX-2026-04-28-591-render-guard: hero element 在 panel 外，用 getElementById 並加 null guard
+  if(!AD591 || !AD591.summary){
+    const set = (id, val, asHtml) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (asHtml) el.innerHTML = val; else el.textContent = val;
+    };
+    set('adHeroExpiring', '—');
+    set('adHeroDisappeared', '—');
+    set('adHeroExpiringOwners', '<span class="text-slate-500">資料尚未生成，請稍後再試</span>', true);
+    return;
+  }
+  const d = AD591, s = d.summary;
+
+  document.getElementById('adHeroExpiring').textContent = s.total_expiring;
+  document.getElementById('adHeroExpiringOwners').innerHTML = ad591TopOwners(d.expiring, '✓ 今天沒有到期的物件');
+
+  document.getElementById('adKpiActive').textContent = s.total_active;
+  document.getElementById('adKpiVacant').textContent = s.total_vacant;
+  document.getElementById('adKpiFeatured').textContent = s.featured_count;
+  document.getElementById('adKpiTopped').textContent = (s.super_top_count||0) + (s.normal_top_count||0);
+
+  // 套餐卡片：stacked bar（綠=在刊、黃=空位、紅=到期），去掉易誤解的分母
+  document.getElementById('adPackageList').innerHTML = d.packages.map(p=>{
+    const total = p.active + p.vacant + p.expired;
+    let bg='bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200', stat='滿刊', statCls='bg-emerald-500 text-white';
+    if(p.expired > 0){ bg='bg-gradient-to-br from-red-50 to-red-100 border-red-200'; stat=`${p.expired} 筆到期`; statCls='bg-red-500 text-white'; }
+    else if(p.vacant > 0){ bg='bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200'; stat=`${p.vacant} 空位`; statCls='bg-amber-500 text-white'; }
+    const activePct = total > 0 ? (p.active/total*100) : 0;
+    const vacantPct = total > 0 ? (p.vacant/total*100) : 0;
+    const expiredPct = total > 0 ? (p.expired/total*100) : 0;
+    // 組成摘要文字
+    const parts = [`<span class="text-emerald-700 font-bold">${p.active} 在刊</span>`];
+    if(p.vacant > 0) parts.push(`<span class="text-amber-700 font-bold">${p.vacant} 空位</span>`);
+    if(p.expired > 0) parts.push(`<span class="text-red-700 font-bold">${p.expired} 到期</span>`);
+    return `<div class="rounded-xl border p-4 ${bg}">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm font-bold text-slate-700">套餐 #${p.num}</span>
+        <span class="${statCls} text-[10px] font-bold px-2 py-0.5 rounded-full">${stat}</span>
+      </div>
+      <div class="flex items-baseline gap-1 mb-2">
+        <span class="text-4xl font-black text-slate-900">${p.active}</span>
+        <span class="text-xs text-slate-500 ml-1">筆在刊</span>
+      </div>
+      <div class="flex h-2 rounded-full overflow-hidden bg-white/70 mb-2">
+        <div class="h-full bg-emerald-500" style="width:${activePct}%"></div>
+        <div class="h-full bg-amber-400" style="width:${vacantPct}%"></div>
+        <div class="h-full bg-red-400" style="width:${expiredPct}%"></div>
+      </div>
+      <div class="flex flex-wrap gap-x-2 gap-y-0.5 text-[11px]">${parts.join('<span class="text-slate-400">·</span>')}</div>
+    </div>`;
+  }).join('');
+
+  // 負責人記分板（純事實呈現：名字、在刊、今日到期）
+  document.getElementById('adOwnerCount').textContent = `${d.owners.length} 人`;
+  const sortedOwners = [...d.owners].sort((a,b)=>(b.active||0)-(a.active||0));
+  document.getElementById('adOwnerBoard').innerHTML = sortedOwners.map((o,i)=>{
+    let badge;
+    if(i<3 && o.active>0){
+      const cls=['medal-1','medal-2','medal-3'][i]; const icon=['🥇','🥈','🥉'][i];
+      badge = `<span class="${cls} w-10 h-10 rounded-full flex items-center justify-center font-black text-lg">${icon}</span>`;
+    } else {
+      badge = `<span class="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center font-bold text-sm">${i+1}</span>`;
+    }
+    const expiringCell = o.expiring ? `<div class="text-center"><span class="inline-flex items-center justify-center min-w-[48px] px-3 py-1.5 rounded-lg text-lg font-bold text-amber-700 bg-amber-50 border border-amber-100">${o.expiring}</span></div>` : '<div class="text-center text-lg font-black text-slate-300">—</div>';
+    return `<div class="grid grid-cols-[48px_1fr_96px_112px] items-center gap-3 py-3">
+      ${badge}
+      <div class="min-w-0"><div class="font-bold text-slate-900 truncate">${esc(o.name)}</div></div>
+      <div class="text-center text-lg font-black text-slate-800">${o.active||0}</div>
+      ${expiringCell}
+    </div>`;
+  }).join('');
+
+  // 24h 到期明細
+  document.getElementById('adExpiringCount').textContent = d.expiring.length ? `共 ${d.expiring.length} 筆` : '';
+  document.getElementById('adExpiringGroups').innerHTML = d.expiring.length
+    ? ad591GroupBy(d.expiring,'owner').map(([o,items])=>ad591OwnerGroup(o,items,ad591ItemRow,'bg-sky-600 text-white')).join('')
+    : '<div class="text-emerald-600 font-bold py-4 text-center">✓ 今天沒有到期的物件</div>';
+
+
+  // 全部在刊 + filter
+  document.getElementById('adAllItemsCount').textContent = `${d.items.length} 筆`;
+  const filterEl = document.getElementById('adOwnerFilter');
+  const listEl = document.getElementById('adAllItemsList');
+  const chipAct='bg-slate-900 text-white border-slate-900', chipIdle='bg-white text-slate-600 border-slate-200 hover:border-slate-400';
+  const chips = [{name:'全部',count:d.items.length},...sortedOwners.map(o=>({name:o.name,count:o.active||0}))];
+  filterEl.innerHTML = chips.map((c,i)=>`<button type="button" data-owner="${c.name==='全部'?'':esc(c.name)}" class="px-3 py-1 rounded-full text-xs font-semibold border ${i===0?chipAct:chipIdle}">${esc(c.name)}<span class="ml-1 text-[10px] opacity-70">${c.count}</span></button>`).join('');
+  const renderList = (filter)=>{
+    const arr = filter ? d.items.filter(it=>it.owner===filter) : d.items;
+    listEl.innerHTML = arr.length ? arr.map(ad591ItemRow).join('') : '<div class="text-sm text-slate-400 py-4 text-center">無符合資料</div>';
+  };
+  filterEl.onclick = (e)=>{
+    const btn = e.target.closest('button[data-owner]'); if(!btn) return;
+    filterEl.querySelectorAll('button').forEach(b=>b.className=b.className.replace(chipAct,chipIdle));
+    btn.className = btn.className.replace(chipIdle,chipAct);
+    renderList(btn.dataset.owner);
+  };
+  renderList('');
+
+  // 精選/置頂
+  document.getElementById('adFeaturedCount').textContent = `精選 ${s.featured_count} · 置頂 ${(s.super_top_count||0)+(s.normal_top_count||0)}`;
+  document.getElementById('adToppedSection').innerHTML = d.topped_list.length
+    ? `<div class="text-xs uppercase tracking-wider text-slate-500 font-bold mb-2">置頂中（${d.topped_list.length}）</div><div class="space-y-1">${d.topped_list.map(ad591ItemRow).join('')}</div>`
+    : '';
+  document.getElementById('adFeaturedSection').innerHTML = d.featured_list.length
+    ? `<div class="text-xs uppercase tracking-wider text-slate-500 font-bold mb-2 mt-4">精選中（${d.featured_list.length}）</div><div class="space-y-1">${d.featured_list.map(ad591ItemRow).join('')}</div>`
+    : (d.topped_list.length ? '' : '<div class="text-sm text-slate-400 py-2 text-center">目前沒有精選或置頂</div>');
+}
+function ad591UrgencyBadge(days){
+  if(days<=0) return {cls:'bg-red-600 text-white',label:'今天到期'};
+  if(days===1) return {cls:'bg-red-500 text-white',label:'剩 1 天'};
+  if(days<=3) return {cls:'bg-amber-500 text-white',label:`剩 ${days} 天`};
+  if(days<=7) return {cls:'bg-yellow-400 text-yellow-900',label:`剩 ${days} 天`};
+  return {cls:'bg-slate-200 text-slate-700',label:`剩 ${days} 天`};
+}
+function ad591ItemTags(it){
+  const t=[];
+  if(it.featured) t.push('<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">精選</span>');
+  if(it.topped==='超級置頂') t.push('<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200">超級置頂</span>');
+  else if(it.topped) t.push(`<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-pink-100 text-pink-800 border border-pink-200">${esc(it.topped)}</span>`);
+  return t.join(' ');
+}
+function ad591ItemRow(it){
+  const u = ad591UrgencyBadge(it.days);
+  return `<a href="${esc(it.href)}" target="_blank" rel="noopener" class="group flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors">
+    <span class="shrink-0 inline-flex items-center justify-center text-[11px] font-bold px-2 py-1 rounded ${u.cls} min-w-[68px] text-center">${u.label}</span>
+    <div class="flex-1 min-w-0">
+      <div class="text-sm text-slate-800 truncate font-semibold">${esc(it.title)}</div>
+      <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 flex-wrap">
+        <span>套餐 #${it.package_num}</span><span>·</span>
+        <span class="text-slate-700 font-semibold">${esc(it.owner)}</span>
+        ${ad591ItemTags(it) ? '<span>·</span>' + ad591ItemTags(it) : ''}
+      </div>
+    </div>
+    <span class="text-slate-300 group-hover:text-slate-500 shrink-0">↗</span>
+  </a>`;
+}
+function ad591GroupBy(arr,key){
+  const m = new Map();
+  for(const it of arr){ const k = it[key]||'未知'; if(!m.has(k)) m.set(k,[]); m.get(k).push(it); }
+  return [...m.entries()].sort((a,b)=>b[1].length-a[1].length);
+}
+function ad591OwnerGroup(owner,items,rowFn,accent){
+  return `<div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${accent} text-sm font-bold">
+        ${esc(owner)}<span class="bg-white/90 text-slate-800 px-1.5 rounded text-xs">${items.length}</span>
+      </span>
+    </div>
+    <div class="space-y-1">${items.map(rowFn).join('')}</div>
+  </div>`;
+}
+function ad591TopOwners(items,emptyText){
+  if(!items.length) return `<span class="inline-flex items-center gap-1 font-bold">${emptyText}</span>`;
+  const groups = ad591GroupBy(items,'owner').slice(0,4);
+  return groups.map(([o,arr])=>`<span class="inline-flex items-center gap-1 bg-white/70 px-2.5 py-1 rounded-full mr-1.5 mb-1 text-xs"><span class="font-bold">${esc(o)}</span><span>${arr.length}</span></span>`).join('');
+}
+
+// ── Tab ──
+const TAB_DESC = {
+  month:'當月進案件數與業績金額對照，當月業績即時來自珊珊 GSheet、歷史來自 OB 業績表',
+  recurring:'上方 chips 切換單月視角；頁面最底部固定顯示全年度累積排行。',
+  analysis:'單一業務戰力側寫：北極星 KPI、時序趨勢、接案偏好、協作動態',
+  compare:'Ragic 資料與 OB 業績表的交叉比對，找出差異',
+  inventory:'目前所有在架物件的庫存狀態，庫存越多代表待消化越多',
+  outreach:'業務主動開發屋主的次數、轉化率與完整度追蹤',
+  clients:'租客來源管道分佈，了解客戶從哪裡找到我們',
+  ad591:'591 套餐版位、24h 到期、到期未補與精選/置頂追蹤',
+  sources:'本頁每個主要數字的來源表與算法，數字和下方各分頁同一份資料算出',
+};
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById('panel-'+t.dataset.tab).classList.add('active');
+  document.getElementById('tabDesc').textContent = TAB_DESC[t.dataset.tab]||'';
+  if (t.dataset.tab === 'recurring') renderRecurring();
+}));
+
+// ════════════════════════════════════════
+// 續約業績 & 代管 Tab
+// ════════════════════════════════════════
+
+// 從 perf.md 解析「### 個人續約 / 代管業績（X/YY）」小表
+// 回傳 { ym_iso: { name: { renewal, mgmt } } }
+function parseExtrasFromPerfMd(text) {
+  const result = {};
+  let curYm = null;
+  let inExtrasTable = false;
+  for (const line of text.split('\n')) {
+    // 找 ## X/YY section
+    const secM = line.match(/^##\s+(\d{3}\/\d{2})\s*$/);
+    if (secM) { curYm = rocToIso(secM[1]); inExtrasTable = false; continue; }
+    if (!curYm) continue;
+    // 找「### 個人續約 / 代管業績（X/YY）」
+    const hdrM = line.match(/^###\s+個人續約 \/ 代管業績/);
+    if (hdrM) { inExtrasTable = true; continue; }
+    // 離開 extras table（遇到 ## 或 --- 或空的 ###）
+    if (inExtrasTable && (line.startsWith('##') || line.startsWith('---'))) {
+      inExtrasTable = false; continue;
+    }
+    if (!inExtrasTable) continue;
+    if (!line.startsWith('|')) continue;
+    const cols = line.split('|').map(c => c.trim());
+    if (cols.length < 4) continue;
+    const name = normalizeName(cols[1].replace(/\*/g, '').trim());
+    if (!name || name === '姓名' || /^-+$/.test(name)) continue;
+    const renewal = parseInt((cols[2] || '0').replace(/,/g, '')) || 0;
+    const mgmt    = parseInt((cols[3] || '0').replace(/,/g, '')) || 0;
+    if (!result[curYm]) result[curYm] = {};
+    if (!result[curYm][name]) result[curYm][name] = { renewal: 0, mgmt: 0 };
+    result[curYm][name].renewal += renewal;
+    result[curYm][name].mgmt    += mgmt;
+  }
+  return result;
+}
+
+// 計算年資（今天 - 到職日，以月為單位）→ { months, label }
+function calcTenure(onboardYm) {
+  if (!onboardYm) return { months: 0, label: '未知' };
+  const today = new Date();
+  const ob = new Date(onboardYm + '-01');
+  const months = (today.getFullYear() - ob.getFullYear()) * 12 + (today.getMonth() - ob.getMonth());
+  const years = Math.floor(months / 12);
+  const rem = months % 12;
+  const label = years > 0 ? `${years} 年 ${rem} 月` : `${rem} 月`;
+  return { months: Math.max(0, months), label };
+}
+
+// 取近 12 個月（ISO YYYY-MM list）
+function last12Months() {
+  const today = new Date();
+  const months = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    months.push(ym(d));
+  }
+  return months;
+}
+
+let recurringScatterRef = null;
+let recAllMonths = []; // ISO yyyy-mm list, sorted asc
+let recActivePreset = 'lastMonth'; // default: 上月（最近完整月結）
+
+// Build the rec range chips and inject dynamic month chips
+function buildRecChips() {
+  const extras = window.PERF_EXTRAS || {};
+  recAllMonths = Object.keys(extras).filter(Boolean).sort();
+
+  // Inject per-month chips into #recMonthChips (skip thisMonth/lastMonth which are static)
+  const container = document.getElementById('recMonthChips');
+  if (container) {
+    container.innerHTML = '';
+    recAllMonths.slice().reverse().forEach(m => {
+      const el = document.createElement('span');
+      el.className = 'chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium';
+      el.dataset.recPreset = m; // ISO month as preset key
+      el.textContent = m; // display as ISO yyyy-mm (aligned with other tabs)
+      container.appendChild(el);
+    });
+  }
+
+  // Wire all data-rec-preset chips (preset + dynamic month)
+  document.querySelectorAll('[data-rec-preset]').forEach(c => {
+    c.addEventListener('click', () => {
+      recActivePreset = c.dataset.recPreset;
+      document.querySelectorAll('[data-rec-preset]').forEach(x => x.classList.remove('active'));
+      c.classList.add('active');
+      renderMonthly(recActivePreset);
+    });
+  });
+
+  // Set initial active chip to lastMonth
+  document.querySelectorAll('[data-rec-preset]').forEach(x => x.classList.remove('active'));
+  const lastMonthChip = document.querySelector('[data-rec-preset="lastMonth"]');
+  if (lastMonthChip) lastMonthChip.classList.add('active');
+
+  // Trigger initial renders
+  renderMonthly(recActivePreset);
+  renderYearly();
+}
+
+// Convert ISO yyyy-mm to ROC display string
+function isoToRoc(isoYm) {
+  if (!isoYm) return isoYm;
+  const [y, m] = isoYm.split('-').map(Number);
+  const roc = y - 1911;
+  return `${roc}/${String(m).padStart(2,'0')}`;
+}
+
+// Resolve a preset key (thisMonth / lastMonth / ISO yyyy-mm) to a single ISO month string
+function resolveMonthPreset(preset) {
+  const today = new Date();
+  const thisYm = ym(today);
+  const lastMonthYm = ym(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+
+  if (!recAllMonths.length) return null;
+
+  if (preset === 'thisMonth') {
+    return recAllMonths.includes(thisYm) ? thisYm : recAllMonths[recAllMonths.length - 1];
+  } else if (preset === 'lastMonth') {
+    return recAllMonths.includes(lastMonthYm) ? lastMonthYm
+      : recAllMonths[Math.max(0, recAllMonths.length - 2)];
+  } else if (recAllMonths.includes(preset)) {
+    return preset;
+  }
+  return recAllMonths[recAllMonths.length - 1]; // fallback
+}
+
+// renderMonthly — 渲染單月主表（主表 + 散點圖），被 chip click 觸發
+function renderMonthly(preset) {
+  const extras = window.PERF_EXTRAS || {};
+  const resolvedYm = resolveMonthPreset(preset);
+
+  // Update range label
+  const labelEl = document.getElementById('recRangeLabel');
+  if (labelEl) {
+    if (resolvedYm) {
+      const today = new Date();
+      const thisYm = ym(today);
+      const lastMonthYm = ym(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+      let displayText = resolvedYm;
+      if (resolvedYm === thisYm) displayText = `${resolvedYm}（本月）`;
+      else if (preset === 'lastMonth' || resolvedYm === lastMonthYm) displayText = `${resolvedYm}（上月）`;
+      labelEl.textContent = displayText;
+    } else {
+      labelEl.textContent = '—';
+    }
+  }
+
+  // Update source note
+  const noteEl = document.getElementById('recSourceNote');
+  if (noteEl) {
+    noteEl.textContent = resolvedYm
+      ? `資料來源：perf.md 個人續約／代管業績小表（${resolvedYm}）`
+      : '尚無資料';
+  }
+
+  // 彙整單月資料
+  const perPerson = {}; // name -> { renewal, mgmt }
+  if (resolvedYm) {
+    const monthData = extras[resolvedYm] || {};
+    for (const [name, v] of Object.entries(monthData)) {
+      if (!perPerson[name]) perPerson[name] = { renewal: 0, mgmt: 0 };
+      perPerson[name].renewal += v.renewal;
+      perPerson[name].mgmt    += v.mgmt;
+    }
+  }
+
+  // 年資資料
+  const tenureMap = {};
+  for (const [name, ob] of Object.entries(STAFF_ONBOARD_MONTH)) {
+    tenureMap[name] = calcTenure(ob);
+  }
+
+  // ── 該月續約業績表 ──
+  const renewalList = Object.entries(perPerson)
+    .map(([name, v]) => ({ name, perf: v.renewal }))
+    .filter(x => x.perf > 0)
+    .sort((a, b) => b.perf - a.perf);
+
+  const renewalBody = document.getElementById('recurringRenewalBody');
+  if (renewalBody) {
+    renewalBody.innerHTML = renewalList.length === 0
+      ? '<tr><td colspan="4" class="text-center text-slate-400 py-6">該月無續約業績資料</td></tr>'
+      : renewalList.map((x, i) => {
+          const t = tenureMap[x.name] || { label: '—' };
+          return `<tr class="hover:bg-slate-50">
+            <td class="py-2 pr-3 text-slate-400 font-mono">${i + 1}</td>
+            <td class="py-2 font-semibold text-slate-800">${esc(x.name)}</td>
+            <td class="py-2 text-slate-500 text-xs">${esc(t.label)}</td>
+            <td class="py-2 text-right font-bold text-blue-600">${fmtMoney(x.perf)}</td>
+          </tr>`;
+        }).join('');
+  }
+
+  // ── 該月代管業績表 ──
+  const mgmtList = Object.entries(perPerson)
+    .map(([name, v]) => ({ name, perf: v.mgmt }))
+    .filter(x => x.perf > 0)
+    .sort((a, b) => b.perf - a.perf);
+
+  const mgmtBody = document.getElementById('recurringMgmtBody');
+  if (mgmtBody) {
+    mgmtBody.innerHTML = mgmtList.length === 0
+      ? '<tr><td colspan="4" class="text-center text-slate-400 py-6">該月無代管業績資料</td></tr>'
+      : mgmtList.map((x, i) => {
+          const t = tenureMap[x.name] || { label: '—' };
+          return `<tr class="hover:bg-slate-50">
+            <td class="py-2 pr-3 text-slate-400 font-mono">${i + 1}</td>
+            <td class="py-2 font-semibold text-slate-800">${esc(x.name)}</td>
+            <td class="py-2 text-slate-500 text-xs">${esc(t.label)}</td>
+            <td class="py-2 text-right font-bold text-emerald-600">${fmtMoney(x.perf)}</td>
+          </tr>`;
+        }).join('');
+  }
+
+  // ── 散點圖（該月業績）──
+  const scatterData = [];
+  for (const [name, v] of Object.entries(perPerson)) {
+    const t = tenureMap[name];
+    if (!t) continue;
+    const total = v.renewal + v.mgmt;
+    if (total <= 0) continue;
+    scatterData.push({ x: t.months, y: total, name, renewal: v.renewal, mgmt: v.mgmt, tenure: t.label });
+  }
+
+  const canvas = document.getElementById('recurringScatterChart');
+  if (!canvas) return;
+  if (recurringScatterRef) { recurringScatterRef.destroy(); recurringScatterRef = null; }
+
+  recurringScatterRef = new Chart(canvas, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: '年資 × 業績',
+        data: scatterData,
+        backgroundColor: 'rgba(59,130,246,0.7)',
+        pointRadius: 8,
+        pointHoverRadius: 11,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const d = ctx.raw;
+              return [
+                `${d.name}`,
+                `年資：${d.tenure}（${d.x} 月）`,
+                `該月續約業績：${d.renewal.toLocaleString()}`,
+                `該月代管業績：${d.mgmt.toLocaleString()}`,
+                `合計：${d.y.toLocaleString()}`,
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: '年資（月數）', color: '#94a3b8' },
+          ticks: { color: '#94a3b8' },
+          grid: { color: '#f1f5f9' },
+        },
+        y: {
+          title: { display: true, text: '該月續約 ＋ 代管業績合計', color: '#94a3b8' },
+          ticks: { color: '#94a3b8', callback: v => v.toLocaleString() },
+          grid: { color: '#f1f5f9' },
+        }
+      }
+    }
+  });
+}
+
+// renderYearly — 渲染底部年度累積區塊，page load 跑一次，chip 切換不重跑
+function renderYearly() {
+  const extras = window.PERF_EXTRAS || {};
+  // v2：舊版把 2024/03 起所有月份都加進來卻標「年度」；改為只算今年
+  const yearPrefix = `${new Date().getFullYear()}-`;
+  const allMonths = Object.keys(extras).filter(ym => ym && ym.startsWith(yearPrefix)).sort();
+
+  // 彙整今年每人累積
+  const perPerson = {}; // name -> { renewal, mgmt }
+  for (const ym_iso of allMonths) {
+    const monthData = extras[ym_iso] || {};
+    for (const [name, v] of Object.entries(monthData)) {
+      if (!perPerson[name]) perPerson[name] = { renewal: 0, mgmt: 0 };
+      perPerson[name].renewal += v.renewal;
+      perPerson[name].mgmt    += v.mgmt;
+    }
+  }
+
+  // 年資資料
+  const tenureMap = {};
+  for (const [name, ob] of Object.entries(STAFF_ONBOARD_MONTH)) {
+    tenureMap[name] = calcTenure(ob);
+  }
+
+  // ── 年度累積續約業績表 ──
+  const renewalList = Object.entries(perPerson)
+    .map(([name, v]) => ({ name, perf: v.renewal }))
+    .filter(x => x.perf > 0)
+    .sort((a, b) => b.perf - a.perf);
+
+  const yearlyRenewalBody = document.getElementById('yearlyRenewalBody');
+  if (yearlyRenewalBody) {
+    yearlyRenewalBody.innerHTML = renewalList.length === 0
+      ? '<tr><td colspan="4" class="text-center text-slate-400 py-6">尚無續約業績資料</td></tr>'
+      : renewalList.map((x, i) => {
+          const t = tenureMap[x.name] || { label: '—' };
+          return `<tr class="hover:bg-amber-50">
+            <td class="py-2 pr-3 text-slate-400 font-mono">${i + 1}</td>
+            <td class="py-2 font-semibold text-slate-800">${esc(x.name)}</td>
+            <td class="py-2 text-slate-500 text-xs">${esc(t.label)}</td>
+            <td class="py-2 text-right font-bold text-amber-700">${fmtMoney(x.perf)}</td>
+          </tr>`;
+        }).join('');
+  }
+
+  // ── 年度累積代管業績表 ──
+  const mgmtList = Object.entries(perPerson)
+    .map(([name, v]) => ({ name, perf: v.mgmt }))
+    .filter(x => x.perf > 0)
+    .sort((a, b) => b.perf - a.perf);
+
+  const yearlyMgmtBody = document.getElementById('yearlyMgmtBody');
+  if (yearlyMgmtBody) {
+    yearlyMgmtBody.innerHTML = mgmtList.length === 0
+      ? '<tr><td colspan="4" class="text-center text-slate-400 py-6">尚無代管業績資料</td></tr>'
+      : mgmtList.map((x, i) => {
+          const t = tenureMap[x.name] || { label: '—' };
+          return `<tr class="hover:bg-amber-50">
+            <td class="py-2 pr-3 text-slate-400 font-mono">${i + 1}</td>
+            <td class="py-2 font-semibold text-slate-800">${esc(x.name)}</td>
+            <td class="py-2 text-slate-500 text-xs">${esc(t.label)}</td>
+            <td class="py-2 text-right font-bold text-orange-600">${fmtMoney(x.perf)}</td>
+          </tr>`;
+        }).join('');
+  }
+}
+
+// renderRecurring — backward-compat shim (tab switch calls this)
+function renderRecurring() {
+  renderMonthly(recActivePreset);
+}
+
+// HR 在職（含試用）本名；dept 有給就只取該部門
+function hrActiveNames(dept) {
+  const out = new Set();
+  for (const rec of Object.values(window._rawHr || {})) {
+    const name = (rec['姓名'] || '').trim();
+    const status = (rec['在職狀態'] || '').trim();
+    if (!name || (status !== '在職' && status !== '試用')) continue;
+    if (dept && (rec['部門'] || '').trim() !== dept) continue;
+    out.add(name);
+  }
+  return out;
+}
+
+// 今年業績排行：只列 HR 在職者（離職者今年的業績仍算在全店合計，不進個人排行）
+function yearRankRows() {
+  if (!YEAR_PERF) return [];
+  const active = hrActiveNames();
+  const rows = [];
+  for (const [key, p] of Object.entries(YEAR_PERF.byName)) {
+    if (key.includes('&')) {
+      for (const n of key.split('&').map(s => s.trim())) {
+        rows.push({ name: n, total: Math.round(p.total / 2), avg: Math.round(p.avg / 2), months: p.months, firstYm: p.firstYm, teamTotal: p.total });
+      }
+    } else {
+      rows.push({ name: key, ...p });
+    }
+  }
+  return rows.filter(r => active.has(r.name) && !isExcluded(r.name)).sort((a, b) => b.avg - a.avg);
+}
+
+function renderYearRank() {
+  const body = document.getElementById('yRankBody');
+  const rows = yearRankRows();
+  if (!rows.length) { body.innerHTML = '<div class="text-center text-slate-400 py-4">尚無今年業績資料</div>'; return; }
+  document.getElementById('yRankRange').textContent = `統計到 ${YEAR_PERF.lastYm} 月（珊珊業績表）`;
+  const W = WorklogPerf.fmtWan;
+  body.innerHTML = `<table class="w-full text-sm"><thead><tr class="text-left text-xs text-slate-500 border-b border-slate-200"><th class="py-2 w-10">名次</th><th class="py-2">姓名</th><th class="py-2 text-right">平均每月</th><th class="py-2 text-right">今年累計</th><th class="py-2 text-right">計算月數</th></tr></thead><tbody>${
+    rows.map((r, i) => `<tr class="border-b border-slate-100"><td class="py-2 text-slate-400 font-mono">${i + 1}</td><td class="py-2 font-semibold text-slate-800">${esc(r.name)}${r.teamTotal ? `<span class="ml-2 text-xs font-normal text-slate-400">兩人合計 ${W(r.teamTotal)}</span>` : ''}</td><td class="py-2 text-right font-black text-blue-600">${W(r.avg)}</td><td class="py-2 text-right">${W(r.total)}</td><td class="py-2 text-right text-slate-500">${r.firstYm}–${YEAR_PERF.lastYm} 月，${r.months} 個月</td></tr>`).join('')
+  }</tbody></table>`;
+}
+
+// ════════════════════════════════════════
+// 最後進案距今
+// ════════════════════════════════════════
+function renderLastCase(){
+  const today=new Date(); today.setHours(0,0,0,0);
+  const todayStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const lastDate={};
+  // 委託日填在未來的案件還沒進案，不算（否則會出現「-30天前」）；只列 HR 在職者（HR 讀不到時不過濾）
+  INTAKE.forEach(r=>{ if(!r.date||r.date>todayStr) return; (r.devs||[]).forEach(d=>{
+    if(ACTIVE_STAFF.size && !ACTIVE_STAFF.has(d.name)) return;
+    if(!lastDate[d.name]||r.date>lastDate[d.name]) lastDate[d.name]=r.date;
+  }); });
+  const allLast=Object.values(lastDate).reduce((a,b)=>a>b?a:b,'');
+  function daysAgo(ds){const d=new Date(ds);d.setHours(0,0,0,0);return Math.round((today-d)/86400000);}
+  function cls(n){if(n<=7)return 'bg-emerald-100 text-emerald-800 border-emerald-200';if(n<=14)return 'bg-yellow-100 text-yellow-800 border-yellow-200';if(n<=30)return 'bg-orange-100 text-orange-800 border-orange-200';return 'bg-red-100 text-red-800 border-red-200';}
+  function dot(n){if(n<=7)return 'bg-emerald-500';if(n<=14)return 'bg-yellow-400';if(n<=30)return 'bg-orange-500';return 'bg-red-500';}
+  function card(name,ds,isAll){const n=daysAgo(ds);return `<div class="rounded-xl border p-3 flex flex-col gap-1 ${cls(n)}"><div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full ${dot(n)} flex-shrink-0"></span><span class="font-semibold text-sm truncate">${isAll?'🏢 全部門':esc(name)}</span></div><div class="text-2xl font-black leading-none">${n}<span class="text-sm font-normal ml-1">天前</span></div><div class="text-xs opacity-70">${ds}</div></div>`;}
+  const people=Object.entries(lastDate).sort((a,b)=>daysAgo(a[1])-daysAgo(b[1]));
+  // v2：租賃部在職但一年內沒有進案的人（新人）舊版完全不顯示，補一張「尚無進案」
+  const noCase=[...hrActiveNames('租賃部')].map(normalizeName).filter((n,i,a)=>a.indexOf(n)===i && !lastDate[n] && !isExcluded(n));
+  const noCaseCard=n=>`<div class="rounded-xl border p-3 flex flex-col gap-1 bg-slate-50 text-slate-500 border-slate-200"><div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-slate-300 flex-shrink-0"></span><span class="font-semibold text-sm truncate">${esc(n)}</span></div><div class="text-lg font-bold leading-none">尚無進案</div><div class="text-xs opacity-70">近一年 Ragic 無紀錄</div></div>`;
+  window._noCaseNames = noCase;
+  document.getElementById('mLastCase').innerHTML = allLast
+    ? card('',allLast,true)+people.map(([n,d])=>card(n,d,false)).join('')+noCase.map(noCaseCard).join('')
+    : '<div class="text-center text-slate-400 py-4">尚無進案資料</div>';
+}
+
+// ════════════════════════════════════════
+// 進案量 & 業績（日期範圍）
+// ════════════════════════════════════════
+let perfMonths = [];
+
+function renderPerfIntake(){
+  const start = document.getElementById('mStart').value;
+  const end = document.getElementById('mEnd').value;
+  if (!start || !end || start > end) return;
+
+  // ── 業績：用 PERF（GSheet 快照 + perf.md）取涵蓋月份的月累計，這樣心瑜 GSheet 記的 58,000 才撈得到 ──
+  const startYm = start.slice(0,7);
+  const endYm = end.slice(0,7);
+  const perfRows = PERF.filter(r => r.ym >= startYm && r.ym <= endYm);
+  const perfCounter = {};
+  perfRows.forEach(r => { perfCounter[r.name] = (perfCounter[r.name]||0) + r.perf; });
+  const perfTotal = Object.values(perfCounter).reduce((a,b) => a+b, 0);
+
+  // ── 進案量（逐日 INTAKE，這個有日精度）──
+  const intakeRows = INTAKE.filter(r => r.date >= start && r.date <= end);
+  const intakeCounter = {};
+  intakeRows.forEach(r => (r.devs||[]).forEach(d => { intakeCounter[d.name] = (intakeCounter[d.name]||0) + d.ratio; }));
+
+  // ── KPIs ──
+  document.getElementById('mKpiIntake').textContent    = intakeRows.length;
+  document.getElementById('mKpiIntakePpl').textContent = Object.keys(intakeCounter).length;
+  document.getElementById('mKpiPerf').textContent      = fmtMoney(perfTotal);
+  document.getElementById('mKpiPerfPpl').textContent   = Object.keys(perfCounter).length;
+
+  // ── 資料來源註記 ──
+  const srcNote = document.getElementById('mSourceNote');
+  if (srcNote) {
+    const coveredMonths = startYm === endYm ? startYm : `${startYm} ~ ${endYm}`;
+    srcNote.innerHTML = `📊 業績：涵蓋月份 ${coveredMonths} 的月累計 · 進案量：滑軌區間逐日`;
+  }
+
+  // ── Rankings ──
+  const intakeItems = Object.entries(intakeCounter).sort((a,b)=>b[1]-a[1]);
+  const perfItems = Object.entries(perfCounter).sort((a,b)=>b[1]-a[1]);
+  const showTarget = isMayPeriod(start, end);
+
+  // 五月期間才顯示「達成率」tab；非五月期間鎖定排行 tab
+  const intakeTabBar = document.getElementById('intakeTabBar');
+  const perfTabBar   = document.getElementById('perfTabBar');
+  if (showTarget) {
+    intakeTabBar.classList.remove('hidden');
+    perfTabBar.classList.remove('hidden');
+  } else {
+    intakeTabBar.classList.add('hidden');
+    perfTabBar.classList.add('hidden');
+    // 非五月期間強制回排行 tab
+    _rankTabState.intake = 'rank';
+    _rankTabState.perf   = 'rank';
+  }
+
+  // 存入資料供 tab 切換時重渲染
+  const intakeEl = document.getElementById('mIntakeRanking');
+  const perfEl   = document.getElementById('mPerfRanking');
+  intakeEl._rankItems = intakeItems;
+  perfEl._rankItems   = perfItems;
+
+  // 依當前 tab 渲染（資料更新後重繪，不強制切回 tab）
+  intakeEl.innerHTML = intakeItems.length
+    ? (_rankTabState.intake === 'rank' ? rankHtmlIntakeRank(intakeItems) : rankHtmlIntakeGoal(intakeItems))
+    : '<div class="text-center text-slate-400 py-4">此區間無進案</div>';
+  // showTarget（當月在選取區間內）時即使 perfItems 是空的，也要交給 rankHtmlPerfGoal
+  // 判斷是否有人有填目標（0 業績但有目標的人才補得進榜）
+  perfEl.innerHTML = (perfItems.length || showTarget)
+    ? (_rankTabState.perf === 'rank' ? rankHtmlPerfRank(perfItems) : rankHtmlPerfGoal(perfItems))
+    : '<div class="text-center text-slate-400 py-4">此區間無業績</div>';
+
+  // ── 全店達成總覽（當月日期範圍才顯示，目標來源：listGoals 當月填報加總）──
+  const storeGoalSection = document.getElementById('mStoreGoalSection');
+  if (showTarget) {
+    storeGoalSection.classList.remove('hidden');
+
+    // 動態標題：顯示當月月份
+    const nowForTitle = new Date();
+    const titleMonthNum = nowForTitle.getMonth() + 1;
+    const titleEl2 = document.getElementById('mStoreGoalTitle');
+    if (titleEl2) titleEl2.textContent = `🏁 ${titleMonthNum}月全店目標達成`;
+
+    // 目標數字：從 CURRENT_MONTH_GOAL（由 renderGoalPanel 計算，來源 listGoals 當月填報）
+    const goalFilled = CURRENT_MONTH_GOAL.filled;
+    const STORE_PERF_TARGET  = CURRENT_MONTH_GOAL.perfWan * 10000; // 元
+    const STORE_CASES_TARGET = CURRENT_MONTH_GOAL.cases;            // 間
+
+    // 目標標籤文字（動態）
+    const perfTargetWanStr  = CURRENT_MONTH_GOAL.perfWan  % 1 === 0 ? `${CURRENT_MONTH_GOAL.perfWan} 萬`  : `${CURRENT_MONTH_GOAL.perfWan} 萬`;
+    const casesTargetStr    = CURRENT_MONTH_GOAL.cases    % 1 === 0 ? `${CURRENT_MONTH_GOAL.cases} 間`    : `${CURRENT_MONTH_GOAL.cases.toFixed(1)} 間`;
+    const perfLabelEl  = document.getElementById('mStorePerfTargetLabel');
+    const perfNoteEl   = document.getElementById('mStorePerfTargetNote');
+    const casesLabelEl = document.getElementById('mStoreCasesTargetLabel');
+    const casesNoteEl  = document.getElementById('mStoreCasesTargetNote');
+    if (perfLabelEl)  perfLabelEl.textContent  = goalFilled ? ` / ${perfTargetWanStr}`  : ' / —';
+    if (perfNoteEl)   perfNoteEl.textContent   = goalFilled ? `目標 ${perfTargetWanStr}` : '目標 —';
+    if (casesLabelEl) casesLabelEl.textContent = goalFilled ? ` / ${casesTargetStr}`    : ' / —';
+    if (casesNoteEl)  casesNoteEl.textContent  = goalFilled ? `目標 ${casesTargetStr}`  : '目標 —';
+
+    const noGoalMsg    = document.getElementById('mStoreNoGoalMsg');
+    const achieverLine = document.getElementById('mStoreAchieverLine');
+
+    if (!goalFilled) {
+      // 目標尚未填報：顯示提示，隱藏達成率，進度條歸零
+      if (noGoalMsg)    noGoalMsg.classList.remove('hidden');
+      if (achieverLine) achieverLine.innerHTML = '';
+
+      document.getElementById('mStoreGoalBadge').className = 'text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-500';
+      document.getElementById('mStoreGoalBadge').textContent = '目標未填';
+      document.getElementById('mStorePerfActual').textContent = (perfTotal/10000).toFixed(1).replace(/\.0$/,'') + ' 萬';
+      document.getElementById('mStorePerfPct').textContent = '—';
+      document.getElementById('mStorePerfPct').className = 'ml-2 text-base font-bold text-slate-400';
+      document.getElementById('mStorePerfBar').style.width = '0%';
+      document.getElementById('mStorePerfGap').textContent = '';
+      const storeCasesActual0 = Object.values(intakeCounter).reduce((s,v)=>s+v,0);
+      document.getElementById('mStoreCasesActual').textContent = storeCasesActual0 % 1 === 0 ? storeCasesActual0 : storeCasesActual0.toFixed(1);
+      document.getElementById('mStoreCasesPct').textContent = '—';
+      document.getElementById('mStoreCasesPct').className = 'ml-2 text-base font-bold text-slate-400';
+      document.getElementById('mStoreCasesBar').style.width = '0%';
+      document.getElementById('mStoreCasesGap').textContent = '';
+    } else {
+      // 有目標：正常計算達成率
+      if (noGoalMsg) noGoalMsg.classList.add('hidden');
+
+      // 全店業績：perfCounter 加總（元）
+      const storePerfActual = perfTotal;
+      const storePerfPct = STORE_PERF_TARGET > 0 ? Math.round(storePerfActual / STORE_PERF_TARGET * 100) : 0;
+      const storePerfGap = storePerfActual < STORE_PERF_TARGET
+        ? `還差 ${((STORE_PERF_TARGET - storePerfActual) / 10000).toFixed(1)} 萬`
+        : `超標 +${((storePerfActual - STORE_PERF_TARGET) / 10000).toFixed(1)} 萬 ✅`;
+
+      // 全店進案量：intakeCounter 加總（間）
+      const storeCasesActual = Object.values(intakeCounter).reduce((s,v)=>s+v,0);
+      const storeCasesPct = STORE_CASES_TARGET > 0 ? Math.round(storeCasesActual / STORE_CASES_TARGET * 100) : 0;
+      const storeCasesGap = storeCasesActual < STORE_CASES_TARGET
+        ? `還差 ${(STORE_CASES_TARGET - storeCasesActual).toFixed(1)} 間`
+        : `超標 +${(storeCasesActual - STORE_CASES_TARGET).toFixed(1)} 間 ✅`;
+
+      // badge 顏色
+      const perfOver = storePerfActual >= STORE_PERF_TARGET;
+      const perfNear = !perfOver && storePerfPct >= 70;
+      const badgeCls = perfOver ? 'bg-emerald-100 text-emerald-700' : perfNear ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700';
+      const badgeText = perfOver ? '已達標' : perfNear ? '衝刺中' : '落後';
+
+      // 進度條寬度（最大 100%）
+      const perfBarW  = Math.min(storePerfPct, 100);
+      const casesBarW = Math.min(storeCasesPct, 100);
+
+      // 達標人員計算（依 listGoals 當月個人目標）
+      // 取 rawGoals 當月列（CURRENT_MONTH_GOAL 只存加總，需重算；用 window._rawGoals 暫存）
+      let perfAchievers = 0, perfTotal2 = 0, casesAchievers = 0, casesTotal2 = 0;
+      const goalRaw = window._rawGoals || {};
+      const nowYm2 = (() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
+      // 目標在 Ragic 分人填（張忠豪、蕭頤臻），業績與進案用合併名計 → 先依 normalizeName 合併目標再比
+      const goalByName = {};
+      Object.values(goalRaw).forEach(r => {
+        const m = (r['月份']||'').trim();
+        if (m !== nowYm2 && !m.startsWith(nowYm2)) return;
+        const nm = normalizeName((r['員工姓名']||r['_index_title_']||'').trim());
+        if (!nm) return;
+        const g = goalByName[nm] || (goalByName[nm] = { perf: 0, cases: 0 });
+        g.perf  += parseFloat(r['業績目標(萬)']) || 0;
+        g.cases += parseFloat(r['新進案件量(間)']) || 0;
+      });
+      Object.entries(goalByName).forEach(([nm, g]) => {
+        if (g.perf  > 0) { perfTotal2++;  if ((perfCounter[nm]||0)   >= g.perf*10000) perfAchievers++; }
+        if (g.cases > 0) { casesTotal2++; if ((intakeCounter[nm]||0) >= g.cases)      casesAchievers++; }
+      });
+
+      document.getElementById('mStoreGoalBadge').className = `text-xs font-bold px-3 py-1 rounded-full ${badgeCls}`;
+      document.getElementById('mStoreGoalBadge').textContent = badgeText;
+
+      document.getElementById('mStorePerfActual').textContent = (storePerfActual/10000).toFixed(1).replace(/\.0$/,'') + ' 萬';
+      document.getElementById('mStorePerfPct').textContent = storePerfPct + '%';
+      document.getElementById('mStorePerfPct').className = `ml-2 text-base font-bold ${perfOver?'text-emerald-600':perfNear?'text-amber-500':'text-rose-500'}`;
+      document.getElementById('mStorePerfBar').style.width = perfBarW + '%';
+      document.getElementById('mStorePerfBar').className = `bar absolute left-0 top-0 h-full rounded-full bg-gradient-to-r ${perfOver?'from-emerald-400 to-emerald-500':perfNear?'from-amber-400 to-amber-500':'from-blue-500 to-indigo-500'}`;
+      document.getElementById('mStorePerfGap').textContent = storePerfGap;
+
+      document.getElementById('mStoreCasesActual').textContent = storeCasesActual % 1 === 0 ? storeCasesActual : storeCasesActual.toFixed(1);
+      document.getElementById('mStoreCasesPct').textContent = storeCasesPct + '%';
+      const casesOver = storeCasesActual >= STORE_CASES_TARGET;
+      const casesNear = !casesOver && storeCasesPct >= 70;
+      document.getElementById('mStoreCasesPct').className = `ml-2 text-base font-bold ${casesOver?'text-emerald-600':casesNear?'text-amber-500':'text-rose-500'}`;
+      document.getElementById('mStoreCasesBar').style.width = casesBarW + '%';
+      document.getElementById('mStoreCasesBar').className = `bar absolute left-0 top-0 h-full rounded-full bg-gradient-to-r ${casesOver?'from-emerald-400 to-emerald-500':casesNear?'from-amber-400 to-amber-500':'from-purple-500 to-indigo-500'}`;
+      document.getElementById('mStoreCasesGap').textContent = storeCasesGap;
+
+      if (achieverLine) achieverLine.innerHTML =
+        `業績達標 <strong class="text-slate-900">${perfAchievers}</strong> / ${perfTotal2} 人&nbsp;&nbsp;·&nbsp;&nbsp;委託達標 <strong class="text-slate-900">${casesAchievers}</strong> / ${casesTotal2} 人`;
+    }
+  } else {
+    storeGoalSection.classList.add('hidden');
+  }
+
+  // ── 進案明細 ──
+  document.getElementById('mDetail').innerHTML = intakeRows.length===0
+    ? '<div class="text-center text-slate-400 py-8">此區間無進案</div>'
+    : `<table class="w-full"><thead><tr class="text-left text-xs font-semibold text-slate-500 uppercase border-b-2 border-slate-200"><th class="py-2 px-2">委託日</th><th class="py-2 px-2">案名</th><th class="py-2 px-2">狀態</th><th class="py-2 px-2">地區</th><th class="py-2 px-2 text-right">月租</th><th class="py-2 px-2">開發人員</th></tr></thead><tbody>${
+      intakeRows.map(r=>{
+        const off=r.status==='下架';
+        const rowCls=off?'bg-slate-100 text-slate-400':'';
+        const tag=off?'<span class="px-2 py-0.5 text-xs rounded-full bg-slate-300 text-slate-600">下架</span>':`<span class="px-2 py-0.5 text-xs rounded-full bg-emerald-100 text-emerald-700">${esc(r.status||'—')}</span>`;
+        return `<tr class="border-b border-slate-100 hover:bg-slate-50 ${rowCls}"><td class="py-3 px-2 text-sm whitespace-nowrap">${esc(r.date)}</td><td class="py-3 px-2 font-medium ${off?'line-through':''}">${esc(r.name)}</td><td class="py-3 px-2">${tag}</td><td class="py-3 px-2 text-sm">${esc(r.city+' '+r.district)}</td><td class="py-3 px-2 text-right font-mono">${esc(r.rent)}</td><td class="py-3 px-2 text-sm">${esc(r.people)}</td></tr>`;
+      }).join('')
+    }</tbody></table>`;
+}
+
+function applyMonthPreset(name){
+  const [s,e] = datePresets[name]();
+  document.getElementById('mStart').value = ymd(s);
+  document.getElementById('mEnd').value = ymd(e);
+  document.querySelectorAll('[data-m]').forEach(c => c.classList.toggle('active', c.dataset.m === name));
+  renderPerfIntake();
+}
+
+function buildMonthChips(){
+  // 歷史月份快捷（INTAKE + PERF 的所有月份）
+  const months = new Set(PERF.map(r=>r.ym));
+  for (const r of INTAKE) if (r.date && r.date.length >= 7) months.add(r.date.slice(0,7));
+  perfMonths = [...months].filter(Boolean).sort();
+  const container = document.getElementById('mMonthChips');
+  container.innerHTML = '';
+  perfMonths.slice().reverse().slice(0,12).forEach(m=>{
+    const el = document.createElement('span');
+    el.className='chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium';
+    el.dataset.m = m;
+    el.textContent = m;
+    el.addEventListener('click',()=>{
+      const [y, mo] = m.split('-').map(Number);
+      const firstDay = `${m}-01`;
+      const lastDayObj = new Date(y, mo, 0);
+      const lastDay = ymd(lastDayObj);
+      document.getElementById('mStart').value = firstDay;
+      document.getElementById('mEnd').value = lastDay;
+      document.querySelectorAll('[data-m]').forEach(c=>c.classList.remove('active'));
+      el.classList.add('active');
+      renderPerfIntake();
+    });
+    container.appendChild(el);
+  });
+}
+
+document.querySelectorAll('[data-m="thisWeek"],[data-m="lastWeek"],[data-m="thisMonth"],[data-m="lastMonth"]').forEach(c =>
+  c.addEventListener('click', () => applyMonthPreset(c.dataset.m))
+);
+document.getElementById('mStart').addEventListener('change', () => {
+  document.querySelectorAll('[data-m]').forEach(c=>c.classList.remove('active'));
+  renderPerfIntake();
+});
+document.getElementById('mEnd').addEventListener('change', () => {
+  document.querySelectorAll('[data-m]').forEach(c=>c.classList.remove('active'));
+  renderPerfIntake();
+});
+
+// ════════════════════════════════════════
+// 🔬 業務分析
+// ════════════════════════════════════════
+let anaAllMonths = [];
+let anaStartIdx = 0;
+let anaEndIdx = 0;
+
+function getAnaBounds(){
+  const start = anaAllMonths[anaStartIdx] || '';
+  const end = anaAllMonths[anaEndIdx] || '';
+  const label = (start === end) ? start : `${start} ~ ${end}`;
+  return { start, end, label };
+}
+
+function setAnaPreset(type){
+  if (!anaAllMonths.length) return;
+  const today = new Date();
+  const thisYm = ym(today);
+  const thisIdx = anaAllMonths.indexOf(thisYm);
+  const lastMonthDate = new Date(today.getFullYear(), today.getMonth()-1, 1);
+  const lastYm = ym(lastMonthDate);
+  const lastIdx = anaAllMonths.indexOf(lastYm);
+
+  if (type === 'thisMonth') {
+    const i = thisIdx >= 0 ? thisIdx : anaAllMonths.length - 1;
+    anaStartIdx = i; anaEndIdx = i;
+  } else if (type === 'lastMonth') {
+    const i = lastIdx >= 0 ? lastIdx : Math.max(0, anaAllMonths.length - 2);
+    anaStartIdx = i; anaEndIdx = i;
+  } else if (type === '3M' || type === '6M') {
+    const n = type === '3M' ? 3 : 6;
+    const startDate = new Date(today.getFullYear(), today.getMonth()-n+1, 1);
+    const startYmVal = ym(startDate);
+    // 找大於等於 startYmVal 的第一個 index
+    let s = 0;
+    for (let i = 0; i < anaAllMonths.length; i++) {
+      if (anaAllMonths[i] >= startYmVal) { s = i; break; }
+    }
+    anaStartIdx = s;
+    anaEndIdx = thisIdx >= 0 ? thisIdx : anaAllMonths.length - 1;
+  }
+  syncSlidersFromRange();
+  renderAnalysis();
+}
+
+function syncSlidersFromRange(){
+  document.getElementById('anaStartSlider').value = anaStartIdx;
+  document.getElementById('anaEndSlider').value = anaEndIdx;
+  updateAnaHighlight();
+}
+
+function updateAnaHighlight(){
+  const max = Math.max(1, anaAllMonths.length - 1);
+  const lPct = (anaStartIdx / max) * 100;
+  const rPct = (anaEndIdx / max) * 100;
+  const hl = document.getElementById('anaRangeHighlight');
+  if (hl) { hl.style.left = lPct + '%'; hl.style.width = (rPct - lPct) + '%'; }
+}
+
+function initAnaRangeUI(){
+  // 收集所有月份（INTAKE + PERF）
+  const months = new Set();
+  for (const r of INTAKE) if (r.date?.length >= 7) months.add(r.date.slice(0,7));
+  for (const r of PERF) if (r.ym) months.add(r.ym);
+  anaAllMonths = [...months].filter(Boolean).sort();
+  if (!anaAllMonths.length) return;
+
+  const startSlider = document.getElementById('anaStartSlider');
+  const endSlider = document.getElementById('anaEndSlider');
+  startSlider.max = anaAllMonths.length - 1;
+  endSlider.max = anaAllMonths.length - 1;
+
+  // 預設「本月」
+  const thisYm = ym(new Date());
+  const thisIdx = anaAllMonths.indexOf(thisYm);
+  const defaultIdx = thisIdx >= 0 ? thisIdx : anaAllMonths.length - 1;
+  anaStartIdx = defaultIdx;
+  anaEndIdx = defaultIdx;
+  syncSlidersFromRange();
+
+  // 月份 chips（最近 6 個月）
+  const container = document.getElementById('anaMonthChips');
+  container.innerHTML = '';
+  anaAllMonths.slice().reverse().slice(0, 6).forEach(m => {
+    const el = document.createElement('span');
+    el.className = 'chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium';
+    el.dataset.anaMonth = m;
+    el.textContent = m;
+    el.addEventListener('click', () => {
+      const i = anaAllMonths.indexOf(m);
+      if (i >= 0) { anaStartIdx = i; anaEndIdx = i; syncSlidersFromRange(); renderAnalysis(); }
+    });
+    container.appendChild(el);
+  });
+
+  // Preset chips
+  document.querySelectorAll('[data-ana-preset]').forEach(c => {
+    c.addEventListener('click', () => setAnaPreset(c.dataset.anaPreset));
+  });
+
+  // 雙手柄：拖動時自動保證 start <= end
+  startSlider.addEventListener('input', () => {
+    anaStartIdx = parseInt(startSlider.value);
+    if (anaStartIdx > anaEndIdx) { anaEndIdx = anaStartIdx; endSlider.value = anaEndIdx; }
+    updateAnaHighlight();
+    renderAnalysis();
+  });
+  endSlider.addEventListener('input', () => {
+    anaEndIdx = parseInt(endSlider.value);
+    if (anaEndIdx < anaStartIdx) { anaStartIdx = anaEndIdx; startSlider.value = anaStartIdx; }
+    updateAnaHighlight();
+    renderAnalysis();
+  });
+}
+
+function renderAnalysis(){
+  const empty = document.getElementById('anaEmpty');
+  const content = document.getElementById('anaContent');
+  if (!curStaff) {
+    empty.classList.remove('hidden');
+    content.classList.add('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  content.classList.remove('hidden');
+
+  const bounds = getAnaBounds();
+  document.getElementById('anaRangeLabel').textContent = bounds.label;
+
+  // 全歷史（Tier 2 時序用）
+  const allMyIntake = INTAKE.filter(r => (r.devs||[]).some(d => d.name === curStaff));
+  const allMyPerf = PERF.filter(r => r.name === curStaff);
+
+  // 範圍篩選後（Tier 1/3/5 用）
+  const inRange = ymStr => ymStr >= bounds.start && ymStr <= bounds.end;
+  const myIntake = allMyIntake.filter(r => inRange(r.date.slice(0,7)));
+  const myPerf = allMyPerf.filter(r => inRange(r.ym));
+
+  // 顯示起始/結束月份 label
+  document.getElementById('anaStartLabel').textContent = bounds.start || '—';
+  document.getElementById('anaEndLabel').textContent = bounds.end || '—';
+
+  // Month chips 的 active 狀態（單月選中時）
+  document.querySelectorAll('[data-ana-month]').forEach(c =>
+    c.classList.toggle('active', bounds.start === bounds.end && c.dataset.anaMonth === bounds.start));
+
+  // ── Tier 0 個人簡介卡 ──
+  // onboardMonthForBio 來自 STAFF_ONBOARD_MONTH，已處理夫妻檔合併取較早到職
+  const onboardMonthForBio = STAFF_ONBOARD_MONTH[curStaff] || '';
+  // 到職日顯示：
+  //   1. 先用 STAFF_ONBOARD_MONTH 作為基準（YYYY-MM 精度，夫妻檔合併 entry 也能取到）
+  //   2. 再嘗試從 rawHr 找同名單人 entry 的精確到日欄位（YYYY-MM-DD）
+  //   3. rawHr 找不到（合併 key 查不到）或欄位空 → 直接用 YYYY-MM
+  let onboardDateStr = onboardMonthForBio || '—';
+  if (onboardMonthForBio) {
+    // 嘗試找精確日期（單人 entry 才有，合併 key 如「張忠豪&蕭頤臻」不會在 rawHr 裡出現）
+    const hrRecFull = Object.values(window._rawHr || {}).find(r => {
+      const nm = (r['姓名'] || '').trim();
+      return nm === curStaff;
+    });
+    if (hrRecFull) {
+      const raw = (hrRecFull['到職日期'] || hrRecFull['到職日'] || hrRecFull['入職日'] || '').trim();
+      // 只在 raw 有實際值時才覆寫；空值維持 onboardMonthForBio
+      if (raw) onboardDateStr = raw.replaceAll('/', '-');
+    }
+    // hrRecFull 為 undefined（合併 entry）→ onboardDateStr 已是 onboardMonthForBio，不需額外處理
+  }
+  const tenureInfo = calcTenure(onboardMonthForBio);
+  document.getElementById('anaBioOnboard').textContent = onboardDateStr;
+  document.getElementById('anaBioTenure').textContent = onboardMonthForBio ? tenureInfo.label : '—';
+
+  // 累積總業績（自入職至今，新開發 + 續約 + 代管，不受範圍影響）
+  const allExtras = window.PERF_EXTRAS || {};
+  const allMyPerfFull = PERF.filter(r => r.name === curStaff);
+  let bioTotalDev = allMyPerfFull.reduce((a, r) => {
+    if (!onboardMonthForBio || r.ym >= onboardMonthForBio) return a + r.perf;
+    return a;
+  }, 0);
+  let bioTotalRenewal = 0, bioTotalMgmt = 0;
+  Object.entries(allExtras).forEach(([mon, staffMap]) => {
+    if (!onboardMonthForBio || mon >= onboardMonthForBio) {
+      const d = staffMap[curStaff];
+      if (d) { bioTotalRenewal += d.renewal || 0; bioTotalMgmt += d.mgmt || 0; }
+    }
+  });
+  const bioGrandTotal = bioTotalDev + bioTotalRenewal + bioTotalMgmt;
+  document.getElementById('anaBioTotal').textContent = `${fmtMoney(bioGrandTotal)} 元`;
+
+  // ── Tier 1 北極星 ──
+  const intakeCount = myIntake.length;
+  const perfTotal = myPerf.reduce((a,r) => a+r.perf, 0);
+  const intakeMonths = new Set(myIntake.map(r => r.date.slice(0,7)));
+  const perfMonthsSet = new Set(myPerf.map(r => r.ym));
+  const intakeMoAvg = intakeMonths.size ? (intakeCount/intakeMonths.size).toFixed(1) : '—';
+  const perfMoAvg = perfMonthsSet.size ? Math.round(perfTotal/perfMonthsSet.size) : 0;
+
+  // 續約 + 代管業績（範圍篩選）
+  const extrasRange = window.PERF_EXTRAS || {};
+  let renewalTotal = 0, mgmtTotal = 0;
+  const renewalMonthsSet = new Set(), mgmtMonthsSet = new Set();
+  Object.entries(extrasRange).forEach(([mon, staffMap]) => {
+    if (mon >= bounds.start && mon <= bounds.end) {
+      const d = staffMap[curStaff];
+      if (d) {
+        if (d.renewal > 0) { renewalTotal += d.renewal; renewalMonthsSet.add(mon); }
+        if (d.mgmt > 0)    { mgmtTotal += d.mgmt;    mgmtMonthsSet.add(mon); }
+      }
+    }
+  });
+  const grandTotal = perfTotal + renewalTotal + mgmtTotal;
+  // 月均計算：以實際有資料的月數為分母
+  const renewalMoAvg = renewalMonthsSet.size ? Math.round(renewalTotal / renewalMonthsSet.size) : 0;
+  const mgmtMoAvg = mgmtMonthsSet.size ? Math.round(mgmtTotal / mgmtMonthsSet.size) : 0;
+  // 總和月均：取範圍月份數（含三類任一有資料的月）
+  const rangeMonthKeys = [];
+  { let rm = bounds.start; while (rm && rm <= bounds.end) { rangeMonthKeys.push(rm); const [ry,rmm]=rm.split('-').map(Number); rm=ym(new Date(ry,rmm,1)); if(rangeMonthKeys.length>120)break; } }
+  const activeTotalMonths = rangeMonthKeys.filter(m => {
+    const hasDev = allMyPerfFull.some(r => r.ym === m);
+    const extras = (window.PERF_EXTRAS||{})[m]?.[curStaff];
+    return hasDev || (extras && (extras.renewal>0 || extras.mgmt>0));
+  });
+  const totalMoAvg = activeTotalMonths.length ? Math.round(grandTotal / activeTotalMonths.length) : 0;
+
+  document.getElementById('anaKpiIntake').textContent = intakeCount;
+  document.getElementById('anaKpiIntakeAvg').textContent = intakeMonths.size
+    ? `月均 ${intakeMoAvg} 件 · 範圍內 ${intakeMonths.size} 個月有進案`
+    : '範圍內無進案';
+  document.getElementById('anaKpiPerf').textContent = fmtMoney(perfTotal);
+  document.getElementById('anaKpiPerfAvg').textContent = perfMonthsSet.size
+    ? `月均 ${fmtMoney(perfMoAvg)} 元 · 範圍內 ${perfMonthsSet.size} 個月有業績`
+    : '範圍內無業績';
+  document.getElementById('anaKpiRenewal').textContent = fmtMoney(renewalTotal);
+  document.getElementById('anaKpiRenewalAvg').textContent = renewalMonthsSet.size
+    ? `月均 ${fmtMoney(renewalMoAvg)} 元 · 範圍內 ${renewalMonthsSet.size} 個月有續約`
+    : '範圍內無續約紀錄';
+  document.getElementById('anaKpiMgmt').textContent = fmtMoney(mgmtTotal);
+  document.getElementById('anaKpiMgmtAvg').textContent = mgmtMonthsSet.size
+    ? `月均 ${fmtMoney(mgmtMoAvg)} 元 · 範圍內 ${mgmtMonthsSet.size} 個月有代管`
+    : '範圍內無代管紀錄';
+  document.getElementById('anaKpiTotal').textContent = fmtMoney(grandTotal);
+  document.getElementById('anaKpiTotalAvg').textContent = activeTotalMonths.length
+    ? `月均 ${fmtMoney(totalMoAvg)} 元（含三類）`
+    : '範圍內無業績';
+
+  // 範圍統計註記（更新加總）
+  document.getElementById('anaRangeStat').textContent =
+    `範圍內 ${myIntake.length} 件進案 · 三類業績合計 ${fmtMoney(grandTotal)} 元`;
+
+  // ── 最近進案距今 + 最長空窗（永遠用全歷史，不受範圍影響）──
+  const today = new Date(); today.setHours(0,0,0,0);
+  const sortedDates = allMyIntake.map(r => r.date).filter(d => d && d <= ymd(today)).sort();  // 委託日填在未來的不算
+  let daysAgo = '—', maxGap = '—';
+  if (sortedDates.length) {
+    const lastDate = new Date(sortedDates[sortedDates.length-1]);
+    daysAgo = Math.round((today - lastDate)/86400000);
+    let gap = 0;
+    for (let i=1; i<sortedDates.length; i++) {
+      const g = (new Date(sortedDates[i]) - new Date(sortedDates[i-1]))/86400000;
+      if (g > gap) gap = g;
+    }
+    maxGap = Math.round(gap);
+  }
+  document.getElementById('anaKpiActive').textContent = daysAgo === '—' ? '—' : daysAgo;
+  document.getElementById('anaKpiSilence').textContent = `歷史最長空窗 ${maxGap} 天（不受範圍影響）`;
+
+  // ── Tier 2 月度雙軸趨勢 ──
+  // 預設顯示最近 12 個月（以滑軌 end 為終點往回推），滑軌範圍超過 12 個月時跟著延伸
+  const onboardMonth = STAFF_ONBOARD_MONTH[curStaff] || '';
+  const allIntakeMonths = new Set(allMyIntake.map(r => r.date.slice(0,7)));
+  const allPerfMonths = new Set(allMyPerf.map(r => r.ym));
+  const dataMonths = [...new Set([...allIntakeMonths, ...allPerfMonths])].filter(Boolean).sort();
+  const thisYmVal = ym(new Date());
+  const rangeMonthsCount = anaEndIdx - anaStartIdx + 1;
+  const chartEndYm = anaAllMonths[anaEndIdx] || thisYmVal;
+  let startYm;
+  if (rangeMonthsCount >= 12) {
+    startYm = anaAllMonths[anaStartIdx];
+  } else {
+    const [ey, em] = chartEndYm.split('-').map(Number);
+    const startDateObj = new Date(ey, em - 12, 1);  // 往回 11 個月 = 12 個月窗口
+    startYm = ym(startDateObj);
+  }
+  // 不早於報到月（新人看不到報到前的空月份）
+  if (onboardMonth && startYm < onboardMonth) startYm = onboardMonth;
+  // 生成 startYm → chartEndYm 的連續月份陣列（空月補 0）
+  const months = [];
+  let curYm = startYm;
+  while (curYm && curYm <= chartEndYm) {
+    months.push(curYm);
+    const [yy, mm] = curYm.split('-').map(Number);
+    curYm = ym(new Date(yy, mm, 1));  // 下個月
+    if (months.length > 120) break;  // 保險 10 年上限
+  }
+  const intakeByMonth = {};
+  allMyIntake.forEach(r => { const m = r.date.slice(0,7); intakeByMonth[m] = (intakeByMonth[m]||0)+1; });
+  const perfByMonth = {};
+  allMyPerf.forEach(r => { perfByMonth[r.ym] = (perfByMonth[r.ym]||0)+r.perf; });
+  // 圖表範圍 + 報到月註記
+  const onboardNote = document.getElementById('anaOnboardNote');
+  if (onboardNote) {
+    const rangeText = `圖表：${months[0] || '—'} ~ ${months[months.length-1] || '—'}（${months.length} 個月${rangeMonthsCount >= 12 ? '，跟隨上方滑軌' : '，預設最近 12 個月'}）`;
+    if (onboardMonth) {
+      const firstIntakeM = dataMonths[0] || '';
+      const hint = firstIntakeM && firstIntakeM > onboardMonth
+        ? ` · 第一筆進案 ${firstIntakeM}（報到 ${calcMonthsDiff(onboardMonth, firstIntakeM)} 個月後開胡）`
+        : '';
+      onboardNote.textContent = `${rangeText} · 報到月 ${onboardMonth}${hint}`;
+    } else {
+      onboardNote.textContent = `${rangeText}（HR 無到職資料）`;
+    }
+  }
+
+  const intakeSeries = months.map(m => intakeByMonth[m]||0);
+  const perfSeries = months.map(m => perfByMonth[m]||0);
+  // 續約 / 代管 月度系列（圖表用全歷史範圍）
+  const trendExtras = window.PERF_EXTRAS || {};
+  const renewalSeries = months.map(m => (trendExtras[m]?.[curStaff]?.renewal) || 0);
+  const mgmtSeries    = months.map(m => (trendExtras[m]?.[curStaff]?.mgmt)    || 0);
+
+  if (window._anaTrendChart) window._anaTrendChart.destroy();
+  window._anaTrendChart = new Chart(document.getElementById('anaTrendChart'), {
+    data: {
+      labels: months,
+      datasets: [
+        // 堆疊業績長條（左 y 軸）
+        { type:'bar', label:'新開發業績', data:perfSeries,    yAxisID:'y1', backgroundColor:'rgba(59,130,246,0.65)',  borderColor:'#3b82f6', borderWidth:1, borderRadius:2, stack:'perf' },
+        { type:'bar', label:'續約業績',   data:renewalSeries, yAxisID:'y1', backgroundColor:'rgba(16,185,129,0.65)', borderColor:'#10b981', borderWidth:1, borderRadius:2, stack:'perf' },
+        { type:'bar', label:'代管業績',   data:mgmtSeries,    yAxisID:'y1', backgroundColor:'rgba(139,92,246,0.65)', borderColor:'#8b5cf6', borderWidth:1, borderRadius:2, stack:'perf' },
+        // 進案折線（右 y 軸）
+        { type:'line', label:'進案件數', data:intakeSeries, yAxisID:'y2', borderColor:'#f97316', backgroundColor:'rgba(249,115,22,0.12)', borderWidth:2.5, tension:0.3, fill:false, pointRadius:3, pointBackgroundColor:'#f97316' },
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      scales:{
+        y1:{position:'left',  beginAtZero:true, stacked:true, title:{display:true,text:'業績 (元)'}, ticks:{callback:v=>fmtMoney(v)}},
+        y2:{position:'right', beginAtZero:true, title:{display:true,text:'件數'}, grid:{drawOnChartArea:false}},
+      },
+      plugins:{legend:{position:'top'}}
+    }
+  });
+
+  // ── Tier 3 房型圓餅 ──
+  const layoutGroups = {};
+  myIntake.forEach(r => {
+    const key = classifyLayout(r.layout);
+    layoutGroups[key] = (layoutGroups[key]||0)+1;
+  });
+  const layoutEntries = Object.entries(layoutGroups).sort((a,b)=>b[1]-a[1]);
+  if (window._anaLayoutChart) window._anaLayoutChart.destroy();
+  window._anaLayoutChart = new Chart(document.getElementById('anaLayoutChart'), {
+    type:'doughnut',
+    data:{
+      labels: layoutEntries.map(e=>e[0]),
+      datasets:[{
+        data: layoutEntries.map(e=>e[1]),
+        backgroundColor:['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899','#6b7280'],
+      }]
+    },
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right'}}}
+  });
+
+  // ── Tier 3 區域 TOP 5 ──
+  const districtGroups = {};
+  myIntake.forEach(r => {
+    const key = `${r.city}${r.district}`.trim() || '(未填)';
+    districtGroups[key] = (districtGroups[key]||0)+1;
+  });
+  const districtTop = Object.entries(districtGroups).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const districtMax = districtTop[0]?.[1] || 1;
+  document.getElementById('anaDistrict').innerHTML = districtTop.length
+    ? districtTop.map(([k,v])=>`
+        <div>
+          <div class="flex justify-between text-sm mb-0.5"><span class="font-medium">${esc(k)}</span><span class="text-slate-500">${v} 件</span></div>
+          <div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full" style="width:${(v/districtMax*100)}%"></div></div>
+        </div>`).join('')
+    : '<div class="text-center text-slate-400 py-8">無資料</div>';
+
+  // ── Tier 3 價格帶 ──
+  const bands = [
+    {label:'< 1 萬', min:0, max:10000},
+    {label:'1-2 萬', min:10000, max:20000},
+    {label:'2-3 萬', min:20000, max:30000},
+    {label:'3-5 萬', min:30000, max:50000},
+    {label:'5 萬+', min:50000, max:Infinity},
+  ];
+  const bandCounts = bands.map(b => ({
+    label: b.label,
+    count: myIntake.filter(r => r.rentNum >= b.min && r.rentNum < b.max).length
+  }));
+  const bandMax = Math.max(1, ...bandCounts.map(b=>b.count));
+  document.getElementById('anaPriceBand').innerHTML = bandCounts.map(b=>`
+    <div>
+      <div class="flex justify-between text-sm mb-0.5"><span class="font-medium">${b.label}</span><span class="text-slate-500">${b.count} 件</span></div>
+      <div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-gradient-to-r from-emerald-500 to-teal-500 h-2 rounded-full" style="width:${(b.count/bandMax*100)}%"></div></div>
+    </div>`).join('');
+
+  // ── Tier 3 委託類別 ──
+  const leaseGroups = {};
+  myIntake.forEach(r => { const k = r.leaseType || '(未填)'; leaseGroups[k] = (leaseGroups[k]||0)+1; });
+  const leaseEntries = Object.entries(leaseGroups).sort((a,b)=>b[1]-a[1]);
+  if (window._anaLeaseChart) window._anaLeaseChart.destroy();
+  window._anaLeaseChart = new Chart(document.getElementById('anaLeaseChart'), {
+    type:'doughnut',
+    data:{
+      labels: leaseEntries.map(e=>e[0]),
+      datasets:[{
+        data: leaseEntries.map(e=>e[1]),
+        backgroundColor:['#f59e0b','#8b5cf6','#3b82f6','#10b981','#ec4899','#6b7280'],
+      }]
+    },
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right'}}}
+  });
+
+  // ── Tier 3 平均/中位數月租 ──
+  const rents = myIntake.map(r=>r.rentNum).filter(n=>n>0).sort((a,b)=>a-b);
+  const rentAvg = rents.length ? Math.round(rents.reduce((a,b)=>a+b,0)/rents.length) : 0;
+  const rentMed = rents.length ? (rents.length%2 ? rents[(rents.length-1)/2] : Math.round((rents[rents.length/2-1]+rents[rents.length/2])/2)) : 0;
+  document.getElementById('anaRentAvg').textContent = fmtMoney(rentAvg);
+  document.getElementById('anaRentMed').textContent = fmtMoney(rentMed);
+
+  // ── Tier 5 最佳拍檔 TOP 3 ──
+  const partnerCount = {};
+  myIntake.forEach(r => {
+    (r.devs||[]).forEach(d => {
+      if (d.name !== curStaff) partnerCount[d.name] = (partnerCount[d.name]||0)+1;
+    });
+  });
+  const partners = Object.entries(partnerCount).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  const partnerMax = partners[0]?.[1] || 1;
+  document.getElementById('anaPartners').innerHTML = partners.length
+    ? partners.map(([name,cnt],i)=>`
+        <div class="flex items-center gap-3">
+          <div class="w-8 text-2xl font-black text-center ${['text-amber-500','text-slate-400','text-orange-400'][i]}">${['🥇','🥈','🥉'][i]}</div>
+          <div class="flex-1">
+            <div class="flex justify-between text-sm mb-0.5"><span class="font-bold">${esc(name)}</span><span class="text-slate-500">協作 ${cnt} 件</span></div>
+            <div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-gradient-to-r from-amber-400 to-orange-500 h-2 rounded-full" style="width:${(cnt/partnerMax*100)}%"></div></div>
+          </div>
+        </div>`).join('')
+    : '<div class="text-center text-slate-400 py-6">獨立作戰：無協作紀錄</div>';
+
+  // ── Tier 5 獨立 vs 協作 ──
+  const soloCount = myIntake.filter(r => (r.devs||[]).length === 1).length;
+  const collabCount = myIntake.length - soloCount;
+  const collabPct = myIntake.length ? Math.round(collabCount/myIntake.length*100) : 0;
+  if (window._anaCollabChart) window._anaCollabChart.destroy();
+  window._anaCollabChart = new Chart(document.getElementById('anaCollabChart'), {
+    type:'doughnut',
+    data:{
+      labels:['獨立', '協作'],
+      datasets:[{ data:[soloCount, collabCount], backgroundColor:['#3b82f6','#f59e0b'] }]
+    },
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+  });
+  document.getElementById('anaCollabNote').textContent = myIntake.length
+    ? `協作比例 ${collabPct}%（${collabCount}/${myIntake.length} 件有夥伴）`
+    : '';
+
+  // ── Tier 6 預警 ──
+  const alerts = [];
+  if (daysAgo !== '—') {
+    if (daysAgo > 30) alerts.push({level:'red', text:`🔴 已 ${daysAgo} 天無進案（超過 30 天）`});
+    else if (daysAgo > 14) alerts.push({level:'yellow', text:`🟡 已 ${daysAgo} 天無進案（超過 14 天）`});
+  }
+  if (perfMonthsSet.size === 0 && intakeCount > 0) {
+    alerts.push({level:'yellow', text:`🟡 有 ${intakeCount} 件進案但尚無業績入帳`});
+  }
+  const alertSection = document.getElementById('anaAlertSection');
+  if (alerts.length) {
+    alertSection.classList.remove('hidden');
+    document.getElementById('anaAlerts').innerHTML = alerts.map(a=>{
+      const bg = a.level==='red' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-800';
+      return `<div class="border rounded-lg px-4 py-2 text-sm ${bg}">${a.text}</div>`;
+    }).join('');
+  } else {
+    alertSection.classList.add('hidden');
+  }
+}
+
+function calcMonthsDiff(ymA, ymB){
+  if (!ymA || !ymB) return 0;
+  const [ya, ma] = ymA.split('-').map(Number);
+  const [yb, mb] = ymB.split('-').map(Number);
+  return (yb-ya)*12 + (mb-ma);
+}
+
+function classifyLayout(layout){
+  if (!layout) return '(未填)';
+  // e.g. "3房2廳2衛1廚1陽" → 抓「X房」
+  const m = layout.match(/(\d+)房/);
+  if (!m) return '(未填)';
+  const n = parseInt(m[1]);
+  if (n === 0) return '套房';
+  if (n === 1) return '1 房';
+  if (n === 2) return '2 房';
+  if (n === 3) return '3 房';
+  if (n === 4) return '4 房';
+  return '5 房以上';
+}
+
+// ════════════════════════════════════════
+// 資料比對
+// ════════════════════════════════════════
+let compareMonths = [];
+
+const statusBadge = {
+  match:       '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">✅ 一致</span>',
+  ragic_more:  '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">📊 Ragic 多</span>',
+  ob_more:     '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">📋 GSheet 多</span>',
+  only_ragic:  '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">🆕 僅 Ragic</span>',
+  only_ob:     '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">❌ 未 key in</span>',
+};
+
+function renderCompare(targetYm){
+  const rows = COMPARE[targetYm] || [];
+  const matched = rows.filter(r=>r.status==='match').length;
+  const issues  = rows.length - matched;
+  document.getElementById('cSummary').textContent = rows.length + ' 人次　✅ 一致 ' + matched + '　⚠️ 差異 ' + issues;
+  document.querySelectorAll('[data-c]').forEach(c=>c.classList.toggle('active', c.dataset.c===targetYm));
+  if(!rows.length){
+    document.getElementById('cTable').innerHTML='<div class="text-center text-slate-400 py-8">無資料</div>';
+    return;
+  }
+  const sorted = rows.slice().sort((a,b)=>{
+    const order={only_ob:0,ob_more:1,ragic_more:2,only_ragic:3,match:4};
+    return (order[a.status]??5)-(order[b.status]??5);
+  });
+  document.getElementById('cTable').innerHTML = '<table class="w-full text-sm"><thead><tr class="text-left text-xs font-semibold text-slate-500 uppercase border-b-2 border-slate-200"><th class="py-2 px-3">業務</th><th class="py-2 px-3 text-right">Ragic</th><th class="py-2 px-3 text-right">GSheet（OB）</th><th class="py-2 px-3 text-right">差異</th><th class="py-2 px-3">狀態</th></tr></thead><tbody>' +
+    sorted.map(r=>{
+      const diffStr = r.diff===0?'—':(r.diff>0?'+':'')+fmtMoney(r.diff);
+      const diffCls = r.diff===0?'text-slate-400':r.diff>0?'text-blue-600 font-medium':'text-amber-700 font-medium';
+      const rowCls  = r.status==='match'?'opacity-50':'';
+      return '<tr class="border-b border-slate-100 hover:bg-slate-50 '+rowCls+'"><td class="py-3 px-3 font-medium">'+esc(r.name)+'</td><td class="py-3 px-3 text-right font-mono">'+(r.ragic?fmtMoney(r.ragic):'—')+'</td><td class="py-3 px-3 text-right font-mono">'+(r.ob?fmtMoney(r.ob):'—')+'</td><td class="py-3 px-3 text-right font-mono '+diffCls+'">'+diffStr+'</td><td class="py-3 px-3">'+(statusBadge[r.status]||r.status)+'</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+function buildCompareChips(){
+  compareMonths = Object.keys(COMPARE).sort().reverse();
+  const container = document.getElementById('cMonthChips');
+  container.innerHTML = '';
+  compareMonths.slice(0,12).forEach(m=>{
+    const el = document.createElement('span');
+    el.className = 'chip px-3 py-1.5 bg-slate-100 rounded-full text-sm font-medium';
+    el.dataset.c = m;
+    el.textContent = m;
+    el.addEventListener('click', ()=>renderCompare(m));
+    container.appendChild(el);
+  });
+}
+
+// ════════════════════════════════════════
+// 庫存統計
+// ════════════════════════════════════════
+let invTypeFilter = 'all';
+
+const INV_TYPES = ['專任出租案', '一般出租案', '包租案', '代管案'];
+function renderInventory(){
+  const rows = INVENTORY;
+  document.getElementById('invTotal').textContent = rows.length;
+  document.getElementById('invExcl').textContent  = rows.filter(r=>r.type==='專任出租案').length;
+  document.getElementById('invGenl').textContent  = rows.filter(r=>r.type==='一般出租案').length;
+  document.getElementById('invLease').textContent = rows.filter(r=>r.type==='包租案').length;
+  document.getElementById('invMgmt').textContent  = rows.filter(r=>r.type==='代管案').length;
+  document.getElementById('invUntyped').textContent = rows.filter(r=>!INV_TYPES.includes(r.type)).length;
+
+  // 新進案件（自接案源）：排除 包租案 + 代管案
+  const NEW_TARGET = 10;
+  const newCounter = {};
+  const mgmtCounter = {};
+  rows.forEach(r=>{
+    const isMgmt = r.type==='包租案' || r.type==='代管案';
+    (r.devs||[]).forEach(d=>{
+      if (isMgmt) mgmtCounter[d.name]=(mgmtCounter[d.name]||0)+d.ratio;
+      else        newCounter[d.name] =(newCounter[d.name] ||0)+d.ratio;
+    });
+  });
+
+  const newItems = Object.entries(newCounter).sort((a,b)=>b[1]-a[1]);
+  const reached = newItems.filter(([,n])=>n>=NEW_TARGET).length;
+  document.getElementById('invNewKpi').textContent = newItems.length
+    ? `達標 ${reached}/${newItems.length} 人`
+    : '';
+  document.getElementById('invRanking').innerHTML = newItems.length===0
+    ? '<div class="text-center text-slate-400 py-8">無新進案件</div>'
+    : newItems.map(([name,n],i)=>{
+        const hit = n >= NEW_TARGET;
+        const pct = Math.min(100, Math.round(n/NEW_TARGET*100));
+        const barCls = hit ? 'bg-gradient-to-r from-emerald-400 to-green-500' : 'bg-gradient-to-r from-amber-300 to-orange-400';
+        const numCls = hit ? 'text-emerald-600' : 'text-amber-600';
+        const badgeCls = hit ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500';
+        const hint = hit ? '✅ 達標' : `缺 ${fmtN(NEW_TARGET-n)} 件`;
+        return `<div class="flex items-center gap-4"><span class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${badgeCls}">${i+1}</span><div class="flex-1"><div class="flex justify-between mb-1"><span class="font-bold text-slate-800">${esc(name)}<span class="ml-2 text-xs font-normal ${hit?'text-emerald-600':'text-amber-600'}">${hint}</span></span><span class="font-black ${numCls}">${fmtN(n)} <span class="text-sm font-normal text-slate-400">/ ${NEW_TARGET} 件</span></span></div><div class="relative h-2 bg-slate-100 rounded-full overflow-hidden"><div class="bar h-full ${barCls} rounded-full" style="width:${pct}%"></div></div></div></div>`;
+      }).join('');
+
+  // 包租/代管 — 每人分 包租/代管 + 未租件數 + 可展開明細
+  const VACANT = '代租中';
+  const perPerson = {}; // { name: { lease:{total,vacant,cases}, mgmt:{total,vacant,cases}, total } }
+  rows.forEach(r=>{
+    const kind = r.type==='包租案' ? 'lease' : r.type==='代管案' ? 'mgmt' : null;
+    if (!kind) return;
+    (r.devs||[]).forEach(d=>{
+      if (!perPerson[d.name]) perPerson[d.name] = {
+        lease:{total:0,vacant:0,cases:[]},
+        mgmt: {total:0,vacant:0,cases:[]},
+        total:0
+      };
+      const p = perPerson[d.name];
+      p[kind].total += d.ratio;
+      p.total += d.ratio;
+      if (r.status === VACANT) p[kind].vacant += d.ratio;
+      p[kind].cases.push({ ratio:d.ratio, name:r.name, status:r.status, rent:r.rent, city:r.city, district:r.district, daysOn:r.daysOn, type:r.type });
+    });
+  });
+
+  const mgmtItems = Object.entries(perPerson).sort((a,b)=>b[1].total-a[1].total);
+  const stColor = s => s===VACANT ? 'bg-red-100 text-red-700' : /已收定/.test(s) ? 'bg-blue-100 text-blue-700' : /整理|維修/.test(s) ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600';
+
+  const renderCases = p => {
+    const all = [...p.lease.cases, ...p.mgmt.cases].sort((a,b)=>(a.status===VACANT?-1:0)-(b.status===VACANT?-1:0));
+    if (!all.length) return '';
+    return `<div class="mt-3 pt-3 border-t border-slate-100 space-y-2">${all.map(c=>{
+      const typeChip = c.type==='包租案' ? 'bg-amber-100 text-amber-700' : 'bg-purple-100 text-purple-700';
+      const typeLabel = c.type==='包租案' ? '包租' : '代管';
+      const ratioLabel = c.ratio < 1 ? `（${Math.round(c.ratio*100)}%）` : '';
+      return `<div class="flex items-center gap-3 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${typeChip} shrink-0">${typeLabel}</span><span class="font-medium text-slate-800 flex-1 truncate">${esc(c.name)}${ratioLabel}</span><span class="text-xs text-slate-400">${esc(c.city)}${esc(c.district)}</span><span class="px-2 py-0.5 rounded-full text-xs ${stColor(c.status)} shrink-0">${esc(c.status)}</span><span class="font-mono text-xs text-slate-500 w-20 text-right">${esc(c.rent)}</span><span class="text-xs text-slate-400 w-14 text-right">${c.daysOn}天</span></div>`;
+    }).join('')}</div>`;
+  };
+
+  document.getElementById('invMgmtRanking').innerHTML = mgmtItems.length===0
+    ? '<div class="text-center text-slate-400 py-8">無包租/代管案件</div>'
+    : mgmtItems.map(([name,p],i)=>{
+        const vacant = p.lease.vacant + p.mgmt.vacant;
+        const leaseInfo = p.lease.total > 0 ? `<span class="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700">包租 ${fmtN(p.lease.total)}${p.lease.vacant>0?` <span class="font-bold">⚠️ 未租 ${fmtN(p.lease.vacant)}</span>`:''}</span>` : '';
+        const mgmtInfo  = p.mgmt.total  > 0 ? `<span class="px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-700">代管 ${fmtN(p.mgmt.total)}${p.mgmt.vacant>0?` <span class="font-bold">⚠️ 未租 ${fmtN(p.mgmt.vacant)}</span>`:''}</span>` : '';
+        const vacantBadge = vacant > 0 ? `<span class="ml-2 px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700 font-bold">空租 ${fmtN(vacant)} 件</span>` : '';
+        return `<details class="group"><summary class="list-none cursor-pointer flex items-center gap-4 hover:bg-slate-50 -mx-3 px-3 py-2 rounded-lg"><span class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm bg-purple-100 text-purple-700 shrink-0">${i+1}</span><div class="flex-1 min-w-0"><div class="flex flex-wrap items-center gap-2"><span class="font-bold text-slate-800">${esc(name)}</span>${leaseInfo}${mgmtInfo}${vacantBadge}</div></div><span class="font-black text-purple-700 shrink-0">${fmtN(p.total)} <span class="text-sm font-normal text-slate-400">件</span></span><span class="text-slate-300 text-xs transition-transform group-open:rotate-180 shrink-0">▼</span></summary>${renderCases(p)}</details>`;
+      }).join('');
+
+  const typeCount = {};
+  rows.forEach(r=>{ typeCount[r.type]=(typeCount[r.type]||0)+1; });
+  const typeLabels = Object.keys(typeCount);
+  const typeData   = Object.values(typeCount);
+  const TYPE_COLORS = {'專任出租案':'#6366f1','一般出租案':'#10b981','包租案':'#f59e0b','代管案':'#a855f7','帶看同意':'#94a3b8','社會住宅':'#ef4444'};
+  const typeColors = typeLabels.map(l=>TYPE_COLORS[l]||'#cbd5e1');
+  if(window._invTypeChart) window._invTypeChart.destroy();
+  window._invTypeChart = new Chart(document.getElementById('invTypeChart'),{
+    type:'doughnut',
+    data:{labels:typeLabels,datasets:[{data:typeData,backgroundColor:typeColors}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:12}}}}}
+  });
+
+  let detail = rows;
+  if(invTypeFilter!=='all') detail = detail.filter(r=>r.type===invTypeFilter);
+  const statusColors = {'代租中':'bg-emerald-100 text-emerald-700','已收定，可帶看':'bg-blue-100 text-blue-700','已收定，等簽約':'bg-blue-100 text-blue-700','整理中':'bg-amber-100 text-amber-700','維修中':'bg-red-100 text-red-700','即將開放':'bg-cyan-100 text-cyan-700','輸入中':'bg-slate-100 text-slate-600'};
+  document.getElementById('invDetail').innerHTML = detail.length===0
+    ? '<div class="text-center text-slate-400 py-8">無符合條件的案件</div>'
+    : `<table class="w-full"><thead><tr class="text-left text-xs font-semibold text-slate-500 uppercase border-b-2 border-slate-200"><th class="py-2 px-2">案名</th><th class="py-2 px-2">狀態</th><th class="py-2 px-2">委託類型</th><th class="py-2 px-2">開發人員</th><th class="py-2 px-2">地區</th><th class="py-2 px-2 text-right">月租</th><th class="py-2 px-2 text-right">上架天數</th></tr></thead><tbody>${
+      detail.map(r=>{
+        const warn = r.daysOn > 90;
+        const rowCls = warn ? 'bg-orange-50' : '';
+        const daysCls = warn ? 'text-orange-600 font-bold' : '';
+        const noDate = r.dateSource==='未填委託日';
+        const daysCell = noDate ? '<span class="text-xs text-slate-400">未填委託日</span>' : `${r.daysOn}天${warn?' ⚠️':''}`;
+        const stCls = statusColors[r.status] || 'bg-slate-100 text-slate-600';
+        const typeCls = r.type==='專任出租案'?'bg-indigo-100 text-indigo-700':r.type==='包租案'?'bg-amber-100 text-amber-700':r.type==='代管案'?'bg-purple-100 text-purple-700':'bg-emerald-100 text-emerald-700';
+        return `<tr class="border-b border-slate-100 hover:bg-slate-50 ${rowCls}"><td class="py-3 px-2 font-medium">${esc(r.name)}</td><td class="py-3 px-2 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${stCls}">${esc(r.status)}</span></td><td class="py-3 px-2 text-sm"><span class="px-2 py-0.5 rounded-full text-xs ${typeCls}">${esc(r.type)}</span></td><td class="py-3 px-2 text-sm">${esc(r.people)}</td><td class="py-3 px-2 text-sm">${esc(r.city+' '+r.district)}</td><td class="py-3 px-2 text-right font-mono">${esc(r.rent)}</td><td class="py-3 px-2 text-right font-mono ${daysCls}">${daysCell}</td></tr>`;
+      }).join('')
+    }</tbody></table>`;
+}
+
+document.querySelectorAll('[data-inv-type]').forEach(c=>c.addEventListener('click',()=>{
+  invTypeFilter = c.dataset.invType;
+  document.querySelectorAll('[data-inv-type]').forEach(x=>x.classList.toggle('active',x.dataset.invType===invTypeFilter));
+  renderInventory();
+}));
+
+// ════════════════════════════════════════
+// 開發追蹤
+// ════════════════════════════════════════
+function renderOutreach(){
+  const start = document.getElementById('oStart').value;
+  const end   = document.getElementById('oEnd').value;
+  if(!start||!end||start>end) return;
+  const rows = OUTREACH.filter(r=>r.date>=start && r.date<=end);
+  const total    = rows.length;
+  const accepted = rows.filter(r=>r.status==='已接委託').length;
+  const rate     = total > 0 ? (accepted/total*100).toFixed(1) : '0';
+  document.getElementById('oTotal').textContent    = total;
+  document.getElementById('oAccepted').textContent = accepted;
+  document.getElementById('oRate').textContent     = rate;
+
+  const devCounter = {};
+  rows.forEach(r=>{ devCounter[r.dev]=(devCounter[r.dev]||0)+1; });
+  const devItems = Object.entries(devCounter).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('oDevRanking').innerHTML = rankHtml(devItems, fmtN, '筆');
+
+  const accCounter = {};
+  rows.forEach(r=>{ if(r.status==='已接委託') accCounter[r.dev]=(accCounter[r.dev]||0)+1; });
+  const convItems = Object.keys(devCounter).map(name=>{
+    const dev = devCounter[name]||0;
+    const acc = accCounter[name]||0;
+    return [name, dev>0 ? Math.round(acc/dev*100) : 0];
+  }).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('oConvRanking').innerHTML = convItems.length
+    ? rankHtml(convItems, v=>v, '%')
+    : '<div class="text-center text-slate-400 py-8">此區間無轉化</div>';
+
+  const dots = {green:'🟢',yellow:'🟡',red:'🔴'};
+  document.getElementById('oDetail').innerHTML = rows.length===0
+    ? '<div class="text-center text-slate-400 py-8">此區間無開發紀錄</div>'
+    : `<table class="w-full"><thead><tr class="text-left text-xs font-semibold text-slate-500 uppercase border-b-2 border-slate-200"><th class="py-2 px-2">日期</th><th class="py-2 px-2">開發人</th><th class="py-2 px-2">屋主</th><th class="py-2 px-2">電話</th><th class="py-2 px-2">經營次數</th><th class="py-2 px-2">完整度</th><th class="py-2 px-2">狀態</th></tr></thead><tbody>${
+      rows.map(r=>{
+        const extraTag = r.extraCount ? `<span class="text-xs text-slate-400 ml-1">+${r.extraCount} 筆</span>` : '';
+        const propLink = r.matchedName
+          ? (r.matchedRid
+              ? ` → <a href="https://ap15.ragic.com/wuohome/operation/4/${r.matchedRid}" target="_blank" class="text-indigo-600 hover:underline">${esc(r.matchedName)}</a>${extraTag}`
+              : ` → <span class="text-slate-600">${esc(r.matchedName)}</span>${extraTag}`)
+          : '';
+        const statusTag = r.status==='已接委託'
+          ? `<span class="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">已接委託</span>${propLink}`
+          : '<span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600">潛在屋主</span>';
+        return `<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="py-3 px-2 text-sm whitespace-nowrap">${esc(r.date)}</td><td class="py-3 px-2 font-medium">${esc(r.dev)}</td><td class="py-3 px-2 text-sm">${esc(r.owner||'—')}</td><td class="py-3 px-2 text-sm">${r.phone||'—'}</td><td class="py-3 px-2 text-sm text-center">${r.logCount}</td><td class="py-3 px-2 text-center">${dots[r.completeness]||'—'}</td><td class="py-3 px-2">${statusTag}</td></tr>`;
+      }).join('')
+    }</tbody></table>`;
+}
+
+function applyOutreachPreset(name){
+  const [s,e] = datePresets[name]();
+  document.getElementById('oStart').value = ymd(s);
+  document.getElementById('oEnd').value   = ymd(e);
+  document.querySelectorAll('[data-o]').forEach(c=>c.classList.toggle('active',c.dataset.o===name));
+  renderOutreach();
+}
+document.querySelectorAll('[data-o]').forEach(c=>c.addEventListener('click',()=>applyOutreachPreset(c.dataset.o)));
+document.getElementById('oStart').addEventListener('change',()=>{document.querySelectorAll('[data-o]').forEach(c=>c.classList.remove('active'));renderOutreach();});
+document.getElementById('oEnd').addEventListener('change',()=>{document.querySelectorAll('[data-o]').forEach(c=>c.classList.remove('active'));renderOutreach();});
+
+// ════════════════════════════════════════
+// 客戶來源
+// ════════════════════════════════════════
+function renderClients(){
+  const start = document.getElementById('clStart').value;
+  const end   = document.getElementById('clEnd').value;
+  if(!start||!end||start>end) return;
+  const rows = CLIENTS.filter(r=>r.date>=start && r.date<=end);
+  document.getElementById('clTotal').textContent = rows.length;
+  document.getElementById('clStaff').textContent = new Set(rows.map(r=>r.staff).filter(Boolean)).size;
+
+  const counter = {};
+  rows.forEach(r=>{ if(r.staff) counter[r.staff]=(counter[r.staff]||0)+1; });
+  document.getElementById('clRanking').innerHTML = rankHtml(Object.entries(counter).sort((a,b)=>b[1]-a[1]), fmtN, '人');
+
+  const srcCount = {};
+  rows.forEach(r=>{ srcCount[r.source]=(srcCount[r.source]||0)+1; });
+  const srcLabels = Object.keys(srcCount);
+  const srcData   = Object.values(srcCount);
+  const srcColors = ['#3b82f6','#ef4444','#f59e0b','#8b5cf6','#10b981','#ec4899','#94a3b8'];
+  if(window._clSourceChart) window._clSourceChart.destroy();
+  window._clSourceChart = new Chart(document.getElementById('clSourceChart'),{
+    type:'doughnut',
+    data:{labels:srcLabels,datasets:[{data:srcData,backgroundColor:srcColors.slice(0,srcLabels.length)}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:12}}}}}
+  });
+
+  document.getElementById('clDetail').innerHTML = rows.length===0
+    ? '<div class="text-center text-slate-400 py-8">此區間無客戶紀錄</div>'
+    : `<table class="w-full"><thead><tr class="text-left text-xs font-semibold text-slate-500 uppercase border-b-2 border-slate-200"><th class="py-2 px-2">日期</th><th class="py-2 px-2">服務人員</th><th class="py-2 px-2">客戶名稱</th><th class="py-2 px-2">來源</th></tr></thead><tbody>${
+      rows.map(r=>{
+        const srcTag = r.source==='未標記'
+          ? '<span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-500">未標記</span>'
+          : `<span class="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700">${esc(r.source)}</span>`;
+        return `<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="py-3 px-2 text-sm whitespace-nowrap">${esc(r.date)}</td><td class="py-3 px-2 font-medium">${esc(r.staff)}</td><td class="py-3 px-2 text-sm">${esc(r.client||'—')}</td><td class="py-3 px-2">${srcTag}</td></tr>`;
+      }).join('')
+    }</tbody></table>`;
+}
+
+function applyClientPreset(name){
+  const [s,e] = datePresets[name]();
+  document.getElementById('clStart').value = ymd(s);
+  document.getElementById('clEnd').value   = ymd(e);
+  document.querySelectorAll('[data-cl]').forEach(c=>c.classList.toggle('active',c.dataset.cl===name));
+  renderClients();
+}
+document.querySelectorAll('[data-cl]').forEach(c=>c.addEventListener('click',()=>applyClientPreset(c.dataset.cl)));
+document.getElementById('clStart').addEventListener('change',()=>{document.querySelectorAll('[data-cl]').forEach(c=>c.classList.remove('active'));renderClients();});
+document.getElementById('clEnd').addEventListener('change',()=>{document.querySelectorAll('[data-cl]').forEach(c=>c.classList.remove('active'));renderClients();});
+
+
+// ════════════════════════════════════════════════════════════════════
+// INIT — fetch data then render
+// ════════════════════════════════════════════════════════════════════
+// 數字來源登記表：每筆＝畫面上的一個數字、它的值、出自哪張表、怎麼算。
+// 值同時掛到 window.DASH_NUMBERS，scripts/verify_staff_dashboard_v2.py 用無頭瀏覽器讀出來跟獨立重算比對。
+function buildNumberSources() {
+  const d = new Date();
+  const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const intake = INTAKE.filter(r => r.date.startsWith(ym));
+  const perf = PERF.filter(r => r.ym === ym);
+  const extras = (window.PERF_EXTRAS || {})[ym] || {};
+  const sumExtras = k => Object.values(extras).reduce((s, v) => s + v[k], 0);
+  const inv = t => INVENTORY.filter(r => r.type === t).length;
+  const top = yearRankRows()[0];
+  const RAGIC_INTAKE = 'Ragic 物件委託表（委託時間(起) 在本月；排除永策同步件）';
+  const RAGIC_INV = 'Ragic 物件庫存表（排除永策同步件）';
+  const PERF_MD = '珊珊業績試算表（每天 20:00 同步成 perf.md）';
+  return [
+    { key: 'intake_count', tab: '進案量', label: '本月進案件數', value: intake.length, source: RAGIC_INTAKE, method: '筆數' },
+    { key: 'intake_cases', tab: '進案量', label: '本月委託間數（排行加總）', value: Math.round(intake.reduce((s, r) => s + (r.devs || []).reduce((a, x) => a + x.ratio, 0), 0) * 100) / 100, source: RAGIC_INTAKE, method: '每件依開發比例分給開發人員後加總；比例全填 0 的件平分給列名的人' },
+    { key: 'intake_ratio_missing', tab: '進案量', label: '本月比例未填件數', value: intake.filter(r => (r.devs || []).some(x => x.ratioMissing)).length, source: RAGIC_INTAKE, method: '開發比例子表全部為 0 的件數（請在 Ragic 補比例）' },
+    { key: 'perf_total', tab: '進案量', label: '本月全店業績', value: perf.reduce((s, r) => s + r.perf, 0), source: PERF_MD, method: '本月主表「業績」欄加總；空白或「—」不算，不改讀業務獎金欄' },
+    { key: 'perf_people', tab: '進案量', label: '本月有業績人數', value: new Set(perf.map(r => r.name)).size, source: PERF_MD, method: '本月業績大於 0 的人數（同月同人取最大值）' },
+    { key: 'goal_perf_wan', tab: '進案量', label: '本月全店業績目標（萬）', value: CURRENT_MONTH_GOAL.perfWan, source: 'Ragic 業績目標表（月份＝本月）', method: '各人「業績目標(萬)」加總' },
+    { key: 'goal_cases', tab: '進案量', label: '本月全店委託目標（間）', value: CURRENT_MONTH_GOAL.cases, source: 'Ragic 業績目標表（月份＝本月）', method: '各人「新進案件量(間)」加總' },
+    { key: 'renewal_month', tab: '續約代管', label: '本月續約業績', value: sumExtras('renewal'), source: PERF_MD + '「個人續約／代管」小表', method: '本月續約欄加總' },
+    { key: 'mgmt_month', tab: '續約代管', label: '本月代管業績', value: sumExtras('mgmt'), source: PERF_MD + '「個人續約／代管」小表', method: '本月代管欄加總' },
+    { key: 'inv_total', tab: '庫存', label: '全店總庫存', value: INVENTORY.length, source: RAGIC_INV, method: '筆數' },
+    { key: 'inv_excl', tab: '庫存', label: '專任出租案', value: inv('專任出租案'), source: RAGIC_INV, method: '委託類型＝專任出租案' },
+    { key: 'inv_genl', tab: '庫存', label: '一般出租案', value: inv('一般出租案'), source: RAGIC_INV, method: '委託類型＝一般出租案' },
+    { key: 'inv_lease', tab: '庫存', label: '包租案', value: inv('包租案'), source: RAGIC_INV, method: '委託類型＝包租案' },
+    { key: 'inv_mgmt', tab: '庫存', label: '代管案', value: inv('代管案'), source: RAGIC_INV, method: '委託類型＝代管案' },
+    { key: 'inv_untyped', tab: '庫存', label: '類型未填', value: INVENTORY.filter(r => !INV_TYPES.includes(r.type)).length, source: RAGIC_INV, method: '委託類型空白或不在四類內；四類＋本格＝總庫存' },
+    { key: 'year_total', tab: '進案量', label: '今年全店業績累計', value: Object.values(YEAR_PERF ? YEAR_PERF.byName : {}).reduce((s, p) => s + p.total, 0), source: PERF_MD, method: '今年各月主表「業績」欄加總（含已離職者）' },
+    { key: 'year_top', tab: '進案量', label: '今年業績月均第一名', value: top ? `${top.name} ${top.avg}` : '', source: PERF_MD, method: '今年累計 ÷（最新月 − 第一個有業績的月 ＋ 1），只列在職者' },
+    { key: 'no_case_people', tab: '進案量', label: '租賃部在職但尚無進案', value: (window._noCaseNames || []).join('、'), source: 'Ragic 人事表＋物件委託表', method: '部門＝租賃部、在職或試用，且一年內委託表沒有出現' },
+  ];
+}
+
+function renderSources() {
+  const rows = buildNumberSources();
+  window.DASH_NUMBERS = Object.fromEntries(rows.map(r => [r.key, r.value]));
+  const fmt = v => typeof v === 'number' ? v.toLocaleString('en-US') : (v || '—');
+  document.getElementById('srcRange').textContent = '「本月」指今天所在月份；表內數字和各分頁預設畫面一致。';
+  document.getElementById('srcBody').innerHTML = `<table class="w-full text-sm"><thead><tr class="text-left text-xs text-slate-500 border-b-2 border-slate-200"><th class="py-2 px-2">分頁</th><th class="py-2 px-2">數字</th><th class="py-2 px-2 text-right">目前值</th><th class="py-2 px-2">來源</th><th class="py-2 px-2">算法</th></tr></thead><tbody>${
+    rows.map(r => `<tr class="border-b border-slate-100 align-top"><td class="py-2 px-2 text-slate-500 whitespace-nowrap">${esc(r.tab)}</td><td class="py-2 px-2 font-semibold text-slate-800">${esc(r.label)}</td><td class="py-2 px-2 text-right font-mono" data-key="${r.key}">${esc(fmt(r.value))}</td><td class="py-2 px-2 text-slate-600">${esc(r.source)}</td><td class="py-2 px-2 text-slate-500">${esc(r.method)}</td></tr>`).join('')
+  }</tbody></table>`;
+}
+
+const REST_TABS = ['inventory', 'outreach', 'clients', 'analysis'];
+async function loadRestAndRender(){
+  try {
+    await fetchRestData();
+    buildStaffSelector();
+    renderLastCase();
+    renderPerfIntake();  // 在職名單補齊後重畫首頁（不重設使用者選的區間）
+    renderInventory();
+    applyOutreachPreset('thisMonth');
+    applyClientPreset('thisMonth');
+    initAnaRangeUI();
+    renderAnalysis();
+    renderSources();
+  } catch(err) {
+    console.error('Dashboard background load error:', err);
+    REST_TABS.forEach(t => document.getElementById('panel-'+t).classList.add('rest-fail'));
+    return;
+  }
+  REST_TABS.forEach(t => document.getElementById('panel-'+t).classList.remove('rest-wait'));
+}
+
+(async function init(){
+  const t0 = Date.now();
+  try {
+    await fetchAllData();
+    const elapsed = ((Date.now()-t0)/1000).toFixed(1);
+
+    // Update status
+    const now = new Date();
+    const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    // FIX-2026-04-28-loading: 移除 perfNote 殘骸，直接寫入時間戳
+    const gsheetNote = PERF_GSHEET_UPDATED
+      ? `　<span class="text-slate-400">・</span>　GSheet 快照 <span class="font-semibold text-emerald-700">${PERF_GSHEET_UPDATED}</span>`
+      : '';
+    document.getElementById('updateStatus').innerHTML = `即時資料　${ts}（${elapsed}s）${gsheetNote}`;
+    document.getElementById('refreshBtn').classList.remove('hidden');
+
+    // Build UI（首頁要的先畫；庫存／開發／客戶／業務分析等背景資料到了再畫）
+    REST_TABS.forEach(t => document.getElementById('panel-'+t).classList.add('rest-wait'));
+    buildMonthChips();
+    buildRecChips();
+    buildCompareChips();
+    renderLastCase();
+    renderYearRank();
+    applyMonthPreset('thisMonth');
+    if(compareMonths.length) renderCompare(compareMonths[0]);
+    // 資料比對是給管理部對帳用，一般同仁看不到；網址加 ?admin=1 才出現
+    if (new URLSearchParams(location.search).get('admin') === '1') document.querySelectorAll('.admin-only').forEach(x => x.classList.remove('hidden'));
+    renderAd591();
+    loadRestAndRender();
+
+    // Fade out loading
+    const overlay = document.getElementById('loadingOverlay');
+    overlay.classList.add('fade-out');
+    setTimeout(()=>overlay.remove(), 300);
+
+    // URL param: ?tab=recurring 自動切換 tab
+    const urlTab = new URLSearchParams(location.search).get('tab');
+    if (urlTab) {
+      const target = document.querySelector(`.tab[data-tab="${urlTab}"]`);
+      if (target) {
+        document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(x => x.classList.remove('active'));
+        target.classList.add('active');
+        document.getElementById('panel-' + urlTab).classList.add('active');
+        document.getElementById('tabDesc').textContent = TAB_DESC[urlTab] || '';
+        if (urlTab === 'recurring') renderRecurring();
+      }
+    }
+
+  } catch(err) {
+    console.error('Dashboard load error:', err);
+    if (!document.getElementById('loadingText')) return;  // 首頁已出來，錯誤在背景階段，由 loadRestAndRender 處理
+    document.getElementById('loadingText').textContent = '❌ 資料載入失敗';
+    document.getElementById('loadingDetail').textContent = err.message + '　— 請檢查網路連線或重新整理';
+    document.getElementById('loadingDetail').innerHTML += '<br><button onclick="location.reload()" class="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">重新整理</button>';
+  }
+})();
+</script>
+<script src="bug-report.js"></script>
+</body>
+</html>
