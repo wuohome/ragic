@@ -3538,7 +3538,7 @@ function buildNumberSources() {
   const top = yearRankRows()[0];
   const RAGIC_INTAKE = 'Ragic 物件委託表（委託時間(起) 在本月；排除永策同步件）';
   const RAGIC_INV = 'Ragic 物件庫存表（排除永策同步件）';
-  const PERF_MD = '珊珊業績試算表（每天 20:00 同步成 perf.md）';
+  const PERF_MD = '珊珊業績試算表（每 15 分鐘同步成 perf.md）';
   return [
     { key: 'intake_count', tab: '進案量', label: '本月進案件數', value: intake.length, source: RAGIC_INTAKE, method: '筆數' },
     { key: 'intake_cases', tab: '進案量', label: '本月委託間數（排行加總）', value: Math.round(intake.reduce((s, r) => s + (r.devs || []).reduce((a, x) => a + x.ratio, 0), 0) * 100) / 100, source: RAGIC_INTAKE, method: '每件依開發比例分給開發人員後加總；比例全填 0 的件平分給列名的人' },
