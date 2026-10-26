@@ -1788,5 +1788,29 @@
       }
     };
   </script>
+
+  <!-- 問題回報按鈕：底部主要按鈕或簽名板進到右下角區域時先藏起來，避免蓋住或被誤觸 -->
+  <style>body.wh-bug-hide #wh-bug-report-btn{display:none}</style>
+  <script>
+    (function () {
+      const GUARDED = "#btn-next, #btn-back, #btn-clear, #btn-submit, #signature-pad, #step-success .big-btn, #step-failed .big-btn";
+      const BAND = 96; // 按鈕直徑 48 + 底距 24 + 餘裕
+      function update() {
+        const vh = window.innerHeight;
+        let hide = !document.getElementById("loader").classList.contains("hidden");
+        document.querySelectorAll(GUARDED).forEach(el => {
+          if (hide || !el.offsetParent) return;
+          const r = el.getBoundingClientRect();
+          if (r.bottom > vh - BAND && r.top < vh) hide = true;
+        });
+        document.body.classList.toggle("wh-bug-hide", hide);
+      }
+      window.addEventListener("scroll", update, { passive: true });
+      window.addEventListener("resize", update);
+      new MutationObserver(update).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class"] });
+      update();
+    })();
+  </script>
+  <script src="bug-report.js" defer></script>
 </body>
 </html>
