@@ -293,7 +293,8 @@
   }
   // 讀自己的紀錄：走 worklogBoard（任何登入方式——通行碼或 Google——都能用）再挑出填寫人是自己的那幾筆，所以 Worker 不必另開 action
   async function loadMineFromApi(dateStr) {
-    const r = await D.api(`worklogBoard?date=${encodeURIComponent(dateStr)}`);
+    const c = D.cachedBoard && D.cachedBoard(dateStr); // 頁面剛讀過同一天就直接用，不再打一次 Worker（2026-10-28 提速）
+    const r = c ? { status: 200, json: c } : await D.api(`worklogBoard?date=${encodeURIComponent(dateStr)}`);
     if (r.status !== 200 || !r.json || r.json.ok !== true) return { ok: false, status: r.status };
     const me = D.viewer() && D.viewer().name;
     const mine = (r.json.entries || []).filter((e) => e.reporter === me && (e.source !== 'timetree' || D.readOnly));
@@ -569,12 +570,17 @@
   }
 
   // ---------- 載入（第一次顯示才載 Tailwind、才抓資料） ----------
+  let twLoad = null; // 同一個載入只發一次（warm() 可能先開始載）
   function ensureTailwind(cb, fail) {
     if (window.tailwind && window.tailwind.__wl) { cb(); return; }
-    const s = document.createElement('script'); s.src = 'https://cdn.tailwindcss.com';
-    s.onload = () => { window.tailwind.config = TW_CONFIG; window.tailwind.__wl = true; cb(); };
-    s.onerror = fail; document.head.append(s);
+    if (!twLoad) twLoad = new Promise((ok, no) => {
+      const s = document.createElement('script'); s.src = 'https://cdn.tailwindcss.com';
+      s.onload = () => { window.tailwind.config = TW_CONFIG; window.tailwind.__wl = true; ok(); };
+      s.onerror = () => { twLoad = null; no(); }; document.head.append(s);
+    });
+    twLoad.then(cb, fail);
   }
+  function warm() { ensureTailwind(() => {}, () => {}); } // 上次用清單模式的人：頁面一打開就先載樣式，跟讀資料同時進行
   async function firstLoad() {
     loading = true;
     const res = await loadMineFromApi(dateStrForOffset(0));
@@ -600,5 +606,5 @@
   }
   function hide() { if (root) root.hidden = true; }
   function invalidate() { stale = true; }
-  window.WLList = { show, hide, invalidate };
+  window.WLList = { show, hide, invalidate, warm };
 })();
