@@ -152,6 +152,38 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
 .msg{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;text-align:center;color:var(--muted)}
 .warnbox.err{background:var(--warn-soft);color:var(--warn);font-weight:700}
 .btn:disabled{opacity:.6;cursor:default}
+
+/* 兩種填法（2026-10-28）：格子（預設）／清單。清單模式＝自己的行程一筆一列，點開就地填寫；看大家的格子看板收在下面一顆按鈕裡 */
+.stack{display:flex;flex-direction:column;gap:14px}
+.modebtn{font:inherit;font-size:13px;font-weight:500;color:var(--accent);background:var(--surface);border:1px solid var(--accent);border-radius:999px;padding:4px 12px;cursor:pointer;white-space:nowrap}
+.modebtn:hover,.modebtn:focus-visible{background:var(--accent-soft)}
+.listpanel{background:var(--surface);border:2px solid var(--accent);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.listpanel h2{margin:0;font-size:17px}
+.listpanel .sub{margin:0;font-size:13px;color:var(--muted)}
+.listpanel .addrow{align-self:flex-start}
+.li{border:1px solid var(--line);border-left-width:4px;border-radius:10px;background:var(--bg);overflow:hidden}
+.li.out{border-left-color:var(--out)}.li.in{border-left-color:var(--in)}.li.away{border-left-color:var(--away)}.li.meet{border-left-color:var(--meet)}
+.li.q{border-left-color:var(--q-edge);border-style:dashed;border-left-style:solid}
+.li.clash{box-shadow:inset 0 0 0 2px var(--clash)}
+.lirow{display:grid;grid-template-columns:auto 1fr auto auto;gap:4px 12px;align-items:center;width:100%;padding:10px 12px;border:0;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.lirow:hover,.lirow:focus-visible{background:var(--accent-soft)}
+.lirow .lt{font-family:var(--mono);font-size:14px;font-weight:500}
+.lirow .lw{min-width:0;display:flex;flex-direction:column}
+.lirow .lw b{font-size:15px}
+.lirow .lw span{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lirow .lw span.bad{color:var(--q)}
+.lirow .edit{font-size:13px;color:var(--accent);font-weight:500}
+.wh{font-size:12px;font-weight:700;border-radius:999px;padding:2px 10px;white-space:nowrap}
+.wh.out{background:var(--out-soft);color:var(--out)}.wh.in{background:var(--in-soft);color:var(--in)}.wh.away{background:var(--away-soft);color:var(--away)}.wh.meet{background:var(--meet-soft);color:var(--meet)}.wh.q{background:var(--q-soft);color:var(--q)}
+.inl{padding:12px;display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line)}
+.inl:empty{display:none}
+.inl.newslot{border:2px solid var(--accent);border-radius:10px}
+.inl h2{margin:0;font-size:16px}
+.inl details.more summary{cursor:pointer;color:var(--accent);font-size:13px}
+.inl details.more .fld{margin-top:8px}
+textarea.memo{font:inherit;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%;resize:vertical}
+.teamtoggle{align-self:flex-start}
+@media (max-width:520px){.lirow{grid-template-columns:1fr auto auto}.lirow .lt{grid-column:1/-1}.listpanel{padding:12px}}
 </style>
 
 <div class="wrap">
@@ -162,6 +194,7 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
         <button id="d0" aria-pressed="true">今天</button>
         <button id="d1" aria-pressed="false">明天</button>
       </div>
+      <button class="modebtn" id="modeBtn" hidden title="兩種填法存的資料一樣，系統會記住你上次用哪一種">換成清單填寫</button>
       <button class="helpbtn" id="helpBtn" aria-expanded="false">怎麼用？</button>
       <button class="helpbtn" id="logoutBtn" hidden style="font-size:12px;font-weight:400;color:var(--muted)">登出</button>
     </div>
@@ -174,6 +207,7 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
       <li><b>寫</b>：只能寫自己那一排。點虛線空格（＋）或自己已寫的方塊，下面會滑出填寫框：選時間、選項目、選「店內」或「外出」（選項目時會自動帶入，可以改），按「存起來」，大家馬上看得到。</li>
       <li><b>一定要寫的</b>：選「其他」要寫一句做什麼；選「外出」要寫地點。沒寫就存不了，框裡會用一句話告訴你少了什麼。</li>
       <li><b>改</b>：點自己的方塊就能改時間、項目、地點。自己那排在最上面，下面其他同仁的只能看、不能點。</li>
+      <li><b>兩種填法</b>：右上角的按鈕可以在「格子填寫」（點時間格）和「清單填寫」（自己的行程一筆一列）之間隨時切換，存進去的資料完全一樣，大家看到的也一樣。系統會記住你上次用哪一種，下次打開就是那種。</li>
       <li><b>日期</b>：只能寫今天和明天，過去的日子不能再改。</li>
       <li><b>休假</b>：排班表有排休、特休、請假的人，會自動放在最下面，不用寫。</li>
       <li><b>誰看得到</b>：同仁和主管用自己的專屬連結打開，或直接用公司登記的 Google 帳號登入，都看得到大家的行程。</li>
@@ -182,6 +216,10 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
     </ul>
   </section>
 
+  <section class="listpanel" id="listPanel" hidden></section>
+  <button class="btn teamtoggle" id="teamToggle" hidden aria-expanded="false">看大家的行程 ▾</button>
+
+  <div class="stack" id="teamBox">
   <section class="headline" id="headline" aria-live="polite"></section>
 
   <div class="legend">
@@ -198,6 +236,7 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
   <section class="who" id="who" hidden></section>
 
   <div class="boardbox"><div class="board" id="board"></div></div>
+  </div>
 </div>
 
 <div class="sheet" id="sheet" hidden><div class="in" id="sheetIn"></div></div>
@@ -249,6 +288,8 @@ const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const dateStr=off=>{const d=new Date();d.setDate(d.getDate()+off);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
 const nowMin=()=>{const d=new Date();return d.getHours()*60+d.getMinutes()};
 
+// 兩種填法：board＝格子（預設）、list＝清單。偏好存在 Worker（依登入姓名），worklogBoard 的 fillMode 帶回；只有第一次載入採用伺服器值，之後以本機切換為準
+let MODE="board", MODE_INIT=false, TEAM_OPEN=false, LREFS=[];
 let day=0, focus=null, VIEWER=null, STATE={status:"loading",data:null}, reqId=0, lastLoad=0, scrolled=false;
 const $=id=>document.getElementById(id);
 
@@ -316,9 +357,9 @@ function perfLine(n){
   return `<span class="perf" title="${esc(tip)}"><span>今年業績 ${W(p.total)}</span><span>平均每月 ${W(p.avg)}</span>${team?`<span>${team}</span>`:""}</span>`;
 }
 if(window.WorklogPerf)WorklogPerf.load().then(p=>{PERF=p;if(p&&STATE&&STATE.status==="ready")render()});
-async function load(){
+async function load(quiet){ // quiet：存檔後重抓，不閃「載入中」（清單模式整頁都是填寫區，閃一下很干擾）
   if(!TOKEN&&!ID_TOKEN){STATE={status:"auth",kind:"out"};render();return}
-  const my=++reqId;STATE={status:"loading",data:null};render();
+  const my=++reqId;if(!quiet){STATE={status:"loading",data:null};render()}
   const r=await api(`worklogBoard?date=${encodeURIComponent(dateStr(day))}`);
   if(my!==reqId)return;
   if(r.status===404&&TOKEN){ // 通行碼連結失效：改走 Google 登入（不動 localStorage，下次開連結仍先試一次）
@@ -330,6 +371,7 @@ async function load(){
     STATE={status:"auth",kind:"denied",email};render();return}
   if(r.status===200&&r.json&&r.json.ok===true){
     VIEWER=r.json.viewer;lastLoad=Date.now();
+    if(!MODE_INIT){MODE_INIT=true;MODE=r.json.fillMode==="list"?"list":"board"}
     STATE={status:"ready",data:r.json,D:buildDay(r.json)};
   }else STATE={status:"error",code:r.status};
   render();
@@ -373,6 +415,7 @@ function showGate(){
 }
 let REFS=[];
 function render(){
+  $("modeBtn").hidden=true;$("listPanel").hidden=true;$("teamToggle").hidden=true;$("teamBox").hidden=false; // 預設全收；下面確定是清單模式才動
   const base=new Date();base.setDate(base.getDate()+day);
   $("logoutBtn").hidden=!(ID_TOKEN&&!TOKEN); // 登出只給 Google 登入的人（通行碼連結沒有登入態）
   $("dateline").textContent=`${base.getMonth()+1}/${base.getDate()}（${"日一二三四五六"[base.getDay()]}）`;
@@ -389,6 +432,10 @@ function render(){
   const ro=new Set(data.members.filter(m=>m.source).map(m=>m.name)); // 行事曆帶入的成員：唯讀、不列入催填統計
   const canWrite=working.includes(me)&&!ro.has(me);
   const isToday=day===0, NOW=nowMin();
+  // 清單模式只對「這天自己能寫」的人生效；只能看的人（主管、設計部、排休）沒有切換鈕，一律看板
+  const LM=canWrite&&MODE==="list";
+  $("modeBtn").hidden=!canWrite;$("modeBtn").textContent=LM?"換成格子填寫":"換成清單填寫";
+  if(LM){$("teamToggle").hidden=false;$("teamBox").hidden=!TEAM_OPEN;$("teamToggle").setAttribute("aria-expanded",TEAM_OPEN);$("teamToggle").textContent=TEAM_OPEN?"收起大家的行程 ▴":"看大家的行程 ▾"}
 
   // 時間軸：9–19 點固定；9 點前／19 點後依當天全部人最早出門、最晚回來的行程自動拉長（以整點為界），沒人就縮成一小格
   const allRecs=[...working,...designWorking].flatMap(n=>D.get(n)); // 時間軸範圍要看到所有人的實際行程（含設計部）
@@ -435,7 +482,7 @@ function render(){
     const list=D.get(n), pct=Math.round(coreMinutes(list)/(CORE[1]-CORE[0])*100), cl=clashes(list);
     const k=focus!=null?at(list,focus):[];
     const dim=focus!=null&&k.length&&k[0].kind!=="in"&&k[0].kind!=="q";
-    const mine=n===me, own=mine&&!ro.has(n); // own＝這排我自己能寫
+    const mine=n===me, own=mine&&!ro.has(n)&&!LM; // own＝這排我自己能在格子上寫（清單模式改在上面的清單填，格子只看）
     html+=`<div class="row ${mine?"mine":""} ${dim?"rowdim":""}">
       <div class="cellname"><span>${esc(n)}${mine?`<span class="me">我</span>`:""}</span>${perfLine(n)}<span class="cnt ${!ro.has(n)&&pct<40?"low":""}">${ro.has(n)?"設計部・行事曆":`9–18 點寫了 ${pct}%`}</span></div>
       <div class="track"><div class="zone" style="left:0;width:${preW}px"></div><div class="zone" style="left:${preW+10*H}px;width:${postW}px"></div>`;
@@ -463,7 +510,8 @@ function render(){
   board.querySelectorAll(".gap").forEach(b=>b.onclick=()=>openNew(+b.dataset.s,+b.dataset.e));
   board.querySelectorAll(".axis button.h").forEach(b=>b.onclick=()=>{const v=+b.dataset.m;focus=focus===v?null:v;render()});
   renderWho(working);
-  maybeTour();
+  if(LM){if(!(draft&&draft.inline))renderList(D.get(me)||[]);$("listPanel").hidden=false} // 正在清單裡填寫時不重畫，免得洗掉打到一半的字
+  else maybeTour();
   if(!scrolled){scrolled=true;const fits=trackW<=avail;const box=document.querySelector(".boardbox");requestAnimationFrame(()=>{box.scrollLeft=isToday&&!fits?Math.max(0,nowX-(box.clientWidth-parseInt(board.style.getPropertyValue("--namew")))/2):0})}
 }
 
@@ -489,7 +537,31 @@ const endOpts=(sel,start)=>{let s="";for(let m=start+STEP;m<=LAST_END;m+=STEP)s+
 // 舊紀錄的時間不一定落在 15 分格上：補一個該值的選項，避免下拉洗掉原時間
 const withVal=(html,v)=>html.includes(`value="${v}"`)?html:`<option value="${v}" selected>${fmt(v)}</option>`+html;
 
-function openEntry(n,r){
+// ---------- 清單模式：自己的行程一筆一列，點開就地填寫（用同一個填寫表單，只是長在那一列底下，不是從下面滑出來）----------
+function renderList(list){
+  LREFS=list;
+  const cl=clashes(list), pct=Math.round(coreMinutes(list)/(CORE[1]-CORE[0])*100);
+  const d=new Date();d.setDate(d.getDate()+day);
+  const WH={out:"外出",in:"店內",meet:"例會／開會",away:"不在崗",q:"不確定在哪"};
+  const rows=list.map((r,i)=>`<div class="li ${r.kind} ${cl.has(r.id)?"clash":""}">
+    <button class="lirow" data-i="${i}"><span class="lt">${fmt(r.s)}–${fmt(r.e)}</span>
+      <span class="lw"><b>${esc(r.cat)}</b><span class="${r.missing?"bad":""}">${esc(r.missing?r.hint:r.place)}${cl.has(r.id)?"　⚠ 時間重疊":""}</span></span>
+      <span class="wh ${r.kind}">${WH[r.kind]||"店內"}</span><span class="edit">改</span></button>
+    <div class="inl" id="slot-${i}"></div></div>`).join("");
+  $("listPanel").innerHTML=`<h2>我的行程・${d.getMonth()+1}/${d.getDate()}（${"日一二三四五六"[d.getDay()]}）</h2>
+    <p class="sub">${list.length?`${day?"明天":"今天"}已經寫了 ${list.length} 筆，9–18 點寫了 ${pct}%。點一列可以改，要加就按「＋ 新增一筆」。`:`${day?"明天":"今天"}還沒有行程，按「＋ 新增一筆」開始。`}</p>
+    <button class="btn primary addrow" id="addRow">＋ 新增一筆</button>
+    <div class="inl newslot" id="slot-new"></div>${rows}`;
+  $("listPanel").querySelectorAll(".lirow").forEach(b=>b.onclick=()=>{
+    const r=LREFS[+b.dataset.i];if(draft&&draft.inline){draft=null;renderList(LREFS)} // 換開另一列：沒存的先放掉
+    openEntry(VIEWER.name,r,"slot-"+b.dataset.i)});
+  $("addRow").onclick=()=>{
+    if(draft&&draft.inline){draft=null;renderList(LREFS)}
+    let s=LREFS.length?Math.max(...LREFS.map(r=>r.e)):(day===0?Math.max(CORE[0],nowMin()):CORE[0]);
+    s=Math.min(Math.ceil(s/STEP)*STEP,LAST_END-STEP); // 接在最後一筆後面（今天還沒寫就從現在起），湊 15 分一格
+    openNew(s,Math.min(s+60,LAST_END),"slot-new")};
+}
+function openEntry(n,r,slot){
   if(n!==(VIEWER&&VIEWER.name)){
     const where=r.kind==="out"?"外出":r.kind==="in"?"店內":r.kind==="meet"?"例會／開會":r.kind==="away"?"不在崗":"不確定在哪";
     $("sheetIn").innerHTML=`<h2>${esc(n)}・${fmt(r.s)}–${fmt(r.e)}</h2><p style="margin:0"><b>${esc(r.cat)}</b>　${esc(r.place)}</p>
@@ -501,9 +573,9 @@ function openEntry(n,r){
   const cat=r.rawCat==="開發"?null:r.rawCat;
   let what="",place=r.place;
   if(r.rawCat===OTHER){what=r.cat===OTHER?"":r.cat}
-  draft={id:r.id,s:r.s,e:r.e,cat,place,what,loc:r.loc||(cat&&!AMBIG.includes(r.rawCat)?defaultLoc(cat):null),raw:r.raw};showForm(true);
+  draft={id:r.id,s:r.s,e:r.e,cat,place,what,loc:r.loc||(cat&&!AMBIG.includes(r.rawCat)?defaultLoc(cat):null),raw:r.raw,inline:slot||null};showForm(true);
 }
-function openNew(s,e){draft={id:null,s,e:Math.min(e,s+60),cat:null,place:"",what:"",loc:null,raw:null};showForm(false)}
+function openNew(s,e,slot){draft={id:null,s,e:Math.min(e,s+60),cat:null,place:"",what:"",loc:null,raw:null,inline:slot||null};showForm(false)}
 // 填寫規則：沒選項目、沒選人在哪、「其他」沒寫做什麼、外出沒寫地點，都不能存；回一句講原因
 function draftProblem(){
   if(!draft.cat)return draft.rawWas==="開發"?"「開發」已拆成電話開發和拜訪屋主，請選一個。":"先選一個項目。";
@@ -516,7 +588,10 @@ function showForm(editing){
   const btn=c=>`<button data-c="${c}" class="${chipKind(c)}${NEW_CATS.includes(c)?" new":""}" aria-pressed="${draft.cat===c}">${c}</button>`;
   // 正在改的舊紀錄若是已不在選單的項目（場勘、驗收…），補一顆讓它維持選取
   const legacy=draft.cat&&![...GROUPS.out,...GROUPS.in,...GROUPS.meet,...GROUPS.away].includes(draft.cat)?`<div class="cats"><button data-c="${esc(draft.cat)}" class="${OLD_OUT.includes(draft.cat)?"out":"in"}" aria-pressed="true">${esc(draft.cat)}（舊）</button></div>`:"";
-  $("sheetIn").innerHTML=`<h2>${editing?"改這一段":"新增一段"}</h2>
+  const host=draft.inline?$(draft.inline):$("sheetIn"); // 清單模式長在那一列底下，格子模式從下面滑出來
+  const raw0=draft.raw||{};
+  if(draft.inline){draft.planned=raw0.plannedSchedule||"";draft.memo=(raw0.note||"").replace(/^【[^】]*】/,"").trim()}
+  host.innerHTML=`<h2>${editing?"改這一段":"新增一段"}</h2>
     <div class="times">從 <select id="sSel">${withVal(timeOpts(draft.s),draft.s)}</select> 到 <select id="eSel">${withVal(endOpts(draft.e,draft.s),draft.e)}</select>
       <span>（00:00–23:45 都可以，每 15 分鐘一格）</span></div>
     ${legacy?`<div class="grouplbl">原本的項目</div>${legacy}`:""}
@@ -528,13 +603,17 @@ function showForm(editing){
     <div class="locs" id="locs"><button data-l="店內" aria-pressed="false">店內</button><button data-l="外出" aria-pressed="false">外出</button></div>
     <div class="fld" id="whatBox" hidden><label for="what" id="whatLbl">做什麼（必填）</label><input type="text" id="what" placeholder="例：整理買賣資料" maxlength="60"></div>
     <div class="fld"><label for="place" id="placeLbl">案名或地址</label><input type="text" id="place" maxlength="200"></div>
+    ${draft.inline?`<details class="more"><summary>更多欄位（選填）</summary>
+      <div class="fld"><label for="planned">預先排定行程</label><input type="text" id="planned" maxlength="300" placeholder="例：原本排定 10 點去王公館驗收"></div>
+      <div class="fld"><label for="memo">紀錄內容</label><textarea id="memo" class="memo" rows="2" maxlength="400" placeholder="這段時間實際發生的細節，簡短就好"></textarea></div></details>`:""}
     <p class="hintline" id="problem" aria-live="polite"></p>
     <div class="warnbox" id="clashWarn" hidden></div>
     <div class="warnbox err" id="saveErr" hidden></div>
     <div class="row2"><button class="btn" id="close">取消</button><button class="btn primary" id="save">存起來</button></div>`;
   draft.rawWas=editing&&draft.raw&&draft.raw.category;
   $("place").value=draft.place;$("what").value=draft.what||"";
-  const s=$("sheetIn"), mineList=STATE.D.get(VIEWER.name)||[];
+  if(draft.inline){$("planned").value=draft.planned;$("memo").value=draft.memo;$("planned").oninput=()=>{draft.planned=$("planned").value};$("memo").oninput=()=>{draft.memo=$("memo").value}}
+  const s=host, mineList=STATE.D.get(VIEWER.name)||[];
   const sync=()=>{
     s.querySelectorAll(".cats button").forEach(y=>y.setAttribute("aria-pressed",y.dataset.c===draft.cat));
     s.querySelectorAll("#locs button").forEach(y=>y.setAttribute("aria-pressed",y.dataset.l===draft.loc));
@@ -559,7 +638,7 @@ function showForm(editing){
   $("close").onclick=closeSheet;
   $("save").onclick=save;
   sync();
-  $("sheet").hidden=false;
+  if(draft.inline)host.scrollIntoView({block:"nearest",behavior:"smooth"});else $("sheet").hidden=false;
 }
 const ERR_TEXT={not_on_board:"你不在名單上，這頁只能看",invalid_session:"登入已過期，請重新整理頁面再登入一次",not_whitelisted:"這個帳號沒有寫入權限",date_locked_past:"過去的日期不能再填寫",record_locked_cross_day:"這一筆是過去的紀錄，不能再改",not_found:"找不到這一筆（可能已被改動），請重新整理頁面",invalid_category:"這個項目目前不能存，請改選別的項目",value_too_long:"案名或地址太長了，請縮短",location_required:"頁面是舊版，請重新整理頁面再填",invalid_location:"請重新整理頁面再填",other_text_required:"選「其他」要寫一句做什麼",place_required:"外出要寫地點"};
 async function save(){
@@ -571,20 +650,28 @@ async function save(){
   const raw=draft.raw||{};
   // 改既有一段時，Worker 會整列覆寫；沒在畫面上的欄位（報修原因、預排行程、紀錄內容）要原樣帶回，不能洗掉
   // 「其他」寫了什麼放在紀錄內容最前面的【】裡；換成別的項目就拿掉
-  let note=(raw.note||"").replace(/^【[^】]*】/,"").trim();
+  // 清單模式的表單多了「預先排定行程」「紀錄內容」兩格可以直接改；格子模式沒有這兩格，維持原樣帶回
+  let note=draft.inline?(draft.memo||"").trim():(raw.note||"").replace(/^【[^】]*】/,"").trim();
   if(draft.cat===OTHER)note=`【${what}】`+note;
-  const entry={startTime:fmt(S),endTime:fmt(E),category:draft.cat,location:draft.loc,caseName:place,repairReason:raw.repairReason||"",plannedSchedule:raw.plannedSchedule||"",note};
+  const entry={startTime:fmt(S),endTime:fmt(E),category:draft.cat,location:draft.loc,caseName:place,repairReason:raw.repairReason||"",plannedSchedule:draft.inline?(draft.planned||"").trim():(raw.plannedSchedule||""),note};
   if(draft.id)entry.rid=draft.id;
   saving=true;const b=$("save");b.disabled=true;b.textContent="儲存中…";
-  const r=await api("worklogCreate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({entries:[entry],date:dateStr(day)})});
+  const r=await api("worklogCreate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({entries:[entry],date:dateStr(day),mode:MODE})}); // mode：後台記錄這次是用哪種填法存的
   saving=false;b.disabled=false;b.textContent="存起來";
   const res=r.json&&Array.isArray(r.json.results)?r.json.results[0]:null;
   if(r.status!==200||!res||!res.ok){
     const code=(res&&res.error)||(r.json&&r.json.error)||"";
     showErr(r.status===0?"連線失敗，請檢查網路後再按一次「存起來」（填的內容還在）":`沒存成：${ERR_TEXT[code]||code||"請稍後再試"}`);return}
-  closeSheet();toast("已存，大家都看得到了");load();
+  closeSheet();toast("已存，大家都看得到了");load(MODE==="list");
 }
-function closeSheet(){$("sheet").hidden=true;draft=null}
+function closeSheet(){const wasInline=!!(draft&&draft.inline);$("sheet").hidden=true;draft=null;if(wasInline&&STATE.status==="ready")render()} // 清單裡的表單關掉要重畫那一列
+// 切換填寫模式：先換畫面，再告訴 Worker 記住偏好並記一筆切換；Worker 失敗只提醒一句，不影響這次使用
+$("modeBtn").onclick=()=>{
+  const to=MODE==="list"?"board":"list";
+  draft=null;$("sheet").hidden=true;MODE=to;TEAM_OPEN=false;scrolled=false;render();
+  api("worklogMode",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:to})}).then(r=>{if(r.status!==200)toast("這次的選擇沒記住，下次打開可能還是原本那種")});
+};
+$("teamToggle").onclick=()=>{TEAM_OPEN=!TEAM_OPEN;scrolled=false;render()};
 let tt;function toast(m){const el=$("toast");el.textContent=m;el.hidden=false;clearTimeout(tt);tt=setTimeout(()=>el.hidden=true,1800)}
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheet()});
 $("d0").onclick=()=>setDay(0);$("d1").onclick=()=>setDay(1);
@@ -625,8 +712,8 @@ function maybeTour(){
 }
 $("helpBtn").onclick=()=>{const h=$("help");h.hidden=!h.hidden;$("helpBtn").setAttribute("aria-expanded",!h.hidden)};
 // 切回這個分頁時，資料超過一分鐘就重抓（別人剛寫的才看得到）；填寫框開著時不動它
-document.addEventListener("visibilitychange",()=>{if(!document.hidden&&STATE.status==="ready"&&$("sheet").hidden&&Date.now()-lastLoad>60000)load()});
-setInterval(()=>{if(!document.hidden&&STATE.status==="ready"&&$("sheet").hidden&&day===0)render()},60000); // 現在時間線往前走
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&STATE.status==="ready"&&$("sheet").hidden&&!draft&&Date.now()-lastLoad>60000)load(MODE==="list")});
+setInterval(()=>{if(!document.hidden&&STATE.status==="ready"&&$("sheet").hidden&&!draft&&day===0)render()},60000); // 現在時間線往前走
 
 // ---------- Google 登入（2026-10-14；與通行碼連結並存，照 Google登入_標準接法 2026-08-19 更新版）----------
 // Google 只負責「第一次證明你是誰」：ID token 換成 Worker 發的看板 session（30 天、每次使用滾動延長、伺服器端可撤銷），
