@@ -71,7 +71,7 @@
 
   let D = null;            // 頁面傳進來的 deps：{ api, viewer(), categories, defaultLoc, placeJunk(s), other, onSaved, onFail }
   let root = null, view = null;
-  let ready = false, loading = false, stale = false;
+  let ready = false, loading = false, stale = false, lastRO = false;
   let SELECTED_OFFSET = 0, EXPANDED_BLOCKS = new Set(), toastTimer = null, dateReq = 0;
   const LOADED = new Set();
   const NAV_MIN_OFFSET = -90, NAV_MAX_OFFSET = 1, STEP_MINUTES = 15;
@@ -116,7 +116,7 @@
   function blockSortMinutes(b) { const m = timeToMinutes(b.start); return m != null ? m : (b.isLegacy ? legacyHourSortHint(b.legacyHourLabel) : 0); }
   const sortedBlocks = (day) => blocksList(day).slice().sort((a, b) => blockSortMinutes(a) - blockSortMinutes(b));
   function isOverdueUnrecorded(dateStr, block) {
-    if (block.isLegacy) return false;
+    if (D.readOnly || block.isLegacy) return false;
     if (dateStr !== dateStrForOffset(0)) return false;
     if (!block.end || block.note || !block.category) return false;
     return timeToMinutes(block.end) < nowMinutes();
@@ -196,18 +196,18 @@
       const dur = Math.max(seg.end - seg.start, 1);
       if (seg.type === 'gap') {
         const btn = make('button', 'timeline-seg timeline-seg-gap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink');
-        btn.type = 'button'; btn.style.flex = `${dur} 0 0%`;
+        btn.type = 'button'; btn.style.flex = `${dur} 0 0%`; if (D.readOnly) { btn.disabled = true; btn.classList.add('pointer-events-none'); }
         btn.setAttribute('aria-label', `${minutesToTime(seg.start)}–${minutesToTime(seg.end)} 沒有紀錄，點擊新增`);
-        btn.addEventListener('click', () => addBlock(dateStr, { start: minutesToTime(seg.start), end: minutesToTime(seg.end) }));
+        if (!D.readOnly) btn.addEventListener('click', () => addBlock(dateStr, { start: minutesToTime(seg.start), end: minutesToTime(seg.end) }));
         track.append(btn);
       } else {
         const hasOverlap = blockHasOverlap(day, seg.block), overdue = isOverdueUnrecorded(dateStr, seg.block);
         const stateCls = overdue ? 'timeline-seg-overdue' : hasOverlap ? 'timeline-seg-overlap' : (seg.block.synced ? 'timeline-seg-submitted' : 'timeline-seg-pending');
         const stateText = overdue ? '（已排定・尚未補紀錄）' : hasOverlap ? '（時間重疊）' : seg.block.synced ? '（已送出）' : '（尚未送出）';
         const btn = make('button', `timeline-seg timeline-seg-block ${stateCls} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink`);
-        btn.type = 'button'; btn.style.flex = `${dur} 0 0%`;
+        btn.type = 'button'; btn.style.flex = `${dur} 0 0%`; if (D.readOnly) { btn.disabled = true; btn.classList.add('pointer-events-none'); }
         btn.setAttribute('aria-label', `${seg.block.start}–${seg.block.end} ${labelOf(seg.block)}${stateText}${seg.block.isLegacy ? '（舊版格式）' : ''}`);
-        btn.addEventListener('click', () => {
+        if (!D.readOnly) btn.addEventListener('click', () => {
           if (!seg.block.isLegacy) EXPANDED_BLOCKS.add(seg.block.id);
           renderView();
           requestAnimationFrame(() => { const el = byId(`row-block-${seg.block.id}`); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
@@ -287,7 +287,7 @@
   function applyMineData(json, dateStr) {
     const existing = getDayState(dateStr), day = { blocks: {} };
     (json.entries || []).forEach((rec) => { const b = parseApiEntry(rec); day.blocks[b.id] = b; });
-    Object.entries(existing.blocks || {}).forEach(([id, b]) => { if (!b.rid && isBlockFilled(b) && !day.blocks[id]) day.blocks[id] = { ...b, synced: false }; });
+    if (!D.readOnly) Object.entries(existing.blocks || {}).forEach(([id, b]) => { if (!b.rid && isBlockFilled(b) && !day.blocks[id]) day.blocks[id] = { ...b, synced: false }; });
     setDayState(dateStr, day);
   }
   // 讀自己的紀錄：走 worklogBoard（任何登入方式——通行碼或 Google——都能用）再挑出填寫人是自己的那幾筆，所以 Worker 不必另開 action
@@ -295,7 +295,9 @@
     const r = await D.api(`worklogBoard?date=${encodeURIComponent(dateStr)}`);
     if (r.status !== 200 || !r.json || r.json.ok !== true) return { ok: false, status: r.status };
     const me = D.viewer() && D.viewer().name;
-    return { ok: true, json: { entries: (r.json.entries || []).filter((e) => e.reporter === me && e.source !== 'timetree') } };
+    const mine = (r.json.entries || []).filter((e) => e.reporter === me && (e.source !== 'timetree' || D.readOnly));
+    // TimeTree 行事曆帶入的行程（標題與顏色由 Worker 決定）轉成唯讀卡片；kind=out 算外出，away（請假）不標人在哪，其餘店內
+    return { ok: true, json: { entries: mine.map((e) => e.source === 'timetree' ? { rid: String(e.rid), startTime: e.startTime, endTime: e.endTime, category: e.title || '行程', location: e.kind === 'out' ? '外出' : e.kind === 'away' ? '' : '店內' } : e) } };
   }
   async function switchSelectedDate(offset) {
     offset = Math.max(NAV_MIN_OFFSET, Math.min(NAV_MAX_OFFSET, offset));
@@ -325,6 +327,7 @@
   const ERR_TEXT = { not_on_board: '你不在名單上，這頁只能看', invalid_session: '登入已過期，請重新整理頁面再登入一次', not_whitelisted: '這個帳號沒有寫入權限', date_locked_past: '過去的日期不能再填寫', record_locked_cross_day: '這一筆是過去的紀錄，不能再改', not_found: '找不到這一筆（可能已被改動），請重新整理頁面', invalid_category: '這個項目目前不能存，請改選別的項目', value_too_long: '案名或地址太長了，請縮短', location_required: '頁面是舊版，請重新整理頁面再填', invalid_location: '請重新整理頁面再填', other_text_required: '選「其他」要寫一句做什麼', place_required: '外出要寫地點' };
 
   async function saveBlock(dateStr, blockId, btn) {
+    if (D.readOnly) return; // 預覽：任何情況都不送出
     const day = getDayState(dateStr), block = day.blocks[blockId];
     if (!block) return;
     const pr = blockProblem(block);
@@ -346,6 +349,7 @@
   }
   function deleteBlock(dateStr, blockId) { const day = getDayState(dateStr); delete day.blocks[blockId]; setDayState(dateStr, day); EXPANDED_BLOCKS.delete(blockId); renderView(); }
   function addBlock(dateStr, prefill) {
+    if (D.readOnly) return;
     const day = getDayState(dateStr), b = blankBlock();
     const start = (prefill && prefill.start) || suggestedStartTime(day);
     Object.assign(b, { start, end: (prefill && prefill.end) || suggestedEndTime(start) });
@@ -522,11 +526,18 @@
       : isTomorrow ? `${selectedDateDisplay()}・先列幾筆明天的計畫（填「預先排定行程」即可），時間到了再回來補實際紀錄。`
       : `${selectedDateDisplay()}・想幾點記就幾點記；早上先排大概行程（填「預先排定行程」），下班前回來把「紀錄內容」補齊——同一筆補、不用重填。`));
     view.append(head, dateNavRow(SELECTED_OFFSET, switchSelectedDate));
+    if (D.readOnly) view.append(make('div', 'mb-4 rounded-xl border-2 border-coral bg-coraltint px-4 py-2.5 text-sm font-black text-coraldark', `預覽：這是同仁看到的清單填寫畫面。${D.readOnlyReason || '你這天不能填。'}`));
     if (isPast) { // 過去日期：後端只收今天或未來，前端同步鎖成純唯讀（不顯示任何輸入欄位）
       view.append(make('div', 'mb-4 rounded-xl border-2 border-line bg-paper px-4 py-2.5 text-sm font-black text-ink', `🔒 這是 ${selectedDateDisplay()} 的紀錄，已鎖定不可修改`));
       const list = make('div', 'space-y-2'), blocks = sortedBlocks(day);
       if (!blocks.length) list.append(emptyNote(`${selectedDateDisplay()} 這天沒有紀錄。`)); else blocks.forEach((b) => list.append(memberEntryLine(dateStr, b)));
       view.append(list); return;
+    }
+    if (D.readOnly) { // 預覽：只看時間條與唯讀卡片，沒有任何寫入入口
+      const pb = blocksList(day), pl = make('div', 'space-y-2');
+      view.append(renderTimelineBar(dateStr, day, pb), make('h3', 'mb-2 text-sm font-black text-ink', '今天的紀錄'));
+      if (!pb.length) pl.append(emptyNote('這一排沒有紀錄。')); else sortedBlocks(day).forEach((b) => pl.append(memberEntryLine(dateStr, b)));
+      view.append(pl); return;
     }
     const unsynced = blocksList(day).filter((b) => isBlockFilled(b) && !b.synced);
     if (unsynced.length) view.append(make('div', 'mb-4 rounded-xl border-2 border-pending bg-pendingtint px-4 py-2.5 text-sm font-black text-pendingdark', `⚠ 你有 ${unsynced.length} 筆已經填寫但還沒送出成功，展開後按「儲存這筆」才會真的存進系統`));
@@ -572,9 +583,9 @@
   }
   function show(host, deps) {
     D = deps; root = host; root.hidden = false;
-    if (ready) { if (stale) { stale = false; reload(); } else if (!view.childNodes.length) renderView(); return; }
+    if (ready) { if (stale || lastRO !== !!D.readOnly) { stale = false; lastRO = !!D.readOnly; reload(); } else if (!view.childNodes.length) renderView(); return; }
     if (loading || root.dataset.init) return;
-    root.dataset.init = '1';
+    root.dataset.init = '1'; lastRO = !!D.readOnly;
     root.id = 'listmode'; root.style.visibility = 'hidden';
     const st = document.createElement('style'); st.textContent = BASE_CSS; document.head.append(st);
     root.innerHTML = '<datalist id="worklogCaseList"></datalist><section id="view-worklog" class="mx-auto max-w-2xl"></section>';

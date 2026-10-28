@@ -220,7 +220,7 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
 <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js" defer></script>
 <script src="bug-report.js" defer></script>
 <script src="js/worklog-perf.js"></script>
-<script src="js/worklog-list.js?v=20261028b"></script>
+<script src="js/worklog-list.js?v=20261028c"></script>
 
 <script>
 // 每日工作行程（照 2026-10-08 示範頁、2026-10-19 改版示範頁：顏色看「人在哪」；資料接 Worker worklogBoard／worklogCreate）。
@@ -266,6 +266,11 @@ const nowMin=()=>{const d=new Date();return d.getHours()*60+d.getMinutes()};
 
 // 兩種填法：board＝格子（預設）、list＝清單。偏好存在 Worker（依登入姓名），worklogBoard 的 fillMode 帶回；只有第一次載入採用伺服器值，之後以本機切換為準
 let MODE="board", MODE_INIT=false, TEAM_OPEN=false;
+// 不能寫的人（主管、TimeTree 那排、排休當天、不在名單）切到清單模式＝預覽同仁看到的畫面：偏好只存這台裝置（PMODE），不呼叫 Worker、不進統計
+let PMODE=undefined, CAN_WRITE=false, EFF="board";
+const PM_KEY=()=>"wuohome_worklog_pmode_v1:"+((VIEWER&&VIEWER.name)||"");
+const pmodeGet=()=>{try{const v=localStorage.getItem(PM_KEY());return v==="list"||v==="board"?v:null}catch{return null}}; // ponytail-debt: 讀不到就當沒選過，退回伺服器偏好／格子
+const pmodeSet=v=>{try{localStorage.setItem(PM_KEY(),v)}catch{}}; // ponytail-debt: 存不進去（無痕模式）只是下次打開回到預設，不影響使用
 let day=0, focus=null, VIEWER=null, STATE={status:"loading",data:null}, reqId=0, lastLoad=0, scrolled=false;
 const $=id=>document.getElementById(id);
 
@@ -408,10 +413,14 @@ function render(){
   const ro=new Set(data.members.filter(m=>m.source).map(m=>m.name)); // 行事曆帶入的成員：唯讀、不列入催填統計
   const canWrite=working.includes(me)&&!ro.has(me);
   const isToday=day===0, NOW=nowMin();
-  // 清單模式只對「這天自己能寫」的人生效；只能看的人（主管、設計部、排休）沒有切換鈕，一律看板；清單畫面檔案沒載到也退回看板
-  const LM=canWrite&&MODE==="list"&&!!window.WLList;
-  $("modeBtn").hidden=!(canWrite&&window.WLList);$("modeBtn").textContent=LM?"換成格子填寫":"換成清單填寫";
+  // 看得到看板的人都有切換鈕；能寫的人用伺服器記的偏好，不能寫的人切到清單＝預覽（偏好只存本機）。清單畫面檔案沒載到就退回看板
+  if(PMODE===undefined)PMODE=pmodeGet();
+  CAN_WRITE=canWrite;EFF=canWrite?MODE:(PMODE||MODE);
+  const LM=EFF==="list"&&!!window.WLList;
+  $("modeBtn").hidden=!window.WLList;$("modeBtn").textContent=LM?"換成格子填寫":"換成清單填寫";
   if(LM){document.querySelector(".controls .seg").hidden=true; // 清單畫面自己有日期切換
+    LDEPS.readOnly=!canWrite;
+    LDEPS.readOnlyReason=canWrite?"":ro.has(me)?"你這一排是從你的行事曆（TimeTree）自動帶入的，不能在這裡填。":me&&data.members.some(m=>m.name===me)?"你今天排休，不能填。":(VIEWER&&VIEWER.role==="manager"?"你是主管身分（不在同仁名單上），沒有自己那一排可以填。":"你今天不在名單上（人事表要是租賃部・在職・承攬），不能填；有問題請跟主管說。");
     $("teamToggle").hidden=false;$("teamBox").hidden=!TEAM_OPEN;$("teamToggle").setAttribute("aria-expanded",TEAM_OPEN);$("teamToggle").textContent=TEAM_OPEN?"收起大家的行程 ▴":"看大家的行程 ▾";
     WLList.show($("listmode"),LDEPS)}
 
@@ -617,7 +626,8 @@ const LDEPS={api:(p,o)=>api(p,o),viewer:()=>VIEWER,categories:[...GROUPS.out,...
   onSaved:()=>{lastLoad=0}, onFail:()=>{MODE="board";toast("清單畫面沒載入成功，先換回格子填寫");render()}};
 // 切換填寫模式：先換畫面，再告訴 Worker 記住偏好並記一筆切換；Worker 失敗只提醒一句，不影響這次使用
 $("modeBtn").onclick=()=>{
-  const to=MODE==="list"?"board":"list";
+  const to=EFF==="list"?"board":"list";
+  if(!CAN_WRITE){PMODE=to;pmodeSet(to);TEAM_OPEN=false;scrolled=false;if(window.WLList)WLList.invalidate();render();return} // 預覽：只記在這台裝置，不呼叫 Worker
   draft=null;$("sheet").hidden=true;MODE=to;TEAM_OPEN=false;scrolled=false;if(window.WLList)WLList.invalidate();render();
   api("worklogMode",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:to})}).then(r=>{if(r.status!==200)toast("這次的選擇沒記住，下次打開可能還是原本那種")});
 };
@@ -660,8 +670,8 @@ function maybeTour(){
 }
 $("helpBtn").onclick=()=>{const h=$("help");h.hidden=!h.hidden;$("helpBtn").setAttribute("aria-expanded",!h.hidden)};
 // 切回這個分頁時，資料超過一分鐘就重抓（別人剛寫的才看得到）；填寫框開著時不動它
-document.addEventListener("visibilitychange",()=>{if(!document.hidden&&STATE.status==="ready"&&$("sheet").hidden&&Date.now()-lastLoad>60000)load(MODE==="list")});
-setInterval(()=>{if(!document.hidden&&STATE.status==="ready"&&$("sheet").hidden&&day===0&&MODE!=="list")render()},60000); // 現在時間線往前走
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&STATE.status==="ready"&&$("sheet").hidden&&Date.now()-lastLoad>60000)load(EFF==="list")});
+setInterval(()=>{if(!document.hidden&&STATE.status==="ready"&&$("sheet").hidden&&day===0&&EFF!=="list")render()},60000); // 現在時間線往前走
 
 // ---------- Google 登入（2026-10-14；與通行碼連結並存，照 Google登入_標準接法 2026-08-19 更新版）----------
 // Google 只負責「第一次證明你是誰」：ID token 換成 Worker 發的看板 session（30 天、每次使用滾動延長、伺服器端可撤銷），
