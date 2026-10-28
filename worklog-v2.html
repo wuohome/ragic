@@ -220,7 +220,7 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
 <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js" defer></script>
 <script src="bug-report.js" defer></script>
 <script src="js/worklog-perf.js"></script>
-<script src="js/worklog-list.js?v=20261028e"></script>
+<script src="js/worklog-list.js?v=20261028f"></script>
 
 <script>
 // 每日工作行程（照 2026-10-08 示範頁、2026-10-19 改版示範頁：顏色看「人在哪」；資料接 Worker worklogBoard／worklogCreate）。
@@ -624,7 +624,7 @@ let tt;function toast(m){const el=$("toast");el.textContent=m;el.hidden=false;cl
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheet()});
 // 清單畫面（js/worklog-list.js）需要的東西；項目清單、必填規則與格子填寫共用同一份
 const LDEPS={api:(p,o)=>api(p,o),viewer:()=>VIEWER,categories:[...GROUPS.out,...GROUPS.in,...GROUPS.meet,...GROUPS.away],defaultLoc,placeJunk:PLACE_JUNK,whatJunk:WHAT_JUNK,other:OTHER,
-  cachedBoard:d=>STATE&&STATE.status==="ready"&&STATE.data&&STATE.data.date===d&&Date.now()-lastLoad<15000?STATE.data:null, // 剛讀過同一天就給清單畫面直接用
+  cachedBoard:d=>STATE&&STATE.status==="ready"&&STATE.data&&String(STATE.data.date).replace(/\//g,"-")===String(d).replace(/\//g,"-")&&Date.now()-lastLoad<60000?STATE.data:null, // 剛讀過同一天就給清單畫面直接用
   onSaved:()=>{lastLoad=0}, onFail:()=>{MODE="board";toast("清單畫面沒載入成功，先換回格子填寫");render()}};
 try{if(localStorage.getItem("wl_last_mode")==="list"&&window.WLList)WLList.warm()}catch{} // ponytail-debt: 讀不到就等切到清單時再載，只是慢一點
 // 切換填寫模式：先換畫面，再告訴 Worker 記住偏好並記一筆切換；Worker 失敗只提醒一句，不影響這次使用
