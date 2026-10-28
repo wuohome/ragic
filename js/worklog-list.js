@@ -38,6 +38,7 @@
 #listmode select:focus,#listmode textarea:focus,#listmode input:not([type="checkbox"]):focus{border-color:#004C8C!important;outline:none;box-shadow:0 0 0 4px rgba(0,76,140,.18)}
 #listmode .tnum{font-variant-numeric:tabular-nums}
 #listmode .tap44{min-height:44px}
+#listmode .wl-loading{text-align:center;color:#4B6570;padding:48px 0;font-size:15px}
 #listmode select.time-part{padding:12px 4px!important;text-align:center;font-variant-numeric:tabular-nums}
 #listmode .accordion{transition:grid-template-rows 200ms cubic-bezier(.23,1,.32,1)}
 #listmode .accordion-inner{overflow:hidden}
@@ -535,7 +536,7 @@
     }
     if (D.readOnly) { // 預覽：只看時間條與唯讀卡片，沒有任何寫入入口
       const pb = blocksList(day), pl = make('div', 'space-y-2');
-      view.append(renderTimelineBar(dateStr, day, pb), make('h3', 'mb-2 text-sm font-black text-ink', '今天的紀錄'));
+      view.append(renderTimelineBar(dateStr, day, pb), make('h3', 'mb-2 text-sm font-black text-ink', isTomorrow ? '明天的紀錄' : '今天的紀錄'));
       if (!pb.length) pl.append(emptyNote('這一排沒有紀錄。')); else sortedBlocks(day).forEach((b) => pl.append(memberEntryLine(dateStr, b)));
       view.append(pl); return;
     }
@@ -550,7 +551,7 @@
     fullDayBtn.type = 'button'; fullDayBtn.addEventListener('click', () => addFullDayBlock(dateStr));
     quickRow.append(addBtn, fullDayBtn); view.append(quickRow);
     const blocks = blocksList(day);
-    view.append(renderTimelineBar(dateStr, day, blocks), make('h3', 'mb-2 text-sm font-black text-ink', '今天的紀錄'));
+    view.append(renderTimelineBar(dateStr, day, blocks), make('h3', 'mb-2 text-sm font-black text-ink', isTomorrow ? '明天的紀錄' : '今天的紀錄'));
     const list = make('div', 'space-y-2');
     if (!blocks.length) list.append(emptyNote('還沒有任何紀錄，點上面「+ 新增一筆」開始。'));
     else sortedBlocks(day).forEach((b) => list.append(b.isLegacy ? memberEntryLine(dateStr, b) : renderBlockRow(dateStr, day, b)));
@@ -579,17 +580,17 @@
     const res = await loadMineFromApi(dateStrForOffset(0));
     if (res.ok) { LOADED.add(0); applyMineData(res.json, dateStrForOffset(0)); }
     loading = false; ready = true; renderView();
-    root.style.visibility = ''; // Tailwind 產生樣式需要一個 frame，畫完才顯示，免得閃一下沒樣式的畫面
+    const ld = root.querySelector('.wl-loading'); if (ld) ld.remove(); view.hidden = false; // Tailwind 產生樣式需要一個 frame，畫完才顯示，免得閃一下沒樣式的畫面
   }
   function show(host, deps) {
     D = deps; root = host; root.hidden = false;
     if (ready) { if (stale || lastRO !== !!D.readOnly) { stale = false; lastRO = !!D.readOnly; reload(); } else if (!view.childNodes.length) renderView(); return; }
     if (loading || root.dataset.init) return;
     root.dataset.init = '1'; lastRO = !!D.readOnly;
-    root.id = 'listmode'; root.style.visibility = 'hidden';
+    root.id = 'listmode';
     const st = document.createElement('style'); st.textContent = BASE_CSS; document.head.append(st);
-    root.innerHTML = '<datalist id="worklogCaseList"></datalist><section id="view-worklog" class="mx-auto max-w-2xl"></section>';
-    view = byId('view-worklog');
+    root.innerHTML = '<p class="wl-loading">載入中…</p><datalist id="worklogCaseList"></datalist><section id="view-worklog" class="mx-auto max-w-2xl" hidden></section>';
+    view = byId('view-worklog'); // 樣式（Tailwind CDN）與資料都到齊前先秀「載入中…」，免得手機網路慢時按了切換只看到一片空白
     ensureTailwind(() => { renderView(); setTimeout(firstLoad, 120); }, () => { root.dataset.init = ''; root.hidden = true; if (D.onFail) D.onFail(); });
   }
   async function reload() { // 切換模式回來：格子那邊可能已經存過東西，重抓目前這天
