@@ -501,7 +501,63 @@ const App = () => {
             const empObj = allEmployees.find(e => e.name === empName);
             setSaving(s => ({...s, [dutyKey]: true}));
             try {
-                if (myDuties.length > 0) {
+                if (myDuties.length >= 2 && SC.isDutyV2Month(year, month)) {
+                    // 新制：一人一天多層（整棟 4 層／內勤 2 層）。舊流程只對「最後一筆」操作，連點會把那層刪掉，
+                    // 整棟沒掃最多只標得到 1 層（2026-10-29 審查發現）。改成一次處理這個人當天全部的層。
+                    const okDuties = myDuties.filter(d => !d.missed);
+                    const missedDuties = myDuties.filter(d => d.missed);
+                    const fl = (arr) => arr.map(d => d.floor || "值日").join("+");
+                    const opts = [];
+                    if (okDuties.length > 0) opts.push({ label: `${fl(okDuties)} 全部標記未掃（${okDuties.length} 層，罰 ${okDuties.length * SC.CLEANING_FEE.FLOOR_DUTY} 元）`, run: "markAll" });
+                    if (okDuties.length > 1) opts.push({ label: "只標其中一層未掃", run: "markOne" });
+                    if (missedDuties.length > 0) opts.push({ label: `取消未掃（${fl(missedDuties)} 恢復成已掃）`, run: "unmark" });
+                    opts.push({ label: `刪除這天 ${empName} 的值日（${fl(myDuties)}）`, run: "deleteAll" });
+                    const pickedIdx = await openActionSelect(`${empName} ${dateStr} 值日 ${fl(myDuties)}${missedDuties.length ? `（未掃：${fl(missedDuties)}）` : ""}，要做什麼？`, opts.map(o => o.label));
+                    const picked = pickedIdx ? opts[Number(pickedIdx) - 1].run : null;
+                    let targets = [];
+                    if (picked === "markAll") targets = okDuties;
+                    else if (picked === "markOne") {
+                        const fIdx = await openActionSelect(`${empName} ${dateStr} 哪一層沒掃？`, okDuties.map(d => d.floor || "值日"));
+                        targets = fIdx ? [okDuties[Number(fIdx) - 1]] : [];
+                    }
+                    if (picked === "markAll" || picked === "markOne") {
+                        for (const d of targets) {
+                            await SC.proxyFetch(`updateLeave/${d.ragicId}`, {
+                                method: "POST",
+                                headers: {"Content-Type":"application/json"},
+                                body: JSON.stringify({ [CONFIG.F_LEAVE.IS_AUTO]: "未掃" })
+                            });
+                        }
+                        const ids = new Set(targets.map(d => d.ragicId));
+                        if (ids.size) {
+                            setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).map(x => ids.has(x.ragicId) ? {...x, missed: true} : x)}));
+                            showToast(`${empName} ${dateStr} ${fl(targets)} 標記未掃 ❌`);
+                        }
+                    } else if (picked === "unmark") {
+                        // 恢復成已掃：IS_AUTO 寫 "No"（手動紀錄，一鍵預排不會覆蓋；過去的日子本來就鎖定）
+                        for (const d of missedDuties) {
+                            await SC.proxyFetch(`updateLeave/${d.ragicId}`, {
+                                method: "POST",
+                                headers: {"Content-Type":"application/json"},
+                                body: JSON.stringify({ [CONFIG.F_LEAVE.IS_AUTO]: "No" })
+                            });
+                        }
+                        const ids = new Set(missedDuties.map(d => d.ragicId));
+                        setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).map(x => ids.has(x.ragicId) ? {...x, missed: false, isAuto: "No"} : x)}));
+                        showToast(`${empName} ${dateStr} ${fl(missedDuties)} 已恢復成已掃`);
+                    } else if (picked === "deleteAll") {
+                        const okDel = await openConfirm(`確定刪除 ${empName} ${dateStr} 的值日（${fl(myDuties)}）？`);
+                        if (okDel) {
+                            for (const d of myDuties) {
+                                await SC.proxyFetch(`deleteLeave/${d.ragicId}`, { method: "DELETE" });
+                                if (d.floor && empObj) empObj.fc[d.floor] = Math.max(0, (empObj.fc[d.floor]||0) - 1);
+                            }
+                            const ids = new Set(myDuties.map(d => d.ragicId));
+                            setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => !ids.has(x.ragicId))}));
+                            showToast(`${empName} ${dateStr} 值日已刪除`);
+                        }
+                    }
+                } else if (myDuties.length > 0) {
                     // 同人多層：檢查是否還有空樓層可加
                     const myFloors = myDuties.map(d => d.floor);
                     const usedFloors = current.map(d => d.floor);
@@ -1529,7 +1585,8 @@ const App = () => {
     };
 
     const handleAutoZhiban = async () => {
-        const okAutoZhiban = await openConfirm(`確定要自動預排 ${year} 年 ${month} 月的值班？\n每天 1 人（承攬滿 3 個月），本月所有值班紀錄會被清除重排。`);
+        const zLockToday = SC.todayStr(); // 今天以前（含今天）的值班鎖定不動（含「未值班」罰款標記），只重排明天起（2026-10-29）
+        const okAutoZhiban = await openConfirm(`確定要自動預排 ${year} 年 ${month} 月的值班？\n每天 1 人（承攬滿 3 個月）。今天以前（含今天）的值班不動，明天起的值班會清除重排。`);
         if (!okAutoZhiban) return;
         setAutoZhiban(true);
         try {
@@ -1562,7 +1619,20 @@ const App = () => {
                     const date = f[CONFIG.F_LEAVE.DATE] || "";
                     if (type !== "值班") return false;
                     const p = date.replace(/\//g,"-").split("-");
+                    if (SC.isDutyLocked(SC.fmtDate(+p[0], +p[1], +p[2]), zLockToday)) return false; // 已過的日子鎖定
                     return parseInt(p[0]) === year && parseInt(p[1]) === month;
+                });
+            // 鎖定日子的既有值班：照算本月值班次數、倒垃圾次數，並當作「前一天的人」避免連排
+            const zLocked = {};
+            Object.entries(allLeaveJson)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([, f]) => {
+                    if ((f[CONFIG.F_LEAVE.TYPE] || "") !== "值班") return;
+                    const p = (f[CONFIG.F_LEAVE.DATE] || "").split("/").map(Number);
+                    if (p[0] !== year || p[1] !== month) return;
+                    const ds = SC.fmtDate(p[0], p[1], p[2]);
+                    if (!SC.isDutyLocked(ds, zLockToday)) return;
+                    zLocked[ds] = { name: f[CONFIG.F_LEAVE.EMP] || "", missed: (f[CONFIG.F_LEAVE.IS_AUTO] || "") === "未值班" };
                 });
 
             // ── 二次確認（技術債修復 2026-07-26）：顯示實際即將刪除的筆數/月份/人數，並在真的動手前自動匯出 JSON 快照 ──
@@ -1611,6 +1681,15 @@ const App = () => {
                 const mm = String(month).padStart(2,"0");
                 const dd = String(day).padStart(2,"0");
                 const dateStr = `${year}/${mm}/${dd}`;
+                if (SC.isDutyLocked(dateStr, zLockToday)) {
+                    const lk = zLocked[dateStr];
+                    if (lk && lk.name) {
+                        zCount[lk.name] = (zCount[lk.name] || 0) + 1;
+                        if (zIsV2 && !lk.missed && SC.isTrashCollectionDay(year, month, day)) zTrash[lk.name] = (zTrash[lk.name] || 0) + 1;
+                    }
+                    lastPick = lk ? lk.name : "";
+                    continue;
+                }
                 const onLeave = new Set();
                 Object.entries(leaves).forEach(([k, arr]) => {
                     if (!k.endsWith("|" + dateStr)) return;

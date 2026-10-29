@@ -247,6 +247,25 @@ test("當天排休/請假的人跳過", async () => {
     }
 });
 
+test("內勤日只剩不到 2 位內勤可排：改給一位業務整棟，同一天不會排成兩個人（8 筆）", async () => {
+    // 2026-10-29 審查發現：該天同時進 bizDays 與 fallbackBiz，被排兩次
+    for (const off of [4, 5]) {
+        const leaves = {};
+        for (let d = 2; d <= 30; d++) {
+            const date = ds(2026, 11, d);
+            OFFICE.slice(0, off).forEach(n => { if (d % 3 === 0) (leaves[`${n}|${date}`] ||= []).push({ ragicId: "x", type: "排休", isAuto: "" }); });
+        }
+        for (let k = 0; k < REPEAT * 5; k++) {
+            const { log } = await run({ todayStr: "2026/10/29", leaves });
+            const days = byDay(log.created);
+            for (let d = 1; d <= 30; d++) {
+                const w = days[ds(2026, 11, d)] || {};
+                assert.deepEqual(Object.values(w).flat().sort(), ["1F", "2F", "3F", "4F"], `11/${d} 內勤請假 ${off} 人：${JSON.stringify(w)}`);
+            }
+        }
+    }
+});
+
 test("今天以前（含今天）鎖定：不刪不寫；已存在的紀錄計入，明天起才排", async () => {
     const records = {};
     let id = 1;
