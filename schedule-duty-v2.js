@@ -13,6 +13,32 @@
 SC.dutyV2Kind = (emp) =>
     emp.hire === "兼職" ? "parttime" : (SC.OFFICE_DUTY_NAMES.includes(emp.name) ? "office" : "biz");
 
+// 倒一次垃圾算幾層（2026-10-29 瓊安拍板：算 1 層；理由：罰款 300 > 一層 200，且算 1 層時業務與內勤每月負擔約同為 5.6 層）
+SC.DUTY_V2_TRASH_FLOORS = 1;
+
+/**
+ * 上月每人「負擔分數」，單位＝層：每掃一層算 1；新制月份值班當天倒垃圾（清潔隊有收的日子、非「未值班」）算 SC.DUTY_V2_TRASH_FLOORS。
+ * 未掃不計。舊制月份值班不倒垃圾、不算分；舊制的清運紀錄本身是一筆值日，算 1。
+ */
+SC.dutyV2PrevPoints = (records, prevYear, prevMonth) => {
+    const out = {};
+    const v2 = SC.isDutyV2Month(prevYear, prevMonth);
+    Object.entries(records)
+        .filter(([k, v]) => v && typeof v === "object" && !k.startsWith("_"))
+        .forEach(([, f]) => {
+            const type = f[SC.F_LEAVE.TYPE] || "";
+            const isAuto = f[SC.F_LEAVE.IS_AUTO] || "";
+            const date = f[SC.F_LEAVE.DATE] || "";
+            const emp = f[SC.F_LEAVE.EMP] || "";
+            const p = date.split("/").map(Number);
+            if (!date || !emp || p[0] !== prevYear || p[1] !== prevMonth) return;
+            if (type === "值日" && isAuto !== "未掃") out[emp] = (out[emp] || 0) + 1;
+            else if (type === "值班" && v2 && isAuto !== "未值班" && SC.isTrashCollectionDay(p[0], p[1], p[2]))
+                out[emp] = (out[emp] || 0) + SC.DUTY_V2_TRASH_FLOORS;
+        });
+    return out;
+};
+
 /**
  * 上月每人「打掃天數」（同人同日多筆算一天；未掃不計；舊制的清運算一次）。
  * 新制一人一天 4 筆，不能直接數筆數。
@@ -46,7 +72,7 @@ SC.dutyV2PrevDayCounts = (records, prevYear, prevMonth) => {
  * @param {Object} o.zhibanByDate      {dateStr: name} 值班（只用來「盡量不要同一人當天值班又打掃」）
  * @param {Object} o.noRest            {dateStr: ...} 禁休日（全員打掃，不排）
  * @param {Object} o.fixedByDate       {dateStr: [{empName, floor}]} 已存在、不能動的值日（今天以前鎖定 + 手動）
- * @param {Object} o.prevDayCounts     上月每人打掃天數（SC.dutyV2PrevDayCounts）
+ * @param {Object} o.prevDayCounts     上月每人負擔分數（層，SC.dutyV2PrevPoints；倒垃圾算 1 層）。只在同組內比較，決定這個月誰先排
  * @param {Function} [o.rand]          亂數（測試可傳固定種子）
  * @returns {{duties:Object, dayKinds:Object, counts:Object, warnings:string[]}}
  */

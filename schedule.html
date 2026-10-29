@@ -1435,7 +1435,7 @@ const App = () => {
                     year, month, todayStr: lockTodayStr,
                     people: allEmployees.map(e => ({ name: e.name, hire: e.hire, useAvg: avgTargets.includes(e.name) })),
                     offByDate, zhibanByDate, noRest, fixedByDate: manualByDate,
-                    prevDayCounts: SC.dutyV2PrevDayCounts(allLeaveForDuty, prevYear, prevMonth),
+                    prevDayCounts: SC.dutyV2PrevPoints(allLeaveForDuty, prevYear, prevMonth), // 上月負擔分數：每層 1、倒垃圾 1 層
                 });
                 Object.assign(newDuties, plan.duties);
                 planWarnings = plan.warnings;
@@ -1847,7 +1847,7 @@ const App = () => {
     };
 
     const getStats = (empName) => {
-        let paixiu = 0, texiu = 0, qingjia = 0, zhiban = 0, zhibanMissed = 0, f1 = 0, f2 = 0, f3 = 0, f4 = 0, dutyOther = 0, govRestDays = 0;
+        let trash = 0, paixiu = 0, texiu = 0, qingjia = 0, zhiban = 0, zhibanMissed = 0, f1 = 0, f2 = 0, f3 = 0, f4 = 0, dutyOther = 0, govRestDays = 0;
         Object.entries(leaves).forEach(([k, arr]) => {
             if (!k.startsWith(empName + "|") || !Array.isArray(arr)) return;
             arr.forEach(v => {
@@ -1855,7 +1855,11 @@ const App = () => {
                 else if (v.type === "特休") texiu++;
                 else if (v.type === "值班") {
                     if (v.isAuto === "未值班") zhibanMissed++;
-                    else zhiban++;
+                    else {
+                        zhiban++;
+                        const day = Number(k.split("|")[1].split("/")[2]);
+                        if (SC.isDutyV2Month(year, month) && SC.isTrashCollectionDay(year, month, day)) trash++; // 新制：值班的人倒垃圾
+                    }
                 }
                 // 新制真實紀錄，獨立計數，不算進請假；標記「已取消」的那天是上班日，不計入休假
                 else if (v.type === "見紅休") { if (v.isAuto !== GOV_REST_CANCELLED) govRestDays++; }
@@ -1888,7 +1892,9 @@ const App = () => {
             }
         }
         const totalRest = paixiu + texiu + qingjia + govRestDays;
-        return { paixiu, texiu, qingjia, zhiban, zhibanMissed, f1, f2, f3, f4, dutyOther, missed, govRestDays, totalRest };
+        const floorsDone = f1 + f2 + f3 + f4 + dutyOther;
+        const points = floorsDone + trash * SC.DUTY_V2_TRASH_FLOORS; // 新制負擔分數（層）：每掃一層 1、倒一次垃圾 1 層
+        return { paixiu, texiu, qingjia, zhiban, zhibanMissed, f1, f2, f3, f4, dutyOther, missed, govRestDays, totalRest, trash, floorsDone, points };
     };
 
     const pct = progress && progress.total > 0 ? Math.round(progress.current / progress.total * 100) : null;
@@ -2359,6 +2365,9 @@ const App = () => {
                                                 {(s.f1 + s.f2 + s.f3 + s.f4 + s.dutyOther) > 0 && <span className="text-blue-600"> {s.f1 + s.f2 + s.f3 + s.f4 + s.dutyOther}值</span>}
                                                 {s.missed > 0 && <span className="text-red-500"> {s.missed}未掃</span>}
                                             </div>
+                                            {SC.isDutyV2Month(year, month) && s.points > 0 && (
+                                                <div className="text-purple-700 font-medium" title={`負擔分數：打掃 ${s.floorsDone} 層＋倒垃圾 ${s.trash} 次（每次算 ${SC.DUTY_V2_TRASH_FLOORS} 層）`}>{s.points}層</div>
+                                            )}
                                             {s.paixiu === 0 && s.texiu === 0 && s.qingjia === 0 && s.zhiban === 0 && s.zhibanMissed === 0 && s.f1 === 0 && s.f2 === 0 && s.f3 === 0 && s.f4 === 0 && s.dutyOther === 0 && s.missed === 0 && <span className="text-gray-300">-</span>}
                                         </td>
                                     );
