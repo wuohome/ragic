@@ -1081,7 +1081,7 @@ function dt(v) { return v ? String(v).replace(/-/g,'/') : ''; }
 async function submit() {
   const btn = document.getElementById('btnNext');
   btn.disabled = true;
-  btn.textContent = '送出中，請不要關掉頁面…';
+  btn.textContent = '送出中，請稍候…';
   showSubmitErr('');
   const fail = (msg) => {
     flash(msg);
