@@ -12,8 +12,8 @@ Before changing schedule behavior, read these Obsidian PRDs on Joan's Windows ma
 
 ## Scheduling rule guardrails
 
-- 4F is Friday-only. Non-Friday days should expect only 1F/2F/3F.
-- Trash duty (`全棟垃圾清運`) is separate from floor duty and avoids Wednesday/Sunday.
+- **Months before 2026/11 (old rules)**: 4F is Friday-only (non-Friday days expect only 1F/2F/3F); trash duty (`全棟垃圾清運`) is a separate record that avoids Wednesday/Sunday.
+- **2026/11 onward (`SC.isDutyV2Month`)**: whole building 1F-4F every day; 業務/兼職 one person sweeps all four floors (4 records, same person); 內勤 five people work in pairs (1F+4F / 2F+3F, weekdays only); 兼職 once a month on weekends (`SC.PARTTIME_DUTY_FIRST_DATE`, exclusions in `SC.PARTTIME_DUTY_EXCLUDE`); the 值班 person takes out the trash (no standalone trash records, shown as 🗑️ on the 值班 cell). Algorithm: `schedule-duty-v2.js`; tests: `node tests/duty-v2.test.mjs`. Spec: 排班表_規格書 § 2026-11 新制.
 - Manual changes must not be overwritten by auto-scheduling.
 - Existing Ragic fields are overloaded: `1002026 部門` is also used for source labels, `1000967 備註` stores floor/trash/reason, and `1000966 是否計入8天` also stores missed states. Treat this as technical debt, not a clean schema.
 
