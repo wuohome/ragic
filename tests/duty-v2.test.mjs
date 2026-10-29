@@ -23,6 +23,7 @@ const trashNote = (n) => ["清運", "垃圾", "全棟", "全樓", "倒垃圾"].s
 const OFFICE = ["張瓊安", "韓珊珊", "沈郁雯", "呂鴻墀", "王芳瑜"];
 const BIZ = ["詹張傳", "張忠豪", "蕭頤臻", "劉子碩", "吳惠慈", "林宣佑", "吳炫儒", "方鼎文", "關宗宇", "李卓威", "葉恩廷", "白欣宜", "黃帟潔"];
 const PART = ["林佳燕", "鐘晟鈺", "李維", "張玉慧", "陳勁豪", "賴信杰", "張嗣祥", "劉兆傑", "楊書銘"];
+const SC_cmp = (a, b) => a.replace(/\//g, "").localeCompare(b.replace(/\//g, ""));
 const EXCLUDED = ["高晶晶", "謝佳芬", "曾正煌"];
 const mkEmp = (name, hire, i) => ({ name, ragicId: String(100 + i), hire, hireDate: "2025/01/01", birthday: "", fc: { "1F": 3, "2F": 3, "3F": 3, "4F": 1 } });
 const mkEmployees = () => [
@@ -32,7 +33,7 @@ const mkEmployees = () => [
     ...EXCLUDED.map((n, i) => mkEmp(n, "兼職", 50 + i)), // 即使被塞進池子也不可排
 ];
 
-const run = async ({ todayStr, year = 2026, month = 11, records = {}, leaves = {}, noRest = {}, tweak, rand }) => {
+const run = async ({ todayStr, year = 2026, month = 11, records = {}, leaves = {}, noRest = {}, tweak, rand, extraEmps = [] }) => {
     const log = { deleted: [], created: [], confirms: [], alerts: [], toasts: [] };
     const ctx = { console: { log() {}, error: (e) => { if (process.env.DBG) console.error(e); } }, Math, Date, Object, Set, Array, String, JSON, parseInt, Promise, setTimeout, Error };
     vm.createContext(ctx);
@@ -48,7 +49,7 @@ const run = async ({ todayStr, year = 2026, month = 11, records = {}, leaves = {
     };
     const deps = {
         SC, CONFIG: { F_EMP: SC.F_EMP, F_LEAVE: SC.F_LEAVE },
-        employees: mkEmployees(), allEmployees: mkEmployees().filter(e => SC.isDutyV2Month(year, month) || e.hire !== "兼職"), leaves, // 舊制月份兼職不進池（同 schedule.html load()）
+        employees: [...mkEmployees(), ...extraEmps], allEmployees: [...mkEmployees(), ...extraEmps].filter(e => SC.isDutyV2Month(year, month) || e.hire !== "兼職"), leaves, // 舊制月份兼職不進池（同 schedule.html load()）
         duties: {}, noRest,
         year, month, GOV_REST_EMPLOYEES: new Set(SC.GOV_REST_NAMES), GOV_REST_CANCELLED: SC.GOV_REST_CANCELLED,
         openConfirm: async (msg) => { log.confirms.push(msg); return true; },
@@ -202,6 +203,15 @@ test("兼職起排日是參數：改成 11/1 就能排 11/1；改成 11/14 則 1
     ({ log } = await run({ todayStr: "2026/10/29", tweak: (SC) => { SC.PARTTIME_DUTY_FIRST_DATE = "2026/11/14"; } }));
     days = byDay(log.created);
     for (let d = 1; d <= 13; d++) assert.ok(!Object.keys(days[ds(2026, 11, d)]).some(n => PART.includes(n)), `11/${d} 不該有兼職`);
+});
+
+test("到職日以前不排值日（11/3 到職的新人 11/1、11/2 不排）", async () => {
+    for (let k = 0; k < REPEAT; k++) {
+        const newbie = { ...mkEmp("新到職", "正職", 70), hireDate: "2026/11/03" };
+        const { log } = await run({ todayStr: "2026/10/29", extraEmps: [newbie] });
+        const bad = log.created.filter(r => r[F.EMP] === "新到職" && SC_cmp(r[F.DATE], "2026/11/03") < 0);
+        assert.equal(bad.length, 0, "到職前被排：" + bad.map(r => r[F.DATE]).join(","));
+    }
 });
 
 test("高晶晶、謝佳芬、曾正煌（排除名單）一次都不排", async () => {
