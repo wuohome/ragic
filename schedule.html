@@ -47,6 +47,7 @@
 <body>
 <div id="root"></div>
 <script src="schedule-common.js"></script>
+<script src="schedule-duty-v2.js"></script>
 <script type="text/babel">
 
 const CONFIG = {
@@ -337,7 +338,11 @@ const App = () => {
                     };
                 })
                 .filter(e => e.status === "在職" && e.dept !== "經營階層");
-            setAllEmployees(allEmps.filter(e => e.hire !== "兼職").sort((a,b) => a.dept.localeCompare(b.dept) || a.hireDate.localeCompare(b.hireDate)));
+            // 2026/11 新制：在職兼職也進值日人員池（每月一次、排六日），並在排班表多一個「兼職」欄組讓珊珊看得到、點得到；
+            // 排除名單 SC.PARTTIME_DUTY_EXCLUDE（高晶晶、謝佳芬）不進。舊月份行為不變。
+            const dutyV2Month = SC.isDutyV2Month(year, month);
+            const isDutyPartTime = (e) => dutyV2Month && e.hire === "兼職" && !SC.PARTTIME_DUTY_EXCLUDE.includes(e.name);
+            setAllEmployees(allEmps.filter(e => e.hire !== "兼職" || isDutyPartTime(e)).sort((a,b) => a.dept.localeCompare(b.dept) || a.hireDate.localeCompare(b.hireDate)));
 
             // 排休用：只有承攬 + 韓珊珊 + 設計部 + 行銷部 + 瓊安 + 社宅部
             const getDeptOrder = (dept) => {
@@ -346,11 +351,12 @@ const App = () => {
                 if (dept === "行銷部") return 2;
                 if (dept === "租賃部") return 3;
                 if (dept === "社宅部") return 4;
+                if (dept === "兼職") return 9; // 2026/11 起兼職欄組放最後
                 return 5;
             };
             const emps = allEmps
-                .filter(e => e.hire === "承攬" || e.name === "韓珊珊" || e.dept === "設計部" || e.dept === "行銷部" || e.name === "張瓊安" || e.dept === "社宅部")
-                .map(e => e.name === "韓珊珊" ? {...e, dept: "管理部/秘書"} : e.name === "張瓊安" ? {...e, dept: "管理部/特助"} : e)
+                .filter(e => e.hire === "承攬" || e.name === "韓珊珊" || e.dept === "設計部" || e.dept === "行銷部" || e.name === "張瓊安" || e.dept === "社宅部" || isDutyPartTime(e))
+                .map(e => isDutyPartTime(e) ? {...e, dept: "兼職"} : e.name === "韓珊珊" ? {...e, dept: "管理部/秘書"} : e.name === "張瓊安" ? {...e, dept: "管理部/特助"} : e)
                 .sort((a,b) => getDeptOrder(a.dept) - getDeptOrder(b.dept) || a.hireDate.localeCompare(b.hireDate));
             setEmployees(emps);
             console.log("生日資料:", emps.map(e => e.name + ":" + (e.birthday || "無")).join(", "));
@@ -921,6 +927,7 @@ const App = () => {
     };
 
     const handleAutoSchedule = async () => {
+        const isV2 = SC.isDutyV2Month(year, month); // 2026/11 起新制（整棟 1F–4F、業務兼職一人掃整棟、內勤兩人一組、值班倒垃圾），見 schedule-duty-v2.js
         if (employees.length === 0) { showToast("尚未載入員工資料", false); return; }
         // 過去鎖定（2026-10-06）：今天以前（含今天）的值日一律不動，見 SC.isDutyLocked
         const lockTodayStr = SC.todayStr();
@@ -933,7 +940,9 @@ const App = () => {
         const lockNote = SC.isDutyLocked(monthFirstStr, lockTodayStr)
             ? `今天以前（含今天 ${lockTodayStr.slice(5)}）的值日都不會動，只重排明天起的日子。已經掃過的次數會算進去，掃比較多的人之後會少排一點。`
             : `這個月還沒開始，會重排整個月。`;
-        const okAutoDuty = await openConfirm(`確定要自動預排 ${year} 年 ${month} 月的值日生？\n\n${lockNote}\n\n每天 3 位（1F/2F/3F），週五加排 4F。清運（🗑️）已經有人的日子不動，沒人的日子會自動補（週三、週日不排，六日只排承攬同仁，當天休假的人跳過，內勤五位不排清運，次數少的人優先）。你手動排的值日會保留。`);
+        const okAutoDuty = await openConfirm(isV2
+            ? `確定要自動預排 ${year} 年 ${month} 月的值日生？\n\n${lockNote}\n\n【新制】每天掃整棟 1F–4F：業務、兼職一個人掃整棟（兼職每月一次、排六日，${SC.PARTTIME_DUTY_FIRST_DATE.slice(5)} 起）；內勤兩人一組，一人 1F+4F、一人 2F+3F，只排平日。倒垃圾由當天值班的人負責，不另外排清運。你手動排的值日會保留。`
+            : `確定要自動預排 ${year} 年 ${month} 月的值日生？\n\n${lockNote}\n\n每天 3 位（1F/2F/3F），週五加排 4F。清運（🗑️）已經有人的日子不動，沒人的日子會自動補（週三、週日不排，六日只排承攬同仁，當天休假的人跳過，內勤五位不排清運，次數少的人優先）。你手動排的值日會保留。`);
         if (!okAutoDuty) return;
 
         setAutoScheduling(true);
@@ -1040,6 +1049,11 @@ const App = () => {
                     const noteRaw = f[CONFIG.F_LEAVE.NOTE] || "";
                     // 清運值日（🗑️）既有紀錄一律保留不刪（不管來源是手動還是先前自動預排），並記下當天清運的人；
                     // 沒有紀錄的日子改由下面新增的清運自動補位邏輯處理（2026-08-02 新增，見 newTrashDuties）
+                    if (isV2 && SC.isTrashDuty(noteRaw) && dept === "系統預排" && isAuto !== "No" && isAuto !== "未掃" && !SC.isDutyLocked(date, lockTodayStr)) {
+                        // 新制不再另排清運（值班的人倒垃圾）：先前系統預排、尚未到的日子的清運紀錄一併清掉；手動排的、已標未掃的、今天以前的不動
+                        toDelete.push([id, f]);
+                        return;
+                    }
                     if (SC.isTrashDuty(noteRaw)) {
                         const tEmp = f[CONFIG.F_LEAVE.EMP] || "";
                         if (!trashByDate[date]) trashByDate[date] = [];
@@ -1208,14 +1222,14 @@ const App = () => {
             // 預算夫妻的值班值日天數：值班那天夫妻會一起掃地，先算進 countMap
             // 這樣 Plan A/B 在其他天就會少排他們，總次數跟大家一樣
             const coupleZhibanDays = Object.values(zhibanByDate).filter(emp => coupleSet.has(emp)).length;
-            if (coupleZhibanDays > 0) {
+            if (!isV2 && coupleZhibanDays > 0) {
                 for (const name of coupleSet) {
                     countMap[name] = (countMap[name] || 0) + coupleZhibanDays;
                 }
                 console.log("夫妻值班值日預算:", coupleZhibanDays, "天，countMap 各 +", coupleZhibanDays);
             }
 
-            for (let day = 1; day <= daysInMonth; day++) {
+            for (let day = 1; !isV2 && day <= daysInMonth; day++) { // 新制月份不走這個舊迴圈，改由下方 SC.planDutyV2
                 const mm = String(month).padStart(2,"0");
                 const dd = String(day).padStart(2,"0");
                 const dateStr = `${year}/${mm}/${dd}`;
@@ -1404,6 +1418,30 @@ const App = () => {
                 newDuties[dateStr] = assignments;
             }
 
+            // ══ 2026/11 新制：整棟 1F–4F，演算法在 schedule-duty-v2.js（純函式，可離線試排）══
+            let planWarnings = [];
+            if (isV2) {
+                const offByDate = {};
+                Object.entries(leaves).forEach(([k, arr]) => {
+                    if (!Array.isArray(arr)) return;
+                    const [nm, ds] = k.split("|");
+                    if (arr.some(e => e.type !== "值班" && !(e.type === "見紅休" && e.isAuto === SC.GOV_REST_CANCELLED))) (offByDate[ds] ||= new Set()).add(nm);
+                });
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const ds = SC.fmtDate(year, month, day);
+                    allEmployees.forEach(e => { if (SC.isBirthday(e, month, day)) (offByDate[ds] ||= new Set()).add(e.name); });
+                }
+                const plan = SC.planDutyV2({
+                    year, month, todayStr: lockTodayStr,
+                    people: allEmployees.map(e => ({ name: e.name, hire: e.hire, useAvg: avgTargets.includes(e.name) })),
+                    offByDate, zhibanByDate, noRest, fixedByDate: manualByDate,
+                    prevDayCounts: SC.dutyV2PrevDayCounts(allLeaveForDuty, prevYear, prevMonth),
+                });
+                Object.assign(newDuties, plan.duties);
+                planWarnings = plan.warnings;
+                console.log("新制排班人天數:", JSON.stringify(plan.counts), "警告:", planWarnings.join("；") || "無");
+            }
+
             // === DEBUG: 排班結果統計 ===
             const dutyCounts = {};
             Object.values(newDuties).forEach(arr => arr.forEach(a => {
@@ -1478,7 +1516,10 @@ const App = () => {
             setAllEmployees(prev => prev.map(e => changedEmps.has(e.name) ? {...e, fc: {...fcMap[e.name]}} : e));
             const totalRecords = Object.values(newDuties).reduce((s, a) => s + a.length, 0);
             const trashAddedCount = Object.keys(newTrashDuties).length;
-            showToast(`已完成自動預排 ${Object.keys(newDuties).length} 天，共 ${totalRecords} 筆（平日 3 樓、週五 4 樓）${trashAddedCount > 0 ? `；另新補清運值日 ${trashAddedCount} 筆` : ""}`);
+            showToast(isV2
+                ? `已完成自動預排 ${Object.keys(newDuties).length} 天，共 ${totalRecords} 筆（每天整棟 1F–4F）${planWarnings.length ? "；注意：" + planWarnings.join("；") : ""}`
+                : `已完成自動預排 ${Object.keys(newDuties).length} 天，共 ${totalRecords} 筆（平日 3 樓、週五 4 樓）${trashAddedCount > 0 ? `；另新補清運值日 ${trashAddedCount} 筆` : ""}`);
+            if (planWarnings.length) await openAlert("預排完成，但有幾件事要看一下：\n\n" + planWarnings.join("\n"));
         } catch(e) {
             console.error(e);
             showToast("自動預排失敗: " + e.message, false);
@@ -1919,8 +1960,8 @@ const App = () => {
                                         <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-green-100 text-green-700">排休</span></td><td>月休（計入 {SC.monthLeaveLimit(year, month)} 天上限{SC.monthLeaveLimit(year, month) === 9 ? "，三節月 +1" : ""}）</td></tr>
                                         <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-yellow-100 text-yellow-700">特休</span></td><td>特別休假</td></tr>
                                         <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-red-100 text-red-700">請假</span></td><td>事假/病假</td></tr>
-                                        <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-orange-100 text-orange-700">值班</span></td><td>19:00-20:00 多留 1 小時</td></tr>
-                                        <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-blue-100 text-blue-700">值日</span></td><td>打掃（1F/2F/3F 每天各 1 人，4F 只在週五）</td></tr>
+                                        <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-orange-100 text-orange-700">值班</span></td><td>{SC.isDutyV2Month(year, month) ? "19:00-20:00 多留 1 小時，並負責倒垃圾 🗑️" : "19:00-20:00 多留 1 小時"}</td></tr>
+                                        <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-blue-100 text-blue-700">值日</span></td><td>{SC.isDutyV2Month(year, month) ? "打掃（整棟 1F–4F 每天；業務/兼職一人掃整棟，內勤兩人一組）" : "打掃（1F/2F/3F 每天各 1 人，4F 只在週五）"}</td></tr>
                                         <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-gray-100 text-gray-500">休假</span></td><td>見紅休（{SC.GOV_REST_NAMES.join("、")}，週末/國定假日{SC.isPrescheduledRestMonth(year, month) ? "，月初一鍵預排，可自由編輯（不計入月休上限）" : "自動標記，不可編輯"}）</td></tr>
                                     </tbody>
                                 </table>
@@ -1950,6 +1991,22 @@ const App = () => {
                                 </ul>
                             </div>
                             <hr className="border-gray-200" />
+                            {SC.isDutyV2Month(year, month) ? (
+                            <div>
+                                <h3 className="font-bold text-base mb-1">🧹 一鍵預排值日生（2026/11 新制）</h3>
+                                <ul className="list-disc pl-4 space-y-1">
+                                    <li><b>每天掃整棟 1F–4F</b>（4F 也是每天）</li>
+                                    <li><b>業務、兼職：一個人一天掃整棟</b>（表上會看到同一個人 1F+2F+3F+4F）</li>
+                                    <li><b>內勤五位兩人一組</b>：一人 1F+4F、一人 2F+3F，搭檔和樓層每次輪替；只排平日，六日與國定假日不排</li>
+                                    <li><b>兼職每月一次</b>，由系統排在六日（{SC.PARTTIME_DUTY_FIRST_DATE.slice(5)} 起），六日不夠的排平日；不用值班、不用倒垃圾</li>
+                                    <li><b>倒垃圾歸當天值班的人</b>（值班格會標 🗑️；週三、週日清潔隊不收）。不再另外排清運</li>
+                                    <li>值班和打掃各排各的，互不綁定</li>
+                                    <li>次數平均：業務約每月 1 次整棟，剩下的平日由內勤兩人一組補；同一個人不連續兩天</li>
+                                    <li>今天以前（含今天）鎖定、手動排的保留、休假與見紅休的人跳過、禁休日全員打掃不排</li>
+                                    <li>罰款：沒掃每層 200（整棟 800）；沒倒垃圾 300（罰值班的人，標「未值班」）。只罰錢不補掃</li>
+                                </ul>
+                            </div>
+                            ) : (
                             <div>
                                 <h3 className="font-bold text-base mb-1">🧹 一鍵預排值日生</h3>
                                 <ul className="list-disc pl-4 space-y-1">
@@ -1975,6 +2032,7 @@ const App = () => {
                                     <p className="mt-1.5 text-blue-600">大家都是按上月打掃次數排的 — 次數少的這個月多排一點，次數多的少排一點，確保長期下來每個人差不多。每位員工名字下方的 🧹 數字就是上月打掃次數，可以對照確認。</p>
                                 </div>
                             </div>
+                            )}
                             <hr className="border-gray-200" />
                             <div>
                                 <h3 className="font-bold text-base mb-1">💑 夫妻同排（張忠豪 &amp; 蕭頤臻）</h3>
@@ -2017,7 +2075,8 @@ const App = () => {
                     {id:"請假", color:"bg-red-500", label:"請假"},
                     {id:"值班", color:"bg-orange-500", label:"值班"},
                     {id:"值日", color:"bg-blue-500", label:"值日生"},
-                    {id:"清運", color:"bg-slate-600", label:"清運🗑️"},
+                    // 2026/11 新制：倒垃圾歸值班的人，不再有獨立清運模式
+                    ...(SC.isDutyV2Month(year, month) ? [] : [{id:"清運", color:"bg-slate-600", label:"清運🗑️"}]),
                     // 見紅休手動模式：9 月起（新制）才顯示，8 月以前見紅休仍是即時計算、手動點無意義
                     ...(SC.isPrescheduledRestMonth(year, month) ? [{id:"見紅休", color:"bg-gray-500", label:"見紅休"}] : []),
                     {id:"禁休", color:"bg-rose-700", label:"禁休"},
@@ -2036,7 +2095,7 @@ const App = () => {
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#8b5cf6"}}></span> 2F</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#0891b2"}}></span> 3F</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#ea580c"}}></span> 4F</span>
-                <span className="flex items-center gap-1 text-sm">🗑️ 清運</span>
+                <span className="flex items-center gap-1 text-sm">{SC.isDutyV2Month(year, month) ? "🗑️ 值班倒垃圾" : "🗑️ 清運"}</span>
                 <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-gray-200 inline-block"></span> 見紅休</span>
                 <span className="flex items-center gap-1 text-sm">🚫 禁休</span>
                 {!IS_READONLY && <span className="ml-2 text-gray-400 text-sm">{mode === "禁休" ? "點左邊日期欄設定/取消禁休" : `點格子=${mode}，再點=清除`}</span>}
@@ -2114,15 +2173,15 @@ const App = () => {
                                         const slot = ["1F","2F","3F","4F"].includes(d.floor) ? d.floor : "_none";
                                         floorGroup[slot].push(d.empName);
                                     });
-                                    // 4 樓只在週五排：非週五不驗「缺 4F」；若非週五誤排 4F 才提示
-                                    const isFri = new Date(year, month-1, day).getDay() === 5;
-                                    const expectFloors = isFri ? ["1F","2F","3F","4F"] : ["1F","2F","3F"];
+                                    // 舊制 4 樓只在週五排；2026/11 起每天 1F–4F（SC.expectedDutyFloors 依月份判斷）
+                                    const expectFloors = SC.expectedDutyFloors(year, month, day);
+                                    const expect4F = expectFloors.includes("4F");
                                     expectFloors.forEach(f => {
                                         const n = floorGroup[f].length;
                                         if (n === 0) warnMsgs.push(`缺 ${f} 值日`);
                                         else if (n > 1) warnMsgs.push(`${f} 多排：${floorGroup[f].join("、")}`);
                                     });
-                                    if (!isFri && floorGroup["4F"].length > 0) warnMsgs.push(`4F 非週五不排：${floorGroup["4F"].join("、")}`);
+                                    if (!expect4F && floorGroup["4F"].length > 0) warnMsgs.push(`4F 非週五不排：${floorGroup["4F"].join("、")}`);
                                     if (floorGroup["_none"].length > 0) warnMsgs.push(`未註樓層：${floorGroup["_none"].join("、")}`);
                                     const zhibanEmps = [];
                                     Object.entries(leaves).forEach(([k, arr]) => {
@@ -2184,6 +2243,9 @@ const App = () => {
                                                 if (l.type === "值班") {
                                                     if (l.isAuto === "未值班") {
                                                         segments.push({ color: MISSED_BG, label: "值班", short: "班", missed: true });
+                                                    } else if (SC.isDutyV2Month(year, month) && SC.isTrashCollectionDay(year, month, day)) {
+                                                        // 新制：值班的人負責當天倒垃圾（週三/週日清潔隊不收，不標）
+                                                        segments.push({ color: "#f97316", label: "值班🗑️", short: "班🗑️", missed: false, title: "值班：留到 20:00 並倒垃圾" });
                                                     } else {
                                                         segments.push({ color: "#f97316", label: "值班", short: "班", missed: false });
                                                     }
@@ -2223,8 +2285,12 @@ const App = () => {
                                                 }).join(", ") + ")";
 
                                             // 文字：單段用 label，多段用 short，未做段同樣參與，字級隨段數縮
-                                            const label = nSeg === 0 ? "" : nSeg === 1 ? segments[0].label : segments.map(s => s.short).join("·");
-                                            const textSizeClass = nSeg >= 4 ? "text-[8px]" : nSeg >= 3 ? "text-[9px]" : nSeg === 2 ? "text-[10px]" : "text-xs";
+                                            // 2026/11 新制：一人掃整棟 = 同一人四筆 1F/2F/3F/4F，格子上合併顯示「整棟」（四色斜條仍保留）
+                                            const isWholeBuilding = SC.isDutyV2Month(year, month) && SC.FLOORS.every(f => myDuties.some(d => d.floor === f && !d.missed));
+                                            const label = nSeg === 0 ? "" : isWholeBuilding
+                                                ? [...segments.filter(sg => !SC.FLOORS.includes(sg.label)).map(sg => sg.short), "整棟"].join("·")
+                                                : nSeg === 1 ? segments[0].label : segments.map(s => s.short).join("·");
+                                            const textSizeClass = isWholeBuilding ? "text-[10px]" : nSeg >= 4 ? "text-[8px]" : nSeg >= 3 ? "text-[9px]" : nSeg === 2 ? "text-[10px]" : "text-xs";
                                             // 單段粉色未掃：文字改黑（蓋掉 text-white）
                                             const singleTextStyle = (nSeg === 1 && segments[0].color === "#ffb3c6") ? { color: "#000" } : {};
 
@@ -2278,7 +2344,7 @@ const App = () => {
                                             {(() => {
                                                 const monthLimit = SC.monthLeaveLimit(year, month);
                                                 const restShort = monthLimit - s.totalRest;
-                                                return restShort > 0
+                                                return restShort > 0 && emp.hire !== "兼職" // 兼職不吃月休上限（只為了打掃才出現在表上）
                                                     ? <div className="text-red-500 font-bold" title={`總休 ${s.totalRest} 天（排休${s.paixiu}+特休${s.texiu}+請假${s.qingjia}${s.govRestDays > 0 ? "+見紅休" + s.govRestDays : ""}），還差 ${restShort} 天（上限 ${monthLimit}${monthLimit === 9 ? "，三節月 +1" : ""}）`}>未休{restShort}天</div>
                                                     : null;
                                             })()}

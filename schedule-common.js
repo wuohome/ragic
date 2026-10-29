@@ -131,6 +131,21 @@ const SC = {
     // 同一週已經排過的人再排的加權（原本 5 等於一週最多一次，內勤只能排平日就永遠排不滿）
     DUTY_SAME_WEEK_PENALTY: 1,
 
+    // ══ 2026-11 新制打掃（Joan 2026-10-29 定案；規則見 排班表_規格書 § 2026-11 新制）══
+    // 此月份（含）起：每天打掃整棟 1F–4F（4F 每天）、業務/兼職一人掃整棟、內勤兩人一組（1F+4F／2F+3F）、
+    // 值班的人倒垃圾（不再另排清運）、兼職每月一次排六日。之前的月份行為完全不變。YYYY/MM 字串比較。
+    DUTY_V2_START: "2026/11",
+    // 內勤五人（新制「兩人一組分掃」的對象）。與 TRASH_DUTY_EXEMPT_NAMES / GOV_REST_NAMES 是三份各自獨立的名單，
+    // 剛好人員重疊但用途不同，人員異動各自逐一決定，不可互相引用。
+    OFFICE_DUTY_NAMES: ["張瓊安", "韓珊珊", "沈郁雯", "呂鴻墀", "王芳瑜"],
+    // 內勤兩人一組的樓層分法：一人 A 組、另一人 B 組，每次輪替
+    OFFICE_DUTY_SPLIT: { A: ["1F", "4F"], B: ["2F", "3F"] },
+    // 兼職排除名單（Joan 2026-10-29 決定剔除，但 Ragic 上仍是在職兼職、離職手續未辦）。辦完離職後可從這裡移除。
+    PARTTIME_DUTY_EXCLUDE: ["高晶晶", "謝佳芬"],
+    // 兼職最早起排日（通知期，Joan 2026-10-29：給大家時間調整，11 月第一個週末不排兼職）。
+    // 這天以前（不含）不排兼職；改排業務。換月份/調整通知期只改這個字串（YYYY/MM/DD）。
+    PARTTIME_DUTY_FIRST_DATE: "2026/11/07",
+
     // ── 星期 ──
     DAYS_TW: ["日", "一", "二", "三", "四", "五", "六"],
 };
@@ -209,8 +224,12 @@ SC.isBirthday = (emp, month, day) => {
 // ── 清運值日判斷（值日紀錄的備註含清運關鍵字 → 視為清運值日）──
 SC.isTrashDuty = (note) => SC.TRASH_DUTY_KEYWORDS.some(kw => (note || "").includes(kw));
 
-// ── 每日應排樓層：1F/2F/3F 每天；4F 只在週五 ──
+// ── 新制打掃月份判斷（2026/11 起）──
+SC.isDutyV2Month = (year, month) => `${year}/${String(month).padStart(2, "0")}` >= SC.DUTY_V2_START;
+
+// ── 每日應排樓層：舊制 1F/2F/3F 每天、4F 只在週五；2026/11 起整棟 1F–4F 每天 ──
 SC.expectedDutyFloors = (year, month, day) => {
+    if (SC.isDutyV2Month(year, month)) return ["1F", "3F", "2F", "4F"];
     const isFriday = new Date(year, month - 1, day).getDay() === 5;
     return isFriday ? ["1F", "3F", "2F", "4F"] : ["1F", "3F", "2F"];
 };
@@ -251,6 +270,7 @@ SC.FAIRNESS_CUTOVER_DATE = "2026/07/01";
 SC.FAIRNESS_HIST_START = "2026/03/30";
 
 // ── 環境清潔費金額（7/1 後新制，僅顯示計算用，不接真實扣款）──
+// FLOOR_DUTY 是「每層」金額：新制一人掃整棟 = 4 筆樓層紀錄，整棟沒掃 4×200=800、內勤兩層沒掃 400，不需另外乘算
 SC.CLEANING_FEE = { FLOOR_DUTY: 200, TRASH_DUTY: 300 };
 
 // 兩日期字串（YYYY/MM/DD）比較，a < b 回傳負值
@@ -385,7 +405,8 @@ SC.computeFairnessLedger = (employees, leaveRecords, todayStr) => {
 
         // ── 清運帳（避開週三/週日）──
         const dowForTrash = dow; // 0=日, 3=三
-        if (dowForTrash !== 0 && dowForTrash !== 3) {
+        // 2026/11 起清運不再另排（值班的人倒垃圾），清運帳不累積 expected，避免憑空產生欠帳
+        if (dowForTrash !== 0 && dowForTrash !== 3 && !SC.isDutyV2Month(y, m)) {
             const trashPool = employees.filter(e => {
                 if (offToday.has(e.name)) return false;
                 if (!noRestToday && SC.GOV_REST_NAMES.includes(e.name) && isHoliday) return false;
@@ -461,6 +482,17 @@ SC.computeCleaningFeePreview = (leaveRecords, todayStr) => {
             const note = f[SC.F_LEAVE.NOTE] || "";
             const emp = f[SC.F_LEAVE.EMP] || "";
             if (!date || !emp) return;
+            // 2026/11 新制：未倒垃圾 = 當天「值班」被標「未值班」，罰值班的人 300（週三/週日清潔隊不收，不罰）
+            if (type === "值班" && isAuto === "未值班") {
+                const dp = date.split("/").map(Number);
+                if (SC.isDutyV2Month(dp[0], dp[1]) && SC.isTrashCollectionDay(dp[0], dp[1], dp[2])
+                    && SC._cmpDateStr(date, todayStr) <= 0) {
+                    if (!out[emp]) out[emp] = { floorMissed: 0, trashMissed: 0, feeTotal: 0 };
+                    out[emp].trashMissed += 1;
+                    out[emp].feeTotal += SC.CLEANING_FEE.TRASH_DUTY;
+                }
+                return;
+            }
             if (type !== "值日") return;
             if (SC._cmpDateStr(date, SC.FAIRNESS_CUTOVER_DATE) < 0) return; // 7/1 前不追溯收費
             if (SC._cmpDateStr(date, todayStr) > 0) return; // 未來日期不計
