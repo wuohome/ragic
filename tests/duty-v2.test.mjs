@@ -22,8 +22,8 @@ const trashNote = (n) => ["清運", "垃圾", "全棟", "全樓", "倒垃圾"].s
 
 const OFFICE = ["張瓊安", "韓珊珊", "沈郁雯", "呂鴻墀", "王芳瑜"];
 const BIZ = ["詹張傳", "張忠豪", "蕭頤臻", "劉子碩", "吳惠慈", "林宣佑", "吳炫儒", "方鼎文", "關宗宇", "李卓威", "葉恩廷", "白欣宜", "黃帟潔"];
-const PART = ["林佳燕", "鐘晟鈺", "李維", "張玉慧", "曾正煌", "陳勁豪", "賴信杰", "張嗣祥", "劉兆傑", "楊書銘"];
-const EXCLUDED = ["高晶晶", "謝佳芬"];
+const PART = ["林佳燕", "鐘晟鈺", "李維", "張玉慧", "陳勁豪", "賴信杰", "張嗣祥", "劉兆傑", "楊書銘"];
+const EXCLUDED = ["高晶晶", "謝佳芬", "曾正煌"];
 const mkEmp = (name, hire, i) => ({ name, ragicId: String(100 + i), hire, hireDate: "2025/01/01", birthday: "", fc: { "1F": 3, "2F": 3, "3F": 3, "4F": 1 } });
 const mkEmployees = () => [
     ...OFFICE.map((n, i) => mkEmp(n, "正職", i)),
@@ -177,9 +177,9 @@ test("兼職每人剛好 1 次；11/7 以前不排；六日優先，六日不夠
             if ([0, 6].includes(dow(date))) weekendPart++; else weekdayPart++;
         }
         PART.forEach(n => assert.equal(cnt[n], 1, `${n} 排了 ${cnt[n]} 次`));
-        // 11/7 起六日共 8 天（7、8、14、15、21、22、28、29）→ 8 位排六日、2 位排平日
+        // 11/7 起六日共 8 天（7、8、14、15、21、22、28、29）→ 8 位排六日、其餘排平日
         assert.equal(weekendPart, 8, "六日兼職數：" + weekendPart);
-        assert.equal(weekdayPart, 2, "平日兼職數：" + weekdayPart);
+        assert.equal(weekdayPart, PART.length - 8, "平日兼職數：" + weekdayPart);
     }
 });
 
@@ -204,7 +204,7 @@ test("兼職起排日是參數：改成 11/1 就能排 11/1；改成 11/14 則 1
     for (let d = 1; d <= 13; d++) assert.ok(!Object.keys(days[ds(2026, 11, d)]).some(n => PART.includes(n)), `11/${d} 不該有兼職`);
 });
 
-test("高晶晶、謝佳芬（排除名單）一次都不排", async () => {
+test("高晶晶、謝佳芬、曾正煌（排除名單）一次都不排", async () => {
     for (let k = 0; k < REPEAT; k++) {
         const { log } = await run({ todayStr: "2026/10/29" });
         assert.equal(log.created.filter(r => EXCLUDED.includes(r[F.EMP])).length, 0);
