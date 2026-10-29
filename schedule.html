@@ -1866,6 +1866,9 @@ const App = () => {
                 SC.GOV_REST_NAMES.forEach(empName => {
                     const k = `${empName}|${dateStr}`;
                     if (existingKeys.has(k)) return; // 手動保留的紀錄已存在，不重複寫
+                    // 到職日以前不預排（2026-10-29 花那 11/3 到職）；查不到員工資料就照排
+                    const hd = ((allEmployees.find(e => e.name === empName) || {}).hireDate || "").split("/").map(Number);
+                    if (hd.length === 3 && hd[0] < 9999 && SC._cmpDateStr(dateStr, SC.fmtDate(hd[0], hd[1], hd[2])) < 0) return;
                     grBatchRecords.push({
                         [CONFIG.F_LEAVE.EMP]: empName,
                         [CONFIG.F_LEAVE.DATE]: dateStr,
