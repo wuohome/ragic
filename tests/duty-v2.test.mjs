@@ -339,6 +339,24 @@ test("負擔分數：每掃一層 1、新制值班倒垃圾算 1 層（週三/�
     assert.equal(SC.DUTY_V2_TRASH_FLOORS, 1);
 });
 
+test("值班排序：新制月份同次數時平均倒垃圾（模擬 11 月 13 人逐日排，倒垃圾次數差距 ≤ 1）；舊制只比次數", async () => {
+    const { SC } = await run({ todayStr: "2026/10/29" });
+    const ppl = BIZ.map(name => ({ name }));
+    const z = {}, t = {};
+    let last = "";
+    for (let d = 1; d <= 30; d++) {
+        const td = SC.isTrashCollectionDay(2026, 11, d);
+        const c = ppl.filter(p => p.name !== last).sort(SC.zhibanCompare(z, t, td, true))[0].name;
+        z[c] = (z[c] || 0) + 1; if (td) t[c] = (t[c] || 0) + 1; last = c;
+    }
+    const zs = BIZ.map(n => z[n] || 0), ts = BIZ.map(n => t[n] || 0);
+    assert.ok(Math.max(...zs) - Math.min(...zs) <= 1, "值班次數差距 " + zs.join(","));
+    assert.ok(Math.max(...ts) - Math.min(...ts) <= 1, "倒垃圾次數差距 " + ts.join(","));
+    assert.equal(ts.reduce((a, b) => a + b, 0), 21); // 11 月扣掉週三、週日共 21 天有垃圾車
+    // 舊制：只比值班次數，倒垃圾不影響
+    assert.equal(SC.zhibanCompare({ a: 1, b: 1 }, { a: 0, b: 5 }, true, false)({ name: "a" }, { name: "b" }), 0);
+});
+
 test("共用判斷：新制月份 expectedDutyFloors 每天 1F–4F；舊制月份 4F 仍只週五", async () => {
     const { SC } = await run({ todayStr: "2026/10/29" });
     for (let d = 1; d <= 30; d++) assert.equal(SC.expectedDutyFloors(2026, 11, d).length, 4);

@@ -1604,6 +1604,8 @@ const App = () => {
             const totalDays = new Date(year, month, 0).getDate();
 
             const newZhiban = {};
+            const zTrash = {}; // 新制：本月倒垃圾次數（值班落在有垃圾車的日子）
+            const zIsV2 = SC.isDutyV2Month(year, month);
             let lastPick = "";
             for (let day = 1; day <= totalDays; day++) {
                 const mm = String(month).padStart(2,"0");
@@ -1619,7 +1621,9 @@ const App = () => {
                 }
                 // 排序：本月次數少的優先（月內均勻），同分時保持原始順序（部門+年資）
                 // 跨月不追債：不用歷史次數影響排序
-                const sortFn = (a, b) => (zCount[a.name]||0) - (zCount[b.name]||0);
+                // 新制月份同分再平均倒垃圾次數（週三/週日沒垃圾車，見 SC.zhibanCompare）
+                const isTrashDayZ = SC.isTrashCollectionDay(year, month, day);
+                const sortFn = SC.zhibanCompare(zCount, zTrash, isTrashDayZ, zIsV2);
                 // 生日當天不排值班
                 const isBirthdayToday = (emp) => SC.isBirthday(emp, month, day);
                 const cands = eligible
@@ -1631,6 +1635,7 @@ const App = () => {
                     : eligible.map(e => ({ name: e.name })).sort(sortFn);
                 const chosen = final[0].name;
                 zCount[chosen] = (zCount[chosen] || 0) + 1;
+                if (zIsV2 && isTrashDayZ) zTrash[chosen] = (zTrash[chosen] || 0) + 1;
                 lastPick = chosen;
                 newZhiban[dateStr] = chosen;
             }

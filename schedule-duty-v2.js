@@ -40,6 +40,18 @@ SC.dutyV2PrevPoints = (records, prevYear, prevMonth) => {
 };
 
 /**
+ * 值班自動排的排序（新制月份）：先比本月值班次數（月內平均，原規則），同分再看倒垃圾——
+ * 有垃圾車的日子讓本月倒垃圾少的人先排；週三/週日（不收）讓倒垃圾多的人先排，把沒垃圾的班留給已經倒比較多的人。
+ * 避免有人值班剛好都落在週三/週日、倒垃圾 0 次而「欠層數」（2026-10-29 瓊安提出）。舊制月份只比值班次數。
+ */
+SC.zhibanCompare = (zCount, trashCount, isTrashDay, isV2) => (a, b) => {
+    const dz = (zCount[a.name] || 0) - (zCount[b.name] || 0);
+    if (dz !== 0 || !isV2) return dz;
+    const dt = (trashCount[a.name] || 0) - (trashCount[b.name] || 0);
+    return isTrashDay ? dt : -dt;
+};
+
+/**
  * 上月每人「打掃天數」（同人同日多筆算一天；未掃不計；舊制的清運算一次）。
  * 新制一人一天 4 筆，不能直接數筆數。
  */
