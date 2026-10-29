@@ -255,6 +255,20 @@ SC.planDutyV2 = (o) => {
     // 兩層分法輪替：反覆嘗試把某天的 A/B 對調，只要「每人 A 組與 B 組次數的落差總和」變小就換
     const imbalance = () => officePeople.reduce((s, p) => s + Math.abs(typeCnt[p.name].A - typeCnt[p.name].B), 0);
     officeLog.forEach(({ fa, fb }) => { typeCnt[fa].A++; typeCnt[fb].B++; });
+    // 內勤組日子不多（一個月約 7–10 天）→ 直接窮舉每天對調與否，取落差總和最小的組合。
+    // 單步對調的貪心在內勤六人時會卡住（某人 2 次都是同一種分法，要同時換兩天才解得開）。
+    const flip = (e) => { typeCnt[e.fa].A--; typeCnt[e.fb].B--; typeCnt[e.fb].A++; typeCnt[e.fa].B++; [e.fa, e.fb] = [e.fb, e.fa]; };
+    if (officeLog.length && officeLog.length <= 14) {
+        let bestMask = 0, bestVal = imbalance();
+        const N = officeLog.length;
+        for (let mask = 1; mask < (1 << N); mask++) {
+            officeLog.forEach((e, i) => { if (mask >> i & 1) flip(e); });
+            const v = imbalance();
+            if (v < bestVal) { bestVal = v; bestMask = mask; }
+            officeLog.forEach((e, i) => { if (mask >> i & 1) flip(e); });
+        }
+        officeLog.forEach((e, i) => { if (bestMask >> i & 1) flip(e); });
+    }
     for (let pass = 0; pass < 10; pass++) {
         let improved = false;
         for (const e of shuffle(officeLog)) {
