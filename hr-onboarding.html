@@ -338,8 +338,13 @@
     position: fixed; left: 50%; top: 24px; transform: translateX(-50%);
     background: #333; color: white; padding: 10px 20px; border-radius: 50px;
     font-size: 14px; z-index: 200; opacity: 0; transition: opacity 0.3s;
-    pointer-events: none; max-width: 90%;
+    pointer-events: none; max-width: 90%; text-align: center; line-height: 1.5;
   }
+  #submitErr {
+    display: none; margin: 16px 0 0; padding: 12px 14px; border-radius: 12px;
+    background: #fdecea; color: #b3261e; font-size: 14px; line-height: 1.6; font-weight: bold;
+  }
+  #submitErr.show { display: block; }
   #toast.show { opacity: 1; }
   /* Mobile */
   @media (max-width: 600px) {
@@ -573,6 +578,7 @@
         <input type="checkbox" id="agree">
         <span>我已確認以上資料正確無誤，並同意公司依個資法蒐集、處理及利用本表資料。</span>
       </label>
+      <div id="submitErr" role="alert"></div>
     </div>
 
   </form>
@@ -675,7 +681,7 @@ function validateStep(n) {
   }
   if(n===1) {
     const id = data.fields['身分證字號'] || '';
-    if(id && !/^[A-Z][12]\d{8}$/.test(id.toUpperCase())) { mark(document.getElementById('f_id'), false); ok=false; flash('身分證字號格式錯誤'); return ok; }
+    if(id && !/^[A-Z]([1289]\d|[A-D]\d)\d{7}$/.test(id.toUpperCase())) { mark(document.getElementById('f_id'), false); ok=false; flash('身分證字號格式錯誤'); return ok; }
     if(!data.fields['性別']) { ok=false; flash('請選擇性別'); return ok; }
   }
   if(n===2) {
@@ -693,7 +699,7 @@ function validateStep(n) {
     });
     if(noPhoto.length) { flash('證件 #' + noPhoto.join('、#') + ' 還沒有上傳照片，已幫你跳回證件那一步'); showStep(7); return false; }
     if(noType.length) { flash('證件 #' + noType.join('、#') + ' 還沒有選證件類型，沒選就不會送出，已幫你跳回去'); showStep(7); return false; }
-    if(!document.getElementById('agree').checked) { ok=false; flash('請勾選同意聲明'); }
+    if(!document.getElementById('agree').checked) { flash('請勾選最下面的同意聲明，再按確認送出'); return false; }
   }
   if(!ok) flash('請檢查必填欄位');
   return ok;
@@ -701,12 +707,20 @@ function validateStep(n) {
 function mark(el, ok) { el.setAttribute('aria-invalid', ok?'false':'true'); }
 
 let toastTimer;
+/* 提示停留時間依字數拉長（原本固定 2.4 秒，同仁看不完退件原因，2026-10-29） */
 function flash(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+  toastTimer = setTimeout(() => t.classList.remove('show'), Math.max(3500, msg.length * 180));
+}
+/* 送出失敗的原因固定顯示在確認頁，不會自己消失 */
+function showSubmitErr(msg) {
+  const e = document.getElementById('submitErr');
+  if(!e) return;
+  e.textContent = msg || '';
+  e.classList.toggle('show', !!msg);
 }
 
 /* ===== Field binding ===== */
@@ -1054,6 +1068,12 @@ function renderReview() {
     <div class="review-row"><dt>存摺照</dt><dd>${data.files['存摺上傳'] ? '✓ 已上傳' : '— 未上傳'}</dd></div>`;
   area.appendChild(sd);
 }
+function startDate() {
+  const q = new URLSearchParams(location.search).get('start') || '';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(q)) return q.replace(/-/g,'/');
+  const d = new Date();
+  return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('/');
+}
 function esc(s) { return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function dt(v) { return v ? String(v).replace(/-/g,'/') : ''; }
 
@@ -1061,7 +1081,14 @@ function dt(v) { return v ? String(v).replace(/-/g,'/') : ''; }
 async function submit() {
   const btn = document.getElementById('btnNext');
   btn.disabled = true;
-  btn.textContent = '送出中…';
+  btn.textContent = '送出中，請不要關掉頁面…';
+  showSubmitErr('');
+  const fail = (msg) => {
+    flash(msg);
+    showSubmitErr(/已經收到/.test(msg) ? msg : msg + '（填的資料都還在，可以直接再按一次送出）');
+    btn.disabled = false;
+    btn.textContent = '✓ 確認送出';
+  };
   try {
     const fd = new FormData();
     const f = data.fields;
@@ -1083,7 +1110,7 @@ async function submit() {
     put('分行', f['分行']);
     put('銀行帳號', f['銀行帳號']);
     put('在職狀態', '在職');
-    put('到職日期', new Date().toISOString().slice(0,10).replace(/-/g,'/'));
+    put('到職日期', startDate());
 
     if(data.files['照片']) fd.append(MAIN_FIELDS['照片'], data.files['照片'], data.files['照片'].name);
     if(data.files['存摺上傳']) fd.append(MAIN_FIELDS['存摺上傳'], data.files['存摺上傳'], data.files['存摺上傳'].name);
@@ -1115,12 +1142,15 @@ async function submit() {
       if(cf) fd.append(`1000925_${subRow(i, certs.length)}`, cf, cf.name);
     });
 
-    const res = await fetch(WORKER_API, { method: 'POST', body: fd });
+    /* 手機網路差時 fetch 可能一直不回，給 90 秒上限，不然按鈕會永遠停在「送出中」 */
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 90000);
+    let res;
+    try { res = await fetch(WORKER_API, { method: 'POST', body: fd, signal: ctl.signal }); }
+    finally { clearTimeout(timer); }
     const json = await res.json().catch(() => ({}));
     if (!res.ok || !json.ok) {
-      flash('送出失敗，' + errText(json, res.status));
-      btn.disabled = false;
-      btn.textContent = '✓ 確認送出';
+      fail('送出失敗，' + errText(json, res.status));
       return;
     }
 
@@ -1128,9 +1158,9 @@ async function submit() {
     localStorage.removeItem(LS_FILES);
     document.getElementById('successModal').classList.add('show');
   } catch(e) {
-    flash('送出失敗，請確認網路連線後再試一次');
-    btn.disabled = false;
-    btn.textContent = '✓ 確認送出';
+    fail(e && e.name === 'AbortError'
+      ? '送出等太久沒有回應，請換到穩定的 Wi-Fi 再送一次'
+      : '送出失敗，請確認網路連線後再試一次');
   }
 }
 
@@ -1139,6 +1169,11 @@ async function submit() {
 function errText(json, status) {
   const code = (json && json.error) || '';
   const raw = (json && json.msg) || '';
+  /* 姓名、主要手機在 Ragic 設為不可重複。第一次送出其實成功、但手機網路沒收到回應時，
+     再按一次就會被退「已存在資料庫中」，這時要告訴同仁資料已經送到了，不是失敗。 */
+  if (/已存在資料庫中/.test(raw)) {
+    return '系統裡已經有同樣的姓名或手機號碼。如果您剛剛已經送出過，資料其實已經收到了，不用再送；若不是，請聯絡人資';
+  }
   if (raw && /[一-鿿]/.test(raw)) {
     return raw.replace(/為必填欄位\s+/g, '為必填、').replace(/\s+/g, ' ').trim().slice(0, 120);
   }
