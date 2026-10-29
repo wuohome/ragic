@@ -339,7 +339,7 @@ const App = () => {
                 })
                 .filter(e => e.status === "在職" && e.dept !== "經營階層");
             // 2026/11 新制：在職兼職也進值日人員池（每月一次、排六日），並在排班表多一個「兼職」欄組讓珊珊看得到、點得到；
-            // 排除名單 SC.PARTTIME_DUTY_EXCLUDE（高晶晶、謝佳芬、曾正煌）不進。舊月份行為不變。
+            // 排除名單 SC.PARTTIME_DUTY_EXCLUDE（高晶晶、謝佳芬、曾正煌、賴信杰）不進。舊月份行為不變。
             const dutyV2Month = SC.isDutyV2Month(year, month);
             const isDutyPartTime = (e) => dutyV2Month && e.hire === "兼職" && !SC.PARTTIME_DUTY_EXCLUDE.includes(e.name);
             setAllEmployees(allEmps.filter(e => e.hire !== "兼職" || isDutyPartTime(e)).sort((a,b) => a.dept.localeCompare(b.dept) || a.hireDate.localeCompare(b.hireDate)));
