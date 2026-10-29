@@ -22,9 +22,9 @@ const trashNote = (n) => ["清運", "垃圾", "全棟", "全樓", "倒垃圾"].s
 
 const OFFICE = ["張瓊安", "韓珊珊", "沈郁雯", "呂鴻墀", "王芳瑜", "曾琬容"];
 const BIZ = ["詹張傳", "張忠豪", "蕭頤臻", "劉子碩", "吳惠慈", "林宣佑", "吳炫儒", "方鼎文", "關宗宇", "李卓威", "葉恩廷", "白欣宜", "黃帟潔"];
-const PART = ["林佳燕", "鐘晟鈺", "李維", "張玉慧", "陳勁豪", "賴信杰", "張嗣祥", "劉兆傑", "楊書銘"];
+const PART = ["林佳燕", "鐘晟鈺", "李維", "張玉慧", "陳勁豪", "張嗣祥", "劉兆傑", "楊書銘"];
 const SC_cmp = (a, b) => a.replace(/\//g, "").localeCompare(b.replace(/\//g, ""));
-const EXCLUDED = ["高晶晶", "謝佳芬", "曾正煌"];
+const EXCLUDED = ["高晶晶", "謝佳芬", "曾正煌", "賴信杰"];
 const mkEmp = (name, hire, i) => ({ name, ragicId: String(100 + i), hire, hireDate: "2025/01/01", birthday: "", fc: { "1F": 3, "2F": 3, "3F": 3, "4F": 1 } });
 const mkEmployees = () => [
     ...OFFICE.map((n, i) => mkEmp(n, "正職", i)),
@@ -214,7 +214,7 @@ test("到職日以前不排值日（11/3 到職的新人 11/1、11/2 不排）",
     }
 });
 
-test("高晶晶、謝佳芬、曾正煌（排除名單）一次都不排", async () => {
+test("高晶晶、謝佳芬、曾正煌、賴信杰（排除名單）一次都不排", async () => {
     for (let k = 0; k < REPEAT; k++) {
         const { log } = await run({ todayStr: "2026/10/29" });
         assert.equal(log.created.filter(r => EXCLUDED.includes(r[F.EMP])).length, 0);
