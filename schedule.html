@@ -1486,6 +1486,11 @@ const App = () => {
                 for (let day = 1; day <= daysInMonth; day++) {
                     const ds = SC.fmtDate(year, month, day);
                     allEmployees.forEach(e => { if (SC.isBirthday(e, month, day)) (offByDate[ds] ||= new Set()).add(e.name); });
+                    // 到職日以前不排（2026-10-29：花那 11/3 到職，11/1、11/2 不可排到她）
+                    allEmployees.forEach(e => {
+                        const h = (e.hireDate || "").split("/").map(Number);
+                        if (h.length === 3 && h[0] < 9999 && SC._cmpDateStr(ds, SC.fmtDate(h[0], h[1], h[2])) < 0) (offByDate[ds] ||= new Set()).add(e.name);
+                    });
                 }
                 const plan = SC.planDutyV2({
                     year, month, todayStr: lockTodayStr,
