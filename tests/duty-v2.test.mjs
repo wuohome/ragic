@@ -318,6 +318,27 @@ test("費用試算：新制每層 200（整棟未掃 800、內勤兩層 400）�
     assert.ok(!fee["蕭頤臻"] && !fee["林宣佑"] && !fee["劉子碩"], JSON.stringify(fee));
 });
 
+test("負擔分數：每掃一層 1、新制值班倒垃圾算 1 層（週三/週日不算、未值班不算、舊制值班不算）", async () => {
+    const { SC } = await run({ todayStr: "2026/10/29" });
+    const rec = (emp, date, type, isAuto = "") => ({ [F.EMP]: emp, [F.DATE]: date, [F.TYPE]: type, [F.IS_AUTO]: isAuto });
+    const r = {
+        a: rec("甲", "2026/11/02", "值日"), b: rec("甲", "2026/11/02", "值日"), c: rec("甲", "2026/11/02", "值日"), d: rec("甲", "2026/11/02", "值日"),
+        e: rec("甲", "2026/11/03", "值班"),            // 週二：倒垃圾 +1
+        f: rec("甲", "2026/11/04", "值班"),            // 週三：不收，不算
+        g: rec("乙", "2026/11/05", "值日"), h: rec("乙", "2026/11/05", "值日"),
+        i: rec("乙", "2026/11/06", "值日", "未掃"),    // 未掃不算
+        j: rec("丙", "2026/11/06", "值班", "未值班"),  // 未值班不算
+        k: rec("丙", "2026/11/08", "值班"),            // 週日：不收
+    };
+    const nov = SC.dutyV2PrevPoints(r, 2026, 11);
+    assert.equal(nov["甲"], 5);
+    assert.equal(nov["乙"], 2);
+    assert.equal(nov["丙"] || 0, 0);
+    const oct = SC.dutyV2PrevPoints({ x: rec("丁", "2026/10/06", "值班"), y: rec("丁", "2026/10/07", "值日") }, 2026, 10);
+    assert.equal(oct["丁"], 1); // 舊制值班不倒垃圾，只算那一筆值日
+    assert.equal(SC.DUTY_V2_TRASH_FLOORS, 1);
+});
+
 test("共用判斷：新制月份 expectedDutyFloors 每天 1F–4F；舊制月份 4F 仍只週五", async () => {
     const { SC } = await run({ todayStr: "2026/10/29" });
     for (let d = 1; d <= 30; d++) assert.equal(SC.expectedDutyFloors(2026, 11, d).length, 4);
