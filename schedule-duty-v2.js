@@ -291,7 +291,10 @@ SC.planDutyV2 = (o) => {
 
     // 還沒人的日子（業務比日子少、或有人配不到）→ 逐日挑本月次數少者
     const bizCnt = {}; bizPeople.forEach(p => { bizCnt[p.name] = done(p.name) + (Object.values(ownerBiz).includes(p.name) ? 1 : 0); });
-    [...bizDays, ...fallbackBiz].filter(x => !used.has(x.ds)).sort((a, b) => a.d - b.d).forEach(x => {
+    // 同一天可能同時在 bizDays 與 fallbackBiz（內勤湊不到兩人的日子），先去重；迴圈內再擋一次已排過的日子
+    const tailDays = [...new Map([...bizDays, ...fallbackBiz].map(x => [x.ds, x])).values()];
+    tailDays.filter(x => !used.has(x.ds)).sort((a, b) => a.d - b.d).forEach(x => {
+        if (used.has(x.ds)) return;
         const pick = (relax) => bizPeople
             .filter(p => !isOff(p.name, x.ds) && !(assignedOn[x.ds] && assignedOn[x.ds].has(p.name)) && (relax || !adjacent(p.name, x.d))) // 當天手動排過的人不再重複排
             .map(p => ({ n: p.name, s: bizCnt[p.name] + CARRY_W * carry[p.name] + (zhibanOf(x.ds) === p.name ? 0.2 : 0) + rand() * 0.01 }))
