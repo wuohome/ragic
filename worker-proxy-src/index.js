@@ -269,8 +269,7 @@
 // v29 — earnest IDOR root-fix: rid/code branches of getEarnest /
 // submitEarnest / submitEarnestAsync now REQUIRE a matching token (was optional since
 // v21/v22, which is why the hole survived those two versions — see 技術債/規格書).
-// Worker directly calls Telegram API on failure (no Mac Mini hop).
-// Mac Mini notify-server retains /telegram-webhook for callback_query button handling.
+// Worker directly calls Discord REST on failure (no Mac Mini hop).
 
 const ALLOWED_ACTIONS = {
   lookupOperator:   { method: 'GET' },
@@ -336,7 +335,7 @@ const ALLOWED_ACTIONS = {
   checkRagicEmail:       { method: 'GET' },
   // Group O: deposit.html — business staff quick-create 定金/斡旋 record (payments/1)
   createDeposit:         { method: 'POST' },
-  // Group P: bug report -- staff pages send screenshot + description to OPS Telegram
+  // Group P: bug report -- staff pages send screenshot + description to Discord alert channel
   reportBug:             { method: 'POST' },
   // Group Q: service-fee.html — Esther 自助請款（固定連結、每月自填，2026-07-13）
   getServiceFeeIdentity: { method: 'GET' },
@@ -377,6 +376,12 @@ const ALLOWED_ACTIONS = {
   worklogTimetreeSync:   { method: 'POST' },
   worklogSession:        { method: 'POST' },
   worklogLogout:         { method: 'POST' },
+  // 2026-10-28 雙模式：偏好／切換紀錄（POST）、統計（GET，管理層與 AI工程師測試 token）
+  worklogMode:           { method: 'POST' },
+  worklogModeStats:      { method: 'GET' },
+  // 2026-10-21 同仁 Google 登入閘（searchStaff／searchDeposits 個資接口）：換 session／登出
+  staffSession:          { method: 'POST' },
+  staffLogout:           { method: 'POST' },
   // Group V: 修繕報價單產生器 → Ragic 化（maintenance-management/15，2026-07-24）。無固定
   // WORKER secret token gate（不像 Group S/T/U）——rqGet 的守門是「建單當下產生、僅該筆記錄
   // 持有」的分享token 逐筆交叉比對，token-only IDOR 防護見下方 handler 註解。
@@ -688,6 +693,8 @@ const WF = Object.freeze({
   // （見踩坑速查 Google Sheet 時區條目同類風險），文字型可完全掌控格式、零轉換層。舊「時間
   // (小時)」(1003095) 欄位保留不動，V1 舊紀錄／V2 新紀錄並存於同一張表，互不干擾。
   startTime: '1003191', endTime: '1003192',
+  // location：2026-10-19 新增「人在哪」下拉（店內／外出），看板顏色看它，不再從項目猜。
+  location: '1003694',
 });
 // V2 逐筆時間（"HH:MM"，24hr）格式驗證；範圍檢查（結束>開始）在 handleWorklogAction 內做。
 const WORKLOG_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -719,7 +726,12 @@ const WORKLOG_CATEGORIES_WORK = Object.freeze([
 ]);
 const WORKLOG_CATEGORIES_RENTAL = Object.freeze([
   '開發', '委託', '帶看', '簽約', '修繕', '續約', '議價', '請假', '休假', '上課', '活動', '上廣告', '退租點交',
+  // 2026-10-19 新增（Ragic 1003097 下拉同步追加）。舊「開發」留著只為讀／改舊紀錄，前端新填選單已拿掉。
+  '電話開發', '拜訪屋主', '例會／開會', '文書／資料整理',
 ]);
+// 2026-10-19「人在哪」：每筆新寫入必填，值只有這兩個。
+const WORKLOG_LOCATIONS = new Set(['店內', '外出']);
+const WORKLOG_PLACE_JUNK = new Set(['', '未寫地點']); // 外出時這兩種視同沒寫地點
 const WORKLOG_CATEGORY_SET = new Set([...WORKLOG_CATEGORIES_WORK, ...WORKLOG_CATEGORIES_RENTAL]);
 // token 設定檔 categoryGroup 允許值；manager／未指定 = 不分組（前端顯示全部，工務組在前，
 // 沿用既有預設順序，不影響既有 manager token 行為）。
@@ -728,7 +740,7 @@ const WORKLOG_CATEGORY_GROUPS = new Set(['工務', '租賃', '社宅']);
 // 避免擋到合理輸入，同時防止異常超長字串灌入）。
 const WORKLOG_TEXT_MAX = { caseName: 200, repairReason: 300, plannedSchedule: 300, note: 500 };
 const WORKLOG_MAX_BATCH = 13; // 一天最多 11 小時格＋前後桶籃，批次上限比欄位數再留餘裕
-const WORKLOG_ACTIONS = new Set(['worklogCreate', 'worklogListMine', 'worklogListAll', 'worklogBoard']);
+const WORKLOG_ACTIONS = new Set(['worklogCreate', 'worklogListMine', 'worklogListAll', 'worklogBoard', 'worklogMode', 'worklogModeStats']);
 // 全員公開看板（2026-10-12，規格書「2026-10-08 改版方向」）：名單＝人事表 租賃部・在職・承攬
 // （兼職不用填，Joan 2026-07-28）；當天排班表有 排休／特休／請假 的人整排沉底。
 // 欄位 ID 與 schedule-guard fallback-constants.js 的 F_EMP 同一批。
@@ -891,6 +903,7 @@ function worklogPublicRecord(rid, rec) {
     // 是空字串，V1 前端 parseApiEntry() 本來就不讀這兩個 key，不受影響。
     startTime: worklogClean(rec[WF.startTime]),
     endTime: worklogClean(rec[WF.endTime]),
+    location: worklogClean(rec[WF.location]), // 2026-10-19 新增（additive）：舊紀錄是空字串
     category: worklogClean(rec[WF.category]),
     caseName: worklogClean(rec[WF.caseName]),
     repairReason: worklogClean(rec[WF.repairReason]),
@@ -931,16 +944,101 @@ async function findWorklogRowByTime(env, name, date, startTime, endTime) {
   return entries.length > 0 ? entries[0][0] : null;
 }
 
-async function handleWorklogBoard(url, env, identity, origin) {
-  const rawDate = url.searchParams.get('date');
-  const date = rawDate ? worklogNormalizeDate(rawDate) : worklogTodayDate();
-  if (!date) return jsonResp({ error: 'invalid_date' }, 400, origin);
+// ── 填寫模式（2026-10-28）：同仁可在「格子」(board) 與「清單」(list) 兩種填法間切換，兩者寫同一張表。
+// 偏好與使用紀錄存 Worker KV（EARNEST_QUEUE），不進 Ragic：
+//   worklog:mpref:<姓名>            → { mode, at }（metadata 同），每人最後一次選的模式
+//   worklog:mlog:<13位ms>:<rand8>   → metadata { k:'save'|'switch', n:姓名, t:ms, m?:模式, c?:成功筆數, f?:從, to?:到 }
+// 紀錄全放 metadata，統計只要 list 就能讀完，不必逐筆 get。全部 best-effort：KV 壞掉不得影響存檔與看板。
+const WORKLOG_MODES = new Set(['board', 'list']);
+const WORKLOG_MODE_PREF_PREFIX = 'worklog:mpref:';
+const WORKLOG_MODE_LOG_PREFIX = 'worklog:mlog:';
+const WORKLOG_MODE_LOG_TTL_S = 400 * 86400; // 紀錄保留約 13 個月
+function worklogStatsAllowed(identity) { return identity.role === 'manager' || identity.name === 'AI工程師'; }
+async function worklogGetModePref(env, name) {
+  try {
+    const raw = env.EARNEST_QUEUE ? await env.EARNEST_QUEUE.get(WORKLOG_MODE_PREF_PREFIX + name) : null;
+    const o = raw ? JSON.parse(raw) : null;
+    return o && WORKLOG_MODES.has(o.mode) ? o.mode : null;
+  } catch { return null; } // ponytail-debt: KV 讀失敗當作沒選過（預設格子），不擋看板；日後可回報 stale 旗標
+}
+async function worklogLogModeEvent(env, meta) {
+  try {
+    if (!env.EARNEST_QUEUE) return;
+    const t = Date.now();
+    const key = `${WORKLOG_MODE_LOG_PREFIX}${String(t).padStart(13, '0')}:${crypto.randomUUID().slice(0, 8)}`;
+    await env.EARNEST_QUEUE.put(key, '1', { expirationTtl: WORKLOG_MODE_LOG_TTL_S, metadata: { ...meta, t } });
+  } catch { /* ponytail-debt: 使用紀錄寫失敗就漏一筆，不得讓存檔失敗；日後可加失敗計數 */ }
+}
+async function worklogKvListAll(kv, prefix) {
+  const out = [];
+  let cursor;
+  for (let i = 0; i < 50; i++) { // 上限 50 頁 × 1000 筆，防無窮迴圈
+    const r = await kv.list({ prefix, cursor, limit: 1000 });
+    out.push(...r.keys);
+    if (r.list_complete) break;
+    cursor = r.cursor;
+  }
+  return out;
+}
+async function handleWorklogModeStats(url, env, identity, origin) {
+  if (!worklogStatsAllowed(identity)) return jsonResp({ error: 'forbidden' }, 403, origin);
+  if (!env.EARNEST_QUEUE) return jsonResp({ error: 'kv_unavailable' }, 500, origin);
+  const rawFrom = url.searchParams.get('from'), rawTo = url.searchParams.get('to');
+  const from = rawFrom ? worklogNormalizeDate(rawFrom) : null, to = rawTo ? worklogNormalizeDate(rawTo) : null;
+  if ((rawFrom && !from) || (rawTo && !to)) return jsonResp({ error: 'invalid_date' }, 400, origin);
+  let logKeys, prefKeys;
+  try {
+    [logKeys, prefKeys] = await Promise.all([
+      worklogKvListAll(env.EARNEST_QUEUE, WORKLOG_MODE_LOG_PREFIX),
+      worklogKvListAll(env.EARNEST_QUEUE, WORKLOG_MODE_PREF_PREFIX),
+    ]);
+  } catch { return jsonResp({ error: 'kv_unavailable' }, 500, origin); }
+  const people = new Map();
+  const get = (n) => {
+    if (!people.has(n)) people.set(n, { name: n, saves: { board: 0, list: 0, unknown: 0, total: 0 }, switches: { toList: 0, toBoard: 0, total: 0 }, preference: null });
+    return people.get(n);
+  };
+  for (const { metadata: m } of logKeys) {
+    if (!m || !m.n || !Number.isFinite(m.t)) continue;
+    const d = worklogTaipeiDateFromMs(m.t);
+    if ((from && d < from) || (to && d > to)) continue;
+    const p = get(m.n);
+    if (m.k === 'save') { const mode = WORKLOG_MODES.has(m.m) ? m.m : 'unknown'; p.saves[mode]++; p.saves.total++; }
+    else if (m.k === 'switch') { if (m.to === 'list') p.switches.toList++; else if (m.to === 'board') p.switches.toBoard++; p.switches.total++; }
+  }
+  for (const { name, metadata: m } of prefKeys) {
+    if (m && WORKLOG_MODES.has(m.mode)) get(name.slice(WORKLOG_MODE_PREF_PREFIX.length)).preference = m.mode;
+  }
+  const list = [...people.values()].sort((a, b) => b.saves.total - a.saves.total || a.name.localeCompare(b.name));
+  const totals = { saves: { board: 0, list: 0, unknown: 0, total: 0 }, switches: { toList: 0, toBoard: 0, total: 0 } };
+  for (const p of list) {
+    for (const k of Object.keys(totals.saves)) totals.saves[k] += p.saves[k];
+    for (const k of Object.keys(totals.switches)) totals.switches[k] += p.switches[k];
+  }
+  return jsonResp({ ok: true, from, to, people: list, totals }, 200, origin);
+}
+
+// 看板三張表的讀取。2026-10-28 提速：路由在驗身分（要先查一次人事表）的同時就先開始讀，
+// 兩段不再串行（實測冷啟動約 2 秒 → 1 秒左右）；驗身分失敗時讀回來的資料直接丟掉，不會回給前端。
+const WORKLOG_BOARD_PREFETCH = new WeakMap(); // request → Promise<[emp, leave, logs]>
+function worklogBoardFetch(env, date) {
   const enc = encodeURIComponent;
-  const [emp, leave, logs] = await Promise.all([
+  return Promise.all([
     getFromRagic(env, 'ragicforms4/20004', `naming=EID&limit=0,500&where=${enc(`${WORKLOG_EMP_F.status},eq,在職`)}`),
     getFromRagic(env, 'ragicforms4/2', `naming=EID&limit=0,500&where=${enc(`${SCHEDULE_F_LEAVE_DATE},eq,${date}`)}`),
     getFromRagic(env, WORKLOG_SHEET, `naming=EID&limit=0,1000&where=${WF.date},eq,${enc(date)}`),
   ]);
+}
+function worklogBoardDate(url) {
+  const rawDate = url.searchParams.get('date');
+  return rawDate ? worklogNormalizeDate(rawDate) : worklogTodayDate();
+}
+
+async function handleWorklogBoard(url, env, identity, origin, request) {
+  const date = worklogBoardDate(url);
+  if (!date) return jsonResp({ error: 'invalid_date' }, 400, origin);
+  const pre = request && WORKLOG_BOARD_PREFETCH.get(request);
+  const [emp, leave, logs] = await (pre || worklogBoardFetch(env, date));
   for (const r of [emp, leave, logs]) {
     const fail = detectUpstreamFailure(r.upstream, r.data);
     if (fail) return jsonResp(fail, 502, origin);
@@ -984,13 +1082,33 @@ async function handleWorklogBoard(url, env, identity, origin) {
   return jsonResp({
     ok: true, date, members, entries,
     viewer: { role: identity.role, name: identity.name, categoryGroup: identity.categoryGroup ?? null },
+    fillMode: await worklogGetModePref(env, identity.name), // 2026-10-28 這個人上次選的填寫模式（board／list／null＝沒選過）
   }, 200, origin);
 }
 
 async function handleWorklogAction(action, request, env, identity, origin) {
   const url = new URL(request.url);
 
-  if (action === 'worklogBoard') return handleWorklogBoard(url, env, identity, origin);
+  if (action === 'worklogBoard') return handleWorklogBoard(url, env, identity, origin, request);
+  if (action === 'worklogModeStats') return handleWorklogModeStats(url, env, identity, origin);
+
+  if (action === 'worklogMode') { // 切換填寫模式：記住偏好＋記一筆切換（同模式重送不重複記）
+    if (identity.canWrite === false) return jsonResp({ error: 'not_on_board' }, 403, origin);
+    let mbody;
+    try { mbody = await request.json(); } catch { return jsonResp({ error: 'bad_json' }, 400, origin); }
+    const mode = mbody && mbody.mode;
+    if (!WORKLOG_MODES.has(mode)) return jsonResp({ error: 'invalid_mode' }, 400, origin);
+    if (!env.EARNEST_QUEUE) return jsonResp({ error: 'kv_unavailable' }, 500, origin);
+    const previous = (await worklogGetModePref(env, identity.name)) || 'board'; // 從沒選過＝格子
+    if (previous !== mode) {
+      const at = Date.now();
+      try {
+        await env.EARNEST_QUEUE.put(WORKLOG_MODE_PREF_PREFIX + identity.name, JSON.stringify({ mode, at }), { metadata: { mode, at } });
+      } catch { return jsonResp({ error: 'kv_unavailable' }, 500, origin); }
+      await worklogLogModeEvent(env, { k: 'switch', n: identity.name, f: previous, to: mode });
+    }
+    return jsonResp({ ok: true, mode, previous }, 200, origin);
+  }
 
   if (action === 'worklogListMine' || action === 'worklogListAll') {
     if (action === 'worklogListAll' && identity.role !== 'manager') {
@@ -1036,6 +1154,7 @@ async function handleWorklogAction(action, request, env, identity, origin) {
     if (!targetDate) return jsonResp({ error: 'invalid_date' }, 400, origin);
     if (targetDate < today) return jsonResp({ error: 'date_locked_past' }, 400, origin);
 
+    const saveMode = WORKLOG_MODES.has(body?.mode) ? body.mode : 'unknown'; // 舊版頁面沒帶 mode：記 unknown，不拒絕存檔
     const seenHours = new Set();
     const seenTimeRanges = new Set(); // V2 版：同一批次不可重複同一組 startTime-endTime，比照 seenHours
     const results = [];
@@ -1092,6 +1211,21 @@ async function handleWorklogAction(action, request, env, identity, origin) {
       );
       if (overLimit) { results.push({ ...resultBase, ok: false, error: 'value_too_long' }); continue; }
 
+      // 2026-10-19：V2 逐筆時間的新寫入一律要有「人在哪」；選「其他」要寫做什麼（note 開頭【做什麼】）；
+      // 選外出要寫地點。V1 小時格紀錄（hour 分支）不套用，行為不變。
+      let location = '';
+      if (hasTimeRange) {
+        location = worklogClean(row.location);
+        if (!location) { results.push({ ...resultBase, ok: false, error: 'location_required' }); continue; }
+        if (!WORKLOG_LOCATIONS.has(location)) { results.push({ ...resultBase, ok: false, error: 'invalid_location' }); continue; }
+        if (category === '其他' && !/^【[^】\s][^】]*】/.test(textFields[WF.note])) {
+          results.push({ ...resultBase, ok: false, error: 'other_text_required' }); continue;
+        }
+        if (location === '外出' && WORKLOG_PLACE_JUNK.has(textFields[WF.caseName])) {
+          results.push({ ...resultBase, ok: false, error: 'place_required' }); continue;
+        }
+      }
+
       let targetRid = null;
       const rowRidRaw = row.rid;
       if (rowRidRaw !== undefined && rowRidRaw !== null && rowRidRaw !== '') {
@@ -1121,6 +1255,7 @@ async function handleWorklogAction(action, request, env, identity, origin) {
       if (hasTimeRange) {
         params.append(WF.startTime, startTime);
         params.append(WF.endTime, endTime);
+        params.append(WF.location, location);
       } else {
         params.append(WF.hour, hour); // V1 既有欄位，V2 紀錄不寫入（保持空白，退役前不混用）
       }
@@ -1134,6 +1269,8 @@ async function handleWorklogAction(action, request, env, identity, origin) {
       results.push({ ...resultBase, ok: true, rid: String(targetRid || data?.ragicId || '') });
     }
 
+    const savedOk = results.filter((r) => r.ok).length;
+    if (savedOk > 0) await worklogLogModeEvent(env, { k: 'save', n: identity.name, m: saveMode, c: savedOk });
     return jsonResp({ ok: results.every((r) => r.ok), results }, 200, origin);
   }
 
@@ -1389,10 +1526,39 @@ function ssParseRid(rid) {
   return { mainRid: m[1], rowId: m[2] };
 }
 
-// 單筆讀取（GET 該月主表記錄，在其子表格內找出對應列）
-async function ssGetEntry(env, rid) {
+// 單筆讀取。2026-10-16 瘦身：預設走「列表模式＋月份條件」，Ragic 列表不回簽名欄（1003643），
+// 十月主表 4.42 MB → 約 127 KB。原因：單筆 GET `shanshans/1/<主表rid>` 會把整月每一列的簽名
+// base64（每張約 78 KB）全帶回，簽名／付款每次要 GET＋POST＋GET，同一 isolate 解析三份 4.4 MB，
+// 10/15 14:57 與 10/16 13:30 兩度 exceededResources（Worker 記憶體上限），第 5～7 筆簽名連寫都沒寫。
+// 只有真的要看簽名圖本身（查看簽名）或搬列要連簽名一起搬時才傳 { full: true } 走舊的整份讀取。
+// 簽名是否已寫入，輕量路徑改看簽收時間 1003644（與簽名同一次寫入、列表有回）。
+const ssMonthStartCache = new Map(); // 主表rid → 月份起日（建好就不會變）
+async function ssMonthStartOfMain(env, mainRid) {
+  if (ssMonthStartCache.has(mainRid)) return ssMonthStartCache.get(mainRid);
+  // subtables=0 對單筆有效（約 450 B），只為取月份起日
+  const { upstream, data } = await getFromRagic(env, `${SS_SHEET}/${mainRid}`, 'naming=EID&subtables=0');
+  if (!upstream.ok || !data) return null;
+  const rec = data[mainRid] || Object.values(data)[0];
+  const ms = rec ? pcVal(rec[SSM.monthStart]) : '';
+  if (!ms) return null;
+  ssMonthStartCache.set(mainRid, ms);
+  return ms;
+}
+
+async function ssGetEntry(env, rid, opts = {}) {
   const parsed = ssParseRid(rid);
   if (!parsed) return null;
+  if (!opts.full) {
+    const ms = await ssMonthStartOfMain(env, parsed.mainRid);
+    if (!ms) return null;
+    const { upstream: lu, data: ld } = await getFromRagic(env, SS_SHEET, `naming=EID&where=${SSM.monthStart},eq,${encodeURIComponent(ms)}`);
+    if (!lu.ok || !ld) return null;
+    const lrec = ld[parsed.mainRid];
+    if (!lrec) return null;
+    const lrow = (lrec[`_subtable_${SS_SUBTABLE_KEY}`] || {})[parsed.rowId];
+    if (!lrow) return null;
+    return { mainRid: parsed.mainRid, mainRec: lrec, rowId: parsed.rowId, row: lrow };
+  }
   const { upstream, data } = await getFromRagic(env, `${SS_SHEET}/${parsed.mainRid}`, 'naming=EID');
   if (!upstream.ok || !data) return null;
   const mainRec = data[parsed.mainRid] || Object.values(data)[0];
@@ -1475,7 +1641,7 @@ async function ssEnsureMonthRecord(env, monthStart, pre = null) {
   if (fail) return { error: fail };
   const newRid = data?.ragicId;
   if (!newRid) return { error: { error: 'no_rid_returned' } };
-  const { upstream: ru, data: rd } = await getFromRagic(env, `${SS_SHEET}/${newRid}`, 'naming=EID');
+  const { upstream: ru, data: rd } = await getFromRagic(env, `${SS_SHEET}/${newRid}`, 'naming=EID&subtables=0');
   if (!ru.ok || !rd) return { error: { error: 'write_unverified' } };
   const rec = rd[String(newRid)] || Object.values(rd)[0];
   if (!rec) return { error: { error: 'write_unverified' } };
@@ -1503,7 +1669,7 @@ const SS_CHAIN_MONTHS_BACK = 3;
 // 把 rid 這筆月帳的 1000719 寫成 expectedPrev，讀回驗證 1000719 與 1000721 都正確。
 // 成功回 { rec, balance }；任何失敗回 null（呼叫端 fail-closed）。
 async function ssHealCarryForward(env, rid, monthStart, expectedPrev, storedPrev) {
-  const { upstream, data } = await postUrlEncodedToRagic(
+  const { upstream, data } = await ragicPostLite(
     env, `${SS_SHEET}/${rid}`,
     new URLSearchParams({ [SSM.prevBalance]: String(expectedPrev) }).toString(),
     'doFormula=true'
@@ -1513,7 +1679,7 @@ async function ssHealCarryForward(env, rid, monthStart, expectedPrev, storedPrev
     console.error('[ssHealCarryForward] write_failed', { monthStart, rid, fail });
     return null;
   }
-  const { upstream: ru, data: rd } = await getFromRagic(env, `${SS_SHEET}/${rid}`, 'naming=EID');
+  const { upstream: ru, data: rd } = await getFromRagic(env, `${SS_SHEET}/${rid}`, 'naming=EID&subtables=0');
   const rec = (ru.ok && rd) ? (rd[String(rid)] || Object.values(rd)[0]) : null;
   if (!rec) {
     console.error('[ssHealCarryForward] readback_failed', { monthStart, rid });
@@ -1644,11 +1810,52 @@ const SS_SUBTABLES = {
 // 子表修改既有一列／刪除既有一列：沿用既有通用 helper wbUpdateSubRow/wbDeleteSubRow（硬規則
 // 明講），額外帶 doFormula=true 讓 1000731/1000732/1000737/1000721 這些加總公式即時重算
 // （2026-08-11 實測：不帶 doFormula=true 的話公式不會更新，見交付摘要）。
-async function ssUpdateSubRow(env, mainRid, rowId, fields) {
-  return wbUpdateSubRow(env, SS_SHEET, mainRid, SS_SUBTABLES, 'entries', rowId, fields, 'doFormula=true');
+// 2026-10-16 瘦身：寫入回應 Ragic 會帶整張主表（十月 4.4 MB），原本 JSON.parse 整份只為了看
+// status。改用 ragicPostLite：回應很大且 status/ragicId/msg 都在 "data" 之前時，只掃開頭、不解析
+// 整份；否則（順序不同、或呼叫端要 fullData）照舊完整解析。驗證規則與 wbUpdateSubRow 完全相同。
+async function ssUpdateSubRow(env, mainRid, rowId, fields, opts = {}) {
+  const config = SS_SUBTABLES.entries;
+  const rowIdStr = String(rowId ?? '');
+  if (!WB_SUB_ROW_ID_RE.test(rowIdStr)) return { error: { error: 'invalid_row_id' } };
+  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return { error: { error: 'invalid_fields' } };
+  const params = new URLSearchParams();
+  for (const [fid, value] of Object.entries(fields)) {
+    if (!config.fields.has(fid)) return { error: { error: 'invalid_field', fid } };
+    if (typeof value !== 'string' && typeof value !== 'number') return { error: { error: 'value_invalid', fid } };
+    const strVal = String(value);
+    const maxLen = config.fieldLimits?.[fid] ?? 2000;
+    if (strVal.length > maxLen) return { error: { error: 'value_too_long', fid } };
+    params.append(`${fid}_${rowIdStr}`, strVal);
+  }
+  if (params.toString() === '') return { error: { error: 'empty_fields' } };
+  const result = await ragicPostLite(env, `${SS_SHEET}/${mainRid}`, params.toString(), 'doFormula=true', { parseFull: !!opts.parseFull });
+  const fail = detectUpstreamFailure(result.upstream, result.data);
+  if (fail) return { error: fail, status: 502 };
+  return { ok: true, ragicId: result.data?.ragicId || mainRid, sub: 'entries', key: config.key, rowId: rowIdStr, fullData: result.data?.data || null };
 }
 async function ssDeleteSubRow(env, mainRid, rowId) {
-  return wbDeleteSubRow(env, SS_SHEET, mainRid, SS_SUBTABLES, 'entries', rowId, 'doFormula=true');
+  const config = SS_SUBTABLES.entries;
+  const rowIdStr = String(rowId ?? '');
+  if (!WB_SUB_ROW_ID_RE.test(rowIdStr)) return { error: { error: 'invalid_row_id' } };
+  const params = new URLSearchParams();
+  params.append(`DELSUB_${config.key}`, rowIdStr);
+  const result = await ragicPostLite(env, `${SS_SHEET}/${mainRid}`, params.toString(), 'doFormula=true');
+  const fail = detectUpstreamFailure(result.upstream, result.data);
+  if (fail) return { error: fail, status: 502 };
+  return { ok: true, ragicId: result.data?.ragicId || mainRid, sub: 'entries', key: config.key, rowId: rowIdStr, fullData: result.data?.data || null };
+}
+
+// 寫入後的讀回驗證：先走輕量列表讀取；沒過就等 300 ms 再讀一次（防列表索引落後一拍而謊報失敗）；
+// 兩次都沒過，最後才用舊的整份讀取當權威判定（罕見路徑，才付 4 MB 的代價）。
+// ok(entry) 為 true 才回傳該 entry；否則回 null（呼叫端回 write_unverified）。
+async function ssReadAndCheck(env, rid, ok) {
+  let e = await ssGetEntry(env, rid);
+  if (e && ok(e)) return e;
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  e = await ssGetEntry(env, rid);
+  if (e && ok(e)) return e;
+  const f = await ssGetEntry(env, rid, { full: true });
+  return f && ok(f) ? f : null;
 }
 
 // 新增子表列（純文字/數字欄位，無檔案）。沒有直接沿用 wbAddSubRow，原因：(a) wbAddSubRow 不
@@ -1798,7 +2005,9 @@ function ssPublicRecord(entry, includeDeleteInfo = false, includeSignature = fal
     updateLog: pcVal(row[SS.updateLog]) || null,
     updatedBy: pcVal(row[SS.updatedBy]) || null,
     updatedAt: pcVal(row[SS.updatedAt]) || null,
-    signed: !!signatureRaw,
+    // 列表查詢 Ragic 不回簽名欄（key 直接缺），只看簽名會讓列表永遠 signed:false，
+    // 財務頁就認不出「簽了沒付」的單。簽收時間與簽名同一次寫入，列表有回，一起算。（2026-10-15）
+    signed: !!signatureRaw || !!pcVal(row[SS.signedAt]),
     signedAt: pcVal(row[SS.signedAt]) || null,
     transferStatus: pcVal(row[SS.transferStatus]) || '未轉單',
     transferPoNo: pcVal(row[SS.transferPoNo]) || '',
@@ -2130,7 +2339,7 @@ async function authenticateRepairConsoleGoogle(request, env, origin) {
 // viewer 格式與 token 路徑完全相同（role／name／categoryGroup），前端不用分支。
 // 只開給 worklogBoard／worklogCreate；其他 worklog action 帶 Authorization 仍走 token 判斷。
 // ─────────────────────────────────────────────────────────────────────────────
-const WORKLOG_GOOGLE_ACTIONS = new Set(['worklogBoard', 'worklogCreate']);
+const WORKLOG_GOOGLE_ACTIONS = new Set(['worklogBoard', 'worklogCreate', 'worklogMode', 'worklogModeStats']);
 const WORKLOG_VIEW_DEPTS = new Set(['租賃部', '社宅部']);
 const WORKLOG_DEPT_GROUP = Object.freeze({ '租賃部': '租賃', '社宅部': '社宅' });
 const worklogGoogleEmailCache = new Map(); // sha256(idToken) → { expiresAt, email }
@@ -2252,6 +2461,106 @@ async function handleWorklogLogout(request, env, origin) {
     try { await env.EARNEST_QUEUE.delete(await worklogSessionKey(tok)); } catch { return jsonResp({ error: 'kv_unavailable' }, 500, origin); }
   }
   return jsonResp({ ok: true }, 200, origin); // 冪等：不論 session 存不存在都回 ok，不洩漏有效性
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 同仁 Google 登入閘（2026-10-21，SEC：searchStaff／searchDeposits 原本匿名可取租客姓名電話、
+// 同仁手機信箱）。照看板 session（worklogSession）同一套手法：Google ID token 只負責第一次證明
+// 身分，換成 Worker 自家 session `sts_<64 hex>`（KV 只存 sha256；30 天滾動；伺服器端可撤銷）。
+// 資格＝人事表在職／試用（任何部門，與 searchStaff 原本就列「全部在職同仁」一致），每次使用即時
+// 反查人事表（離職最多 60 秒生效，查到不合格順手撤銷）。
+// 失敗語意：沒帶憑證 → 同型 404 not_found（不洩漏接口存在與否，比照 v29）；帶了但壞 → 401/403
+// （前端要靠這個分辨「重登」與「不在名單」）。
+// STAFF_GATE_ENFORCE=false 是緊急放行開關（前端出事時改 false 重新部署即可退回舊行為）。
+// ═══════════════════════════════════════════════════════════════════════════════
+const STAFF_GATE_ENFORCE = true;
+const STAFF_GATED_ACTIONS = new Set(['searchStaff', 'searchDeposits']);
+const STAFF_SESSION_PREFIX = 'sts_';
+const STAFF_SESSION_TTL_S = 30 * 24 * 3600;
+const STAFF_SESSION_TOUCH_MS = 6 * 3600 * 1000;
+const staffSessionKey = async (tok) => 'staff:sess:' + await pcSha256Hex(tok);
+const staffGoogleEmailCache = new Map(); // sha256(idToken) → { expiresAt, email }
+
+async function staffIdentityFromEmail(env, email, origin) {
+  const fail = (status, error) => ({ __authError: jsonResp({ error }, status, origin) });
+  const records = await pcGetStaffRecords(env);
+  if (!records) return fail(403, 'not_whitelisted');
+  const rec = records.find((r) => pcClean(r[PC_STAFF_EMAIL_FIELD]).toLowerCase() === email);
+  const name = rec ? pcClean(rec[PC_STAFF_NAME_FIELD]) : '';
+  const status = rec ? pcClean(rec[PC_STAFF_STATUS_FIELD]) : '';
+  if (!rec || !name || !PC_ACTIVE_STATUSES.has(status)) return fail(403, 'not_whitelisted');
+  return { name, department: pcClean(rec[PC_STAFF_DEPT_FIELD]), email };
+}
+
+// 回 null＝沒帶 Authorization；回 { __authError }＝帶了但不通過；否則回身分。
+async function authenticateStaffGoogle(request, env, origin) {
+  const tok = worklogBearer(request);
+  if (!tok) return null;
+  const fail = (status, error) => ({ __authError: jsonResp({ error }, status, origin) });
+
+  if (tok.startsWith(STAFF_SESSION_PREFIX)) {
+    if (!env.EARNEST_QUEUE || typeof env.EARNEST_QUEUE.get !== 'function') return fail(401, 'invalid_session');
+    const key = await staffSessionKey(tok);
+    let rec;
+    try { rec = JSON.parse(await env.EARNEST_QUEUE.get(key)); } catch { rec = null; }
+    if (!rec || typeof rec.email !== 'string') return fail(401, 'invalid_session');
+    const identity = await staffIdentityFromEmail(env, rec.email, origin);
+    if (identity.__authError) {
+      try { await env.EARNEST_QUEUE.delete(key); } catch { /* ponytail-debt: 撤銷失敗只是這顆 session 多活到自然過期；每次使用仍即時反查人事表，不會放行 */ }
+      return identity;
+    }
+    const now = Date.now();
+    if (now - (rec.touchedAt || 0) > STAFF_SESSION_TOUCH_MS) {
+      try { await env.EARNEST_QUEUE.put(key, JSON.stringify({ ...rec, touchedAt: now }), { expirationTtl: STAFF_SESSION_TTL_S }); } catch { /* ponytail-debt: 滾動延長失敗不影響本次使用，下次請求會再試 */ }
+    }
+    return identity;
+  }
+
+  // 其餘一律當 Google ID token 驗
+  const cacheKey = await pcSha256Hex(tok);
+  let email;
+  const cached = staffGoogleEmailCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    email = cached.email;
+  } else {
+    let info;
+    try {
+      const res = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(tok));
+      if (!res.ok) return fail(401, 'invalid_session');
+      info = await res.json();
+    } catch {
+      return fail(401, 'invalid_session');
+    }
+    if (!info || info.aud !== PC_GOOGLE_CLIENT_ID) return fail(401, 'wrong_audience');
+    if (info.email_verified === 'false') return fail(403, 'email_unverified');
+    email = pcClean(info.email).toLowerCase();
+    if (!email) return fail(401, 'invalid_session');
+    const remainingMs = Number.isFinite(Number(info.exp)) ? (Number(info.exp) * 1000 - Date.now()) : 0;
+    staffGoogleEmailCache.set(cacheKey, { expiresAt: Date.now() + Math.max(0, Math.min(5 * 60 * 1000, remainingMs)), email });
+  }
+  return staffIdentityFromEmail(env, email, origin);
+}
+
+async function handleStaffSession(request, env, origin) {
+  const tok = worklogBearer(request);
+  if (!tok || tok.startsWith(STAFF_SESSION_PREFIX)) return jsonResp({ error: 'invalid_session' }, 401, origin); // 只能用 Google ID token 換
+  const identity = await authenticateStaffGoogle(request, env, origin);
+  if (!identity) return jsonResp({ error: 'invalid_session' }, 401, origin);
+  if (identity.__authError) return identity.__authError;
+  if (!env.EARNEST_QUEUE || typeof env.EARNEST_QUEUE.put !== 'function') return jsonResp({ error: 'kv_unavailable' }, 500, origin);
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const session = STAFF_SESSION_PREFIX + [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const now = Date.now();
+  await env.EARNEST_QUEUE.put(await staffSessionKey(session), JSON.stringify({ email: identity.email, createdAt: now, touchedAt: now }), { expirationTtl: STAFF_SESSION_TTL_S });
+  return jsonResp({ ok: true, session, expiresInDays: 30, viewer: { name: identity.name, email: identity.email } }, 200, origin);
+}
+
+async function handleStaffLogout(request, env, origin) {
+  const tok = worklogBearer(request);
+  if (tok.startsWith(STAFF_SESSION_PREFIX) && env.EARNEST_QUEUE && typeof env.EARNEST_QUEUE.delete === 'function') {
+    try { await env.EARNEST_QUEUE.delete(await staffSessionKey(tok)); } catch { return jsonResp({ error: 'kv_unavailable' }, 500, origin); }
+  }
+  return jsonResp({ ok: true }, 200, origin); // 冪等：不論 session 存不存在都回 ok
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2702,8 +3011,8 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
         [SS.amount]: '', [SS.isPaid]: 'No', [SS.paidAt]: '',
       });
       if (upd.error) return jsonResp({ error: 'write_failed', ...upd.error }, 502, origin);
-      const verify = await ssGetEntry(env, rid);
-      if (!verify || pcVal(verify.row[SS.isPaid]) === 'Yes') return jsonResp({ error: 'write_unverified' }, 502, origin);
+      const verify = await ssReadAndCheck(env, rid, (e) => pcVal(e.row[SS.isPaid]) !== 'Yes');
+      if (!verify) return jsonResp({ error: 'write_unverified' }, 502, origin);
       return jsonResp({ ok: true, claim: ssPublicRecord(verify, false, true) }, 200, origin);
     }
 
@@ -2720,8 +3029,8 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
         [SS.amount]: String(claimAmount), [SS.isPaid]: 'Yes', [SS.paidAt]: now,
       });
       if (upd.error) return jsonResp({ error: 'write_failed', ...upd.error }, 502, origin);
-      const verify = await ssGetEntry(env, rid);
-      if (!verify || pcVal(verify.row[SS.isPaid]) !== 'Yes') return jsonResp({ error: 'write_unverified' }, 502, origin);
+      const verify = await ssReadAndCheck(env, rid, (e) => pcVal(e.row[SS.isPaid]) === 'Yes');
+      if (!verify) return jsonResp({ error: 'write_unverified' }, 502, origin);
       return jsonResp({ ok: true, claim: ssPublicRecord(verify, false, true) }, 200, origin);
     }
 
@@ -2731,10 +3040,18 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     const targetMonth = await ssEnsureMonthRecord(env, targetMonthStart);
     if (targetMonth.error) return jsonResp({ error: 'write_failed', ...targetMonth.error }, 502, origin);
 
+    // 搬列要連簽名一起搬，輕量讀取沒有簽名欄：已簽的單才付一次整份讀取的代價（跨月付款本來就罕見）。
+    // 讀不到就中止（fail-closed）——不能搬出一列少了簽名的資料再刪掉原列。
+    let srcRow = entry.row;
+    if (pcVal(entry.row[SS.signedAt]).trim()) {
+      const fullEntry = await ssGetEntry(env, rid, { full: true });
+      if (!fullEntry) return jsonResp({ error: 'upstream_error', detail: 'full_read_failed' }, 502, origin);
+      srcRow = fullEntry.row;
+    }
     const movedFields = {};
     for (const fid of Object.values(SS)) {
       if (fid === SS.amount || fid === SS.isPaid || fid === SS.paidAt) continue; // 這三欄用新值覆蓋
-      const raw = entry.row[fid];
+      const raw = srcRow[fid];
       if (fid === SS.photo) {
         const arr = Array.isArray(raw) ? raw : (raw ? [raw] : []);
         if (arr.length) movedFields[fid] = arr;
@@ -2762,8 +3079,8 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
       return jsonResp({ error: 'old_row_cleanup_failed', claim: verify ? ssPublicRecord(verify, false, true) : null, movedTo: newRid }, 502, origin);
     }
 
-    const verify = await ssGetEntry(env, newRid);
-    if (!verify || pcVal(verify.row[SS.isPaid]) !== 'Yes') return jsonResp({ error: 'write_unverified' }, 502, origin);
+    const verify = await ssReadAndCheck(env, newRid, (e) => pcVal(e.row[SS.isPaid]) === 'Yes');
+    if (!verify) return jsonResp({ error: 'write_unverified' }, 502, origin);
     return jsonResp({ ok: true, claim: ssPublicRecord(verify, false, true), movedTo: newRid }, 200, origin);
   }
 
@@ -2800,9 +3117,9 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     const upd = await ssUpdateSubRow(env, entry.mainRid, entry.rowId, fields);
     if (upd.error) return jsonResp({ error: 'write_failed', ...upd.error }, 502, origin);
 
-    const verify = await ssGetEntry(env, rid);
     const expectedStatus = decision === 'approve' ? '已通過' : '已退回';
-    if (!verify || pcVal(verify.row[SS.reviewStatus]) !== expectedStatus) return jsonResp({ error: 'write_unverified' }, 502, origin);
+    const verify = await ssReadAndCheck(env, rid, (e) => pcVal(e.row[SS.reviewStatus]) === expectedStatus);
+    if (!verify) return jsonResp({ error: 'write_unverified' }, 502, origin);
 
     return jsonResp({ ok: true, claim: ssPublicRecord(verify, false, true) }, 200, origin);
   }
@@ -2845,8 +3162,8 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     if (!newRowId) return jsonResp({ error: 'no_rid_returned' }, 502, origin);
     const rid = ssComposeRid(month.rid, newRowId);
 
-    const verify = await ssGetEntry(env, rid);
-    if (!verify || pcNum(verify.row[SS.deposit]) !== amount) return jsonResp({ error: 'write_unverified' }, 502, origin);
+    const verify = await ssReadAndCheck(env, rid, (e) => pcNum(e.row[SS.deposit]) === amount);
+    if (!verify) return jsonResp({ error: 'write_unverified' }, 502, origin);
 
     return jsonResp({
       ok: true,
@@ -2912,9 +3229,8 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     const upd = await ssUpdateSubRow(env, entry.mainRid, entry.rowId, fields);
     if (upd.error) return jsonResp({ error: 'write_failed', ...upd.error }, 502, origin);
 
-    const verify = await ssGetEntry(env, rid);
-    const actualDeleted = verify ? pcVal(verify.row[SS.deleted]) === 'Yes' : null;
-    if (actualDeleted !== wantDeleted) return jsonResp({ error: 'write_unverified' }, 502, origin);
+    const verify = await ssReadAndCheck(env, rid, (e) => (pcVal(e.row[SS.deleted]) === 'Yes') === wantDeleted);
+    if (!verify) return jsonResp({ error: 'write_unverified' }, 502, origin);
 
     return jsonResp({ ok: true, claim: ssPublicRecord(verify, true, true) }, 200, origin);
   }
@@ -2926,7 +3242,9 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     if (!SS_RID_RE.test(rid)) return jsonResp({ error: 'invalid_rid' }, 400, origin);
     const fieldsIn = (body?.fields && typeof body.fields === 'object' && !Array.isArray(body.fields)) ? body.fields : {};
 
-    const entry = await ssGetEntry(env, rid);
+    // 只有「查看簽名」探針（fields 為空）才需要簽名圖本身，要整份讀；真的改欄位走輕量讀取。
+    const wantFullRead = Object.keys(fieldsIn).length === 0;
+    const entry = await ssGetEntry(env, rid, { full: wantFullRead });
     if (!entry || pcVal(entry.row[SS.dataSource]) !== SS_SOURCE_STAFF) return jsonResp({ error: 'not_found' }, 404, origin);
     const existingRow = entry.row;
     const isPaidNow = pcVal(existingRow[SS.isPaid]) === 'Yes';
@@ -3081,8 +3399,8 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
       return jsonResp({ error: 'write_failed', ...upd.error }, 502, origin);
     }
 
-    const verify = await ssGetEntry(env, rid);
-    if (!verify || pcVal(verify.row[SS.updateLog]).trim() !== newLog.trim()) return jsonResp({ error: 'write_unverified' }, 502, origin);
+    const verify = await ssReadAndCheck(env, rid, (e) => pcVal(e.row[SS.updateLog]).trim() === newLog.trim());
+    if (!verify) return jsonResp({ error: 'write_unverified' }, 502, origin);
 
     return jsonResp({ ok: true, changed: true, claim: ssPublicRecord(verify, false, true) }, 200, origin);
   }
@@ -3104,7 +3422,8 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
     const reviewStatus = pcVal(entry.row[SS.reviewStatus]);
     if (reviewStatus !== '已通過') return jsonResp({ error: 'not_approved' }, 409, origin);
 
-    const alreadySigned = !!pcVal(entry.row[SS.signature]).trim();
+    // 輕量讀取沒有簽名欄：以簽收時間（與簽名同一次寫入）判斷是否已簽過
+    const alreadySigned = !!pcVal(entry.row[SS.signedAt]).trim() || !!pcVal(entry.row[SS.signature]).trim();
     const now = nowTaipeiDateTime();
     const fields = { [SS.signature]: signature, [SS.signedAt]: now };
     if (alreadySigned) {
@@ -3115,17 +3434,32 @@ async function handlePettyCashAction(action, request, env, identity, origin) {
       fields[SS.updatedAt] = now;
     }
 
-    const upd = await ssUpdateSubRow(env, entry.mainRid, entry.rowId, fields);
+    // parseFull：Ragic 這次寫入的回應帶整張主表（含剛寫入的簽名），拿它確認「簽名真的進去了」，
+    // 不必另外再讀一份 4 MB。回應形狀認不得時退回舊的整份讀取當權威判定。
+    const upd = await ssUpdateSubRow(env, entry.mainRid, entry.rowId, fields, { parseFull: true });
     if (upd.error) {
       console.error('[pettyCashSign] write_failed', upd.error);
       return jsonResp({ error: 'write_failed', ...upd.error }, 502, origin);
     }
 
-    const verify = await ssGetEntry(env, rid);
-    const sigLen = verify ? pcVal(verify.row[SS.signature]).length : 0;
-    if (sigLen <= 500) return jsonResp({ error: 'write_unverified' }, 502, origin);
+    const respRow = upd.fullData?.[`_subtable_${SS_SUBTABLE_KEY}`]?.[entry.rowId];
+    let sigOk = null; // null＝回應裡看不到這一列，無從判斷
+    if (respRow) sigOk = pcVal(respRow[SS.signature]).length > 500 && !!pcVal(respRow[SS.signedAt]).trim();
+    upd.fullData = null; // 讓整張主表的回應盡早可被回收
+    if (sigOk === false) return jsonResp({ error: 'write_unverified' }, 502, origin);
 
-    return jsonResp({ ok: true, claim: ssPublicRecord(verify, false, true) }, 200, origin);
+    let verify;
+    if (sigOk === true) {
+      verify = await ssReadAndCheck(env, rid, (e) => !!pcVal(e.row[SS.signedAt]).trim());
+    } else {
+      const full = await ssGetEntry(env, rid, { full: true });
+      verify = full && pcVal(full.row[SS.signature]).length > 500 ? full : null;
+    }
+    if (!verify) return jsonResp({ error: 'write_unverified' }, 502, origin);
+
+    const claimOut = ssPublicRecord(verify, false, true);
+    claimOut.signature = signature; // 契約沿用：單筆寫入回應帶剛存的簽名
+    return jsonResp({ ok: true, claim: claimOut }, 200, origin);
   }
 
   return null;
@@ -3589,7 +3923,7 @@ const TENANT_FIELDS_WHITELIST = new Set([
 // 與 schedule-common.js 的 SC.GOV_REST_NAMES / SC.HOLIDAYS_2026 保持同步，異動需同時改兩邊。
 // 2026-08-24 名單更正：陳勁豪已轉租賃部承攬（自行排休、納入值班池）移除；王芳瑜（行銷部，
 // 2026/08/17 到職）加入。前端 schedule-common.js 的 SC.GOV_REST_NAMES 已同步（commit 10a06330）。
-const GOV_REST_NAMES = new Set(['張瓊安', '沈郁雯', '呂鴻墀', '王芳瑜']);
+const GOV_REST_NAMES = new Set(['張瓊安', '沈郁雯', '呂鴻墀', '王芳瑜', '曾琬容']);
 const GOV_HOLIDAYS_2026 = new Set([
   '2026/01/01','2026/02/16','2026/02/17','2026/02/18','2026/02/19','2026/02/20',
   '2026/02/27','2026/04/03','2026/04/06','2026/05/01','2026/06/19','2026/09/25',
@@ -3957,13 +4291,10 @@ const SHEET_MAP = {
 const KV_PREFIX = 'submission:earnest:';
 const KV_TTL_SECONDS = 7776000; // 90 days
 
-// Telegram webhook path — not in ALLOWED_ACTIONS, handled separately
-const TELEGRAM_WEBHOOK_PATH = 'telegram-webhook';
-
 const corsHeaders = (origin) => ({
   'Access-Control-Allow-Origin': origin,
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-WH-Repair-Token',
+  'Access-Control-Allow-Headers': 'Content-Type, X-WH-Repair-Token, Authorization',
   'Access-Control-Max-Age': '86400',
 });
 
@@ -4124,20 +4455,11 @@ function repairPublicRecord(rid, rec, includeConsoleFields = false) {
 
 async function sendRepairNotification(env, ticketNo, status) {
   const text = `${env.REPAIR_NOTIFY_PREFIX || ''}工務報修 ${String(ticketNo || '（未編號）')} → ${String(status)}`;
-  // 2026-10-02：先交給系統部通報員（Discord 交辦頻道）；沒收下才退回原本的 Telegram
+  // 2026-10-02：先交給系統部通報員（Discord 交辦頻道）；沒收下才退回
+  // 退路由：Worker 直推 Discord 警報頻道
   if (await notifyHubIngest(env, { source: '工務報修', key: `repair.${String(ticketNo || 'none')}.${String(status)}`, title: text, channel: 'assign' })) return null;
-  if (!env.TG_BOT_TOKEN) return null;
-  const body = {
-    chat_id: env.JOAN_CHAT_ID || '8163308207',
-    text,
-  };
-  try {
-    const response = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendMessage`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    });
-    if (!response.ok) return null;
-    return response.json().catch(() => null);
-  } catch { return null; }
+  await sendDiscordAlert(env, DISCORD_PREFIX_ALERT + text);
+  return null;
 }
 
 function scheduleRepairNotification(ctx, env, ticketNo, status) {
@@ -4402,7 +4724,7 @@ function todayTaipei() {
   return `${y}/${m}/${d}`;
 }
 
-// ============ Telegram helpers ============
+// ============ 通知文字 helpers ============
 
 function escapeHtml(str) {
   if (!str) return '—';
@@ -4437,70 +4759,23 @@ function buildFailureMessage(data) {
   const adminUrl = `https://wuohome.github.io/ragic/earnest-admin.html?id=${submission_id}`;
   const shortId = submission_id ? submission_id.slice(0, 8) : '—';
   const lastErrorStr = last_error
-    ? `${escapeHtml(last_error.error || '')} ${last_error.code ? '(HTTP ' + last_error.code + ')' : ''}`.trim()
+    ? `${last_error.error || ''} ${last_error.code ? '(HTTP ' + last_error.code + ')' : ''}`.trim()
     : '—';
+  // 2026-10-20：改純文字給 Discord（退路沒有按鈕，所以把處理頁網址與 id 寫清楚）
   const lines = [
-    `⚠️ <b>定金單 Ragic 寫入失敗</b>`,
-    `單號：${escapeHtml(earnest_no)}`,
-    `房客：${escapeHtml(tenant_name)} / ${escapeHtml(tenant_phone)}`,
-    `經辦：${escapeHtml(operator_name)} (請瓊安用 LINE 通知)`,
+    `${DISCORD_PREFIX_ALERT}定金單 Ragic 寫入失敗（系統部總機未回應，由 Worker 直送）`,
+    `單號：${earnest_no || '—'}`,
+    `房客：${tenant_name || '—'} / ${tenant_phone || '—'}`,
+    `經辦：${operator_name || '—'} (請瓊安用 LINE 通知)`,
     `失敗原因：${lastErrorStr}`,
     `重試：${retry_count || 0} 次全失敗`,
     `建立時間：${formatFailedAt(failed_at)}`,
     minutesAgo(failed_at),
     '',
-    `👉 <a href="${adminUrl}">點此處理</a>`,
-    `<code>id: ${escapeHtml(shortId)}...</code>`,
+    `這則沒有按鈕。請開處理頁手動處理／重送：${adminUrl}`,
+    `id: ${shortId}...（完整：${submission_id || '—'}）`,
   ];
   return lines.join('\n');
-}
-
-async function sendTelegramMessage(env, text, submissionId) {
-  const body = {
-    chat_id: env.JOAN_CHAT_ID || '8163308207',
-    text,
-    parse_mode: 'HTML',
-    reply_markup: {
-      inline_keyboard: [[
-        { text: '一鍵重試', callback_data: `retry:${submissionId}` },
-        { text: '改人工處理', callback_data: `manual:${submissionId}` },
-      ]],
-    },
-  };
-  try {
-    const res = await fetch(
-      `https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendMessage`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-    );
-    const json = await res.json().catch(() => ({}));
-    return json;
-  } catch { return null; }
-}
-
-async function editTelegramMessage(env, chatId, messageId, newText) {
-  try {
-    await fetch(
-      `https://api.telegram.org/bot${env.TG_BOT_TOKEN}/editMessageText`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, message_id: messageId, text: newText, parse_mode: 'HTML' }),
-      }
-    );
-  } catch {}
-}
-
-async function answerCallbackQuery(env, callbackQueryId) {
-  try {
-    await fetch(
-      `https://api.telegram.org/bot${env.TG_BOT_TOKEN}/answerCallbackQuery`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ callback_query_id: callbackQueryId }),
-      }
-    );
-  } catch {}
 }
 
 // ============ Ragic helpers ============
@@ -4543,11 +4818,53 @@ async function postUrlEncodedToRagic(env, sheetPath, paramsString, extraQuery = 
   return { upstream, data };
 }
 
-// decorating/15「意見回饋」sheet：reportBug 額外同步一份可搜尋歷史紀錄（Telegram 為主、這是備份）。
+// 零用金專用的瘦身 POST（2026-10-16）。見 ssUpdateSubRow 註解。
+// - 不經 ragicFetch：它會把大 body 讀一次文字再包成新 Response（再複製一份）。
+// - 回應 >= 8 KB 且 "data" 之前已有 status=SUCCESS、ragicId、msg 時，只回這三項，data 設 null。
+// - 其餘情況（錯誤回應、欄位順序不同、parseFull）一律 JSON.parse 完整回應，行為同 postUrlEncodedToRagic。
+function ragicLiteHead(text) {
+  if (text.length < 8192) return null;
+  const head = text.slice(0, 2048);
+  const m = /[,{]\s*"data"\s*:/.exec(head);
+  if (!m || m.index <= 0) return null;
+  const region = head.slice(0, m.index);
+  const st = /"status"\s*:\s*"([^"]*)"/.exec(region);
+  const rid = /"ragicId"\s*:\s*(\d+)/.exec(region);
+  const msg = /"msg"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(region);
+  if (!st || st[1] !== 'SUCCESS' || !rid || !msg) return null;
+  let msgText = msg[1];
+  try { msgText = JSON.parse('"' + msg[1] + '"'); } catch {}
+  return { status: 'SUCCESS', ragicId: Number(rid[1]), msg: msgText, data: null };
+}
+
+async function ragicPostLite(env, sheetPath, paramsString, extraQuery = '', opts = {}) {
+  const qs = extraQuery ? `&${extraQuery}` : '';
+  const url = `${env.RAGIC_BASE}/${sheetPath}?api${qs}`;
+  const init = {
+    method: 'POST',
+    headers: { 'Authorization': 'Basic ' + env.RAGIC_KEY, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: paramsString,
+  };
+  const t0 = Date.now();
+  let resp = await fetch(url, init);
+  let text = await resp.text();
+  if (text.includes('"code":106')) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    resp = await fetch(url, init);
+    text = await resp.text();
+  }
+  console.log(`[ragic-t] POST(lite) ${sheetPath} ${Date.now() - t0}ms ${text.length}B`);
+  const upstream = { ok: resp.ok, status: resp.status };
+  let data = opts.parseFull ? null : ragicLiteHead(text);
+  if (!data) { try { data = JSON.parse(text); } catch {} }
+  return { upstream, data };
+}
+
+// decorating/15「意見回饋」sheet：reportBug 額外同步一份可搜尋歷史紀錄（Discord 為主、這是備份）。
 // 只有 3 個文字/單選欄位可寫，無截圖附件欄位（ponytail-debt：附件欄位需 Joan 或 ragic agent 後續在 Ragic 後台手動新增，
 // 目前是 schema 缺口不是程式邏輯缺口，Worker 端無法建欄位）。
 const BUG_REPORT_FEEDBACK_SHEET = 'decorating/15';
-async function syncBugReportToRagic(env, { safeType, safeTitle, safeUrl, safeDesc, uaShort, nowTW, hasScreenshot, shotWhere = 'Telegram OPS 群組' }) {
+async function syncBugReportToRagic(env, { safeType, safeTitle, safeUrl, safeDesc, uaShort, nowTW, hasScreenshot, shotWhere = 'Discord 系統部「警報」頻道' }) {
   const title = `[問題回報] ${safeType} — ${safeTitle || '（無標題）'}`.slice(0, 200);
   const body = [
     safeDesc,
@@ -4847,7 +5164,7 @@ async function processEarnestSubmission(env, submissionId, rid, fields, operator
   };
   try { await env.EARNEST_QUEUE.put(kvKey, JSON.stringify(failedPayload), { expirationTtl: KV_TTL_SECONDS }); } catch {}
 
-  // Notify Joan via Telegram directly (Worker can reach api.telegram.org public internet)
+  // Notify Joan (hub first, Discord direct fallback)
   const notifyData = {
     submission_id: submissionId,
     rid,
@@ -4859,16 +5176,17 @@ async function processEarnestSubmission(env, submissionId, rid, fields, operator
     failed_at: failedAt,
     retry_count: 3,
   };
-  // 2026-10-01：先交給系統部總機（Discord 按鈕）；總機沒收下才退回原本的 Telegram 帶按鈕訊息
+  // 2026-10-01：先交給系統部總機（Discord 按鈕）；總機沒收下才退回
+  // 退路由：Worker 直推 Discord 警報頻道（純文字，附處理頁網址）
   if (await notifyHubEarnestFailed(env, notifyData)) return;
   const msgText = buildFailureMessage(notifyData);
-  await sendTelegramMessage(env, msgText, submissionId);
+  await sendDiscordAlert(env, msgText);
 }
 
 // ============ 系統部總機（sys-hub）整合（2026-10-01 第二階段 B）============
 // 排班守門／定金重送的按鈕改到 Discord：總機驗過簽章與「只認瓊安」後，帶共享密鑰呼叫本路由，
-// 由 Worker 執行（KV 與原本的閘門邏輯都在這裡，不重寫一份）。Telegram 按鈕路徑原封不動，
-// 總機掛掉時定金失敗通知仍退回 Telegram 帶按鈕的原格式。
+// 由 Worker 執行（KV 與原本的閘門邏輯都在這裡，不重寫一份）。
+// 總機掛掉時定金失敗通知退回 Worker 直推 Discord（純文字）。
 const HUB_BUTTON_PATH = 'hub-button';
 const HUB_EARNEST_URL_DEFAULT = 'https://mac-mini.tail7c34ea.ts.net/sys-hub/earnest-failed';
 
@@ -4880,7 +5198,7 @@ function hubConstantTimeEqual(a, b) {
   return diff === 0;
 }
 
-// 與 /telegram-webhook 內 retry / manual 兩個分支同一套邏輯（讀 KV → submitEarnestToRagic → 寫回 KV 狀態）。
+// retry / manual 兩個分支的邏輯（讀 KV → submitEarnestToRagic → 寫回 KV 狀態）。
 async function handleEarnestHubButton(env, action, submissionId, dryRun = false) {
   if (!validUuid(submissionId)) return '\n\n❌ submission id 格式錯誤';
   if (dryRun) return '\n\n🧪 測試，未寫入';
@@ -4914,7 +5232,7 @@ async function handleEarnestHubButton(env, action, submissionId, dryRun = false)
   return null;
 }
 
-// 把定金失敗通知交給總機（Discord）。回傳 true＝總機已收下並發出；false＝呼叫端要退回 Telegram 帶按鈕的原格式。
+// 把定金失敗通知交給總機（Discord）。回傳 true＝總機已收下並發出；false＝呼叫端要退回 Worker 直推 Discord（純文字）。
 async function notifyHubEarnestFailed(env, data) {
   if (!env.HUB_SECRET) return false;
   const ctrl = new AbortController();
@@ -4931,7 +5249,7 @@ async function notifyHubEarnestFailed(env, data) {
 }
 
 // 通用單向通知入口（2026-10-02）：Worker 連不到 127.0.0.1，改走 Funnel 的 /sys-hub/ingest，Authorization: Bearer 共享密鑰（secret HUB_INGEST_SECRET）。
-// 回傳 true＝通報員已收下並發到 Discord；false（沒設密鑰、逾時、非 2xx）＝呼叫端必須退回原本的 Telegram，不得漏通知。
+// 回傳 true＝通報員已收下並發到 Discord；false（沒設密鑰、逾時、非 2xx）＝呼叫端必須退回 sendDiscordAlert 直推，不得漏通知。
 const HUB_INGEST_URL_DEFAULT = 'https://mac-mini.tail7c34ea.ts.net/sys-hub/ingest';
 async function notifyHubIngest(env, data) {
   if (!env.HUB_INGEST_SECRET) return false;
@@ -4946,6 +5264,46 @@ async function notifyHubIngest(env, data) {
     });
     return res.ok;
   } catch { return false; } finally { clearTimeout(timer); }
+}
+
+// Worker 直推 Discord：不依賴 Mac，打 Discord REST，用系統通報員那支 bot（secret DISCORD_BOT_TOKEN）。
+// 頻道／User-Agent／PREFIX 與 Mac ~/Projects/sys-hub/client/hubnotify.cjs 的 discordFallback 同一套。
+// files: [{ bytes: Uint8Array, type: 'image/jpeg', name: 'a.jpg' }] 以 multipart 附檔上傳（最多 10 個）。
+// 回傳 Discord message id（字串）；沒設 token、非 2xx、例外 → 回 null，只 console.error，永不丟例外。
+const DISCORD_ALERT_CHANNEL = '1555159892715769956';
+const DISCORD_UA = 'DiscordBot (https://wuohome.local/sys-hub, 1.0)';
+const DISCORD_PREFIX_ALERT = '🚨 ';
+async function sendDiscordAlert(env, text, opts = {}) {
+  if (!env.DISCORD_BOT_TOKEN) { console.error('[discord] DISCORD_BOT_TOKEN not set'); return null; }
+  let content = String(text || '');
+  if (content.length > 2000) content = content.slice(0, 1990) + '…';
+  const files = (opts.files || []).slice(0, 10);
+  const headers = { Authorization: 'Bot ' + env.DISCORD_BOT_TOKEN, 'User-Agent': DISCORD_UA };
+  try {
+    let body;
+    if (files.length) {
+      const form = new FormData();
+      form.append('payload_json', JSON.stringify({
+        content, allowed_mentions: { parse: [] },
+        attachments: files.map((f, i) => ({ id: i, filename: f.name })),
+      }));
+      files.forEach((f, i) => form.append(`files[${i}]`, new Blob([f.bytes], { type: f.type }), f.name));
+      body = form;
+    } else {
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify({ content, allowed_mentions: { parse: [] } });
+    }
+    const res = await fetch(`https://discord.com/api/v10/channels/${DISCORD_ALERT_CHANNEL}/messages`, { method: 'POST', headers, body });
+    if (!res.ok) {
+      console.error('[discord] send failed', res.status, (await res.text().catch(() => '')).slice(0, 200));
+      return null;
+    }
+    const json = await res.json().catch(() => null);
+    return json && json.id ? String(json.id) : 'sent';
+  } catch (e) {
+    console.error('[discord] send error', String(e));
+    return null;
+  }
 }
 
 async function handleRepairAction(action, request, env, ctx, identity, origin) {
@@ -5295,7 +5653,7 @@ function rqGenToken() {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-// ============ 排班表：離職後排班自動檢查 — Telegram 按鈕回呼（2026-08-14 新增）============
+// ============ 排班表：離職後排班自動檢查 — Discord 按鈕回呼（2026-08-14 新增，入口為系統部總機 hub-button）============
 // 建議人選／過去或未來的判斷全部在 Mac Mini schedule-guard 算好，這裡只做兩件事：
 // (1) 安全閘門：目前掛在該筆班次上的員工必須是「離職」，否則一律拒絕（防 payload
 //     被偽造或誤用去改任意在職同仁的班）；(2) 寫入 + 復驗。不重算任何排班建議。
@@ -5414,7 +5772,7 @@ async function handleScheduleShiftCallback(env, action, payload, dryRun = false)
       }
     }
 
-    // 2026-10-01 系統部總機測試用：所有唯讀閘門都過了，但不寫入（Telegram 路徑 dryRun 恆為 false）
+    // 2026-10-01 系統部總機測試用：所有唯讀閘門都過了，但不寫入
     if (dryRun) return `\n\n🧪 測試，未寫入（閘門全數通過；正式會把 ${escapeHtml(shiftDateStr)} ${escapeHtml(typeStr)} 改派給 ${escapeHtml(newEmpName)}）`;
     const params = new URLSearchParams({ [SCHEDULE_F_LEAVE_EMP]: newEmpName, [SCHEDULE_F_LEAVE_DEPT]: '手動變更' });
     const { upstream, data } = await postUrlEncodedToRagic(env, `${SCHEDULE_LEAVE_SHEET}/${recordId}`, params.toString());
@@ -5504,7 +5862,6 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname.replace(/^\//, '').replace(/\/$/, '');
 
-    // ============ Telegram webhook: separate from CORS-locked actions ============
     // ============ 系統部總機 → Worker 按鈕轉呼叫（2026-10-01）============
     if (path === HUB_BUTTON_PATH) {
       const jsonHdr = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
@@ -5528,92 +5885,6 @@ export default {
       console.log(`[hub-button] action=${hbAction} dry=${hbDry} payload=${hbPayload.slice(0, 40)} result=${(hbText || '').replace(/\n/g, ' ')}`);
       const hbOut = (hbText || '').trim();
       return new Response(JSON.stringify({ ok: !!hbOut && !hbOut.includes('❌'), text: hbOut }), { status: 200, headers: jsonHdr });
-    }
-
-    if (path === TELEGRAM_WEBHOOK_PATH) {
-      // Always respond 200 immediately to prevent Telegram retries
-      const responsePromise = new Response('ok', { status: 200 });
-      ctx.waitUntil((async () => {
-        let update;
-        try { update = await request.json(); } catch { return; }
-
-        const cq = update?.callback_query;
-        if (!cq) return;
-
-        await answerCallbackQuery(env, cq.id);
-
-        const callbackData = cq.data || '';
-        const messageId = cq.message?.message_id;
-        const chatId = cq.message?.chat?.id;
-        const originalText = cq.message?.text || '';
-
-        const colonIdx = callbackData.indexOf(':');
-        if (colonIdx < 0) return;
-        const action = callbackData.slice(0, colonIdx);
-        const submissionId = callbackData.slice(colonIdx + 1);
-
-        // schedule-guard 離職後排班改派／標記 callback（2026-08-14 新增）：payload 不是
-        // UUID（shift 是兩個數字 rid 以冒號相接、shiftmark 是單一數字 rid），必須在下面的
-        // validUuid 早退檢查之前處理，否則會被靜默丟棄（見 schedule-guard/README.md）。
-        if (action === 'shift' || action === 'shiftmark') {
-          const shiftResultText = await handleScheduleShiftCallback(env, action, submissionId);
-          // wrangler tail 可觀察的診斷 log（比照既有 service-fee 三段 POST 失敗分支的
-          // console.error 慣例）。不含任何憑證，只有 action/payload/閘門判定結果。
-          console.log(`[schedule-shift] action=${action} payload=${submissionId} result=${(shiftResultText || '').replace(/\n/g, ' ')}`);
-          if (messageId && chatId && shiftResultText) {
-            await editTelegramMessage(env, chatId, messageId, originalText + shiftResultText);
-          }
-          return;
-        }
-
-        if (!submissionId || !validUuid(submissionId)) return;
-
-        let resultText = '';
-
-        if (action === 'retry') {
-          const kvKey = KV_PREFIX + submissionId;
-          let raw, val;
-          try { raw = await env.EARNEST_QUEUE.get(kvKey); } catch { return; }
-          if (!raw) { resultText = '\n\n❌ submission 不存在'; }
-          else {
-            try { val = JSON.parse(raw); } catch { return; }
-            const { rid, fields } = val;
-            if (!rid || !fields) { resultText = '\n\n❌ submission 資料不完整'; }
-            else {
-              const result = await submitEarnestToRagic(env, rid, fields);
-              const now = getNowIso();
-              if (result.ok) {
-                const updated = { ...val, status: 'success', ragic_id: result.ragicId, completed_at: now };
-                try { await env.EARNEST_QUEUE.put(kvKey, JSON.stringify(updated), { expirationTtl: KV_TTL_SECONDS }); } catch {}
-                const ts = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
-                resultText = `\n\n✅ <b>重試已觸發</b> (${ts})`;
-              } else {
-                const errEntry = { attempt: 'manual_retry', error: result.error, code: result.code, msg: result.msg, at: now };
-                const updated = { ...val, status: 'failed_need_human', last_error: errEntry, error_history: [...(val.error_history || []), errEntry] };
-                try { await env.EARNEST_QUEUE.put(kvKey, JSON.stringify(updated), { expirationTtl: KV_TTL_SECONDS }); } catch {}
-                resultText = `\n\n❌ <b>重試失敗</b>：${escapeHtml(result.error || String(result.code || ''))}`;
-              }
-            }
-          }
-        } else if (action === 'manual') {
-          const kvKey = KV_PREFIX + submissionId;
-          let raw, val;
-          try { raw = await env.EARNEST_QUEUE.get(kvKey); } catch { return; }
-          if (!raw) { resultText = '\n\n❌ submission 不存在'; }
-          else {
-            try { val = JSON.parse(raw); } catch { return; }
-            const updated = { ...val, status: 'manual_processed', completed_at: getNowIso() };
-            try { await env.EARNEST_QUEUE.put(kvKey, JSON.stringify(updated), { expirationTtl: KV_TTL_SECONDS }); } catch {}
-            const ts = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
-            resultText = `\n\n📋 <b>已標記為人工處理</b> (${ts})`;
-          }
-        }
-
-        if (messageId && chatId && resultText) {
-          await editTelegramMessage(env, chatId, messageId, originalText + resultText);
-        }
-      })());
-      return responsePromise;
     }
 
     // ============ Regular CORS-locked actions ============
@@ -5694,11 +5965,23 @@ export default {
     if (action === 'worklogTimetreeSync') return handleWorklogTimetreeSync(request, env, allowedOrigin);
     if (action === 'worklogSession') return handleWorklogSession(request, env, allowedOrigin);
     if (action === 'worklogLogout') return handleWorklogLogout(request, env, allowedOrigin);
+    if (action === 'staffSession') return handleStaffSession(request, env, allowedOrigin);
+    if (action === 'staffLogout') return handleStaffLogout(request, env, allowedOrigin);
+    // 同仁 Google 登入閘（2026-10-21）：searchStaff／searchDeposits 回租客姓名電話與同仁手機信箱。
+    if (STAFF_GATED_ACTIONS.has(action)) {
+      const stIdentity = await authenticateStaffGoogle(request, env, allowedOrigin);
+      if (stIdentity && stIdentity.__authError) return stIdentity.__authError;
+      if (!stIdentity && STAFF_GATE_ENFORCE) return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
+    }
     let worklogIdentity = null;
     if (WORKLOG_ACTIONS.has(action)) {
       // 2026-10-14 雙軌：看板兩支 action 帶 Authorization header 走 Google（見
       // authenticateWorklogGoogle），驗證失敗回該錯誤本身、不 fallback；沒帶才走舊 `?token=`。
       if (WORKLOG_GOOGLE_ACTIONS.has(action)) {
+        if (action === 'worklogBoard' && request.headers.get('Authorization')) { // 跟驗身分同時開始讀看板資料（見 WORKLOG_BOARD_PREFETCH）
+          const d = worklogBoardDate(url);
+          if (d) { const p = worklogBoardFetch(env, d); p.catch(() => {}); WORKLOG_BOARD_PREFETCH.set(request, p); }
+        }
         const wlGoogle = await authenticateWorklogGoogle(request, env, allowedOrigin);
         if (wlGoogle && wlGoogle.__authError) return wlGoogle.__authError;
         worklogIdentity = wlGoogle;
@@ -5889,7 +6172,9 @@ export default {
         //                          + staff-dashboard.html 在職名單與離職判定
         //   到職日期              → staff-dashboard.html 年資計算與到職月曲線起點
         //   Email / 員工帳號      → 下一階段 Google 帳號登入的白名單比對
-        const LIST_STAFF_PUBLIC_FIELDS = ['姓名', '部門', '在職狀態', '到職日期', 'Email', '員工帳號'];
+        // 2026-10-21：移除 Email／員工帳號——全機消費端（js/shared.js、staff-dashboard.html）0 使用，
+        // Google 登入白名單比對已改在 Worker 內直接反查人事表（見「同仁 Google 登入閘」），不需要外送信箱。
+        const LIST_STAFF_PUBLIC_FIELDS = ['姓名', '部門', '在職狀態', '到職日期'];
         const staffOut = {};
         for (const [rid, rec] of Object.entries(data || {})) {
           if (!rec || typeof rec !== 'object') continue;
@@ -7388,23 +7673,23 @@ export default {
           });
         }
 
-        // ── Non-blocking Telegram notification on collision ──
+        // ── Non-blocking Discord notification on collision──
         // Decoupled from write: failure here does NOT roll back registration
         if (collisionDeveloper) {
           const nowRD = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
           const tgLines = [
-            '🚨 <b>撞單登記</b>',
+            DISCORD_PREFIX_ALERT + '撞單登記',
             '',
-            '登記人：' + escapeHtml(developerEmail),
-            '591 連結：' + escapeHtml(link591),
-            '地址：' + escapeHtml(address),
-            '原開發人：' + escapeHtml(collisionDeveloper),
+            '登記人：' + developerEmail,
+            '591 連結：' + link591,
+            '地址：' + address,
+            '原開發人：' + collisionDeveloper,
             '時間：' + nowRD,
           ];
           if (ragicId) tgLines.push('開發募集 ID：' + ragicId);
           const tgTextRD = tgLines.join('\n');
           ctx.waitUntil(
-            sendTelegramMessage(env, tgTextRD, ragicId || 'collision').catch(() => {})
+            sendDiscordAlert(env, tgTextRD) // helper 永不丟例外，不需 catch
           );
         }
 
@@ -7488,7 +7773,9 @@ export default {
       // ============ Group N3: searchDeposits ============
       if (action === 'searchDeposits') {
         const q = (url.searchParams.get('q') || '').trim().slice(0, 50);
-        if (!q) return jsonResp({ ok: true, deposits: [] }, 200, allowedOrigin);
+        // caseName=：收款建單頁選物件後自動帶出該物件的定金單，比對案名欄位 1000790（2026-10-15）
+        const caseName = (url.searchParams.get('caseName') || '').trim().slice(0, 100);
+        if (!q && !caseName) return jsonResp({ ok: true, deposits: [] }, 200, allowedOrigin);
         const fetchDep = async (fid, val) => {
           const uu = new URL(env.RAGIC_BASE + '/payments/1');
           uu.searchParams.set('api', 'true');
@@ -7501,8 +7788,10 @@ export default {
         };
         let dMap = {};
         try {
-          const [byNo, byName] = await Promise.all([fetchDep('1000796', q), fetchDep('1000792', q)]);
-          for (const src of [byNo, byName]) {
+          const srcs = caseName
+            ? [await fetchDep('1000790', caseName)]
+            : await Promise.all([fetchDep('1000796', q), fetchDep('1000792', q)]);
+          for (const src of srcs) {
             for (const [rid, rec] of Object.entries(src)) {
               if (rid === '_total' || rid === '_max' || typeof rec !== 'object') continue;
               dMap[rid] = rec;
@@ -7977,7 +8266,7 @@ export default {
         return jsonResp({ ok: true }, 200, allowedOrigin);
       }
 
-      // ============ Group P: reportBug -- screenshot + description to OPS Telegram ============
+      // ============ Group P: reportBug -- screenshot + description to Discord============
       if (action === 'reportBug') {
         let body;
         try { body = await request.json(); } catch { return jsonResp({ error: 'bad_json' }, 400, allowedOrigin); }
@@ -7990,6 +8279,7 @@ export default {
           'https://schedule.wuohome.com.tw',
           'https://map.wuohome.com.tw',
           'https://from.wuohome.com.tw',
+          'https://wuohome-petty-cash.vercel.app', // 零用金請款系統（2026-10-16，經 Vercel 後端代轉）
         ];
         const originOk = ALLOWED_REPORT_ORIGINS.some(function(o) { return reqOrigin.startsWith(o) || reqReferer.startsWith(o); });
         if (!originOk) return jsonResp({ error: 'forbidden_origin' }, 403, allowedOrigin);
@@ -8038,10 +8328,6 @@ export default {
         ];
         var caption = captionParts.join('\n');
 
-        var BOT_TOKEN = env.OPS_BOT_TOKEN;
-        var CHAT_ID = '8163308207';
-        var TG_BASE = 'https://api.telegram.org/bot' + BOT_TOKEN;
-
         var images = [];
         if (screenshot && typeof screenshot === 'string' && screenshot.indexOf('data:image/') === 0) {
           images.push(screenshot);
@@ -8053,27 +8339,20 @@ export default {
           }
         }
 
-        function dataUrlToBytes(dataUrl) {
-          var b64 = dataUrl.split(',')[1];
-          if (!b64) return null;
-          var bin = atob(b64);
-          var bytes = new Uint8Array(bin.length);
-          for (var j = 0; j < bin.length; j++) bytes[j] = bin.charCodeAt(j);
-          return bytes;
+        // data URL -> Discord 附檔。合計超過 8MB／格式不認得／解碼失敗的圖略過並在文字註明（不整則失敗）
+        function dataUrlToFile(dataUrl, idx) {
+          var m = /^data:image\/([a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+\/=]+)$/.exec(dataUrl);
+          if (!m) return null;
+          try {
+            var bin = atob(m[2]);
+            var bytes = new Uint8Array(bin.length);
+            for (var j = 0; j < bin.length; j++) bytes[j] = bin.charCodeAt(j);
+            var ext = m[1].toLowerCase() === 'jpeg' ? 'jpg' : m[1].toLowerCase().replace(/[^a-z0-9]/g, '');
+            return { bytes: bytes, type: 'image/' + m[1], name: 'screenshot-' + (idx + 1) + '.' + (ext || 'bin') };
+          } catch (e) { return null; }
         }
 
-        async function sendPhoto(dataUrl, cap) {
-          var bytes = dataUrlToBytes(dataUrl);
-          if (!bytes || bytes.length > 10 * 1024 * 1024) return { ok: false };
-          var form = new FormData();
-          form.append('chat_id', CHAT_ID);
-          form.append('photo', new Blob([bytes], { type: 'image/jpeg' }), 'screenshot.jpg');
-          if (cap) form.append('caption', cap.slice(0, 1024));
-          var res = await fetch(TG_BASE + '/sendPhoto', { method: 'POST', body: form });
-          return res.json().catch(function() { return { ok: false }; });
-        }
-
-        // Ragic「意見回饋」同步：Telegram 是主流程，這裡失敗不得擋主流程，只記 log（見 syncBugReportToRagic 上方註解）。
+        // Ragic「意見回饋」同步：Discord 是主流程，這裡失敗不得擋主流程，只記 log（見 syncBugReportToRagic 上方註解）。
         function syncBugReportNonBlocking(hasScreenshot, shotWhere) {
           var p = syncBugReportToRagic(env, { safeType, safeTitle, safeUrl, safeDesc, uaShort, nowTW, hasScreenshot, shotWhere })
             .catch(function(e) { console.error('[reportBug->ragic] sync failed', e); });
@@ -8081,7 +8360,7 @@ export default {
         }
 
         // 2026-10-02：先交給系統部通報員（Discord 交辦頻道，截圖當附件）。圖超過 3 張／合計超過 8MB／格式不認得 → 不走總機，
-        // 直接用原本的 Telegram（內容零損失）；總機沒收下也退回 Telegram。
+        // 直接由 Worker 直推 Discord（內容零損失）；總機沒收下也一樣。
         var hubImgs = [], hubBytes = 0, hubOk = true;
         for (var hi = 0; hi < images.length; hi++) {
           var hm = /^data:image\/(jpeg|png|gif|webp);base64,([A-Za-z0-9+\/=]+)$/.exec(images[hi]);
@@ -8096,39 +8375,31 @@ export default {
           syncBugReportNonBlocking(hubImgs.length > 0, 'Discord 系統部「交辦」頻道');
           return jsonResp({ ok: true }, 200, allowedOrigin);
         }
-        if (!BOT_TOKEN) return jsonResp({ error: 'server_config_error' }, 500, allowedOrigin);
+        if (!env.DISCORD_BOT_TOKEN) return jsonResp({ error: 'server_config_error' }, 500, allowedOrigin);
 
-        if (images.length === 0) {
-          var res = await fetch(TG_BASE + '/sendMessage', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: CHAT_ID, text: caption }),
-          });
-          var json = await res.json().catch(function() { return {}; });
-          if (!json.ok) return jsonResp({ error: 'telegram_error', detail: json.description }, 502, allowedOrigin);
-          syncBugReportNonBlocking(false);
+        var discordFiles = [], discordBytes = 0, skippedImgs = 0;
+        for (var di = 0; di < images.length; di++) {
+          var df = dataUrlToFile(images[di], discordFiles.length);
+          if (!df || discordFiles.length >= 10 || discordBytes + df.bytes.length > 8 * 1024 * 1024) { skippedImgs++; continue; }
+          discordBytes += df.bytes.length;
+          discordFiles.push(df);
+        }
+        var discordText = caption + (skippedImgs ? '\n\n⚠️ 另有 ' + skippedImgs + ' 張截圖過大或格式不符，未附上' : '');
+        var msgId = await sendDiscordAlert(env, discordText, { files: discordFiles });
+        var shotNote = 'Discord 系統部「警報」頻道';
+        if (msgId) {
+          syncBugReportNonBlocking(discordFiles.length > 0, shotNote);
           return jsonResp({ ok: true }, 200, allowedOrigin);
         }
-
-        var firstResult = await sendPhoto(images[0], caption);
-        if (!firstResult.ok) {
-          var res2 = await fetch(TG_BASE + '/sendMessage', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: CHAT_ID, text: caption + '\n\n⚠️ 截圖上傳失敗' }),
-          });
-          var json2 = await res2.json().catch(function() { return {}; });
-          if (!json2.ok) return jsonResp({ error: 'telegram_error', detail: json2.description }, 502, allowedOrigin);
-          syncBugReportNonBlocking(false);
-          return jsonResp({ ok: true, warn: 'screenshot_failed' }, 200, allowedOrigin);
+        if (discordFiles.length > 0) {
+          // 附檔上傳失敗 → 退成純文字再送一次，並註明截圖沒送到
+          var msgId2 = await sendDiscordAlert(env, caption + '\n\n⚠️ 截圖上傳失敗');
+          if (msgId2) {
+            syncBugReportNonBlocking(false);
+            return jsonResp({ ok: true, warn: 'screenshot_failed' }, 200, allowedOrigin);
+          }
         }
-        for (var k = 1; k < images.length; k++) {
-          // ponytail-debt: 第 2 張以後的截圖 best-effort 送出，失敗吞掉不中斷——第 1 張失敗已在上層有 sendMessage fallback 告知使用者，
-          // 多圖場景全部失敗頂多少幾張圖，不影響已送出的文字通知；未來若要精確追蹤失敗率可在此補 console.error(e)。
-          await sendPhoto(images[k], '').catch(function() {});
-        }
-        syncBugReportNonBlocking(true);
-        return jsonResp({ ok: true }, 200, allowedOrigin);
+        return jsonResp({ error: 'discord_error' }, 502, allowedOrigin);
       }
 
       // ============ Group S: 資產活化工作檯 P5（asset-workbench.html）============
