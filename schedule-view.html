@@ -143,6 +143,7 @@ async function loadEmployees() {
       if (status !== '在職') return false;
       if (dept === '經營階層') return false;
       if (hire === '承攬') return true;
+      if (hire === '正職') return true; // 2026-10-29 小鐘轉租賃部正職，與 schedule.html 人員範圍一致
       if (name === '韓珊珊') return true;
       if (dept === '設計部') return true;
       if (dept === '社宅部') return true;

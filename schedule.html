@@ -344,7 +344,7 @@ const App = () => {
             const isDutyPartTime = (e) => dutyV2Month && e.hire === "兼職" && !SC.PARTTIME_DUTY_EXCLUDE.includes(e.name);
             setAllEmployees(allEmps.filter(e => e.hire !== "兼職" || isDutyPartTime(e)).sort((a,b) => a.dept.localeCompare(b.dept) || a.hireDate.localeCompare(b.hireDate)));
 
-            // 排休用：只有承攬 + 韓珊珊 + 設計部 + 行銷部 + 瓊安 + 社宅部
+            // 排休用：承攬 + 正職（2026-10-29 小鐘轉租賃部正職，原本不在任何一類會整列消失）+ 韓珊珊 + 設計部 + 行銷部 + 瓊安 + 社宅部
             const getDeptOrder = (dept) => {
                 if (dept.startsWith("管理部")) return 0;
                 if (dept === "設計部") return 1;
@@ -355,7 +355,7 @@ const App = () => {
                 return 5;
             };
             const emps = allEmps
-                .filter(e => e.hire === "承攬" || e.name === "韓珊珊" || e.dept === "設計部" || e.dept === "行銷部" || e.name === "張瓊安" || e.dept === "社宅部" || isDutyPartTime(e))
+                .filter(e => e.hire === "承攬" || e.hire === "正職" || e.name === "韓珊珊" || e.dept === "設計部" || e.dept === "行銷部" || e.name === "張瓊安" || e.dept === "社宅部" || isDutyPartTime(e))
                 .map(e => isDutyPartTime(e) ? {...e, dept: "兼職"} : e.name === "韓珊珊" ? {...e, dept: "管理部/秘書"} : e.name === "張瓊安" ? {...e, dept: "管理部/特助"} : e)
                 .sort((a,b) => getDeptOrder(a.dept) - getDeptOrder(b.dept) || a.hireDate.localeCompare(b.hireDate));
             setEmployees(emps);
