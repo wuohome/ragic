@@ -5855,6 +5855,58 @@ async function handleScheduleShiftCallback(env, action, payload, dryRun = false)
   return null;
 }
 
+// ============ 問題回報（reportBug）來源白名單與限流（2026-10-30）============
+// 精確比對 origin（舊版用 startsWith，`https://wuohome.github.io.evil.com` 也會通過）。
+// 白名單內的網域，瀏覽器可直接 fetch reportBug（OPTIONS／POST 都回該 origin 的 CORS 標頭）；
+// 有 server 代轉的站（零用金、設計部、裝修進度）代轉時帶 github.io 的 Origin，同樣通過。
+const REPORT_ALLOWED_ORIGINS = [
+  'https://wuohome.github.io',
+  'https://schedule.wuohome.com.tw',          // 以下三個自訂網域目前解析不到（2026-10-30 實測），沿用舊白名單不動
+  'https://map.wuohome.com.tw',
+  'https://from.wuohome.com.tw',
+  'https://wuohome-petty-cash.vercel.app',     // 零用金請款系統（2026-10-16，經 Vercel 後端代轉）
+  'https://wuohome-survey-planner.vercel.app', // 場勘規劃書產生器
+  'https://wuohome-crm.vercel.app',            // 業務開發 CRM
+  'https://wuohome-decor-api.vercel.app',      // 設計部工作檯（Vercel 專案 wuohome-decor-console）
+  'https://ruguo-partners.vercel.app',         // 如果人生合夥人平台
+  'https://wuohome-workbench.vercel.app',      // 窩的家工作台
+  'https://wuohome-wuge-tools.vercel.app',     // 小吳哥學員投資工具
+  'https://wuohome-booking.vercel.app',        // 自建預約頁
+  'https://wuohome-reno.vercel.app',           // 裝修進度（代轉）
+  'https://wuohome-property.vercel.app',       // 窩的家物業管理
+];
+// 網址裡的專屬通行碼（?token= / ?t= / ?key= / ?APIKey=）不得進 Discord／Ragic：前端 widget 已遮，這裡是第二道（舊版或別人手打的請求也擋）
+function redactReportUrl(u) { return u.replace(/([?&#](?:token|t|key|apikey|access_token)=)[^&#\s]*/gi, '$1***'); }
+function reportOriginOf(request) {
+  const o = request.headers.get('Origin') || '';
+  if (REPORT_ALLOWED_ORIGINS.includes(o)) return o;
+  try {
+    const r = new URL(request.headers.get('Referer') || '').origin;
+    if (!o && REPORT_ALLOWED_ORIGINS.includes(r)) return r;
+  } catch { /* 沒有或壞掉的 Referer：視為不通過 */ }
+  return null;
+}
+// 匿名可打的端點要有限流，防灌爆（Discord／Ragic／維修員額度）。KV 計數，每小時一格。
+// 單 IP 每小時 REPORT_RL_PER_IP 則、全站每小時 REPORT_RL_GLOBAL 則；超過回 429（正常使用碰不到）。
+// ponytail-debt: KV 讀改寫非原子、KV 故障時放行（寧可多收也不擋真人回報）；要更嚴再換 Durable Object。
+const REPORT_RL_PER_IP = 10;
+const REPORT_RL_GLOBAL = 60;
+async function reportRateLimited(env, request) {
+  if (!env.EARNEST_QUEUE) return false;
+  const hour = Math.floor(Date.now() / 3600000);
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const keys = [['bugrl:ip:' + ip + ':' + hour, REPORT_RL_PER_IP], ['bugrl:all:' + hour, REPORT_RL_GLOBAL]];
+  try {
+    let limited = false;
+    for (const [k, max] of keys) {
+      const n = parseInt(await env.EARNEST_QUEUE.get(k) || '0', 10) || 0;
+      if (n >= max) { limited = true; continue; }
+      await env.EARNEST_QUEUE.put(k, String(n + 1), { expirationTtl: 3900 });
+    }
+    return limited;
+  } catch (e) { console.error('[reportBug] rate limit KV failed', e); return false; }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const allowedOrigin = env.ALLOWED_ORIGIN;
@@ -5889,7 +5941,8 @@ export default {
 
     // ============ Regular CORS-locked actions ============
     if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: corsHeaders(allowedOrigin) });
+      const preOrigin = path === 'reportBug' ? reportOriginOf(request) : null;
+      return new Response(null, { status: 204, headers: corsHeaders(preOrigin || allowedOrigin) });
     }
 
     const config = ALLOWED_ACTIONS[path];
@@ -8268,21 +8321,15 @@ export default {
 
       // ============ Group P: reportBug -- screenshot + description to Discord============
       if (action === 'reportBug') {
+        // 白名單內的來源回該 origin 的 CORS（瀏覽器直打才讀得到回應）；其餘維持原值
+        const reportOrigin = reportOriginOf(request);
+        const allowedOrigin = reportOrigin || env.ALLOWED_ORIGIN;
         let body;
         try { body = await request.json(); } catch { return jsonResp({ error: 'bad_json' }, 400, allowedOrigin); }
 
         // Extra origin guard (on top of CORS)
-        const reqOrigin = request.headers.get('Origin') || '';
-        const reqReferer = request.headers.get('Referer') || '';
-        const ALLOWED_REPORT_ORIGINS = [
-          'https://wuohome.github.io',
-          'https://schedule.wuohome.com.tw',
-          'https://map.wuohome.com.tw',
-          'https://from.wuohome.com.tw',
-          'https://wuohome-petty-cash.vercel.app', // 零用金請款系統（2026-10-16，經 Vercel 後端代轉）
-        ];
-        const originOk = ALLOWED_REPORT_ORIGINS.some(function(o) { return reqOrigin.startsWith(o) || reqReferer.startsWith(o); });
-        if (!originOk) return jsonResp({ error: 'forbidden_origin' }, 403, allowedOrigin);
+        if (!reportOrigin) return jsonResp({ error: 'forbidden_origin' }, 403, allowedOrigin);
+        if (await reportRateLimited(env, request)) return jsonResp({ error: 'rate_limited' }, 429, allowedOrigin);
 
         const bugDesc    = body.description;
         const bugType    = body.type;
@@ -8298,7 +8345,7 @@ export default {
         const VALID_TYPES = ['功能異常', '版面問題', '資料錯誤', '建議', '其他'];
         const safeType  = (typeof bugType === 'string' && VALID_TYPES.includes(bugType)) ? bugType : '其他';
         const safeDesc  = bugDesc.trim().slice(0, 1000);
-        const safeUrl   = (typeof pageUrl === 'string' ? pageUrl : '').slice(0, 500);
+        const safeUrl   = redactReportUrl(typeof pageUrl === 'string' ? pageUrl : '').slice(0, 500);
         const safeTitle = (typeof pageTitle === 'string' ? pageTitle : '').slice(0, 200);
         const safeUA    = (typeof userAgent === 'string' ? userAgent : '').slice(0, 300);
 
