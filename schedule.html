@@ -350,9 +350,9 @@ const App = () => {
                 if (dept === "設計部") return 1;
                 if (dept === "行銷部") return 2;
                 if (dept === "租賃部") return 3;
+                if (dept === "兼職") return 3.5; // 兼職都是租賃部同仁，緊接租賃部欄組
                 if (dept === "社宅部") return 4;
-                if (dept === "兼職") return 9; // 2026/11 起兼職欄組放最後
-                return 5;
+                return 5; // 其他部門（買賣部）放最右邊
             };
             const emps = allEmps
                 .filter(e => e.hire === "承攬" || e.hire === "正職" || e.name === "韓珊珊" || e.dept === "設計部" || e.dept === "行銷部" || e.name === "張瓊安" || e.dept === "社宅部" || isDutyPartTime(e))
@@ -2095,7 +2095,7 @@ const App = () => {
                                 <ul className="list-disc pl-4 space-y-1">
                                     <li><b>每天掃整棟 1F–4F</b>（4F 也是每天）</li>
                                     <li><b>業務、兼職：一個人一天掃整棟</b>（表上會看到同一個人 1F+2F+3F+4F）</li>
-                                    <li><b>內勤五位兩人一組</b>：一人 1F+4F、一人 2F+3F，搭檔和樓層每次輪替；只排平日，六日與國定假日不排</li>
+                                    <li><b>內勤六位兩人一組</b>：一人 1F+4F、一人 2F+3F，搭檔和樓層每次輪替；只排平日，六日與國定假日不排</li>
                                     <li><b>兼職每月一次</b>，由系統排在六日（{SC.PARTTIME_DUTY_FIRST_DATE.slice(5)} 起），六日不夠的排平日；不用值班、不用倒垃圾</li>
                                     <li><b>倒垃圾歸當天值班的人</b>（值班格會標 🗑️；週三、週日清潔隊不收）。不再另外排清運</li>
                                     <li>值班和打掃各排各的，互不綁定</li>
@@ -2219,10 +2219,11 @@ const App = () => {
                                         const dept = employees[i].dept;
                                         let count = 0;
                                         while (i + count < employees.length && employees[i + count].dept === dept) count++;
-                                        const color = DEPT_COLORS[dept] || "#6b7280";
+                                        // 內部 dept 維持「兼職」（手動點格會寫進 Ragic），只改顯示
+                                        const color = dept === "兼職" ? DEPT_COLORS["租賃部"] : (DEPT_COLORS[dept] || "#6b7280");
                                         result.push(
                                             <th key={dept} colSpan={count} className="p-1 text-white text-xs font-medium" style={{backgroundColor: color}}>
-                                                {dept}
+                                                {dept === "兼職" ? "租賃部（兼職）" : dept}
                                             </th>
                                         );
                                         i += count;
