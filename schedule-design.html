@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>窩的家排班表</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ---------- Tokens: 白底細線、等寬小字；顏色只留給班別語意 ---------- */
+:root{
+  --bg:#FFFFFF;--bg2:#F6F6F6;--bg3:#ECECEC;
+  --ink:#0A0A0A;--ink2:#404040;--ink3:#6B6B6B;
+  --line:#E6E6E6;--line2:#BDBDBD;
+  --clean:#2563EB;--clean-soft:#DBE7FF;--clean-ink:#1E3A8A;
+  --duty:#F97316;--duty-soft:#FFE2CC;--duty-ink:#8A2E0C;
+  --rest:#15803D;--rest-soft:#BBF0CC;--rest-ink:#14532D;
+  --today:#EAB308;--today-soft:#FEF7C3;
+  --red:#C2261E;--red-soft:#FCE4E2;
+  --on-ink:#FFFFFF;
+  --shadow:0 12px 40px rgba(0,0,0,.14);
+  --bar:56px;
+  --pad:16px;
+  --slash-duty:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' preserveAspectRatio='none'%3E%3Cpath d='M0 40 40 0' stroke='%238A2E0C' stroke-width='1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+  --slash-clean:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' preserveAspectRatio='none'%3E%3Cpath d='M0 40 40 0' stroke='%231E3A8A' stroke-width='1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+  --hatch:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Cpath d='M-1 9 9-1M-1 1 1-1M7 9 9 7' stroke='%23C4C4C4' stroke-width='1'/%3E%3C/svg%3E");
+  --bar-mark:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18' fill='none' stroke='%230A0A0A' stroke-width='1.5'%3E%3Ccircle cx='9' cy='9' r='6.5'/%3E%3Cpath d='M9 0v18M0 9h18'/%3E%3C/svg%3E");
+  --sans:"Geist","Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --mono:"Geist Mono","Noto Sans TC","PingFang TC","Microsoft JhengHei",ui-monospace,Menlo,Consolas,monospace;
+  --ease:cubic-bezier(0.22,1,0.36,1);
+  color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --bg:#0B0B0B;--bg2:#161616;--bg3:#262626;
+  --ink:#F2F2F2;--ink2:#CFCFCF;--ink3:#A3A3A3;
+  --line:#262626;--line2:#4A4A4A;
+  --clean:#3B82F6;--clean-soft:#14264D;--clean-ink:#BBD3FF;
+  --duty:#F97316;--duty-soft:#3D2110;--duty-ink:#FDC89A;
+  --rest:#1C9A4C;--rest-soft:#11391F;--rest-ink:#A7F0C0;
+  --today:#EAB308;--today-soft:#2A2204;
+  --red:#FF8A80;--red-soft:#3A1614;
+  --on-ink:#0A0A0A;
+  --shadow:0 12px 40px rgba(0,0,0,.6);
+  --slash-duty:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' preserveAspectRatio='none'%3E%3Cpath d='M0 40 40 0' stroke='%23FDC89A' stroke-width='1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+  --slash-clean:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' preserveAspectRatio='none'%3E%3Cpath d='M0 40 40 0' stroke='%23BBD3FF' stroke-width='1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+  --hatch:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Cpath d='M-1 9 9-1M-1 1 1-1M7 9 9 7' stroke='%23555555' stroke-width='1'/%3E%3C/svg%3E");
+  --bar-mark:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18' fill='none' stroke='%23F2F2F2' stroke-width='1.5'%3E%3Ccircle cx='9' cy='9' r='6.5'/%3E%3Cpath d='M9 0v18M0 9h18'/%3E%3C/svg%3E");
+  color-scheme:dark;
+}
+@media (min-width:768px){:root{--pad:24px}}
+
+/* ---------- Base ---------- */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;overflow-x:clip}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:24px;font-variant-numeric:tabular-nums;overflow-x:clip;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:60}
+h1,h2,h3,p,ol,ul,dl,dd{margin:0;padding:0}
+ol,ul{list-style:none}
+h1,h2,h3{text-wrap:balance}
+p{text-wrap:pretty}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:disabled{cursor:not-allowed}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.mono{font-family:var(--mono)}
+.xs{font-size:14px;line-height:20px}
+.sm{font-size:14px;line-height:20px}
+.muted{color:var(--ink3)}
+.semi{font-weight:600}
+.skip{position:fixed;left:16px;top:8px;z-index:70;background:var(--ink);color:var(--on-ink);padding-block:8px;padding-inline:12px;transform:translateY(-64px);transition:transform 200ms var(--ease)}
+.skip:focus{transform:none}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* ---------- Frame ---------- */
+.shell{padding-left:max(var(--pad),env(safe-area-inset-left,0px));padding-right:max(var(--pad),env(safe-area-inset-right,0px));max-width:1440px;margin-inline:auto}
+
+/* 上方選單：整條白底細線，位置靠黑色底線 */
+.topwrap{position:sticky;top:env(safe-area-inset-top,0px);z-index:40;background:var(--bg);border-bottom:1px solid var(--line2)}
+.top{display:flex;align-items:stretch;height:calc(var(--bar) - 1px);max-width:1440px;margin-inline:auto;padding-inline:max(var(--pad),env(safe-area-inset-left,0px))}
+.mark{display:none;align-items:center;gap:10px;margin-right:28px;font-size:15px;line-height:20px;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.mark::before{content:"";width:18px;height:18px;flex:none;border-radius:50%;background:var(--bar-mark) center/100% 100% no-repeat}
+@media (min-width:768px){.mark{display:flex}}
+.tab{position:relative;display:flex;align-items:center;padding-inline:14px;font-size:15px;line-height:20px;font-weight:500;color:var(--ink3);white-space:nowrap;transition:color 150ms var(--ease)}
+.tab:hover{color:var(--ink)}
+.tab[aria-current="page"]{color:var(--ink);font-weight:700}
+.tab[aria-current="page"]::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--ink)}
+.iconbtn{width:44px;height:44px;align-self:center;display:grid;place-items:center;color:var(--ink2);flex:none;transition:background-color 150ms var(--ease),color 150ms var(--ease)}
+.iconbtn:hover{background:var(--bg2);color:var(--ink)}
+#helpBtn{margin-left:auto;font-family:var(--mono);font-size:17px;font-weight:600}
+@media (max-width:639px){.tab{flex:1;justify-content:center;padding-inline:4px}.top{padding-inline:8px}}
+.note{display:flex;justify-content:flex-end;padding-block:8px 0;color:var(--ink3);font-size:13px;line-height:18px}
+.note .who-line{display:flex;gap:12px;align-items:center}
+main{padding-block:8px 112px;min-height:80vh}
+
+/* 月份：寬螢幕收進上方選單，捲到哪都看得到；手機留在內容最上方 */
+.monthnav{display:flex;align-items:center;gap:0;margin-left:-14px}
+.monthnav b{font-size:15px;line-height:20px;font-weight:600;min-width:104px;text-align:center}
+.monthnav .iconbtn{font-family:var(--mono);font-size:22px;line-height:1}
+@media (min-width:768px){
+  .monthnav{position:fixed;z-index:41;top:env(safe-area-inset-top,0px);height:calc(var(--bar) - 1px);margin:0;right:calc(max(var(--pad),(100vw - 1440px)/2 + var(--pad)) + 100px)}
+  .monthnav .iconbtn{width:36px}
+}
+@media (min-width:1100px){
+  .monthnav{right:calc(max(var(--pad),(100vw - 1440px)/2 + var(--pad)) + 290px)}
+  .note{position:fixed;z-index:41;top:env(safe-area-inset-top,0px);height:calc(var(--bar) - 1px);width:180px;padding:0;align-items:center;right:calc(max(var(--pad),(100vw - 1440px)/2 + var(--pad)) + 100px)}
+}
+
+/* ---------- Shared bits ---------- */
+.tag-clean,.pill{display:inline-block;flex:none;padding-inline:6px;font-size:14px;line-height:22px;font-weight:600;white-space:nowrap}
+.tag-clean{background:var(--clean-soft);color:var(--clean-ink)}
+.tag-clean.bad,.tag-clean.miss{background:var(--clean-soft) var(--slash-clean) center/100% 100% no-repeat;color:var(--clean-ink)}
+.pill-duty{background:var(--duty-soft);color:var(--duty-ink)}
+.pill-rest{background:var(--rest);color:#FFFFFF}
+.pill-rest.red{background:var(--rest-soft);color:var(--rest-ink)}
+.pill-off{background:var(--bg3);color:var(--ink);font-weight:500}
+.pill-miss{background:var(--clean-soft);color:var(--clean-ink);outline:1px solid var(--clean-ink);outline-offset:-1px}
+.tag-duty{display:inline-grid;grid-auto-flow:column;place-items:center;gap:1px;min-width:24px;height:24px;flex:none;background:var(--duty-soft);color:var(--duty-ink);font-size:14px;line-height:24px;font-weight:600}
+.tag-duty.warn{outline:1px solid var(--duty-ink);outline-offset:-1px}
+.tag-duty.bad{background:var(--duty-soft) var(--slash-duty) center/100% 100% no-repeat}
+.tag-duty.trash{padding-inline:4px;white-space:nowrap}
+.tag-duty .tr{font-style:normal;font-size:13px;line-height:1;filter:grayscale(1) contrast(1.3) brightness(.62)}
+:root[data-theme="dark"] .tag-duty .tr{filter:grayscale(1) brightness(1.4)}
+.tag-rest{display:inline-grid;place-items:center;min-width:24px;height:24px;flex:none;background:var(--rest);color:#FFFFFF;font-size:14px;font-weight:700;line-height:24px}
+.tag-rest.red{background:var(--rest-soft);color:var(--rest-ink)}
+.btn{min-height:44px;padding-block:8px;padding-inline:18px;font-size:15px;line-height:24px;font-weight:600;background:var(--ink);color:var(--on-ink);border-radius:0;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:opacity 150ms var(--ease)}
+.btn:hover{opacity:.82}
+.btn:disabled{background:var(--bg3);color:var(--ink3);opacity:1}
+.btn2{background:transparent;color:var(--ink);outline:1px solid var(--ink);outline-offset:-1px;transition:background-color 150ms var(--ease)}
+.btn2:hover{opacity:1;background:var(--bg2)}
+.btn2:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.link{font-size:14px;line-height:20px;font-weight:600;color:var(--ink);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;min-height:44px;padding-inline:4px;transition:opacity 150ms var(--ease);white-space:nowrap}
+.link:hover{opacity:.65}
+.note .link{min-height:24px;font-size:13px;line-height:18px;font-weight:500;color:var(--ink3)}
+
+/* 一頁一個大標題；其他都小而整齊 */
+.title,.hero .big{font-variant-numeric:proportional-nums}
+.title{font-size:36px;line-height:42px;font-weight:700;letter-spacing:-.04em}
+@media (min-width:768px){.title{font-size:56px;line-height:60px}}
+@media (min-width:1100px){.title{font-size:64px;line-height:68px;letter-spacing:-.05em}}
+.lede{color:var(--ink2);font-size:15px;line-height:22px;max-width:640px;margin-top:12px}
+.h2{font-size:15px;line-height:22px;font-weight:600}
+.pagehead{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:20px 40px;margin-top:12px}
+.pagehead>div:first-child{min-width:0;flex:1 1 420px}
+
+/* 規格列：等寬數字＋細線分格 */
+.spec{display:flex;flex:none;max-width:100%}
+.spec>div{padding-inline:16px;border-left:1px solid var(--line2)}
+.spec>div:first-child{padding-left:12px}
+.spec>div:last-child{padding-right:0}
+.spec dt{font-size:13px;line-height:18px;color:var(--ink3);white-space:nowrap}
+.spec dd{font-family:var(--mono);font-size:24px;line-height:32px;font-weight:500;letter-spacing:-.03em;white-space:nowrap}
+.spec dd small{font-family:var(--sans);font-size:13px;letter-spacing:0;color:var(--ink3);margin-left:2px;font-weight:400}
+@media (max-width:767px){.spec{width:100%}.spec>div{flex:1;padding-inline:10px}.spec>div:first-child{padding-left:10px}}
+
+/* ---------- 1. 我的班 ---------- */
+.whosel{display:flex;align-items:center;gap:12px;font-size:14px;line-height:20px;color:var(--ink3);margin-top:16px}
+.whosel select{flex:1;min-width:0;height:44px;padding-inline:12px;border:1px solid var(--line2);border-radius:0;background:var(--bg);color:var(--ink);font:inherit;font-size:16px;line-height:24px;font-weight:600}
+@media (min-width:768px){.whosel select{flex:none;width:260px}}
+.mine{display:grid;gap:56px;grid-template-columns:minmax(0,1fr);margin-top:28px}
+@media (min-width:1100px){.mine{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:72px}}
+.hero h1{font-weight:400}
+.hero .ask{display:block;font-size:20px;line-height:28px;color:var(--ink2);margin-bottom:4px}
+.hero .big{display:flex;align-items:baseline;flex-wrap:wrap;font-size:84px;line-height:1;font-weight:700;letter-spacing:-.05em}
+.hero .big .num{margin-right:calc(.04em + 4px)}
+.hero .big small{font-size:28px;line-height:36px;font-weight:600;letter-spacing:-.02em}
+.hero .what{display:block;margin-top:20px;font-size:28px;line-height:36px;font-weight:600;letter-spacing:-.03em}
+.hero .sub{margin-top:12px;color:var(--ink2);font-size:15px;line-height:24px;max-width:560px}
+@media (min-width:768px){.hero .big{font-size:120px}.hero .big small{font-size:36px;line-height:40px}}
+@media (min-width:1100px){.hero .big{font-size:152px;letter-spacing:-.06em}}
+.block{margin-top:48px}
+.mine>div>.block:first-child{margin-top:0}
+.block>.h2{margin-bottom:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:0 12px}
+.block>.h2 .muted{font-size:14px;font-family:var(--sans)}
+.lines>li{display:flex;align-items:center;gap:12px;min-height:50px;padding-block:8px;border-top:1px solid var(--line)}
+.lines>li:last-child{border-bottom:1px solid var(--line)}
+.lines .who-name{font-weight:600}
+.lines .right{margin-left:auto;color:var(--ink2);font-size:14px;line-height:20px;text-align:right}
+.lines .past{color:var(--ink3)}
+.you{font-size:13px;line-height:18px;padding-inline:5px;outline:1px solid var(--line2);outline-offset:-1px;color:var(--ink2);font-weight:500}
+/* 月刻度：一天一格 */
+.ruler{display:grid;gap:1px;height:36px;margin-top:16px}
+.ruler i{display:block;height:100%;background:var(--bg2);position:relative}
+.ruler i.c{background:var(--clean)}
+.ruler i.d{background:var(--duty)}
+.ruler i.r{background:var(--rest)}
+.ruler i.t{outline:2px solid var(--ink);outline-offset:-2px}
+.ruler i.t:not(.c):not(.d):not(.r){background:var(--today-soft)}
+.ruleraxis{display:grid;gap:1px;margin-top:4px;color:var(--ink3);font-size:13px;line-height:16px;font-family:var(--mono);letter-spacing:-.06em;text-align:center}
+.ruleraxis span{white-space:nowrap}
+.ruleraxis .t{color:var(--ink);font-weight:600}
+@media (max-width:1099px){.ruleraxis span{visibility:hidden;margin-inline:-6px}.ruleraxis .wk,.ruleraxis .t{visibility:visible}}
+.key{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:10px;color:var(--ink2);font-size:14px;line-height:20px}
+.key span{display:inline-flex;align-items:center;gap:6px}
+.key b{display:inline-block;width:12px;height:12px;font-weight:400}
+.empty{padding-block:16px;color:var(--ink2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+
+/* ---------- 2. 全體 ---------- */
+.dow{display:none}
+.days{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;background:var(--line);border-top:1px solid var(--ink);border-bottom:1px solid var(--line);margin-top:20px}
+@media (min-width:640px){.days{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:900px){.days{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (min-width:1280px){
+  .days{grid-template-columns:repeat(7,minmax(0,1fr))}
+  .dow{display:block;background:var(--bg);padding-block:8px;padding-inline:12px;color:var(--ink3);font-size:13px;line-height:18px}
+}
+.day{background:var(--bg);padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.day.we{background:var(--bg2)}
+.day.today{background:var(--today-soft)}
+.day.today .dh .n{background:var(--ink);color:var(--on-ink);padding-inline:6px;margin-left:-6px}
+.dh{display:flex;align-items:baseline;gap:8px;min-height:32px}
+.dh .n{font-family:var(--mono);font-size:26px;line-height:32px;font-weight:600;letter-spacing:-.05em}
+.dh .w{font-size:14px;line-height:20px;color:var(--ink3)}
+.dh .flag{margin-left:auto;align-self:center;color:var(--ink3);display:inline-flex;align-items:center;gap:4px;font-size:13px;line-height:18px;white-space:nowrap}
+.dh .pill{align-self:center}
+.day.today .dh .flag{color:var(--ink);font-weight:600}
+.rows{display:grid;gap:6px}
+.rw{display:flex;align-items:center;gap:6px;font-size:15px;line-height:22px;min-width:0}
+.rw .fx,.rw .note2{margin-left:auto;font-size:13px;line-height:18px;color:var(--ink3);white-space:nowrap}
+.rw .fx{font-family:var(--mono)}
+.rw .me{font-weight:700}
+.restbtn{margin-top:auto;align-self:flex-start;min-height:32px;display:inline-flex;align-items:center;gap:6px;font-size:14px;line-height:20px;color:var(--rest-ink);font-weight:600;padding-right:4px;transition:opacity 150ms var(--ease)}
+.restbtn::before{content:"";width:10px;height:10px;background:var(--rest);flex:none}
+.restbtn:hover{opacity:.7}
+.restbtn svg{transition:transform 150ms var(--ease)}
+.restbtn[aria-expanded="true"] svg{transform:rotate(180deg)}
+.restnames{font-size:14px;line-height:20px;color:var(--ink2)}
+.day.blank{display:none}
+@media (min-width:1280px){
+  .day.blank{display:flex;padding:0;background:var(--bg)}
+  .day.lead{grid-column:span 6}
+  .day.tail{grid-column:span 6;justify-content:center;padding:12px}
+}
+.foldpast{display:flex;margin-top:8px}
+.foldpast + .days{margin-top:8px}
+@media (min-width:640px){.foldpast{display:none}.foldpast + .days{margin-top:20px}}
+@media (max-width:639px){.days:not(.showpast) .day.past{display:none}.restbtn{min-height:44px}}
+
+/* ---------- 3. 排班 ---------- */
+.schedhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 32px;min-height:68px}
+.schedhead .nextline{flex:1 1 280px;margin:0;max-width:520px;font-weight:600;color:var(--ink)}
+.schedact{display:flex;align-items:center;gap:8px;margin-left:auto}
+.schedact .btn svg{flex:none;margin-left:-4px}
+@media (max-width:767px){.schedact{width:100%;margin-left:0}.schedact .btn{flex:1;padding-inline:8px}}
+/* 工具列：固定高度，細節收在展開面板 */
+.tools{position:relative;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:8px 32px;min-height:56px;margin-top:8px;border-top:1px solid var(--line2);background:var(--bg)}
+.seg{display:inline-flex;align-items:center;gap:12px}
+.seg .lb{font-size:14px;line-height:20px;color:var(--ink2);white-space:nowrap}
+.seg div{display:inline-flex;outline:1px solid var(--ink);outline-offset:-1px}
+.seg button{min-height:40px;padding-inline:16px;font-size:15px;line-height:20px;font-weight:600;color:var(--ink2);transition:background-color 150ms var(--ease),color 150ms var(--ease)}
+.seg button:hover{color:var(--ink);background:var(--bg2)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
+.toolset{display:flex;align-items:center;gap:4px}
+.toolset summary{display:flex;align-items:center;gap:6px;min-height:44px;padding-inline:14px;font-size:15px;line-height:20px;font-weight:600;color:var(--ink);cursor:pointer;list-style:none;-webkit-tap-highlight-color:transparent}
+.toolset summary::-webkit-details-marker{display:none}
+.toolset summary::after{content:"";width:6px;height:6px;margin-left:2px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2px) rotate(45deg);transition:transform 150ms var(--ease)}
+.toolset details[open] summary{background:var(--ink);color:var(--on-ink)}
+.toolset details[open] summary::after{transform:translateY(1px) rotate(225deg)}
+.toolset summary:hover{background:var(--bg2)}
+.toolset details[open] summary:hover{background:var(--ink)}
+#chkN{display:inline-grid;place-items:center;min-width:20px;height:20px;padding-inline:5px;font-family:var(--mono);font-size:13px;font-weight:600;background:var(--red);color:#FFFFFF}
+#chkN.zero{background:var(--bg3);color:var(--ink3)}
+.panel{position:absolute;left:0;right:0;top:100%;background:var(--bg);outline:1px solid var(--ink);box-shadow:var(--shadow);padding:16px 20px 20px}
+.panel .mxkey{gap:10px 20px}
+@media (max-width:767px){
+  .tools{display:grid;grid-template-columns:minmax(0,1fr);padding-block:12px 4px}
+  .seg{display:grid;width:100%;gap:6px}
+  .seg div{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+  .seg button{min-height:44px;padding-inline:0}
+  .toolset{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+  .toolset summary{justify-content:center;padding-inline:4px}
+  .panel{left:calc(-1*var(--pad));right:calc(-1*var(--pad));max-height:60dvh;overflow:auto}
+}
+.checks{display:grid;gap:0}
+.checks .head{display:none}
+.checks li{display:flex;align-items:center;gap:10px;min-height:44px;padding-block:2px;border-top:1px solid var(--line);font-size:14px;line-height:20px}
+.checks li:last-child{border-bottom:1px solid var(--line)}
+.checks li span{min-width:0}
+.checks li .acts{margin-left:auto;display:flex;gap:10px;flex:none}
+.dot-r{width:8px;height:8px;background:var(--red);flex:none}
+.checks .ok{display:flex;gap:8px;align-items:center;color:var(--ink2);font-size:14px;line-height:20px}
+.confirmbox>.h2{display:none}
+.cfdays{display:grid;grid-template-columns:minmax(0,1fr);gap:16px 32px}
+@media (min-width:1100px){.cfdays{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.cfrow{display:flex;align-items:center;gap:8px;min-height:44px;padding-block:2px;border-top:1px solid var(--line);font-size:14px;line-height:20px}
+.cfrow .nm{font-weight:600;white-space:nowrap}
+.cfrow .acts{margin-left:auto;display:flex;gap:6px;align-items:center;flex:none}
+.cfrow .mini{min-height:36px;padding-inline:10px;font-size:14px;line-height:20px;font-weight:500;outline:1px solid var(--line2);outline-offset:-1px;white-space:nowrap}
+.cfrow .mini:hover{background:var(--bg2)}
+.cfrow .mini.on{background:var(--red-soft);color:var(--red);outline-color:var(--red)}
+.cfrow .done{color:var(--ink3);white-space:nowrap}
+.cfdate{font-size:15px;line-height:22px;font-weight:600;color:var(--ink);padding-block:0 8px}
+@media (min-width:1024px){.cfrow,.checks li{min-height:40px}.cfrow .mini{min-height:32px}}
+
+/* 班表：白底細線，一格一色塊 */
+.mxwrap{margin-top:0;width:max-content;min-width:100%;background:var(--bg)}
+.mx{--th0:56px;--w:46px;--h:40px;border-collapse:separate;border-spacing:0;font-size:14px;line-height:20px;width:100%;table-layout:auto}
+.mx th,.mx td{padding:0;background:var(--bg);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.mx th:last-child,.mx td:last-child{border-right:0}
+.mx thead th{position:sticky;z-index:3;text-align:center;color:var(--ink);vertical-align:middle}
+.mx thead tr.g th{top:var(--th0);height:32px;font-size:14px;line-height:20px;font-weight:500;color:var(--ink2);text-align:left;padding-inline:8px;border-top:1px solid var(--ink);border-right-color:transparent;white-space:nowrap}
+.mx thead tr.p th{top:calc(var(--th0) + 32px);height:44px;min-width:var(--w);font-size:15px;line-height:20px;font-weight:600;letter-spacing:-.03em;white-space:nowrap;border-bottom:1px solid var(--ink);transition:background-color 150ms var(--ease)}
+.mx .gs{border-left:1px solid var(--line2)}
+.mx thead th.corner{top:var(--th0);left:0;z-index:5;text-align:left;min-width:76px;padding-inline:8px;font-size:14px;font-weight:500;color:var(--ink2);vertical-align:bottom;padding-bottom:12px;border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);border-right:1px solid var(--line2)}
+.mx thead tr.p th.hl{background:var(--bg3)}
+.mx th.flash .n{animation:pulse 1200ms var(--ease) 2}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+.mx .dt{position:sticky;left:0;z-index:2;text-align:left;font-weight:400;min-width:76px;height:var(--h);padding-inline:8px;color:var(--ink3);white-space:nowrap;border-right:1px solid var(--line2);cursor:pointer;transition:background-color 150ms var(--ease)}
+.mx .dt .n{display:inline-block;min-width:20px;text-align:right;margin-right:4px;font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.03em;color:var(--ink)}
+.mx .dt .nr{display:inline-block;margin-left:3px;padding-inline:1px;font-size:14px;line-height:18px;letter-spacing:-.05em;font-weight:600;background:var(--red-soft);color:var(--red)}
+.mx tr.we td,.mx tr.we .dt{background:var(--bg2)}
+.mx tr.we .dt{color:var(--ink)}
+.mx tr.wk td,.mx tr.wk .dt{box-shadow:inset 0 1px 0 var(--ink3)}
+.mx tr.nr td{background-color:var(--bg);background-image:var(--hatch);background-size:8px 8px}
+.mx tr.td td{background:var(--today-soft);box-shadow:none}
+.mx tr.td .dt{background:var(--ink);color:var(--on-ink);box-shadow:none}
+.mx tr.td .dt .n{color:var(--on-ink)}
+.mx .dt.hl{background:var(--bg3)}
+.mx tr.td .dt.hl{background:var(--ink)}
+.mx tfoot th,.mx tfoot td{padding-block:8px;vertical-align:top;text-align:center;font-size:14px;line-height:20px;font-weight:600;letter-spacing:-.02em;color:var(--ink);background:var(--bg);border-top:1px solid var(--ink);border-bottom:0}
+.mx tfoot th{position:sticky;left:0;z-index:5;text-align:left;padding-inline:8px;letter-spacing:0;border-right:1px solid var(--line2)}
+.mx tfoot .fs{display:block;min-height:20px}
+.mx tfoot .short{color:var(--red)}
+.mx tfoot .over{color:var(--duty-ink)}
+.mx tfoot .short b,.mx tfoot .over b{display:block;font-weight:inherit}
+.mx td{height:var(--h)}
+.cell{display:flex;align-items:stretch;justify-content:stretch;width:100%;min-width:var(--w,32px);height:100%;min-height:var(--h,40px);padding:2px;position:relative;transition:background-color 150ms var(--ease)}
+.cell:hover{background:var(--bg3)}
+.cell:focus-visible{outline-offset:-2px}
+.cell:disabled{cursor:not-allowed}
+.cell:disabled:hover{background:transparent}
+.cell .gone{width:8px;height:2px;background:var(--line2);align-self:center;margin:auto}
+.cell.bad{background:var(--red-soft)}
+.cell>.pop{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.cell.hit .pop{animation:pop 300ms var(--ease) both}
+@keyframes pop{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:none}}
+.mx .tag-clean,.mx .tag-duty,.mx .tag-rest{display:grid;grid-auto-flow:column;place-content:center;place-items:center;flex:1;width:auto;min-width:0;height:auto;min-height:32px;padding-inline:0;font-size:14px;line-height:18px;letter-spacing:-.02em}
+.cell>.tag-rest{flex:1}
+.mx .tag-clean{font-weight:700}
+.mx .tag-duty{font-weight:700}
+.mx.loading .cell>*{opacity:0}
+.mx.loading .cell::after{content:"";position:absolute;inset:6px;background:var(--bg3);animation:breathe 700ms var(--ease) infinite alternate}
+@keyframes breathe{from{opacity:.4}to{opacity:1}}
+.mxkey{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--ink2);font-size:14px;line-height:20px}
+.mxkey span{display:inline-flex;align-items:center;gap:6px}
+.mxkey .tag-duty,.mxkey .tag-rest{display:inline-grid}
+.mxkey .sw{display:inline-block;width:16px;height:8px}
+.mxkey .sw2{display:inline-block;width:2px;height:14px;background:var(--ink)}
+
+/* 整頁捲動：選單固定、人名貼在選單下、日期貼左邊 */
+html:has(#mxwrap){overflow-x:visible}
+body:has(#mxwrap){overflow-x:visible}
+body:has(#mxwrap) .topwrap{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0}
+body:has(#mxwrap) .shell{padding-top:var(--bar)}
+@media (max-width:1023px){.mx{--h:44px}}
+@media (max-width:767px){
+  body:has(#mxwrap) .topwrap{position:static}
+  body:has(#mxwrap) .shell{padding-top:0}
+  /* 手機瀏覽器整頁橫向捲動時人名列固定不住，改班表滿版自己捲、不顯示捲軸 */
+  html:has(#mxwrap),body:has(#mxwrap){overflow-x:clip}
+  .mxwrap{width:auto;min-width:0;margin-inline:calc(-1*var(--pad));overflow:auto;max-height:calc(100dvh - 8px);scrollbar-width:none;overscroll-behavior:contain}
+  .mxwrap::-webkit-scrollbar{display:none}
+  .mx{--th0:0px;--w:56px}
+  .mx thead th.corner,.mx .dt{min-width:68px;padding-inline:6px}
+  .mx .dt .n{margin-right:3px}
+  .mx tfoot th{padding-inline:6px}
+}
+
+/* ---------- 4. 公平帳 ---------- */
+.fairgrp{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;margin-top:32px;padding-top:16px;border-top:1px solid var(--ink)}
+@media (min-width:1100px){.fairgrp{grid-template-columns:200px minmax(0,1fr);gap:40px;margin-top:40px}}
+.fairside h2{font-size:18px;line-height:26px;font-weight:600;letter-spacing:-.02em}
+.fairside .avg{font-family:var(--mono);font-size:44px;line-height:52px;font-weight:500;letter-spacing:-.05em;margin-top:6px}
+.fairside .avg small{font-family:var(--sans);font-size:14px;line-height:20px;font-weight:400;letter-spacing:0;color:var(--ink3);margin-left:6px}
+.frow{display:grid;grid-template-columns:64px minmax(0,1fr) 56px;align-items:center;gap:2px 12px;padding-block:10px;border-top:1px solid var(--line)}
+.frow:last-child{border-bottom:1px solid var(--line)}
+.frow.fhead{border-top:0;padding-block:0 6px}
+.fscale{display:flex;justify-content:space-between;font-size:13px;line-height:18px;color:var(--ink3)}
+.fname{font-size:15px;line-height:22px;white-space:nowrap}
+.frow.me .fname{font-weight:700}
+.fdev{position:relative;height:18px}
+.fdev::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--ink)}
+.fdev i{position:absolute;top:4px;height:10px;display:block}
+.fdev i.over{left:50%;background:var(--ink)}
+.fdev i.under{right:50%;background:var(--ink3)}
+.fgap{font-family:var(--mono);font-size:17px;line-height:22px;font-weight:600;letter-spacing:-.03em;text-align:right;white-space:nowrap}
+.fgap.same,.fgap.under{color:var(--ink3)}
+.fdet{grid-column:1 / -1;font-size:14px;line-height:20px;color:var(--ink3)}
+@media (min-width:640px){.frow{grid-template-columns:96px minmax(0,1fr) 72px}.fdet{grid-column:2 / -1}}
+
+/* ---------- Toast / Modal / States ---------- */
+.toast{position:fixed;left:50%;bottom:max(24px,env(safe-area-inset-bottom,0px));z-index:50;transform:translate(-50%,16px);opacity:0;pointer-events:none;background:var(--ink);color:var(--on-ink);padding-block:10px;padding-inline:14px;font-size:14px;line-height:20px;box-shadow:var(--shadow);max-width:calc(100vw - 32px);transition:opacity 200ms var(--ease),transform 300ms var(--ease)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.err{background:var(--red);color:#FFFFFF}
+.state{margin:64px auto;max-width:480px}
+.state h1{font-size:32px;line-height:38px;font-weight:700;letter-spacing:-.03em}
+.state p{margin-top:12px;color:var(--ink2);font-size:15px;line-height:22px}
+.state .btn{margin-top:20px}
+.skel{display:grid;gap:12px;margin-top:24px}
+.skel i{display:block;height:16px;background:var(--bg3);animation:breathe 700ms var(--ease) infinite alternate}
+.skel i:nth-child(2){width:70%}.skel i:nth-child(3){width:50%}
+.modalback{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{background:var(--bg);color:var(--ink);max-width:460px;width:100%;max-height:calc(100dvh - 32px);overflow:auto;padding:24px;box-shadow:var(--shadow);outline:1px solid var(--ink)}
+.modal h2{font-size:24px;line-height:30px;font-weight:700;letter-spacing:-.03em}
+.modal .body{margin-top:10px;font-size:15px;line-height:24px;color:var(--ink2)}
+.modal .body p+p{margin-top:8px}
+.modal .body b{color:var(--ink)}
+.modal .opts{display:grid;gap:8px;margin-top:16px}
+.modal .opts .btn{white-space:normal;text-align:center}
+.modal.rules{max-width:600px}
+.modal .body h3{margin-top:20px;padding-top:12px;border-top:1px solid var(--line);font-size:15px;line-height:22px;font-weight:700;color:var(--ink)}
+.modal .body h3:first-child{margin-top:4px;padding-top:0;border-top:0}
+.modal .body ul{margin-top:4px;padding-left:18px;list-style:square}
+.modal .body li+li{margin-top:2px}
+.modal .body .tag-rest{min-width:22px;height:22px;line-height:22px}
+.modal .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}
+.modal input[type=text]{width:100%;height:44px;margin-top:12px;padding-inline:12px;border:1px solid var(--ink);border-radius:0;background:var(--bg);color:var(--ink);font:inherit}
+.bar{height:6px;background:var(--bg3);margin-top:16px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--ink);transition:width 200ms var(--ease)}
+.rcal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;margin-top:12px}
+.rcal .dw{font-size:13px;line-height:18px;color:var(--ink3);text-align:center}
+.rcal button,.rcal span.blk{min-height:48px;outline:1px solid var(--line);outline-offset:-1px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--mono);font-size:15px;line-height:18px;font-weight:500;gap:0}
+.rcal button:hover:not(:disabled){background:var(--bg2)}
+.rcal button:disabled{color:var(--ink3)}
+.rcal .rest,.rcal .rest:disabled{background:var(--rest);outline-color:var(--rest);color:#FFFFFF;font-weight:600}
+.rcal .rest:hover:not(:disabled){background:var(--rest)}
+.rcal .rest.red,.rcal .rest.red:disabled{background:var(--rest-soft);outline-color:var(--rest-soft);color:var(--rest-ink)}
+.rcal .tdy{outline:2px solid var(--ink);outline-offset:-2px}
+.rcal .tdy:not(.rest){background:var(--today-soft)}
+.rcal small{font-family:var(--sans);font-size:13px;line-height:16px;color:var(--ink3)}
+.rcal .rest small{color:inherit}
+.rcal span.blk{outline:0}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important;scroll-behavior:auto!important}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">跳到內容</a>
+<div class="topwrap">
+  <nav class="top" aria-label="主要分頁" id="topnav">
+    <div class="mark" id="mark"></div>
+    <button class="tab" data-view="me">我的班</button>
+    <button class="tab" data-view="all">全體</button>
+    <button class="tab" data-view="sched" id="tabSched" hidden>排班</button>
+    <button class="tab" data-view="fair">公平帳</button>
+    <button class="iconbtn" id="helpBtn" aria-label="排班規則說明" title="排班規則說明">?</button>
+    <button class="iconbtn" id="theme" aria-label="切換深淺色"></button>
+  </nav>
+</div>
+<div class="shell">
+  <div class="note"><span class="who-line" id="noteR"></span></div>
+  <main id="main" tabindex="-1"></main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div id="modalRoot"></div>
+
+<script src="schedule-common.js?v=20261031-5"></script>
+<script src="schedule-duty-v2.js?v=20261031-5"></script>
+<script src="schedule-next-core.js?v=20261031-5"></script>
+<script src="js/staff-gate.js"></script>
+<script>
+(function(){
+'use strict';
+
+/* ================= 基本設定 ================= */
+var WEEK=['日','一','二','三','四','五','六'];
+var TODAY=SC.todayStr();                         // YYYY/MM/DD（本機時間）
+var TY=+TODAY.slice(0,4), TM=+TODAY.slice(5,7), TD=+TODAY.slice(8,10);
+
+/* ================= 小工具 ================= */
+function $(s,r){return (r||document).querySelector(s)}
+function $$(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function dn(n){return esc(SC.nextName(n))}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+var toastT;
+function toast(msg,err){
+  var t=$('#toast');t.textContent=msg;t.className='toast show'+(err?' err':'');
+  clearTimeout(toastT);toastT=setTimeout(function(){t.className='toast'+(err?' err':'')},err?4800:3200);
+}
+
+/* ================= 狀態 ================= */
+var S={
+  boot:'login',            // login 等登入｜loading｜ready｜error
+  err:'',errTitle:'',errAct:'retry',
+  viewer:null,perms:{view:false,schedule:false,confirm:false},
+  year:0,month:0,
+  raw:{},recs:[],M:null,
+  allEmployees:[],employees:[],groups:[],byName:{},
+  view:'me',who:'',mode:'rest',openRest:{},showPast:false,
+  busy:false,cellBusy:{}
+};
+var initYM=(function(){
+  var y=TY,m=TM;
+  var q=(location.search.match(/[?&]m=(\d{4})-(\d{1,2})/)||[]);
+  if(q[1]){y=+q[1];m=+q[2];if(m<1||m>12){y=TY;m=TM}}
+  else if(TD>=20){m++;if(m>12){m=1;y++}}      // 同舊版：每月 20 號後預設看下個月
+  return {y:y,m:m};
+})();
+S.year=initYM.y;S.month=initYM.m;
+
+function ds(d){return SC.fmtDate(S.year,S.month,d)}
+function isTodayD(d){return ds(d)===TODAY}
+function isPastD(d){return SC._cmpDateStr(ds(d),TODAY)<0}
+function isFutureD(d){return SC._cmpDateStr(ds(d),TODAY)>0}
+function fmtMD(d){return S.month+'/'+d+'（'+WEEK[S.M.days[d].dow]+'）'}
+function isWE(d){var w=S.M.days[d].dow;return w===0||w===6}
+function hasTruck(d){return S.M.days[d].truck}
+function kindOf(n){var e=S.byName[n];return e?SC.dutyV2Kind(e):'biz'}
+function groupLabel(n){return SC.NEXT_KIND_LABEL[kindOf(n)]}
+function isRedDay(n,d){return SC.GOV_REST_NAMES.indexOf(n)>=0&&SC.isGovRestDay(S.year,S.month,d)&&!S.M.days[d].noRest}
+function hiredBy(n,d){var e=S.byName[n];if(!e||!e.hireDate||e.hireDate==='9999/12/31')return true;return SC._cmpDateStr(ds(d),e.hireDate)>=0}
+
+/* ================= 文字 ================= */
+function fText(f){return f.length===4?'一樓到四樓':(f.length===2&&f[0]===1&&f[1]===4)?'一樓和四樓':(f.length===2&&f[0]===2&&f[1]===3)?'二樓和三樓':f.map(function(x){return x+'F'}).join('、')}
+function fShort(f){return f.length===4?'整棟':f.map(function(x){return x+'F'}).join('＋')}
+function fHero(f){return f.length===4?'整棟（一樓到四樓）':fText(f)}
+function fCell(f){return f.length===4?'整棟':f.length===2?f.join('＋'):f.length===3?f[0]+'～'+f[2]:f[0]+'F'}
+function cleanTag(f,miss){return '<span class="tag-clean'+(miss?' miss':'')+'">'+fCell(f)+'</span>'}
+var PILL_C='<span class="tag-clean">打掃</span>';
+function pillDuty(d){return '<span class="pill pill-duty">值班</span>'}
+var PILL_R='<span class="pill pill-rest">休假</span>';
+function dutyTag(d,state){
+  if(state==='noshow')return '<span class="tag-duty bad">值</span>';
+  if(state==='notrash')return '<span class="tag-duty warn">值</span>';
+  return hasTruck(d)?'<span class="tag-duty trash">值<i class="tr">🗑️</i></span>':'<span class="tag-duty">值</span>';
+}
+function dutyNote(d,x){
+  if(x.state==='noshow')return '沒到班';
+  if(x.state==='notrash')return '未倒垃圾';
+  return hasTruck(d)?'倒垃圾':'沒垃圾車';
+}
+var IC={
+  caret:'<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>',
+  noTruck:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 4h8v7h-8zM9.5 6.500h3l2 2.500v2h-5"/><circle cx="4.5" cy="12" r="1.25"/><circle cx="11.5" cy="12" r="1.25"/><path d="M2 2l12 12"/></svg>',
+  sun:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 1.500v1.500M8 13v1.500M1.5 8H3M13 8h1.500M3.4 3.400l1 1M11.6 11.600l1 1M3.4 12.600l1-1M11.6 4.400l1-1"/></svg>',
+  moon:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round" aria-hidden="true"><path d="M13.500 9.500A6 6 0 0 1 6.500 2.500a6 6 0 1 0 7 7z"/></svg>',
+  check:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.500 6.500 12 13 4.500"/></svg>'
+};
+
+/* ================= 對話框 ================= */
+var modalRoot=$('#modalRoot'),modalResolve=null,modalKeep=false;
+function closeModal(v){var r=modalResolve;modalResolve=null;modalRoot.innerHTML='';if(r)r(v)}
+function openModal(html,opts){
+  return new Promise(function(resolve){
+    if(modalResolve)closeModal(null);
+    modalResolve=resolve;modalKeep=!!(opts&&opts.keep);
+    modalRoot.innerHTML='<div class="modalback" id="mback"><div class="modal" role="dialog" aria-modal="true">'+html+'</div></div>';
+    var f=$('.modal [autofocus],.modal .btn:not(.btn2)',modalRoot);if(f)f.focus();
+  });
+}
+modalRoot.addEventListener('click',function(e){
+  if(e.target.id==='mback'&&!modalKeep){closeModal(null);return}
+  var b=e.target.closest('[data-mv]');if(!b)return;
+  var v=b.getAttribute('data-mv');
+  if(v==='__input'){var i=$('.modal input',modalRoot);closeModal(i?i.value:'');return}
+  closeModal(v==='__null'?null:v);
+});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&modalResolve&&!modalKeep)closeModal(null)});
+function uiConfirm(title,bodyHtml,okLabel,danger){
+  return openModal('<h2>'+esc(title)+'</h2><div class="body">'+bodyHtml+'</div><div class="acts"><button class="btn btn2" data-mv="__null">取消</button><button class="btn" data-mv="yes">'+esc(okLabel||'確定')+'</button></div>').then(function(v){return v==='yes'});
+}
+function uiAlert(title,bodyHtml){return openModal('<h2>'+esc(title)+'</h2><div class="body">'+bodyHtml+'</div><div class="acts"><button class="btn" data-mv="ok">知道了</button></div>')}
+function uiChoose(title,opts,note){
+  return openModal('<h2>'+esc(title)+'</h2>'+(note?'<div class="body">'+note+'</div>':'')+'<div class="opts">'+opts.map(function(o,i){return '<button class="btn'+(o.sub?' btn2':'')+'" data-mv="'+i+'">'+esc(o.label)+'</button>'}).join('')+'</div><div class="acts"><button class="btn btn2" data-mv="__null">取消</button></div>').then(function(v){return v==null?null:opts[+v].value});
+}
+function uiPrompt(title,hint){
+  return openModal('<h2>'+esc(title)+'</h2><div class="body">'+esc(hint||'')+'</div><input type="text" autofocus><div class="acts"><button class="btn btn2" data-mv="__null">取消</button><button class="btn" data-mv="__input">確定</button></div>');
+}
+function progressOpen(text){openModal('<h2 id="pgT">'+esc(text)+'</h2><div class="body" id="pgS"></div><div class="bar"><i id="pgB"></i></div>',{keep:true})}
+function progressSet(text,cur,tot){
+  var t=$('#pgT'),s=$('#pgS'),b=$('#pgB');if(!t)return;
+  t.textContent=text;s.textContent=tot?cur+' / '+tot:'';b.style.width=tot?Math.round(cur/tot*100)+'%':'0%';
+}
+function progressClose(){closeModal(null)}
+
+/* ================= 資料載入 ================= */
+var base=SC.PROXY_BASE;
+function prevYM(){return S.month===1?{y:S.year-1,m:12}:{y:S.year,m:S.month-1}}
+function rebuild(){
+  S.recs=SC.nextParse(S.raw);
+  S.M=SC.nextBuildMonth(S.recs,S.year,S.month);
+}
+function noRestMap(){
+  var o={};
+  Object.keys(S.M.days).forEach(function(d){var x=S.M.days[d];if(x.noRest)o[x.ds]={ragicId:x.noRest.id,reason:x.noRest.reason}});
+  return o;
+}
+function fetchLeaves(){
+  var p=prevYM();
+  return SC.proxyFetch('listLeaves'+SC.leaveQuery(p.y,p.m,S.year,S.month));
+}
+function setEmployees(empJson){
+  var r=SC.nextBuildEmployees(empJson,S.year,S.month);
+  S.allEmployees=r.allEmployees;S.employees=r.employees;S.groups=SC.nextGroups(r.employees);
+  S.byName={};
+  r.allEmployees.concat(r.employees).forEach(function(e){S.byName[e.name]=e});
+}
+function chooseWho(){
+  var names=Object.keys(S.byName);
+  if(S.viewer&&names.indexOf(S.viewer.name)>=0)S.who=S.viewer.name;
+  else if(!S.who||names.indexOf(S.who)<0)S.who=S.employees.length?S.employees[0].name:'';
+}
+function loadData(){
+  S.boot='loading';render();
+  return Promise.all([SC.proxyFetch('listEmployees'),fetchLeaves()]).then(function(r){
+    setEmployees(r[0]);S.raw=r[1]||{};rebuild();
+    if(!S.who||!S.byName[S.who])chooseWho();
+    S.boot='ready';render();
+  }).catch(function(e){fail('資料載入失敗',e.message||String(e),'retry')});
+}
+function fail(title,msg,act){S.boot='error';S.errTitle=title;S.err=msg;S.errAct=act||'retry';render()}
+
+/* ================= 登入 ================= */
+function whoami(){
+  return StaffGate.fetch('/scheduleWhoami').then(function(res){
+    return res.json().catch(function(){return {}}).then(function(j){
+      if(res.ok&&j&&j.name)return j;
+      var e=new Error(res.status===404?'排班身分查詢尚未啟用（'+res.status+'）':(j&&j.error)||('身分查詢失敗（'+res.status+'）'));e.status=res.status;throw e;
+    });
+  });
+}
+function start(){
+  S.boot='login';render();
+  if(!window.StaffGate){fail('登入元件沒有載入','請重新整理頁面；如果一直這樣，請回報問題。','reload');return}
+  StaffGate.init(base);
+  // 不等 require() 的結果：舊版 StaffGate 在「已存 session」時這個 Promise 不會 resolve（deposit.html 也是只呼叫不等）。
+  // 它同步把 session 載好；接著的 whoami 走 StaffGate.fetch，沒登入會等到登入完成才送出。
+  StaffGate.require();
+  whoami().then(function(v){
+    S.viewer={name:v.name,role:v.role,department:v.department||''};
+    S.perms=SC.nextPerms(S.viewer);
+    $('#tabSched').hidden=!S.perms.schedule;
+    if(S.view==='sched'&&!S.perms.schedule)S.view='me';
+    return loadData();
+  }).catch(function(e){
+    fail('登入沒有完成',(e&&e.message?e.message:String(e))+'。請重新整理再試；仍然不行請用右下角的問題回報。','reload');
+  });
+}
+
+/* ================= 寫入（Ragic，經 Worker）================= */
+var F=SC.F_LEAVE;
+function jpost(path,body){return SC.proxyFetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}
+function apiCreate(body){
+  return jpost('createLeave',body).then(function(res){
+    var id=String(res&&res.ragicId||'');
+    if(!id)throw new Error('寫入沒有拿到編號，請重新整理確認');
+    S.raw[id]=Object.assign({},body);return id;
+  });
+}
+function apiUpdate(id,body){return jpost('updateLeave/'+id,body).then(function(){Object.assign(S.raw[id]||(S.raw[id]={}),body)})}
+function apiDelete(id){return SC.proxyFetch('deleteLeave/'+id,{method:'DELETE'}).then(function(){delete S.raw[id]})}
+function newBody(name,d,type,extra){
+  var o={};o[F.EMP]=name;o[F.DATE]=ds(d);o[F.YEAR]=String(S.year);o[F.MONTH]=String(S.month);o[F.TYPE]=type;
+  return Object.assign(o,extra||{});
+}
+function guardWrite(){
+  if(S.busy){toast('還在處理上一個動作，請稍等。',true);return false}
+  return true;
+}
+
+/* ================= 我的班 ================= */
+function myItems(n){
+  var out=[];
+  for(var d=1;d<=S.M.dim;d++){
+    var day=S.M.days[d];
+    day.clean.forEach(function(g){if(g.name===n)out.push({d:d,k:'c',f:g.floors,miss:g.missedFloors,mate:day.clean.filter(function(x){return x.name!==n})[0]})});
+    day.duty.forEach(function(x){if(x.name===n)out.push({d:d,k:'d',state:x.state})});
+    day.rest.forEach(function(x){if(x.name===n)out.push({d:d,k:'r'})});
+  }
+  return out;
+}
+function heroHTML(n){
+  var items=myItems(n);
+  var next=items.filter(function(i){return i.k==='c'&&SC._cmpDateStr(ds(i.d),TODAY)>=0})[0];
+  var dutyNext=items.filter(function(i){return i.k==='d'&&SC._cmpDateStr(ds(i.d),TODAY)>=0})[0];
+  var e=S.byName[n],kind=kindOf(n),sub=[];
+  var todayIn=(S.year===TY&&S.month===TM);
+  if(next&&!isTodayD(next.d)&&todayIn)sub.push('還有 '+(next.d-TD)+' 天。');
+  if(next&&next.mate)sub.push('跟'+dn(next.mate.name)+'一組，'+dn(next.mate.name)+'掃'+fText(next.mate.floors)+'。');
+  if(dutyNext)sub.push('下次值班 '+fmtMD(dutyNext.d)+'，'+(hasTruck(dutyNext.d)?'那天要倒垃圾。':'那天沒垃圾車，不用倒。'));
+  else if(kind==='office')sub.push('內勤不排值班，六日也不排打掃。');
+  else if(kind==='parttime')sub.push('兼職每月排一次，不排值班。');
+  else if(e&&e.hire!=='承攬')sub.push('你不排值班。');
+  if(!next){
+    var last=ds(S.M.dim);
+    var over=SC._cmpDateStr(last,TODAY)<0;
+    var title=over?'這個月已經過了':(items.some(function(i){return i.k==='c'})?'本月掃完了':'本月沒有排打掃');
+    return '<div class="hero"><h1><span class="ask">'+dn(n)+'，</span><span class="big">'+title+'</span></h1>'+
+      '<p class="sub">'+(over?'':'下一次要等下個月排好才看得到。')+sub.join('')+'</p></div>';
+  }
+  var isToday=isTodayD(next.d);
+  return '<div class="hero"><h1><span class="ask">'+dn(n)+'，你下一次打掃是</span>'+
+    '<span class="big">'+(isToday?'今天':'<span class="num">'+S.month+'/'+next.d+'</span><small>（'+WEEK[S.M.days[next.d].dow]+'）</small>')+'</span>'+
+    '<span class="what">'+fHero(next.f)+'</span></h1><p class="sub">'+sub.join('')+'</p></div>';
+}
+function todayHTML(n){
+  if(!(S.year===TY&&S.month===TM))return '';
+  var d=TD,day=S.M.days[d],rows='';
+  day.clean.forEach(function(c){
+    rows+='<li>'+PILL_C+'<span class="who-name">'+dn(c.name)+'</span>'+(c.name===n?'<span class="you">你</span>':'')+
+      '<span class="right">'+fHero(c.floors)+(c.missedFloors.length?'・'+fShort(c.missedFloors)+'未掃':'')+'</span></li>';
+  });
+  day.duty.forEach(function(x){
+    rows+='<li>'+pillDuty(d)+'<span class="who-name">'+dn(x.name)+'</span>'+(x.name===n?'<span class="you">你</span>':'')+'<span class="right">'+dutyNote(d,x)+'</span></li>';
+  });
+  if(!rows)rows='<li><span class="muted">今天還沒排。</span></li>';
+  return '<section class="block"><h2 class="h2"><span>今天 '+fmtMD(d)+'</span></h2><ul class="lines">'+rows+'</ul></section>';
+}
+function monthHTML(n){
+  var items=myItems(n),map={};
+  items.forEach(function(i){if(!map[i.d]||i.k!=='r')map[i.d]=i.k});
+  var ticks='',axis='';
+  for(var d=1;d<=S.M.dim;d++){
+    var k=map[d]||'';
+    ticks+='<i class="'+k+(isTodayD(d)?' t':'')+'" title="'+fmtMD(d)+'"></i>';
+    axis+='<span class="'+(d%7===1?'wk':'')+(isTodayD(d)?' t':'')+'">'+d+'</span>';
+  }
+  var red=SC.GOV_REST_NAMES.indexOf(n)>=0;
+  var list=items.filter(function(i){return !(red&&i.k==='r'&&isRedDay(n,i.d))});
+  var rows=list.map(function(i){
+    var past=isPastD(i.d);
+    var mark=i.k==='c'?PILL_C:i.k==='d'?pillDuty(i.d):PILL_R;
+    var det=i.k==='c'?fHero(i.f)+(i.mate?'，跟'+dn(i.mate.name):'')+(i.miss&&i.miss.length?'・'+fShort(i.miss)+'未掃':''):
+      i.k==='d'?(i.state==='noshow'?'沒到班':i.state==='notrash'?'未倒垃圾':hasTruck(i.d)?'要倒垃圾':'沒垃圾車，不用倒'):'';
+    return '<li class="'+(past?'past':'')+'">'+mark+'<span class="mono sm'+(past?' past':'')+'">'+fmtMD(i.d)+'</span><span class="right">'+(isTodayD(i.d)?'今天 ':'')+det+'</span></li>';
+  }).join('');
+  var nc=items.filter(function(i){return i.k==='c'}).length,nd=items.filter(function(i){return i.k==='d'}).length,nr=items.filter(function(i){return i.k==='r'}).length;
+  var redRest=red?items.filter(function(i){return i.k==='r'&&isRedDay(n,i.d)}).length:0;
+  var redNote='';
+  return '<section class="block"><h2 class="h2"><span>我的 '+S.month+' 月</span><span class="muted" style="font-weight:400">打掃 '+nc+' 次・值班 '+nd+' 次・休假 '+nr+' 天</span></h2>'+
+    '<div class="ruler" style="grid-template-columns:repeat('+S.M.dim+',minmax(0,1fr))" role="img" aria-label="'+S.month+' 月每天的班別刻度">'+ticks+'</div><div class="ruleraxis" style="grid-template-columns:repeat('+S.M.dim+',minmax(0,1fr))" aria-hidden="true">'+axis+'</div>'+
+    '<div class="key"><span><b style="background:var(--clean)"></b>打掃</span><span><b style="background:var(--duty)"></b>值班</span><span><b style="background:var(--rest)"></b>休假</span></div>'+
+    '<ul class="lines" style="margin-top:16px">'+(rows||'<li><span class="muted">這個月沒有排班。</span></li>')+'</ul>'+redNote+'</section>';
+}
+function whoSelect(){
+  var groups=[['業務','biz'],['內勤','office'],['兼職','parttime']];
+  var html=groups.map(function(g){
+    var list=S.allEmployees.filter(function(e){return SC.dutyV2Kind(e)===g[1]});
+    if(!list.length)return '';
+    return '<optgroup label="'+g[0]+'">'+list.map(function(e){return '<option value="'+esc(e.name)+'"'+(e.name===S.who?' selected':'')+'>'+dn(e.name)+'</option>'}).join('')+'</optgroup>';
+  }).join('');
+  return '<label class="whosel" style="display:flex"><span>看誰的班</span><select id="whoSel">'+html+'</select></label>';
+}
+/* 我的排休（同仁自己改，照舊版「我的排班」規則；珊珊從排班頁改）*/
+function restEditHTML(n){
+  if(!S.viewer||S.viewer.name!==n)return '';
+  var first=S.M.days[1].dow,cells='';
+  var offset=(first+6)%7;
+  var head=['一','二','三','四','五','六','日'].map(function(w){return '<div class="dw">'+w+'</div>'}).join('');
+  for(var i=0;i<offset;i++)cells+='<span class="blk"></span>';
+  var anyOpen=false;
+  for(var d=1;d<=S.M.dim;d++){
+    var c=SC.nextCell(S.M,n,d),day=S.M.days[d];
+    var chk=SC.nextCanEditRest({viewer:S.viewer,target:n,ds:ds(d),todayStr:TODAY,hasRedRecord:restIsRed(n,d,c)});
+    var lab=c.clean?'掃':c.duty?'值':'',cls=(c.rest?'rest ':'')+(restIsRed(n,d,c)?'red ':'')+(isTodayD(d)?'tdy':'');
+    if(chk.ok)anyOpen=true;
+    cells+='<button data-selfrest="'+d+'" class="'+cls+'"'+(chk.ok?'':' disabled')+' aria-label="'+fmtMD(d)+(c.rest?' 休假':' 上班')+'">'+d+'<small>'+(c.rest?'休':lab||(day.noRest?'禁休':''))+'</small></button>';
+  }
+  var note=SC.isRestMonthOpen(S.year,S.month)?'':'這個月已鎖定，要改請找珊珊。';
+  return '<section class="block"><h2 class="h2"><span>我的排休</span><span class="muted" style="font-weight:400">本月已排休 '+countRest(n)+' 天，上限 '+SC.monthLeaveLimit(S.year,S.month)+' 天</span></h2>'+(note?'<p class="xs muted">'+note+'</p>':'')+'<div class="rcal" role="group" aria-label="我的排休">'+head+cells+'</div></section>';
+}
+function countRest(n){var t=0;for(var d=1;d<=S.M.dim;d++)if(S.M.days[d].rest.some(function(x){return x.name===n&&x.kind==='排休'}))t++;return t}
+function restIsRed(n,d,c){
+  if(c&&c.rest&&c.rest.kind==='見紅休')return true;
+  return isRedDay(n,d)&&!!(c&&c.rest);
+}
+function renderMe(){
+  var n=S.who;
+  var re=restEditHTML(n);
+  return '<div class="view">'+whoSelect()+'<div class="mine"><div>'+heroHTML(n)+(re||todayHTML(n))+'</div><div>'+(re?todayHTML(n):'')+monthHTML(n)+'</div></div></div>';
+}
+
+/* 規格列：只顯示，不參與任何邏輯 */
+function specHTML(items){
+  return '<dl class="spec">'+items.map(function(i){return '<div><dt>'+i[0]+'</dt><dd>'+i[1]+(i[2]?'<small>'+i[2]+'</small>':'')+'</dd></div>'}).join('')+'</dl>';
+}
+function monthCounts(){
+  var noTruck=0,noRest=0;
+  for(var d=1;d<=S.M.dim;d++){if(!S.M.days[d].truck)noTruck++;if(S.M.days[d].noRest)noRest++}
+  return {noTruck:noTruck,noRest:noRest};
+}
+
+/* ================= 全體 ================= */
+function dayHTML(d){
+  var day=S.M.days[d],me=S.who;
+  var cls='day'+(isWE(d)?' we':'')+(isTodayD(d)?' today':'')+(isPastD(d)?' past':'');
+  var flag=isTodayD(d)?'<span class="flag">今天</span>':(!day.truck?'<span class="flag" title="清潔隊不收">'+IC.noTruck+'沒車</span>':'');
+  var rows=day.clean.map(function(x){
+    var miss=x.missedFloors.length;
+    return '<div class="rw">'+PILL_C+'<span class="'+(x.name===me?'me':'')+'">'+dn(x.name)+'</span>'+(miss?'<span class="pill pill-miss">'+(miss===x.floors.length?'未掃':fShort(x.missedFloors)+'未掃')+'</span>':'')+'<span class="fx">'+fShort(x.floors)+'</span></div>';
+  }).join('');
+  day.duty.forEach(function(x){
+    rows+='<div class="rw">'+pillDuty(d)+'<span class="'+(x.name===me?'me':'')+'">'+dn(x.name)+'</span><span class="note2">'+dutyNote(d,x)+'</span></div>';
+  });
+  if(!rows)rows='<div class="rw muted">還沒排。</div>';
+  var names=day.rest.map(function(x){return x.name});
+  var open=!!S.openRest[d];
+  return '<article class="'+cls+'" aria-label="'+fmtMD(d)+'"><div class="dh"><span class="n">'+d+'</span><span class="w">週'+WEEK[day.dow]+'</span>'+(day.noRest?'<span class="pill pill-off">禁休</span>':'')+flag+'</div>'+
+    '<div class="rows">'+rows+'</div>'+
+    '<button class="restbtn" data-rest="'+d+'" aria-expanded="'+open+'">休假 '+names.length+' 人'+IC.caret+'</button>'+
+    (open?'<p class="restnames">'+(names.map(dn).join('、')||'沒有人休假')+'</p>':'')+'</article>';
+}
+function renderAll(){
+  var c=S.M.days[1];
+  var todayIn=(S.year===TY&&S.month===TM);
+  var lede;
+  if(todayIn){
+    var td=S.M.days[TD];
+    var cleaners=td.clean.map(function(x){return dn(x.name)}).join('和')||'還沒排';
+    var duty=td.duty.map(function(x){return dn(x.name)}).join('、')||'還沒排';
+    lede='今天 '+fmtMD(TD)+'　打掃 '+cleaners+'　值班 '+duty;
+  }else lede=S.year+' 年 '+S.month+' 月每天的安排。';
+  var noTruck=0;for(var d=1;d<=S.M.dim;d++)if(!S.M.days[d].truck)noTruck++;
+  var dow=['一','二','三','四','五','六','日'].map(function(w){return '<div class="dow">週'+w+'</div>'}).join('');
+  var lead=(c.dow+6)%7;
+  var leadHtml=lead?'<div class="day blank lead" aria-hidden="true" style="grid-column:span '+lead+'"></div>':'';
+  var cards='';for(d=1;d<=S.M.dim;d++)cards+=dayHTML(d);
+  var pastN=0;for(d=1;d<=S.M.dim;d++)if(isPastD(d))pastN++;
+  var fold=pastN?'<div class="foldpast"><button class="link" id="fold">'+(S.showPast?'收起已過的 '+pastN+' 天':'看已過的 '+pastN+' 天')+'</button></div>':'';
+  var mc=monthCounts();
+  return '<div class="view"><div class="pagehead"><div><h1 class="title">'+S.month+' 月全體</h1>'+(todayIn?'<p class="lede">'+lede+'</p>':'')+'</div>'+specHTML([['沒垃圾車',mc.noTruck,'天'],['禁休',mc.noRest,'天']])+'</div>'+fold+
+    '<div class="days'+(S.showPast?' showpast':'')+'">'+dow+leadHtml+cards+'</div></div>';
+}
+
+/* ================= 排班（珊珊、瓊安）================= */
+function peopleCols(){var a=[];S.groups.forEach(function(g){g.people.forEach(function(p){a.push(p.name)})});return a}
+function rowLoad(n){var t=SC.nextTally(S.M,TODAY)[n];return t?t.schedLayers:0}
+function cellView(n,d){
+  var day=S.M.days[d];
+  if(!hiredBy(n,d))return {gone:true};
+  var c=SC.nextCell(S.M,n,d);
+  return {clean:c.clean,duty:c.duty,rest:c.rest,cancelled:c.redCancelled,red:isRedDay(n,d)};
+}
+function cellInner(n,d){
+  var v=cellView(n,d);
+  if(v.gone)return '<span class="gone"></span>';
+  var parts='';
+  if(v.clean){
+    var allMiss=v.clean.missedFloors.length===v.clean.floors.length;
+    parts+='<span class="tag-clean'+(v.clean.missedFloors.length?' miss':'')+'">'+(allMiss?'未掃':fCell(v.clean.floors))+'</span>';
+  }
+  if(v.duty)parts+=dutyTag(d,v.duty.state);
+  if(parts)return '<span class="pop">'+parts+'</span>';
+  if(v.rest){
+    if(v.rest.kind==='見紅休'||v.red)return '<span class="tag-rest red">休</span>';
+    return '<span class="tag-rest">'+(v.rest.kind==='特休'?'特':v.rest.kind==='請假'?'假':'休')+'</span>';
+  }
+  return '';
+}
+function cellLabel(n,d){
+  var v=cellView(n,d),s=SC.nextName(n)+' '+fmtMD(d)+' ';
+  if(v.gone)return s+'尚未到職';
+  var bits=[];
+  if(v.clean)bits.push('打掃'+fText(v.clean.floors)+(v.clean.missedFloors.length?'（'+fShort(v.clean.missedFloors)+'未掃）':''));
+  if(v.duty)bits.push('值班'+(v.duty.state==='noshow'?'（沒到班）':v.duty.state==='notrash'?'（未倒垃圾）':''));
+  if(v.rest)bits.push(v.rest.kind==='見紅休'||v.red?'正職休假':v.rest.kind);
+  if(!bits.length)bits.push(v.red?'正職休假改上班':'未排');
+  return s+bits.join('、');
+}
+function rowHTML(d,cols){
+  var day=S.M.days[d];
+  var cl=[isWE(d)?'we':'',day.dow===1?'wk':'',isTodayD(d)?'td':'',day.noRest?'nr':''].join(' ');
+  var r='<th class="dt" scope="row" data-col="'+d+'"'+(day.truck?'':' title="清潔隊不收，沒垃圾車"')+'><span class="n">'+d+'</span>'+WEEK[day.dow]+(day.noRest?'<span class="nr">禁休</span>':'')+(day.truck?'':'<span class="vh">沒垃圾車</span>')+'</th>';
+  var gi=0;
+  S.groups.forEach(function(g){
+    g.people.forEach(function(p,i){
+      var gone=!hiredBy(p.name,d);
+      r+='<td'+(i===0?' class="gs"':'')+'><button class="cell" data-n="'+esc(p.name)+'" data-d="'+d+'" aria-label="'+esc(cellLabel(p.name,d))+'"'+(gone?' disabled':'')+'>'+cellInner(p.name,d)+'</button></td>';
+    });
+  });
+  return '<tr class="'+cl+'" data-row="'+d+'">'+r+'</tr>';
+}
+function restInfo(n,rests){
+  var t=rests[n]||{paixiu:0,texiu:0,qingjia:0,gov:0,total:0},target=SC.nextRestTarget(S.M,S.byName[n]);
+  return {t:t,target:target,st:SC.nextRestStatus(t,target)};
+}
+function footStats(n,rests,tally){
+  var r=restInfo(n,rests),t=r.t,off=[],xiu=t.paixiu+t.gov,line='';
+  if(t.texiu)off.push(t.texiu+'特');if(t.qingjia)off.push(t.qingjia+'假');
+  if(r.st.side==='short')line='<span class="fs short">未休<b>'+r.st.diff+'天</b></span>';
+  if(r.st.side==='over')line='<span class="fs over">多休<b>'+r.st.diff+'天</b></span>';
+  return '<span class="fs">'+(xiu?xiu+'休':'')+'</span><span class="fs">'+off.join('')+'</span><span class="fs">'+(tally.dutyDays?tally.dutyDays+'班':'')+'</span>'+line;
+}
+function tableHTML(){
+  var g1='<th class="corner" rowspan="2" scope="col">日期</th>',g2='',foot='<th scope="row">合計</th>';
+  var tally=SC.nextTally(S.M,TODAY),rests=SC.nextRestTally(S.M);
+  S.groups.forEach(function(g){
+    g1+='<th class="gs" scope="colgroup" colspan="'+g.people.length+'">'+esc(g.label)+'</th>';
+    g.people.forEach(function(p,i){
+      var gs=i===0?' class="gs"':'';
+      g2+='<th scope="col"'+gs+' data-row="'+esc(p.name)+'">'+dn(p.name)+'</th>';
+      foot+='<td'+gs+' data-tot="'+esc(p.name)+'">'+footStats(p.name,rests,tally[p.name]||{})+'</td>';
+    });
+  });
+  var body='';for(var d=1;d<=S.M.dim;d++)body+=rowHTML(d);
+  return '<table class="mx" id="mx"><thead><tr class="g">'+g1+'</tr><tr class="p">'+g2+'</tr></thead><tbody>'+body+'</tbody><tfoot><tr>'+foot+'</tr></tfoot></table>';
+}
+function stepState(){
+  var noDuty=0,noClean=0;
+  for(var d=1;d<=S.M.dim;d++){var day=S.M.days[d];if(!day.duty.length)noDuty++;if(!day.noRest&&!day.cleanRecs.length)noClean++}
+  return {noDuty:noDuty,noClean:noClean,s1:noDuty===0,s2:noClean===0};
+}
+function headHTML(){
+  var st=stepState();
+  var line=!st.s1?'下一步：預排值班。值班只排承攬業務，每天一位，倒垃圾歸值班的人。':
+    !st.s2?'下一步：預排值日。業務與兼職一人掃整棟，內勤兩人一組。':'';
+  var chk=function(done){return done?IC.check:''};
+  return '<div class="schedhead"><h1 class="title">'+S.month+' 月排班</h1>'+(line?'<p class="lede nextline">'+line+'</p>':'')+
+    '<div class="schedact"><button class="btn'+(st.s1?' btn2':'')+'" id="planZ">'+chk(st.s1)+'預排值班</button><button class="btn'+(st.s1&&!st.s2?'':' btn2')+'" id="planD">'+chk(st.s2)+'預排值日</button></div></div>';
+}
+function checksHTML(){
+  var list=SC.nextChecks(S.M,TODAY);
+  if(!list.length)return '<div class="checks"><div class="ok">'+IC.check+'每天都有人掃完四層，每天都有人值班。</div></div>';
+  return '<div class="checks"><div class="head">檢查 <span class="ct">'+list.length+'</span></div><ul>'+list.slice(0,6).map(function(c,i){
+    return '<li><i class="dot-r"></i><span>'+esc(c.text)+'</span><span class="acts"><button class="link" data-go="'+c.d+'">到這天</button>'+(c.fix?'<button class="link" data-fix="'+c.d+':'+c.fix+'">補上</button>':'')+'</span></li>';
+  }).join('')+'</ul>'+(list.length>6?'<p class="xs muted" style="margin-top:8px">還有 '+(list.length-6)+' 件，補完前面就會出現。</p>':'')+'</div>';
+}
+/* 珊珊確認：預設算完成，只標例外 */
+function confirmHTML(){
+  if(!S.perms.confirm)return '';
+  var out='',shown=0;
+  for(var d=S.M.dim;d>=1&&shown<2;d--){
+    if(isFutureD(d))continue;
+    var day=S.M.days[d];
+    if(!day.clean.length&&!day.duty.length)continue;
+    shown++;
+    var rows='';
+    day.clean.forEach(function(g){
+      var allMiss=g.missedFloors.length===g.floors.length;
+      rows+='<div class="cfrow"><span class="nm">'+dn(g.name)+'</span>'+PILL_C+'<span>'+fShort(g.floors)+'</span><span class="acts">'+
+        (g.missedFloors.length?'<span class="done">'+(allMiss?'未掃':fShort(g.missedFloors)+'未掃')+'</span><button class="mini" data-cf="clean-ok:'+d+':'+esc(g.name)+'">恢復成已掃</button>':
+        '<span class="done">已掃</span><button class="mini" data-cf="clean-miss:'+d+':'+esc(g.name)+'">沒掃</button>')+'</span></div>';
+    });
+    day.duty.forEach(function(x){
+      var tr=day.truck;
+      rows+='<div class="cfrow"><span class="nm">'+dn(x.name)+'</span>'+pillDuty(d)+'<span>'+(tr?'倒垃圾':'沒垃圾車')+'</span><span class="acts">'+
+        (x.state==='ok'?'<span class="done">'+(tr?'已倒':'已值班')+'</span>'+(tr?'<button class="mini" data-cf="duty-notrash:'+d+':'+esc(x.name)+'">沒倒垃圾</button>':'')+'<button class="mini" data-cf="duty-noshow:'+d+':'+esc(x.name)+'">沒到班</button>':
+        '<span class="done">'+(x.state==='noshow'?'沒到班':'未倒垃圾')+'</span><button class="mini" data-cf="duty-ok:'+d+':'+esc(x.name)+'">恢復</button>')+'</span></div>';
+    });
+    out+='<div class="cfday"><div class="cfdate">'+fmtMD(d)+(isTodayD(d)?'・今天':'')+'</div>'+rows+'</div>';
+  }
+  if(!out)out='<p class="xs muted" style="margin-top:8px">到今天為止還沒有排班可以確認。</p>';
+  return '<section class="confirmbox"><h2 class="h2"><span>確認有沒有做</span></h2><div class="cfdays">'+out+'</div></section>';
+}
+function renderSched(){
+  if(!S.perms.schedule)return '<div class="view"><div class="state"><h1>這一頁只有珊珊和瓊安能用</h1><p>你可以看「我的班」「全體」「公平帳」。</p></div></div>';
+  return '<div class="view"><div id="shead">'+headHTML()+'</div>'+
+    '<div class="tools"><div class="seg"><span class="lb">點格子改</span><div role="group" aria-label="點格子時要改的項目">'+
+    [['rest','休假'],['duty','值班'],['clean','打掃'],['confirm','確認']].map(function(m){return '<button data-mode="'+m[0]+'" aria-pressed="'+(S.mode===m[0])+'">'+m[1]+'</button>'}).join('')+
+    '</div></div><div class="toolset">'+
+    '<details name="tools"><summary>檢查<b id="chkN"></b></summary><div class="panel"><div id="schk">'+checksHTML()+'</div></div></details>'+
+    '<details name="tools"'+(S.perms.confirm?'':' hidden')+'><summary>確認</summary><div class="panel"><div id="scf">'+confirmHTML()+'</div></div></details>'+
+    '<details name="tools"><summary>圖例</summary><div class="panel"><div class="mxkey">'+
+    '<span>'+cleanTag([1,2,3,4])+'一人掃一到四樓</span><span>'+cleanTag([1,4])+'掃一樓和四樓</span><span>'+cleanTag([2,3])+'掃二樓和三樓</span>'+
+    '<span><span class="tag-duty trash">值<i class="tr">🗑️</i></span>值班要倒垃圾</span><span><span class="tag-duty">值</span>值班沒垃圾車</span>'+
+    '<span><span class="tag-duty warn">值</span>外框：未倒垃圾</span><span><span class="tag-duty bad">值</span>斜線：沒到班</span><span><span class="tag-clean miss">未掃</span>斜線：沒掃</span>'+
+    '<span><span class="tag-rest">休</span>排休</span><span><span class="tag-rest">特</span>特休</span><span><span class="tag-rest">假</span>請假</span><span><span class="tag-rest red">休</span>正職休假</span><span>空白是上班</span>'+
+    '</div></div></details></div></div>'+
+    '<div class="mxwrap" id="mxwrap" tabindex="0" role="region" aria-label="'+S.month+' 月排班表，可上下左右捲動">'+tableHTML()+'</div></div>';
+}
+function paintCheckCount(){
+  var b=$('#chkN');if(!b)return;
+  var n=SC.nextChecks(S.M,TODAY).length;
+  b.textContent=n;b.className=n?'':'zero';
+}
+function refreshCell(n,d){
+  var b=$('.cell[data-n="'+n.replace(/"/g,'\\"')+'"][data-d="'+d+'"]');
+  if(!b)return;
+  b.innerHTML=cellInner(n,d);b.setAttribute('aria-label',cellLabel(n,d));
+}
+function refreshSched(){
+  if(S.view!=='sched'||!S.perms.schedule)return;
+  var w=$('#mxwrap');if(!w)return;
+  var t=window.scrollY,l=window.scrollX,it=w.scrollTop,il=w.scrollLeft;
+  w.innerHTML=tableHTML();w.scrollTop=it;w.scrollLeft=il;window.scrollTo(l,t);
+  $('#shead').innerHTML=headHTML();$('#schk').innerHTML=checksHTML();$('#scf').innerHTML=confirmHTML();paintCheckCount();
+}
+function refreshAny(){
+  if(S.view==='sched')refreshSched();else render();
+}
+
+/* 點格子 */
+function eligibleZhiban(e){
+  if(!e)return '找不到這位同仁';
+  if(e.hire!=='承攬')return '值班只排承攬業務，'+SC.nextName(e.name)+'是'+groupLabel(e.name);
+  if(e.dept==='社宅部'||e.dept==='設計部')return '社宅部、設計部不排值班';
+  if(SC.ZHIBAN_BLACKLIST&&SC.ZHIBAN_BLACKLIST.indexOf(e.name)>=0)return SC.nextName(e.name)+'在不值班名單內';
+  return '';
+}
+function officeOkDay(d){var w=S.M.days[d].dow;return w>=1&&w<=5&&!SC.isGovHoliday(ds(d),false)}
+function restPreChecks(n,d){
+  var count=countRest(n),limit=SC.monthLeaveLimit(S.year,S.month),ps=[];
+  if(count>=limit)ps.push('<p><b>'+dn(n)+'</b> 本月已排休 '+count+' 天，超過 '+limit+' 天上限。</p>');
+  var nr=S.M.days[d].noRest;
+  if(nr)ps.push('<p>'+fmtMD(d)+' 是禁休日'+(nr.reason?'（'+esc(nr.reason)+'）':'')+'。</p>');
+  if(!ps.length)return Promise.resolve(true);
+  return uiConfirm('確定要排休嗎？',ps.join(''),'仍要排休');
+}
+function clickCell(n,d){
+  var key=n+'|'+d;
+  if(S.cellBusy[key]||S.busy)return;
+  var mode=S.mode,e=S.byName[n];
+  var v=cellView(n,d);
+  if(v.gone){toast(dn(n)+'還沒到職。',true);return}
+  var run;
+  if(mode==='rest')run=doRest(n,d,v);
+  else if(mode==='duty')run=doDuty(n,d,v,e);
+  else if(mode==='clean')run=doClean(n,d,v,e);
+  else run=doConfirmCell(n,d,v);
+  S.cellBusy[key]=true;
+  Promise.resolve(run).catch(function(err){toast('儲存失敗：'+(err&&err.message||err),true)}).then(function(){
+    delete S.cellBusy[key];rebuild();refreshSched();
+  });
+}
+function doRest(n,d,v){
+  var perm=SC.nextCanEditRest({viewer:S.viewer,target:n,ds:ds(d),todayStr:TODAY,hasRedRecord:false});
+  if(!perm.ok){toast(perm.why,true);return}
+  if(v.rest){
+    if(v.rest.kind==='見紅休')return apiUpdate(v.rest.id,(function(){var o={};o[F.IS_AUTO]=SC.GOV_REST_CANCELLED;return o})()).then(function(){toast(dn(n)+' '+fmtMD(d)+'改上班。')});
+    if(v.rest.kind==='排休')return apiDelete(v.rest.id).then(function(){toast(dn(n)+' '+fmtMD(d)+(v.red?'改上班。':'取消休假。'))});
+    toast('這格是'+v.rest.kind+'，請到舊版排班頁（schedule-legacy.html）調整。',true);return;
+  }
+  if(v.cancelled){
+    var rec=S.M.days[d].redCancelled.filter(function(x){return x.name===n})[0];
+    return apiUpdate(rec.id,(function(){var o={};o[F.IS_AUTO]='';return o})()).then(function(){toast(dn(n)+' '+fmtMD(d)+'還原成正職休假。')});
+  }
+  if(v.clean||v.duty){toast(dn(n)+' '+fmtMD(d)+'已排'+(v.duty?'值班':'打掃')+'，先取消才能排休假。',true);return}
+  return restPreChecks(n,d).then(function(ok){
+    if(!ok)return;
+    var e=S.byName[n],extra={};if(e&&e.dept)extra[F.DEPT]=e.dept;
+    return apiCreate(newBody(n,d,'排休',extra)).then(function(){toast(dn(n)+' '+fmtMD(d)+'排休假。')});
+  });
+}
+function doDuty(n,d,v,e){
+  var bad=eligibleZhiban(e);if(bad){toast(bad+'。',true);return}
+  if(v.red){toast(dn(n)+'是正職，六日和國定假日不排值班。',true);return}
+  var day=S.M.days[d];
+  if(v.duty){
+    var go=isFutureD(d)?Promise.resolve(true):uiConfirm('取消值班？',fmtMD(d)+'已經到了或過了，取消後這天的值班紀錄會消失。確定要取消 <b>'+dn(n)+'</b> 的值班嗎？','取消值班');
+    return go.then(function(ok){if(!ok)return;return apiDelete(v.duty.id).then(function(){toast(dn(n)+' '+fmtMD(d)+'取消值班。')})});
+  }
+  if(v.rest){toast(dn(n)+' '+fmtMD(d)+'休假，先取消才能排值班。',true);return}
+  var others=day.duty.filter(function(x){return x.name!==n});
+  var pre=others.length?uiConfirm('換值班？',fmtMD(d)+'目前值班是 <b>'+others.map(function(x){return dn(x.name)}).join('、')+'</b>，要換成 <b>'+dn(n)+'</b> 嗎？','換成他'):Promise.resolve(true);
+  return pre.then(function(ok){
+    if(!ok)return;
+    var chain=Promise.resolve();
+    others.forEach(function(x){chain=chain.then(function(){return apiDelete(x.id)}).then(function(){return sleep(150)})});
+    return chain.then(function(){
+      var extra={};extra[F.DEPT]=others.length?'手動變更':(e.dept||'');
+      return apiCreate(newBody(n,d,'值班',extra));
+    }).then(function(){toast(others.length?fmtMD(d)+'值班換成'+SC.nextName(n)+'。':SC.nextName(n)+' '+fmtMD(d)+'值班。')});
+  });
+}
+function doClean(n,d,v,e){
+  var kind=kindOf(n),day=S.M.days[d];
+  if(v.red){toast(dn(n)+'是正職，六日和國定假日不排打掃。',true);return}
+  if(kind==='office'&&!officeOkDay(d)){toast('內勤六日和國定假日不排打掃。',true);return}
+  if(v.rest){toast(dn(n)+' '+fmtMD(d)+'休假，先取消才能排打掃。',true);return}
+  var cur=v.clean,next;
+  if(kind==='office'){
+    var A=SC.OFFICE_DUTY_SPLIT.A.map(function(f){return +f[0]}),B=SC.OFFICE_DUTY_SPLIT.B.map(function(f){return +f[0]});
+    if(!cur)next=A;else if(cur.floors.join()===A.join())next=B;else next=null;
+  }else next=cur?null:[1,2,3,4];
+  var taken={};day.cleanRecs.forEach(function(c){if(c.name!==n)taken[c.floor]=c.name});
+  if(next){
+    var clash=next.filter(function(f){return taken[f]})[0];
+    if(clash){toast(dn(taken[clash])+'已掃 '+clash+'F，先取消才能排。',true);return}
+  }
+  var del=cur?cur.recs.slice():[];
+  var needConfirm=cur&&!isFutureD(d);
+  var pre=needConfirm?uiConfirm('改這天的打掃？',fmtMD(d)+'已經到了或過了，改動會取代原本 <b>'+dn(n)+'</b> 的紀錄（包含珊珊標的未掃）。','仍要改'):Promise.resolve(true);
+  return pre.then(function(ok){
+    if(!ok)return;
+    var chain=Promise.resolve();
+    del.forEach(function(r){chain=chain.then(function(){return apiDelete(r.id)}).then(function(){return sleep(120)})});
+    (next||[]).forEach(function(f){
+      chain=chain.then(function(){
+        var extra={};extra[F.NOTE]=f+'F';extra[F.IS_AUTO]='No';extra[F.DEPT]='手動變更';
+        return apiCreate(newBody(n,d,'值日',extra));
+      }).then(function(){return sleep(150)});
+    });
+    return chain.then(function(){toast(next?dn(n)+' '+fmtMD(d)+(next.length===4?'掃整棟。':'掃 '+fShort(next)+'。'):dn(n)+' '+fmtMD(d)+'取消打掃。')});
+  });
+}
+function setIsAuto(rec,val){var o={};o[F.IS_AUTO]=val;return apiUpdate(rec.id,o)}
+function markClean(n,d,which,on){
+  var g=S.M.days[d].clean.filter(function(x){return x.name===n})[0];
+  if(!g)return Promise.resolve();
+  var targets=g.recs.filter(function(r){return which?which.indexOf(r.floor)>=0:true});
+  var chain=Promise.resolve();
+  targets.forEach(function(r){chain=chain.then(function(){return setIsAuto({id:r.id},on?SC.NEXT_MARK.MISSED_CLEAN:'No')}).then(function(){return sleep(100)})});
+  return chain;
+}
+function markDuty(n,d,state){
+  var x=S.M.days[d].duty.filter(function(y){return y.name===n})[0];
+  if(!x)return Promise.resolve();
+  return setIsAuto(x,state==='noshow'?SC.NEXT_MARK.NO_SHOW:state==='notrash'?SC.NEXT_MARK.NO_TRASH:'');
+}
+function confirmGuard(d){
+  if(!S.perms.confirm){toast('只有珊珊和瓊安能確認。',true);return false}
+  if(isFutureD(d)){toast('還沒到的日子不能標。',true);return false}
+  return true;
+}
+function doConfirmCell(n,d,v){
+  if(!confirmGuard(d))return;
+  if(v.clean&&!v.duty){
+    var opts=[];
+    if(v.clean.missedFloors.length<v.clean.floors.length)opts.push({label:(v.clean.floors.length===4?'整棟':fShort(v.clean.floors))+'都沒掃',value:'all'});
+    if(v.clean.floors.length>1&&v.clean.missedFloors.length<v.clean.floors.length)opts.push({label:'只有其中一層沒掃…',value:'one',sub:1});
+    if(v.clean.missedFloors.length)opts.push({label:'恢復成已掃',value:'ok',sub:1});
+    return uiChoose(dn(n)+' '+fmtMD(d)+' 打掃 '+fShort(v.clean.floors),opts).then(function(pick){
+      if(!pick)return;
+      if(pick==='all')return markClean(n,d,null,true).then(function(){toast(dn(n)+' '+fmtMD(d)+'標記未掃。')});
+      if(pick==='ok')return markClean(n,d,null,false).then(function(){toast(dn(n)+' '+fmtMD(d)+'恢復成已掃。')});
+      var okF=v.clean.floors.filter(function(f){return v.clean.missedFloors.indexOf(f)<0});
+      return uiChoose('哪一層沒掃？',okF.map(function(f){return {label:f+'F',value:f}})).then(function(f){
+        if(!f)return;return markClean(n,d,[f],true).then(function(){toast(dn(n)+' '+fmtMD(d)+f+'F 標記未掃。')});
+      });
+    });
+  }
+  if(v.duty&&!v.clean)return duty3(n,d,v);
+  if(v.clean&&v.duty)return uiChoose(dn(n)+' '+fmtMD(d)+'要確認哪一項？',[{label:'打掃',value:'c'},{label:'值班',value:'d'}]).then(function(p){
+    if(!p)return;if(p==='d')return duty3(n,d,v);
+    return markClean(n,d,null,v.clean.missedFloors.length===0).then(function(){toast('已更新打掃紀錄。')});
+  });
+  toast('這格沒有排打掃或值班。',true);
+}
+function duty3(n,d,v){
+  var opts=[];
+  if(v.duty.state!=='ok')opts.push({label:'恢復成已完成',value:'ok'});
+  if(v.duty.state!=='notrash'&&hasTruck(d))opts.push({label:'有到班，但沒倒垃圾',value:'notrash'});
+  if(v.duty.state!=='noshow')opts.push({label:'沒到班',value:'noshow',sub:1});
+  if(!hasTruck(d)&&v.duty.state==='ok')opts.unshift({label:'這天沒垃圾車，只能標沒到班',value:'noshow'});
+  return uiChoose(dn(n)+' '+fmtMD(d)+' 值班',opts).then(function(p){
+    if(!p)return;return markDuty(n,d,p).then(function(){toast(dn(n)+' '+fmtMD(d)+({ok:'恢復成已完成。',notrash:'標記未倒垃圾。',noshow:'標記沒到班。'})[p])});
+  });
+}
+/* 確認面板按鈕 */
+function doCf(act,d,n){
+  if(!confirmGuard(d)||S.busy)return;
+  var v=cellView(n,d);
+  var run;
+  if(act==='clean-miss')run=markClean(n,d,null,true);
+  else if(act==='clean-ok')run=markClean(n,d,null,false);
+  else if(act==='duty-notrash'){if(!hasTruck(d)){toast('這天沒垃圾車。',true);return}run=markDuty(n,d,'notrash')}
+  else if(act==='duty-noshow')run=markDuty(n,d,'noshow');
+  else run=markDuty(n,d,'ok');
+  S.busy=true;
+  run.then(function(){toast('已更新。')}).catch(function(e){toast('儲存失敗：'+(e&&e.message||e),true)}).then(function(){S.busy=false;rebuild();refreshSched()});
+}
+/* 自己排休（我的班） */
+function selfRest(d){
+  var n=S.viewer.name;
+  var c=SC.nextCell(S.M,n,d);
+  var chk=SC.nextCanEditRest({viewer:S.viewer,target:n,ds:ds(d),todayStr:TODAY,hasRedRecord:restIsRed(n,d,c)});
+  if(!chk.ok){toast(chk.why,true);return}
+  var key='self|'+d;if(S.cellBusy[key])return;S.cellBusy[key]=true;
+  var run;
+  if(c.rest&&c.rest.kind==='排休')run=apiDelete(c.rest.id).then(function(){toast('已取消 '+S.month+'/'+d+' 休假。')});
+  else if(c.rest){toast('這天是'+c.rest.kind+'，請找珊珊調整。',true);run=Promise.resolve()}
+  else if(c.clean||c.duty){toast('這天已排'+(c.duty?'值班':'打掃')+'，要休假請找珊珊。',true);run=Promise.resolve()}
+  else run=restPreChecks(n,d).then(function(ok){
+    if(!ok)return;var e=S.byName[n],extra={};if(e&&e.dept)extra[F.DEPT]=e.dept;
+    return apiCreate(newBody(n,d,'排休',extra)).then(function(){toast('已排 '+S.month+'/'+d+' 休假。')});
+  });
+  run.catch(function(err){toast('儲存失敗：'+(err&&err.message||err),true)}).then(function(){delete S.cellBusy[key];rebuild();render()});
+}
+/* 禁休 */
+function toggleNoRest(d){
+  if(!S.perms.schedule||S.busy)return;
+  var day=S.M.days[d];S.busy=true;
+  var run;
+  if(day.noRest)run=uiConfirm('取消禁休？',fmtMD(d)+'的禁休會取消。','取消禁休').then(function(ok){if(!ok)return;return apiDelete(day.noRest.id).then(function(){toast(fmtMD(d)+'禁休已取消。')})});
+  else run=uiPrompt(fmtMD(d)+'設為禁休','禁休日全員上班打掃，預排不會排人。請輸入原因（例如：開幕活動）：').then(function(reason){
+    if(reason===null)return;
+    var extra={};extra[F.NOTE]=reason||'';extra[F.DEPT]='禁休設定';
+    return apiCreate(newBody('韓珊珊',d,'禁休',extra)).then(function(){toast(fmtMD(d)+'設為禁休。')});
+  });
+  run.catch(function(e){toast('禁休設定失敗：'+(e&&e.message||e),true)}).then(function(){S.busy=false;rebuild();refreshSched()});
+}
+
+/* ================= 預排（呼叫共用演算法）================= */
+function download(name,obj){
+  var blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+  var url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url)},1000);
+}
+function snapName(type){return 'schedule-snapshot_'+type+'_'+S.year+'-'+String(S.month).padStart(2,'0')+'_'+new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)+'.json'}
+function monthAllPast(){return SC.isDutyLocked(SC.fmtDate(S.year,S.month,S.M.dim),TODAY)}
+function writeAll(toDelete,creates,label){
+  var total=toDelete.length+creates.length,cur=0,delDone=0,addDone=0;
+  progressOpen(label);progressSet(label,0,total);
+  var chain=Promise.resolve();
+  toDelete.forEach(function(x){
+    chain=chain.then(function(){return apiDelete(x.id)}).then(function(){delDone++;cur++;progressSet('清除舊紀錄',cur,total);return sleep(200)});
+  });
+  creates.forEach(function(body){
+    chain=chain.then(function(){return apiCreate(body)}).then(function(){addDone++;cur++;progressSet('寫入新紀錄',cur,total);return sleep(150)});
+  });
+  return chain.then(function(){progressClose();return {delDone:delDone,addDone:addDone}},function(err){
+    progressClose();err.partial={delDone:delDone,addDone:addDone};throw err;
+  });
+}
+function afterWrite(res,okMsg){
+  return fetchLeaves().then(function(raw){S.raw=raw||{};rebuild();refreshSched();toast(okMsg)});
+}
+function writeFailed(err){
+  var p=err.partial||{delDone:0,addDone:0};
+  fetchLeaves().then(function(raw){S.raw=raw||{};rebuild();refreshSched()}).catch(function(){});
+  return uiAlert('做到一半停了','<p>已刪 '+p.delDone+' 筆、已新增 '+p.addDone+' 筆，之後的沒有寫。</p><p>原因：'+esc(err.message||String(err))+'</p><p>畫面已重新載入。確認狀況後可以再按一次預排，已經寫好的手動紀錄不會被動到。</p>');
+}
+function planDuty(){
+  if(!S.perms.schedule||!guardWrite())return;
+  if(monthAllPast()){uiAlert('這個月已經鎖定',S.year+' 年 '+S.month+' 月的日子都過去了，按預排不會改任何東西。要改個別日子請直接點格子。');return}
+  S.busy=true;
+  fetchLeaves().then(function(raw){
+    S.raw=raw||{};rebuild();
+    var r=SC.nextPlanDuty({year:S.year,month:S.month,todayStr:TODAY,allEmployees:S.allEmployees,raw:S.raw,noRest:noRestMap()});
+    var firstUnlocked=SC.isDutyLocked(SC.fmtDate(S.year,S.month,1),TODAY)?'今天以前（含今天 '+TODAY.slice(5)+'）的值日都不會動，只重排明天起的日子。':'這個月還沒開始，會重排整個月。';
+    var body='<p>'+firstUnlocked+'</p>'+
+      '<p>每天掃整棟：業務、兼職一人掃整棟（兼職每月一次，排六日，'+SC.PARTTIME_DUTY_FIRST_DATE.slice(5)+' 起）；內勤兩人一組，只排平日。倒垃圾由當天值班的人負責。</p>'+
+      '<p>將<b>刪除 '+r.toDelete.length+' 筆</b>未到的系統預排、<b>新增 '+r.creates.length+' 筆</b>。保留：手動排的 '+r.manualKept+' 筆、今天以前的 '+r.lockedKept+' 筆。</p>'+
+      (r.toDelete.length?'<p>按確定會先下載一份備份檔，再刪除並重排。</p>':'');
+    return uiConfirm('預排 '+S.month+' 月值日？',body,'開始預排').then(function(ok){
+      if(!ok)return;
+      if(r.toDelete.length){
+        try{download(snapName('值日'),SC.nextSnapshot('值日',S.year,S.month,r.toDelete,new Date().toISOString()))}
+        catch(e){return uiAlert('備份下載失敗，已中止','<p>還沒刪除任何紀錄。'+esc(e.message)+'</p>')}
+      }
+      return writeAll(r.toDelete,r.creates,'預排值日').then(function(res){
+        return afterWrite(res,'值日預排好了：新增 '+res.addDone+' 筆。').then(function(){
+          if(r.warnings.length)return uiAlert('預排完成，有幾件事要看一下','<p>'+r.warnings.map(esc).join('</p><p>')+'</p>');
+        });
+      },writeFailed);
+    });
+  }).catch(function(e){toast('預排失敗：'+(e&&e.message||e),true)}).then(function(){S.busy=false});
+}
+function planZhiban(){
+  if(!S.perms.schedule||!guardWrite())return;
+  if(monthAllPast()){uiAlert('這個月已經鎖定',S.year+' 年 '+S.month+' 月的日子都過去了，按預排不會改任何東西。');return}
+  S.busy=true;
+  fetchLeaves().then(function(raw){
+    S.raw=raw||{};rebuild();
+    var r=SC.nextPlanZhiban({year:S.year,month:S.month,todayStr:TODAY,employees:S.employees,raw:S.raw,noRest:noRestMap()});
+    if(r.error){toast(r.error,true);return}
+    var body='<p>每天 1 人，承攬滿 3 個月的業務。今天以前（含今天）的值班不動，明天起的會清除重排（手動排的也會一起重排）。</p>'+
+      '<p>將<b>刪除 '+r.toDelete.length+' 筆</b>、<b>新增 '+r.creates.length+' 筆</b>。</p>'+(r.toDelete.length?'<p>按確定會先下載一份備份檔，再刪除並重排。</p>':'');
+    return uiConfirm('預排 '+S.month+' 月值班？',body,'開始預排').then(function(ok){
+      if(!ok)return;
+      if(r.toDelete.length){
+        try{download(snapName('值班'),SC.nextSnapshot('值班',S.year,S.month,r.toDelete,new Date().toISOString()))}
+        catch(e){return uiAlert('備份下載失敗，已中止','<p>還沒刪除任何紀錄。'+esc(e.message)+'</p>')}
+      }
+      return writeAll(r.toDelete,r.creates,'預排值班').then(function(res){return afterWrite(res,'值班預排好了：新增 '+res.addDone+' 筆。')},writeFailed);
+    });
+  }).catch(function(e){toast('預排失敗：'+(e&&e.message||e),true)}).then(function(){S.busy=false});
+}
+function fixDay(d,kind){
+  if(!S.perms.schedule||!guardWrite())return;
+  S.busy=true;
+  fetchLeaves().then(function(raw){
+    S.raw=raw||{};rebuild();
+    var r=kind==='duty'
+      ?SC.nextPlanZhiban({year:S.year,month:S.month,todayStr:TODAY,employees:S.employees,raw:S.raw,noRest:noRestMap(),only:ds(d)})
+      :SC.nextPlanFillCleanDay({year:S.year,month:S.month,todayStr:TODAY,allEmployees:S.allEmployees,raw:S.raw,noRest:noRestMap()},ds(d));
+    if(r.error){toast(r.error,true);return}
+    if(!r.creates.length){toast(fmtMD(d)+'沒有可以補的人（可能都休假）。',true);return}
+    return writeAll([],r.creates,'補上 '+fmtMD(d)).then(function(res){return afterWrite(res,fmtMD(d)+(kind==='duty'?'的值班':'的打掃')+'補上了。')},writeFailed).then(function(){jump(d)});
+  }).catch(function(e){toast('補上失敗：'+(e&&e.message||e),true)}).then(function(){S.busy=false});
+}
+function jump(d){
+  var w=$('#mxwrap'),th=$('th[data-col="'+d+'"]');if(!w||!th)return;
+  var head=$('.mx thead').offsetHeight+(parseInt(getComputedStyle($('.mx')).getPropertyValue('--th0'))||0);
+  if(getComputedStyle(w).overflowY==='auto'){w.scrollIntoView({block:'nearest'});w.scrollTo({top:Math.max(0,th.parentNode.offsetTop-head),behavior:'smooth'})}
+  else window.scrollTo({top:Math.max(0,th.getBoundingClientRect().top+window.scrollY-head-8),behavior:'smooth'});
+  th.classList.remove('flash');void th.offsetWidth;th.classList.add('flash');
+}
+
+/* ================= 公平帳 ================= */
+function fairGroup(g,scale){
+  var body=g.rows.map(function(r){
+    var w=(Math.abs(r.gap)/scale*50).toFixed(2)+'%';
+    var sign=r.gap>0?'+'+r.gap:r.gap<0?'−'+Math.abs(r.gap):'0';
+    var det='排定 '+r.floors+' 層'+(g.kind==='biz'&&r.trash?'・倒垃圾 '+r.trash+' 次':'')+'・到今天實際 '+r.done+' 層';
+    var ex=[];if(r.floorsMissed)ex.push('未掃 '+r.floorsMissed+' 層');if(r.trashMissed)ex.push('未倒垃圾 '+r.trashMissed+' 次');if(r.noShow)ex.push('沒到班 '+r.noShow+' 次');
+    return '<div class="frow'+(r.name===S.who?' me':'')+'"><span class="fname">'+dn(r.name)+'</span>'+
+      '<div class="fdev" role="img" aria-label="比平均'+(r.gap>0?'多 '+r.gap:r.gap<0?'少 '+Math.abs(r.gap):'相同')+'"><i class="'+r.side+'" style="width:'+w+'"></i></div>'+
+      '<span class="fgap '+r.side+'">'+sign+'</span>'+
+      '<span class="fdet">'+det+(ex.length?'・'+ex.join('・'):'')+'</span></div>';
+  }).join('');
+  return '<section class="fairgrp"><div class="fairside"><h2>'+g.label+' '+g.rows.length+' 人</h2><p class="avg">'+g.avg+'<small>層／人</small></p></div>'+
+    '<div><div class="frow fhead"><span></span><div class="fscale"><span>比平均少</span><span>比平均多</span></div><span></span></div>'+body+'</div></section>';
+}
+function renderFair(){
+  var people=S.allEmployees.map(function(e){return {name:e.name,kind:SC.dutyV2Kind(e)}});
+  var tally=SC.nextTally(S.M,TODAY);
+  var groups=SC.nextFairness(people,tally);
+  var scale=0;groups.forEach(function(g){g.rows.forEach(function(r){scale=Math.max(scale,Math.abs(r.gap))})});scale=scale||1;
+  return '<div class="view"><div class="pagehead"><div><h1 class="title">'+S.month+' 月公平帳</h1></div></div>'+
+    groups.map(function(g){return fairGroup(g,scale)}).join('')+'</div>';
+}
+
+/* ================= 外框 ================= */
+function monthNavHTML(){
+  return '<div class="monthnav"><button class="iconbtn" data-mn="-1" aria-label="上個月">‹</button><b>'+S.year+' 年 '+S.month+' 月</b><button class="iconbtn" data-mn="1" aria-label="下個月">›</button></div>';
+}
+function stateHTML(){
+  if(S.boot==='login')return '<div class="state"><h1>請用公司的 Google 帳號登入</h1><p>登入一次後，30 天內不用再登入。沒有跳出登入畫面的話，請重新整理頁面。</p><div class="skel"><i></i><i></i><i></i></div></div>';
+  if(S.boot==='loading')return '<div class="state"><h1>載入 '+S.month+' 月排班…</h1><div class="skel"><i></i><i></i><i></i></div></div>';
+  var btn=S.errAct==='reload'?'<button class="btn" id="reloadBtn">重新整理</button>':'<button class="btn" id="retryBtn">再試一次</button>';
+  return '<div class="state"><h1>'+esc(S.errTitle)+'</h1><p>'+esc(S.err)+'</p>'+btn+'</div>';
+}
+var main=$('#main');
+function render(){
+  $$('.tab').forEach(function(b){
+    if(b.getAttribute('data-view')===S.view)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');
+  });
+  var nr=$('#noteR');
+  if(S.viewer){nr.innerHTML='<span>'+dn(S.viewer.name)+'・'+(S.viewer.role==='admin'?'可排班':'同仁')+'</span><button class="link" id="logout">登出</button>'}
+  else nr.innerHTML='';
+  if(S.boot!=='ready'){main.innerHTML=stateHTML();return}
+  main.innerHTML=monthNavHTML()+({me:renderMe,all:renderAll,sched:renderSched,fair:renderFair}[S.view]||renderMe)();paintCheckCount();
+}
+function go(v){
+  if(v==='sched'&&!S.perms.schedule)v='me';
+  S.view=v;render();try{history.replaceState(null,'','#'+v)}catch(e){}window.scrollTo(0,0);
+}
+function changeMonth(delta){
+  if(S.busy)return;
+  var m=S.month+delta,y=S.year;if(m<1){m=12;y--}if(m>12){m=1;y++}
+  S.year=y;S.month=m;
+  S.openRest={};loadData();
+}
+
+document.addEventListener('click',function(e){
+  var t=e.target.closest('button');if(!t)return;
+  if(t.dataset.view){go(t.dataset.view);return}
+  if(t.id==='helpBtn'){showRules();return}
+  if(t.id==='theme'){toggleTheme();return}
+  if(t.id==='reloadBtn'){location.reload();return}
+  if(t.id==='retryBtn'){if(S.viewer)loadData();else start();return}
+  if(t.id==='logout'){
+    S.viewer=null;S.perms=SC.nextPerms(null);$('#tabSched').hidden=true;S.boot='login';S.raw={};render();
+    StaffGate.logout();
+    var poll=setInterval(function(){if(StaffGate.email()){clearInterval(poll);start()}},700); // 登出後等重新登入；不呼叫 require()，免得舊快取立刻把人登回去
+    return;
+  }
+  if(t.dataset.mn){changeMonth(+t.dataset.mn);return}
+  if(t.dataset.rest){var r=+t.dataset.rest;S.openRest[r]=!S.openRest[r];var a=t.closest('.day');var f=document.createElement('div');f.innerHTML=dayHTML(r);a.replaceWith(f.firstChild);return}
+  if(t.id==='fold'){S.showPast=!S.showPast;$('.days').classList.toggle('showpast',S.showPast);var n=0;for(var d=1;d<=S.M.dim;d++)if(isPastD(d))n++;t.textContent=(S.showPast?'收起已過的 ':'看已過的 ')+n+' 天';return}
+  if(t.dataset.mode){S.mode=t.dataset.mode;$$('[data-mode]').forEach(function(b){b.setAttribute('aria-pressed',b===t)});return}
+  if(t.id==='planZ'){planZhiban();return}
+  if(t.id==='planD'){planDuty();return}
+  if(t.dataset.go){jump(+t.dataset.go);return}
+  if(t.dataset.fix){var p=t.dataset.fix.split(':');fixDay(+p[0],p[1]);return}
+  if(t.dataset.cf){var q=t.dataset.cf.split(':');doCf(q[0],+q[1],q.slice(2).join(':'));return}
+  if(t.dataset.selfrest){selfRest(+t.dataset.selfrest);return}
+  if(t.classList.contains('cell')){clickCell(t.dataset.n,+t.dataset.d);return}
+});
+document.addEventListener('click',function(e){
+  var th=e.target.closest&&e.target.closest('th.dt');
+  if(th&&S.view==='sched'&&S.perms.schedule)toggleNoRest(+th.dataset.col);
+});
+document.addEventListener('change',function(e){
+  if(e.target.id==='whoSel'){S.who=e.target.value;var c=$('.mine');render();var s=$('#whoSel');if(s)s.focus()}
+});
+document.addEventListener('mouseover',function(e){
+  var c=e.target.closest&&e.target.closest('.cell');
+  $$('.mx .hl').forEach(function(x){x.classList.remove('hl')});
+  if(!c)return;
+  var th=$('th[data-col="'+c.dataset.d+'"]'),nm=$('th[data-row="'+c.dataset.n.replace(/"/g,'\\"')+'"]');
+  if(th)th.classList.add('hl');if(nm)nm.classList.add('hl');
+});
+
+/* 工具列展開面板：點外面先收起，不誤點到底下的格子 */
+document.addEventListener('click',function(e){
+  var o=$('details[name="tools"][open]');if(!o)return;
+  if(o.contains(e.target)){if(e.target.closest('[data-go]'))o.open=false;return}
+  o.open=false;
+  if(!e.target.closest('details[name="tools"] summary')){e.stopPropagation();e.preventDefault()}
+},true);
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){var o=$('details[name="tools"][open]');if(o)o.open=false}});
+
+/* theme */
+function curTheme(){
+  var a=document.documentElement.getAttribute('data-theme');
+  return a||'light';
+}
+function rulesHTML(){
+  var y=S.year,m=S.month,limit=SC.monthLeaveLimit(y,m),names=SC.GOV_REST_NAMES.map(SC.nextName).join('、');
+  var v2=SC.isDutyV2Month(y,m);
+  var clean=v2?
+    '<li><b>每天掃整棟一到四樓</b>，四樓也是每天掃。</li>'+
+    '<li><b>業務、兼職：</b>一個人一天掃整棟，當天做完就好，可以分時段。</li>'+
+    '<li><b>內勤：</b>兩人一組，一人 1＋4 樓、一人 2＋3 樓，搭檔和樓層會輪替；只排平日，六日和國定假日不排。</li>'+
+    '<li><b>兼職：</b>每月一次，排在六日，六日不夠才排平日；不值班、不倒垃圾。</li>'+
+    '<li>值班和打掃各排各的；同一個人不連續兩天打掃。</li>'+
+    '<li>私下換班、代掃都可以，當天有人掃完就好。</li>'+
+    '<li>有沒有打掃、有沒有倒垃圾由珊珊確認，同仁不用回報。</li>'+
+    '<li>沒掃每層 200 元（整棟 800 元），沒倒垃圾 300 元；只罰錢不補掃。</li>'
+    :'<li>這個月份是舊制：一到三樓每天各一人，四樓只在週五，倒垃圾另外排清運。</li>';
+  var trash=v2?
+    '<li><b>值班的人負責倒垃圾。</b>班表上「值🗑️」是當天要倒垃圾，只有「值」是當天沒垃圾車。</li>'+
+    '<li>週三、週日清潔隊不收，沒有垃圾車。</li>'
+    :'<li>週三、週日清潔隊不收，不排清運。</li>';
+  return '<h2>排班規則說明</h2><div class="body">'+
+    '<h3>班表怎麼看</h3><ul>'+
+    '<li>空白就是上班，黃底是今天，粗線分週。</li>'+
+    '<li><span class="tag-rest">休</span> 排休，<span class="tag-rest">特</span> 特休，<span class="tag-rest">假</span> 請假。</li>'+
+    '<li><span class="tag-rest red">休</span> 正職休假（'+esc(names)+'），六日和國定假日休假，不算在月休內。</li>'+
+    '<li>其他同仁一個月休 '+limit+' 天。班表最下面統計每人的休假和值班，未休、多休會標出來；兼職不算。</li>'+
+    '<li>值班外框是未倒垃圾，斜線是沒到班；打掃斜線是沒掃。</li>'+
+    (S.perms.schedule?'<li>點日期可設定或取消禁休。</li>':'')+'</ul>'+
+    '<h3>排休</h3><ul>'+
+    '<li>在「我的班」自己排，下個月起都可以提前排。</li>'+
+    '<li>到當月最後一天都能改下個月的休假；月份開始後鎖定，要改請找珊珊。</li>'+
+    '<li>在「我的排休」點日期切換休假；正職休假的日子不能改。</li></ul>'+
+    '<h3>值班</h3><ul>'+
+    '<li>19:00 到 20:00 多留一小時。</li>'+
+    '<li>資格：承攬，到職滿 3 個月，社宅部除外。</li>'+
+    '<li>每天一人，每人次數平均，不連續排同一人，當天休假的人不排。</li>'+
+    '<li>每個月重新分配，新人不用補前人的次數。</li>'+trash+'</ul>'+
+    '<h3>打掃</h3><ul>'+clean+'</ul>'+
+    '<h3>今天以前的班</h3><ul><li>預排時今天以前（含今天）的日子鎖定不動，手動排的也會保留。</li></ul>'+
+    (S.perms.confirm?'<h3>確認</h3><ul><li>預設都算做完，只標例外。</li><li>最近兩天在上方「確認」；更早的日子把「點格子改」切到「確認」再點格子。</li></ul>':'')+
+    '<h3>公平帳</h3><ul><li>用層計算：掃一層算 1 層，倒垃圾一次算 1 層。每組跟自己的平均比。</li><li>「排定」是整月排好的量；「實際」是到今天為止、扣掉珊珊標的例外之後做完的量。</li></ul>'+
+    '<h3>資料</h3><ul><li>資料和舊版排班表是同一份。</li></ul>'+
+    '</div><div class="acts"><button class="btn btn2" data-mv="report">回報問題或意見</button><button class="btn" data-mv="ok">知道了</button></div>';
+}
+function showRules(){
+  openModal(rulesHTML()).then(function(v){
+    if(v!=='report')return;
+    var b=document.getElementById('wh-bug-report-btn');if(b)b.click();
+  });
+  var m=$('.modal',modalRoot);if(m)m.classList.add('rules');
+}
+function paintTheme(){$('#theme').innerHTML=curTheme()==='dark'?IC.sun:IC.moon}
+function toggleTheme(){
+  var n=curTheme()==='dark'?'light':'dark';
+  document.documentElement.setAttribute('data-theme',n);
+  try{localStorage.setItem('wh-sched-theme',n)}catch(e){}
+  paintTheme();
+}
+try{var saved=localStorage.getItem('wh-sched-theme');if(saved)document.documentElement.setAttribute('data-theme',saved)}catch(e){}
+paintTheme();
+
+/* boot */
+$('#mark').textContent='窩的家排班';
+try{var h=(location.hash||'').slice(1);if(['me','all','sched','fair'].indexOf(h)>=0)S.view=h}catch(e){}
+start();
+})();
+</script>
+<script src="bug-report.js" defer></script>
+</body>
+</html>
