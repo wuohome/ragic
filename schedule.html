@@ -856,7 +856,7 @@ function rowHTML(d,cols){
 }
 function restInfo(n,rests){
   var t=rests[n]||{paixiu:0,texiu:0,qingjia:0,gov:0,total:0},target=SC.nextRestTarget(S.M,S.byName[n]);
-  return {t:t,target:target,st:SC.nextRestStatus(t.total,target)};
+  return {t:t,target:target,st:SC.nextRestStatus(t,target)};
 }
 function restHead(n,rests,first){
   var r=restInfo(n,rests),t=r.t,bits=[];
@@ -864,7 +864,7 @@ function restHead(n,rests,first){
   var title=dn(n)+' 共休 '+t.total+' 天'+(bits.length?'（'+bits.join('、')+'）':'');
   var cls=[first?'gs':'',r.st.side==='none'?'':r.st.side].join(' ').trim();
   var txt=r.target===null?t.total+' 天':t.total+'/'+r.target;
-  var sub=r.st.side==='short'?'少 '+r.st.diff+' 天':r.st.side==='over'?'多 '+r.st.diff+' 天':r.st.side==='ok'?'剛好':'兼職';
+  var sub=r.st.side==='short'?'少 '+r.st.diff+' 天':r.st.side==='over'?'多 '+r.st.diff+' 天':r.st.side==='ok'?(t.total>r.target?'含特休假':'剛好'):'兼職';
   return '<th scope="col"'+(cls?' class="'+cls+'"':'')+' title="'+esc(title)+'"><span class="rt">'+txt+'</span><span class="rs">'+sub+'</span></th>';
 }
 function restSumHTML(){

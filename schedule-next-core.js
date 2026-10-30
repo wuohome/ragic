@@ -194,10 +194,13 @@ SC.nextRestTarget = (M, emp) => {
     for (let d = 1; d <= M.dim; d++) if (SC.isGovRestDay(M.year, M.month, d) && !M.days[d].noRest) n++;
     return n;
 };
-SC.nextRestStatus = (total, target) => {
+// 少休看總天數（特休、請假也算休到）；多休只看排休＋見紅休，特休和請假不算多休。t = SC.nextRestTally 的一筆
+SC.nextRestStatus = (t, target) => {
     if (target === null) return { side: "none", diff: 0 };
-    const diff = total - target;
-    return { side: diff < 0 ? "short" : diff > 0 ? "over" : "ok", diff: Math.abs(diff) };
+    if (t.total < target) return { side: "short", diff: target - t.total };
+    const planned = t.paixiu + t.gov;
+    if (planned > target) return { side: "over", diff: planned - target };
+    return { side: "ok", diff: 0 };
 };
 
 // ── 公平帳：每組（業務／內勤／兼職）各自的平均，標比平均多／少，沒有欠帳、追債、罰款字眼 ──
@@ -251,6 +254,16 @@ SC.nextChecks = (M, todayStr) => {
             }
         }
     });
+    for (let d = 1; d <= M.dim; d++) {
+        const day = M.days[d];
+        const fixable = SC._cmpDateStr(day.ds, todayStr) > 0;
+        day.rest.forEach((x) => {
+            const jobs = [];
+            if (day.clean.some((g) => g.name === x.name)) jobs.push("打掃");
+            if (day.duty.some((y) => y.name === x.name)) jobs.push("值班");
+            if (jobs.length && fixable) out.push({ d, kind: "twice", fix: null, text: `${SC.nextName(x.name)} ${lab(d)}休假，但同一天排了${jobs.join("和")}` });
+        });
+    }
     SC.DUTY_NOT_ADJACENT_PAIRS.forEach(([a, b]) => {
         const has = (n, d) => M.days[d].clean.some((g) => g.name === n);
         for (let d = 1; d < M.dim; d++) {
