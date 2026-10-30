@@ -5889,7 +5889,7 @@ function reportOriginOf(request) {
 // 匿名可打的端點要有限流，防灌爆（Discord／Ragic／維修員額度）。KV 計數，每小時一格。
 // 單 IP 每小時 REPORT_RL_PER_IP 則、全站每小時 REPORT_RL_GLOBAL 則；超過回 429（正常使用碰不到）。
 // ponytail-debt: KV 讀改寫非原子、KV 故障時放行（寧可多收也不擋真人回報）；要更嚴再換 Durable Object。
-const REPORT_RL_PER_IP = 10;
+const REPORT_RL_PER_IP = 30; // 辦公室共用一個對外 IP，10 則會誤擋同事（2026-10-30）
 const REPORT_RL_GLOBAL = 60;
 async function reportRateLimited(env, request) {
   if (!env.EARNEST_QUEUE) return false;
