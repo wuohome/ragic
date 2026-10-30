@@ -527,4 +527,70 @@ const BUG_REPORT_ENDPOINT = 'https://wuohome-ragic-proxy.wuohome.workers.dev/rep
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && modal.classList.contains('wh-open')) closeModal();
   });
+
+  // ── 避讓：右下角有可操作元件（按鈕／輸入框／簽名板等）時暫時藏起回報鈕 ──
+  // 頁面可在載入本檔「之前」設定 window.WH_BUG_REPORT = { guard: '額外選擇器', hideWhen: '符合時整個藏起的選擇器' }
+  (function () {
+    var opts = window.WH_BUG_REPORT || {};
+    var BAND_X = 88;  // 按鈕 48 + 右距 20 + 餘裕
+    var BAND_Y = 96;  // 按鈕 48 + 底距 24 + 餘裕
+    var SEL = 'button,input,select,textarea,canvas,[role="button"],[type="submit"],[class*="btn"],[class*="button"]' +
+      (opts.guard ? ',' + opts.guard : '');
+    var scheduled = false, last = 0, hidden = false;
+
+    function inWidget(el) { return el.closest && el.closest('#wh-bug-report-btn,#wh-bug-modal,#wh-bug-backdrop,#wh-toast'); }
+
+    function shouldHide() {
+      try {
+        if (opts.hideWhen) {
+          var o = document.querySelectorAll(opts.hideWhen);
+          for (var k = 0; k < o.length; k++) { if (o[k].getClientRects().length) return true; }
+        }
+      } catch (e) { /* 選擇器寫錯就略過 */ }
+      var vw = window.innerWidth, vh = window.innerHeight;
+      var list = document.querySelectorAll(SEL);
+      for (var i = 0; i < list.length; i++) {
+        var el = list[i];
+        var r = el.getBoundingClientRect();
+        if (r.width < 4 || r.height < 4 || r.height > 220) continue;                  // 看不見或是大容器
+        if (r.right < vw - BAND_X || r.left > vw || r.bottom < vh - BAND_Y || r.top > vh) continue; // 不在右下角
+        if (inWidget(el)) continue;
+        var cs = getComputedStyle(el);
+        if (cs.visibility === 'hidden' || cs.display === 'none' || cs.pointerEvents === 'none') continue;
+        // 被其他東西完整蓋住（例如登入覆蓋層、關著的抽屜）不算
+        var cx = Math.min(Math.max(r.left + r.width / 2, 0), vw - 1), cy = Math.min(Math.max(r.top + r.height / 2, 0), vh - 1);
+        var top = document.elementFromPoint(cx, cy);
+        if (top && top !== el && !el.contains(top) && !top.contains(el)) continue;
+        return true;
+      }
+      return false;
+    }
+
+    function update() {
+      scheduled = false; last = Date.now();
+      var h = shouldHide();
+      if (h !== hidden) { hidden = h; btn.classList.toggle('wh-guard-hide', h); }
+    }
+
+    function schedule() {
+      if (scheduled) return;
+      scheduled = true;
+      var wait = Math.max(0, 150 - (Date.now() - last));
+      setTimeout(function () { requestAnimationFrame(update); }, wait);
+    }
+
+    var st = document.createElement('style');
+    st.textContent = '#wh-bug-report-btn.wh-guard-hide{display:none!important}';
+    document.head.appendChild(st);
+
+    window.addEventListener('scroll', schedule, { passive: true, capture: true });
+    window.addEventListener('resize', schedule);
+    window.addEventListener('load', schedule);
+    document.addEventListener('focusin', schedule);
+    document.addEventListener('transitionend', schedule, true);
+    new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) { if (!inWidget(muts[i].target.nodeType === 1 ? muts[i].target : muts[i].target.parentNode || document.body)) { schedule(); return; } }
+    }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'disabled', 'open'] });
+    schedule();
+  })();
 })();
