@@ -2,8 +2,16 @@
 // Worker endpoint — 日後改位置只動這一行
 const BUG_REPORT_ENDPOINT = 'https://wuohome-ragic-proxy.wuohome.workers.dev/reportBug';
 
+// 其他網站的 bug-report.js 只是一支載入器，本體都在這裡；設定走 window.WH_BUG_REPORT：
+//   endpoint 回報網址、screenshot 是否自動截圖、guard／hideWhen 右下角避讓
+var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
+
 (function () {
   'use strict';
+
+  var WH_CFG = window.WH_BUG_REPORT || {};
+  // 自動截圖只開給內部頁（有員工登入或明確設定）：客戶頁的畫面常有姓名、電話、簽名，預設不截，需要時客戶自己上傳
+  function autoShotAllowed() { return WH_CFG.screenshot === true || !!window.StaffGate; }
 
   // 回報裡不能帶同仁的專屬通行碼（?token=…），只保留其他參數
   function safeSearch() {
@@ -348,7 +356,7 @@ const BUG_REPORT_ENDPOINT = 'https://wuohome-ragic-proxy.wuohome.workers.dev/rep
   function loadHtml2canvas(cb) {
     if (html2canvasLoaded && window.html2canvas) { cb(); return; }
     var s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+    s.src = new URL('vendor/html2canvas.min.js', WH_BUG_SELF || location.href).href; // 自家託管 1.4.1，不在金流頁載第三方程式
     s.onload = function () { html2canvasLoaded = true; cb(); };
     s.onerror = function () { cb(new Error('html2canvas load failed')); };
     document.head.appendChild(s);
@@ -407,6 +415,11 @@ const BUG_REPORT_ENDPOINT = 'https://wuohome-ragic-proxy.wuohome.workers.dev/rep
   // ── Events ──
   btn.addEventListener('click', function () {
     // 1. Capture first, then open modal
+    if (!autoShotAllowed()) {
+      openModal();
+      document.getElementById('wh-screenshot-placeholder').textContent = '此頁不自動截圖，以保護個人資料；需要的話可在下方自行上傳';
+      return;
+    }
     btn.style.pointerEvents = 'none';
     takeScreenshot(function (dataUrl) {
       btn.style.pointerEvents = '';
@@ -498,7 +511,7 @@ const BUG_REPORT_ENDPOINT = 'https://wuohome-ragic-proxy.wuohome.workers.dev/rep
       uploads: uploadFiles.slice(0, 5),
     };
 
-    fetch(BUG_REPORT_ENDPOINT, {
+    fetch(WH_CFG.endpoint || BUG_REPORT_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -532,7 +545,7 @@ const BUG_REPORT_ENDPOINT = 'https://wuohome-ragic-proxy.wuohome.workers.dev/rep
   // 標籤只有在壓到簽名板時才整個藏起；hideWhen 符合時也整個藏起
   // 頁面可在載入本檔「之前」設定 window.WH_BUG_REPORT = { guard: '額外選擇器', hideWhen: '符合時整個藏起的選擇器' }
   (function () {
-    var opts = window.WH_BUG_REPORT || {};
+    var opts = WH_CFG;
     var BAND_X = 88;  // 按鈕 48 + 右距 20 + 餘裕
     var BAND_Y = 96;  // 按鈕 48 + 底距 24 + 餘裕
     var SEL = 'button,input,select,textarea,canvas,[role="button"],[type="submit"],[class*="btn"],[class*="button"]' +
