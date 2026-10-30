@@ -282,6 +282,24 @@ main{padding-block:16px 96px;min-height:80vh}
 .mxkey span{display:inline-flex;align-items:center;gap:4px}
 .mxkey .sw{display:inline-block;width:16px;height:8px;border-radius:2px}
 .mxkey .sw2{display:inline-block;width:2px;height:12px;background:var(--ink)}
+/* 班表放大：格子 14 號字、列高 40；手機不讓浮動選單蓋住人名列 */
+.mx{font-size:14px;line-height:20px}
+.mx thead tr.p th{min-width:56px;height:44px;font-size:15px;font-weight:600}
+.mx thead tr.g th{font-size:14px}
+.mx .dt{height:40px;color:var(--ink2)}
+.mx .dt .n{font-size:15px}
+.mx tfoot th,.mx tfoot td{height:40px}
+.mx .cell{min-width:56px;height:40px}
+.mx .tag-clean{font-size:14px;line-height:22px;padding-inline:6px}
+.mx .tag-duty,.mx .tag-rest{width:22px;height:22px;font-size:14px;line-height:22px}
+.mxkey{font-size:14px;line-height:20px;color:var(--ink2)}
+@media (max-width:767px){
+  body:has(#mxwrap) .topwrap{position:static}
+  .mxwrap{max-height:calc(100dvh - 16px)}
+  .mx thead th.corner,.mx .dt{min-width:64px;padding-inline:6px}
+  .mx .dt .n{min-width:20px;margin-right:2px}
+  .mx tfoot th{padding-inline:6px}
+}
 
 /* ---------- 4. 公平帳 ---------- */
 .fairgrp{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-top:48px}
