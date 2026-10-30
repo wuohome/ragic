@@ -5,63 +5,58 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
 <title>窩的家排班表</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-/* ---------- Tokens: light lives on bare :root ---------- */
+/* ---------- Tokens: 白底細線、等寬小字；顏色只留給班別語意 ---------- */
 :root{
-  --bg:#FFFFFF;--bg2:#F7F7F7;--bg3:#EDEDED;
-  --ink:#0A0A0A;--ink2:#4D4D4D;--ink3:#6B6B6B;
-  --line:#EAEAEA;--line2:#D4D4D4;
-  --clean:#2563EB;
-  --clean-soft:#E7EEFC;--clean-ink:#1E40AF;
-  --duty:#F97316;--duty-soft:#FEEFE3;--duty-ink:#9A3412;
-  --rest:#15803D;--rest-soft:#DCFCE7;--rest-ink:#166534;
-  --today:#EAB308;--today-soft:#FEFCE8;
-  --red:#C2261E;--red-soft:#FCEDEC;
+  --bg:#FFFFFF;--bg2:#F6F6F6;--bg3:#ECECEC;
+  --ink:#0A0A0A;--ink2:#404040;--ink3:#6B6B6B;
+  --line:#E6E6E6;--line2:#BDBDBD;
+  --clean:#2563EB;--clean-soft:#DBE7FF;--clean-ink:#1E3A8A;
+  --duty:#F97316;--duty-soft:#FFE2CC;--duty-ink:#8A2E0C;
+  --rest:#15803D;--rest-soft:#BBF0CC;--rest-ink:#14532D;
+  --today:#EAB308;--today-soft:#FEF7C3;
+  --red:#C2261E;--red-soft:#FCE4E2;
   --on-ink:#FFFFFF;
-  --bar:rgba(255,255,255,.8);
-  --shadow:0 8px 24px rgba(0,0,0,.12);
-  --sans:"Geist","PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;
-  --mono:"Geist Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --shadow:0 12px 40px rgba(0,0,0,.14);
+  --bar:56px;
+  --pad:16px;
+  --slash-duty:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' preserveAspectRatio='none'%3E%3Cpath d='M0 40 40 0' stroke='%238A2E0C' stroke-width='1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+  --slash-clean:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' preserveAspectRatio='none'%3E%3Cpath d='M0 40 40 0' stroke='%231E3A8A' stroke-width='1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+  --hatch:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Cpath d='M-1 9 9-1M-1 1 1-1M7 9 9 7' stroke='%23C4C4C4' stroke-width='1'/%3E%3C/svg%3E");
+  --bar-mark:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18' fill='none' stroke='%230A0A0A' stroke-width='1.5'%3E%3Ccircle cx='9' cy='9' r='6.5'/%3E%3Cpath d='M9 0v18M0 9h18'/%3E%3C/svg%3E");
+  --sans:"Geist","Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --mono:"Geist Mono","Noto Sans TC","PingFang TC","Microsoft JhengHei",ui-monospace,Menlo,Consolas,monospace;
   --ease:cubic-bezier(0.22,1,0.36,1);
   color-scheme:light;
 }
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#000000;--bg2:#181818;--bg3:#272727;
-  --ink:#EDEDED;--ink2:#C4C4C4;--ink3:#A1A1A1;
-  --line:#272727;--line2:#3D3D3D;
-  --clean:#2563EB;
-  --clean-soft:#0F1B38;--clean-ink:#A9C6FF;
-  --duty:#F97316;--duty-soft:#2E1A0A;--duty-ink:#FDBA74;
-  --rest:#15803D;--rest-soft:#0B2E1A;--rest-ink:#86EFAC;
-  --today:#EAB308;--today-soft:#251D01;
-  --red:#FF8A80;--red-soft:#1F1F1F;
-  --on-ink:#000000;
-  --bar:rgba(24,24,24,.8);
-  --shadow:0 8px 24px rgba(0,0,0,.6);
-  color-scheme:dark;
-}}
 :root[data-theme="dark"]{
-  --bg:#000000;--bg2:#181818;--bg3:#272727;
-  --ink:#EDEDED;--ink2:#C4C4C4;--ink3:#A1A1A1;
-  --line:#272727;--line2:#3D3D3D;
-  --clean:#2563EB;
-  --clean-soft:#0F1B38;--clean-ink:#A9C6FF;
-  --duty:#F97316;--duty-soft:#2E1A0A;--duty-ink:#FDBA74;
-  --rest:#15803D;--rest-soft:#0B2E1A;--rest-ink:#86EFAC;
-  --today:#EAB308;--today-soft:#251D01;
-  --red:#FF8A80;--red-soft:#1F1F1F;
-  --on-ink:#000000;
-  --bar:rgba(24,24,24,.8);
-  --shadow:0 8px 24px rgba(0,0,0,.6);
+  --bg:#0B0B0B;--bg2:#161616;--bg3:#262626;
+  --ink:#F2F2F2;--ink2:#CFCFCF;--ink3:#A3A3A3;
+  --line:#262626;--line2:#4A4A4A;
+  --clean:#3B82F6;--clean-soft:#14264D;--clean-ink:#BBD3FF;
+  --duty:#F97316;--duty-soft:#3D2110;--duty-ink:#FDC89A;
+  --rest:#1C9A4C;--rest-soft:#11391F;--rest-ink:#A7F0C0;
+  --today:#EAB308;--today-soft:#2A2204;
+  --red:#FF8A80;--red-soft:#3A1614;
+  --on-ink:#0A0A0A;
+  --shadow:0 12px 40px rgba(0,0,0,.6);
+  --slash-duty:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' preserveAspectRatio='none'%3E%3Cpath d='M0 40 40 0' stroke='%23FDC89A' stroke-width='1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+  --slash-clean:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' preserveAspectRatio='none'%3E%3Cpath d='M0 40 40 0' stroke='%23BBD3FF' stroke-width='1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+  --hatch:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Cpath d='M-1 9 9-1M-1 1 1-1M7 9 9 7' stroke='%23555555' stroke-width='1'/%3E%3C/svg%3E");
+  --bar-mark:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18' fill='none' stroke='%23F2F2F2' stroke-width='1.5'%3E%3Ccircle cx='9' cy='9' r='6.5'/%3E%3Cpath d='M9 0v18M0 9h18'/%3E%3C/svg%3E");
   color-scheme:dark;
 }
+@media (min-width:768px){:root{--pad:24px}}
 
 /* ---------- Base ---------- */
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;overflow-x:clip}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:24px;font-variant-numeric:tabular-nums;overflow-x:clip;-webkit-font-smoothing:antialiased}
 body::before{content:"";position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:60}
-h1,h2,h3,p,ol,ul{margin:0;padding:0}
+h1,h2,h3,p,ol,ul,dl,dd{margin:0;padding:0}
 ol,ul{list-style:none}
 h1,h2,h3{text-wrap:balance}
 p{text-wrap:pretty}
@@ -69,386 +64,401 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 button:disabled{cursor:not-allowed}
 :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .mono{font-family:var(--mono)}
-.xs{font-size:12px;line-height:16px}
+.xs{font-size:14px;line-height:20px}
 .sm{font-size:14px;line-height:20px}
 .muted{color:var(--ink3)}
 .semi{font-weight:600}
-.skip{position:fixed;left:16px;top:8px;z-index:70;background:var(--ink);color:var(--on-ink);padding-block:8px;padding-inline:12px;border-radius:8px;transform:translateY(-64px);transition:transform 300ms var(--ease)}
+.skip{position:fixed;left:16px;top:8px;z-index:70;background:var(--ink);color:var(--on-ink);padding-block:8px;padding-inline:12px;transform:translateY(-64px);transition:transform 200ms var(--ease)}
 .skip:focus{transform:none}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 
 /* ---------- Frame ---------- */
-.shell{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1440px;margin-inline:auto}
-@media (min-width:768px){.shell{padding-left:max(32px,env(safe-area-inset-left,0px));padding-right:max(32px,env(safe-area-inset-right,0px))}}
+.shell{padding-left:max(var(--pad),env(safe-area-inset-left,0px));padding-right:max(var(--pad),env(safe-area-inset-right,0px));max-width:1440px;margin-inline:auto}
 
-/* Floating, content-sized nav (B7) */
-.topwrap{position:sticky;top:env(safe-area-inset-top,0px);z-index:40;display:flex;justify-content:center;padding-block:8px;pointer-events:none}
-.top{pointer-events:auto;display:flex;align-items:center;gap:4px;padding:4px;border-radius:12px;background:var(--bar);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border:1px solid var(--line);max-width:100%}
-.mark{display:flex;align-items:center;gap:8px;padding-inline:8px;font-size:14px;line-height:20px;font-weight:600;white-space:nowrap}
-.mark{display:none}
+/* 上方選單：整條白底細線，位置靠黑色底線 */
+.topwrap{position:sticky;top:env(safe-area-inset-top,0px);z-index:40;background:var(--bg);border-bottom:1px solid var(--line2)}
+.top{display:flex;align-items:stretch;height:calc(var(--bar) - 1px);max-width:1440px;margin-inline:auto;padding-inline:max(var(--pad),env(safe-area-inset-left,0px))}
+.mark{display:none;align-items:center;gap:10px;margin-right:28px;font-size:15px;line-height:20px;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.mark::before{content:"";width:18px;height:18px;flex:none;border-radius:50%;background:var(--bar-mark) center/100% 100% no-repeat}
 @media (min-width:768px){.mark{display:flex}}
-.tab{min-height:36px;padding-block:8px;padding-inline:12px;font-size:14px;line-height:20px;font-weight:600;color:var(--ink3);border-radius:8px;white-space:nowrap;transition:background-color 300ms var(--ease),color 300ms var(--ease),transform 300ms var(--ease)}
-.tab:hover{color:var(--ink);background:var(--bg2)}
-.tab:active{transform:scale(.98)}
-.tab[aria-current="page"]{background:var(--ink);color:var(--on-ink)}
-.iconbtn{width:36px;height:36px;display:grid;place-items:center;border-radius:8px;color:var(--ink3);flex:none;transition:background-color 300ms var(--ease),color 300ms var(--ease),transform 300ms var(--ease)}
+.tab{position:relative;display:flex;align-items:center;padding-inline:14px;font-size:15px;line-height:20px;font-weight:500;color:var(--ink3);white-space:nowrap;transition:color 150ms var(--ease)}
+.tab:hover{color:var(--ink)}
+.tab[aria-current="page"]{color:var(--ink);font-weight:700}
+.tab[aria-current="page"]::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--ink)}
+.iconbtn{width:44px;height:44px;align-self:center;display:grid;place-items:center;color:var(--ink2);flex:none;transition:background-color 150ms var(--ease),color 150ms var(--ease)}
 .iconbtn:hover{background:var(--bg2);color:var(--ink)}
-.iconbtn:active{transform:scale(.98)}
-@media (max-width:639px){.tab{min-height:44px;padding-inline:8px;flex:1;text-align:center}.iconbtn{height:44px;width:32px}.mark{padding-inline:4px}.top{width:100%}}
-.note{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;padding-block:8px;color:var(--ink3);font-size:12px;line-height:16px}
-main{padding-block:16px 96px;min-height:80vh}
-.view{animation:rise 500ms var(--ease) both}
-@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+#helpBtn{margin-left:auto;font-family:var(--mono);font-size:17px;font-weight:600}
+@media (max-width:639px){.tab{flex:1;justify-content:center;padding-inline:4px}.top{padding-inline:8px}}
+.note{display:flex;justify-content:flex-end;padding-block:8px 0;color:var(--ink3);font-size:13px;line-height:18px}
+.note .who-line{display:flex;gap:12px;align-items:center}
+main{padding-block:8px 112px;min-height:80vh}
+
+/* 月份：寬螢幕收進上方選單，捲到哪都看得到；手機留在內容最上方 */
+.monthnav{display:flex;align-items:center;gap:0;margin-left:-14px}
+.monthnav b{font-size:15px;line-height:20px;font-weight:600;min-width:104px;text-align:center}
+.monthnav .iconbtn{font-family:var(--mono);font-size:22px;line-height:1}
+@media (min-width:768px){
+  .monthnav{position:fixed;z-index:41;top:env(safe-area-inset-top,0px);height:calc(var(--bar) - 1px);margin:0;right:calc(max(var(--pad),(100vw - 1440px)/2 + var(--pad)) + 100px)}
+  .monthnav .iconbtn{width:36px}
+}
+@media (min-width:1100px){
+  .monthnav{right:calc(max(var(--pad),(100vw - 1440px)/2 + var(--pad)) + 290px)}
+  .note{position:fixed;z-index:41;top:env(safe-area-inset-top,0px);height:calc(var(--bar) - 1px);width:180px;padding:0;align-items:center;right:calc(max(var(--pad),(100vw - 1440px)/2 + var(--pad)) + 100px)}
+}
 
 /* ---------- Shared bits ---------- */
-.tag-clean,.pill{display:inline-block;flex:none;padding-inline:4px;border-radius:4px;font-size:12px;line-height:16px;font-weight:600;white-space:nowrap}
+.tag-clean,.pill{display:inline-block;flex:none;padding-inline:6px;font-size:14px;line-height:22px;font-weight:600;white-space:nowrap}
 .tag-clean{background:var(--clean-soft);color:var(--clean-ink)}
-.tag-clean.bad{background:var(--red);color:var(--on-ink)}
+.tag-clean.bad,.tag-clean.miss{background:var(--clean-soft) var(--slash-clean) center/100% 100% no-repeat;color:var(--clean-ink)}
 .pill-duty{background:var(--duty-soft);color:var(--duty-ink)}
-.pill-duty.off{background:transparent;color:var(--duty-ink);outline:1px solid var(--duty);outline-offset:-1px}
-.pill-rest{background:var(--rest-soft);color:var(--rest-ink);font-weight:500}
-.pill-off{background:var(--bg3);color:var(--ink2);font-weight:400}
-.tag-duty{display:grid;place-items:center;width:16px;height:16px;flex:none;border-radius:2px;background:var(--duty-soft);color:var(--duty-ink);font-size:12px;line-height:16px;font-weight:600}
-.tag-duty.off{background:transparent;color:var(--duty-ink);outline:1px solid var(--duty);outline-offset:-1px}
-.mx tr.td .tag-clean:not(.bad),.day.today .tag-clean{background:var(--clean);color:#FFFFFF}
-.mx tr.td .tag-duty:not(.off),.day.today .pill-duty:not(.off){background:var(--duty);color:#FFFFFF}
-.tag-rest{display:grid;place-items:center;width:16px;height:16px;flex:none;border-radius:2px;background:var(--rest);color:#FFFFFF;font-size:12px;font-weight:600;line-height:16px}
-.tag-rest.red{background:var(--rest-soft);color:var(--rest-ink);outline:1px solid var(--rest);outline-offset:-1px}
-.btn{min-height:40px;padding-block:8px;padding-inline:12px;font-size:16px;line-height:24px;font-weight:600;background:var(--ink);color:var(--on-ink);border-radius:0;white-space:nowrap;display:inline-flex;align-items:center;gap:8px;transition:opacity 300ms var(--ease),transform 300ms var(--ease)}
-.btn:hover{opacity:.84}
-.btn:active{transform:scale(.98)}
-.btn:disabled{background:var(--bg3);color:var(--ink3);opacity:1;transform:none}
-.btn2{background:transparent;color:var(--ink);outline:1px solid var(--line2);outline-offset:-1px;transition:background-color 300ms var(--ease),transform 300ms var(--ease)}
+.pill-rest{background:var(--rest);color:#FFFFFF}
+.pill-rest.red{background:var(--rest-soft);color:var(--rest-ink)}
+.pill-off{background:var(--bg3);color:var(--ink);font-weight:500}
+.pill-miss{background:var(--clean-soft);color:var(--clean-ink);outline:1px solid var(--clean-ink);outline-offset:-1px}
+.tag-duty{display:inline-grid;grid-auto-flow:column;place-items:center;gap:1px;min-width:24px;height:24px;flex:none;background:var(--duty-soft);color:var(--duty-ink);font-size:14px;line-height:24px;font-weight:600}
+.tag-duty.warn{outline:1px solid var(--duty-ink);outline-offset:-1px}
+.tag-duty.bad{background:var(--duty-soft) var(--slash-duty) center/100% 100% no-repeat}
+.tag-duty.trash{padding-inline:4px;white-space:nowrap}
+.tag-duty .tr{font-style:normal;font-size:13px;line-height:1;filter:grayscale(1) contrast(1.3) brightness(.62)}
+:root[data-theme="dark"] .tag-duty .tr{filter:grayscale(1) brightness(1.4)}
+.tag-rest{display:inline-grid;place-items:center;min-width:24px;height:24px;flex:none;background:var(--rest);color:#FFFFFF;font-size:14px;font-weight:700;line-height:24px}
+.tag-rest.red{background:var(--rest-soft);color:var(--rest-ink)}
+.btn{min-height:44px;padding-block:8px;padding-inline:18px;font-size:15px;line-height:24px;font-weight:600;background:var(--ink);color:var(--on-ink);border-radius:0;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:opacity 150ms var(--ease)}
+.btn:hover{opacity:.82}
+.btn:disabled{background:var(--bg3);color:var(--ink3);opacity:1}
+.btn2{background:transparent;color:var(--ink);outline:1px solid var(--ink);outline-offset:-1px;transition:background-color 150ms var(--ease)}
 .btn2:hover{opacity:1;background:var(--bg2)}
 .btn2:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-.link{font-size:14px;line-height:20px;font-weight:600;color:var(--ink);text-decoration:underline;text-underline-offset:2px;min-height:32px;padding-inline:4px;border-radius:4px;transition:opacity 300ms var(--ease),transform 300ms var(--ease);white-space:nowrap}
-.link:hover{opacity:.7}
-.link:active{transform:translateY(1px)}
-.title{font-size:30px;line-height:36px;font-weight:600;letter-spacing:-.02em}
-.lede{color:var(--ink2);font-size:14px;line-height:20px;max-width:680px;margin-top:8px}
-.h2{font-size:14px;line-height:20px;font-weight:600}
+.link{font-size:14px;line-height:20px;font-weight:600;color:var(--ink);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;min-height:44px;padding-inline:4px;transition:opacity 150ms var(--ease);white-space:nowrap}
+.link:hover{opacity:.65}
+.note .link{min-height:24px;font-size:13px;line-height:18px;font-weight:500;color:var(--ink3)}
+
+/* 一頁一個大標題；其他都小而整齊 */
+.title,.hero .big{font-variant-numeric:proportional-nums}
+.title{font-size:36px;line-height:42px;font-weight:700;letter-spacing:-.04em}
+@media (min-width:768px){.title{font-size:56px;line-height:60px}}
+@media (min-width:1100px){.title{font-size:64px;line-height:68px;letter-spacing:-.05em}}
+.lede{color:var(--ink2);font-size:15px;line-height:22px;max-width:640px;margin-top:12px}
+.h2{font-size:15px;line-height:22px;font-weight:600}
+.pagehead{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:20px 40px;margin-top:12px}
+.pagehead>div:first-child{min-width:0;flex:1 1 420px}
+
+/* 規格列：等寬數字＋細線分格 */
+.spec{display:flex;flex:none;max-width:100%}
+.spec>div{padding-inline:16px;border-left:1px solid var(--line2)}
+.spec>div:first-child{padding-left:12px}
+.spec>div:last-child{padding-right:0}
+.spec dt{font-size:13px;line-height:18px;color:var(--ink3);white-space:nowrap}
+.spec dd{font-family:var(--mono);font-size:24px;line-height:32px;font-weight:500;letter-spacing:-.03em;white-space:nowrap}
+.spec dd small{font-family:var(--sans);font-size:13px;letter-spacing:0;color:var(--ink3);margin-left:2px;font-weight:400}
+@media (max-width:767px){.spec{width:100%}.spec>div{flex:1;padding-inline:10px}.spec>div:first-child{padding-left:10px}}
 
 /* ---------- 1. 我的班 ---------- */
-.who{display:flex;align-items:center;gap:8px;overflow-x:auto;scrollbar-width:none;margin-inline:-16px;padding-inline:16px;padding-block:2px}
-.who::-webkit-scrollbar{display:none}
-@media (min-width:768px){.who{margin-inline:0;padding-inline:0;flex-wrap:wrap;overflow:visible}}
-.chip{flex:none;min-height:36px;padding-block:4px;padding-inline:12px;border:1px solid var(--line);border-radius:9999px;font-size:14px;line-height:20px;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;transition:background-color 300ms var(--ease),border-color 300ms var(--ease),color 300ms var(--ease),transform 300ms var(--ease)}
-.chip small{font-size:12px;line-height:16px;color:var(--ink3);transition:color 300ms var(--ease)}
-.chip:hover{border-color:var(--line2);background:var(--bg2)}
-.chip:active{transform:scale(.98)}
-.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--on-ink)}
-.chip[aria-pressed="true"] small{color:var(--on-ink);opacity:.72}
-@media (max-width:639px){.chip{min-height:44px}}
-.whosel{display:none;align-items:center;gap:12px;font-size:14px;line-height:20px;color:var(--ink3)}
-.whosel select{flex:1;min-width:0;height:44px;padding-inline:12px;border:1px solid var(--line2);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;font-size:16px;line-height:24px;font-weight:600}
-@media (max-width:767px){.whosel{display:flex}.who,.more{display:none}}
-.more{margin-top:16px;display:grid;gap:12px}
-.more h3{font-size:12px;line-height:16px;font-weight:400;color:var(--ink3);margin-bottom:8px}
-.more div div{display:flex;flex-wrap:wrap;gap:8px}
-.mine{display:grid;gap:48px;grid-template-columns:minmax(0,1fr);margin-top:24px}
-@media (min-width:1100px){.mine{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:64px;margin-top:48px}}
+.whosel{display:flex;align-items:center;gap:12px;font-size:14px;line-height:20px;color:var(--ink3);margin-top:16px}
+.whosel select{flex:1;min-width:0;height:44px;padding-inline:12px;border:1px solid var(--line2);border-radius:0;background:var(--bg);color:var(--ink);font:inherit;font-size:16px;line-height:24px;font-weight:600}
+@media (min-width:768px){.whosel select{flex:none;width:260px}}
+.mine{display:grid;gap:56px;grid-template-columns:minmax(0,1fr);margin-top:28px}
+@media (min-width:1100px){.mine{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:72px}}
 .hero h1{font-weight:400}
-.hero .ask{display:block;font-size:20px;line-height:28px;color:var(--ink2);margin-bottom:8px}
+.hero .ask{display:block;font-size:20px;line-height:28px;color:var(--ink2);margin-bottom:4px}
+.hero .big{display:flex;align-items:baseline;flex-wrap:wrap;font-size:84px;line-height:1;font-weight:700;letter-spacing:-.05em}
 .hero .big .num{margin-right:calc(.04em + 4px)}
-.hero .big{display:flex;align-items:baseline;flex-wrap:wrap;font-size:72px;line-height:1;font-weight:600;letter-spacing:-.04em}
-.hero .big small{font-size:30px;line-height:36px;font-weight:600;letter-spacing:0}
-.hero .what{display:flex;align-items:center;gap:12px;margin-top:24px;font-size:30px;line-height:36px;font-weight:600;letter-spacing:-.02em}
-.hero .sub{margin-top:12px;color:var(--ink2);max-width:680px}
-@media (min-width:768px){.hero .big{font-size:96px}.hero .big small{font-size:36px;line-height:40px}}
-@media (min-width:1100px){.hero .big{font-size:128px}}
+.hero .big small{font-size:28px;line-height:36px;font-weight:600;letter-spacing:-.02em}
+.hero .what{display:block;margin-top:20px;font-size:28px;line-height:36px;font-weight:600;letter-spacing:-.03em}
+.hero .sub{margin-top:12px;color:var(--ink2);font-size:15px;line-height:24px;max-width:560px}
+@media (min-width:768px){.hero .big{font-size:120px}.hero .big small{font-size:36px;line-height:40px}}
+@media (min-width:1100px){.hero .big{font-size:152px;letter-spacing:-.06em}}
 .block{margin-top:48px}
 .mine>div>.block:first-child{margin-top:0}
-.block>.h2{margin-bottom:12px;display:flex;justify-content:space-between;gap:8px}
-.lines>li{display:flex;align-items:center;gap:12px;min-height:44px;padding-block:8px;border-top:1px solid var(--line)}
+.block>.h2{margin-bottom:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:0 12px}
+.block>.h2 .muted{font-size:14px;font-family:var(--sans)}
+.lines>li{display:flex;align-items:center;gap:12px;min-height:50px;padding-block:8px;border-top:1px solid var(--line)}
 .lines>li:last-child{border-bottom:1px solid var(--line)}
 .lines .who-name{font-weight:600}
-.lines .right{margin-left:auto;color:var(--ink3);font-size:14px;line-height:20px;text-align:right}
+.lines .right{margin-left:auto;color:var(--ink2);font-size:14px;line-height:20px;text-align:right}
 .lines .past{color:var(--ink3)}
-.you{font-size:12px;line-height:16px;padding-inline:4px;border:1px solid var(--line2);border-radius:4px;color:var(--ink2);font-weight:400}
-.ruler{display:grid;grid-template-columns:repeat(30,minmax(0,1fr));gap:2px;align-items:end;height:40px}
-.ruler i{display:block;height:8px;background:var(--bg3)}
-.ruler i.c{height:40px;background:var(--clean)}
-.ruler i.d{height:24px;background:var(--duty)}
-.ruler i.r{height:16px;background:var(--ink3)}
-.ruler i.t{min-height:16px;outline:2px solid var(--today);outline-offset:-2px}
+.you{font-size:13px;line-height:18px;padding-inline:5px;outline:1px solid var(--line2);outline-offset:-1px;color:var(--ink2);font-weight:500}
+/* 月刻度：一天一格 */
+.ruler{display:grid;gap:1px;height:36px;margin-top:16px}
+.ruler i{display:block;height:100%;background:var(--bg2);position:relative}
+.ruler i.c{background:var(--clean)}
+.ruler i.d{background:var(--duty)}
+.ruler i.r{background:var(--rest)}
+.ruler i.t{outline:2px solid var(--ink);outline-offset:-2px}
 .ruler i.t:not(.c):not(.d):not(.r){background:var(--today-soft)}
-.ruleraxis{display:grid;grid-template-columns:repeat(30,minmax(0,1fr));gap:2px;margin-top:8px;color:var(--ink3);font-size:12px;line-height:16px;font-family:var(--mono)}
+.ruleraxis{display:grid;gap:1px;margin-top:4px;color:var(--ink3);font-size:13px;line-height:16px;font-family:var(--mono);letter-spacing:-.06em;text-align:center}
 .ruleraxis span{white-space:nowrap}
-.key{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:12px;color:var(--ink3);font-size:12px;line-height:16px}
-.key span{display:inline-flex;align-items:center;gap:4px}
-.key b{display:inline-block;width:8px;height:12px;font-weight:400}
+.ruleraxis .t{color:var(--ink);font-weight:600}
+@media (max-width:1099px){.ruleraxis span{visibility:hidden;margin-inline:-6px}.ruleraxis .wk,.ruleraxis .t{visibility:visible}}
+.key{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:10px;color:var(--ink2);font-size:14px;line-height:20px}
+.key span{display:inline-flex;align-items:center;gap:6px}
+.key b{display:inline-block;width:12px;height:12px;font-weight:400}
 .empty{padding-block:16px;color:var(--ink2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 
 /* ---------- 2. 全體 ---------- */
 .dow{display:none}
-.days{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:16px}
+.days{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;background:var(--line);border-top:1px solid var(--ink);border-bottom:1px solid var(--line);margin-top:20px}
 @media (min-width:640px){.days{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (min-width:900px){.days{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (min-width:1280px){
   .days{grid-template-columns:repeat(7,minmax(0,1fr))}
-  .dow{display:block;background:var(--bg);padding-block:8px;padding-inline:12px;color:var(--ink3);font-size:12px;line-height:16px}
+  .dow{display:block;background:var(--bg);padding-block:8px;padding-inline:12px;color:var(--ink3);font-size:13px;line-height:18px}
 }
 .day{background:var(--bg);padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .day.we{background:var(--bg2)}
-.day.today{background:var(--today-soft);outline:2px solid var(--today);outline-offset:-2px}
-.dh{display:flex;align-items:center;gap:8px}
-.dh .n{font-size:24px;line-height:32px;font-weight:600;letter-spacing:-.02em;font-family:var(--mono)}
+.day.today{background:var(--today-soft)}
+.day.today .dh .n{background:var(--ink);color:var(--on-ink);padding-inline:6px;margin-left:-6px}
+.dh{display:flex;align-items:baseline;gap:8px;min-height:32px}
+.dh .n{font-family:var(--mono);font-size:26px;line-height:32px;font-weight:600;letter-spacing:-.05em}
 .dh .w{font-size:14px;line-height:20px;color:var(--ink3)}
-.dh .flag{margin-left:auto;color:var(--ink3);display:inline-flex;align-items:center;gap:4px;font-size:12px;line-height:16px}
+.dh .flag{margin-left:auto;align-self:center;color:var(--ink3);display:inline-flex;align-items:center;gap:4px;font-size:13px;line-height:18px;white-space:nowrap}
+.dh .pill{align-self:center}
 .day.today .dh .flag{color:var(--ink);font-weight:600}
-.rows{display:grid;gap:4px}
-.rw{display:flex;align-items:center;gap:4px;font-size:14px;line-height:20px;min-width:0}
-.rw .fx{margin-left:auto;font-size:12px;line-height:16px;color:var(--ink3);font-family:var(--mono);white-space:nowrap}
-.rw .me{font-weight:600}
-.rw .note2{margin-left:auto;font-size:12px;line-height:16px;color:var(--ink3);white-space:nowrap}
-.restbtn{margin-top:auto;align-self:flex-start;min-height:32px;display:inline-flex;align-items:center;gap:4px;font-size:12px;line-height:16px;color:var(--ink3);padding-inline:4px;margin-left:-4px;border-radius:4px;transition:color 300ms var(--ease),background-color 300ms var(--ease),transform 300ms var(--ease)}
-.restbtn:hover{color:var(--ink);background:var(--bg3)}
-.restbtn:active{transform:translateY(1px)}
-.restbtn svg{transition:transform 300ms var(--ease)}
+.rows{display:grid;gap:6px}
+.rw{display:flex;align-items:center;gap:6px;font-size:15px;line-height:22px;min-width:0}
+.rw .fx,.rw .note2{margin-left:auto;font-size:13px;line-height:18px;color:var(--ink3);white-space:nowrap}
+.rw .fx{font-family:var(--mono)}
+.rw .me{font-weight:700}
+.restbtn{margin-top:auto;align-self:flex-start;min-height:32px;display:inline-flex;align-items:center;gap:6px;font-size:14px;line-height:20px;color:var(--rest-ink);font-weight:600;padding-right:4px;transition:opacity 150ms var(--ease)}
+.restbtn::before{content:"";width:10px;height:10px;background:var(--rest);flex:none}
+.restbtn:hover{opacity:.7}
+.restbtn svg{transition:transform 150ms var(--ease)}
 .restbtn[aria-expanded="true"] svg{transform:rotate(180deg)}
-.restnames{font-size:12px;line-height:16px;color:var(--ink2);animation:fade 300ms var(--ease) both}
-.day.blank{background:var(--bg);display:none}
+.restnames{font-size:14px;line-height:20px;color:var(--ink2)}
+.day.blank{display:none}
 @media (min-width:1280px){
-  .day.blank{display:flex;padding:0}
+  .day.blank{display:flex;padding:0;background:var(--bg)}
   .day.lead{grid-column:span 6}
   .day.tail{grid-column:span 6;justify-content:center;padding:12px}
 }
-@keyframes fade{from{opacity:0}to{opacity:1}}
-.foldpast{display:flex;margin-top:12px}
-.foldpast + .days{margin-top:12px}
-@media (min-width:640px){.foldpast{display:none}.foldpast + .days{margin-top:16px}}
-@media (max-width:639px){.days:not(.showpast) .day.past{display:none}}
+.foldpast{display:flex;margin-top:8px}
+.foldpast + .days{margin-top:8px}
+@media (min-width:640px){.foldpast{display:none}.foldpast + .days{margin-top:20px}}
+@media (max-width:639px){.days:not(.showpast) .day.past{display:none}.restbtn{min-height:44px}}
 
 /* ---------- 3. 排班 ---------- */
-.schedhead{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:16px 32px}
-.steps{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:14px;line-height:20px}
-.steps li{display:inline-flex;align-items:center;gap:8px;color:var(--ink3)}
-.steps li+li::before{content:"";width:16px;height:1px;background:var(--line2)}
-.steps b{display:grid;place-items:center;width:20px;height:20px;border-radius:9999px;border:1px solid var(--line2);font-size:12px;line-height:16px;font-weight:600;font-family:var(--mono)}
-.steps .now{color:var(--ink);font-weight:600}
-.steps .now b{background:var(--ink);border-color:var(--ink);color:var(--on-ink)}
-.steps .done b{background:transparent;border-color:var(--ink3);color:var(--ink2)}
-.schedact{display:flex;align-items:center;gap:12px}
-.ctrl{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px;margin-top:24px}
-.seg{display:inline-flex;align-items:center;gap:8px}
-.seg .lb{font-size:14px;line-height:20px;color:var(--ink3)}
-.seg div{display:inline-flex;padding:2px;background:var(--bg3);border-radius:8px}
-.seg button{min-height:32px;padding-block:4px;padding-inline:12px;font-size:14px;line-height:20px;font-weight:600;color:var(--ink3);border-radius:6px;transition:background-color 300ms var(--ease),color 300ms var(--ease),transform 300ms var(--ease)}
-.seg button:hover{color:var(--ink)}
-.seg button:active{transform:scale(.98)}
-.seg button[aria-pressed="true"]{background:var(--bg);color:var(--ink)}
-.checks{margin-top:16px;display:grid;gap:0}
-.checks .head{display:flex;gap:8px;align-items:center;font-size:14px;line-height:20px;font-weight:600;padding-block:8px}
-.checks .head .ct{color:var(--red);font-family:var(--mono)}
-.checks li{display:flex;align-items:center;gap:12px;min-height:40px;padding-block:4px;border-top:1px solid var(--line);font-size:14px;line-height:20px}
+.schedhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 32px;min-height:68px}
+.schedhead .nextline{flex:1 1 280px;margin:0;max-width:520px;font-weight:600;color:var(--ink)}
+.schedact{display:flex;align-items:center;gap:8px;margin-left:auto}
+.schedact .btn svg{flex:none;margin-left:-4px}
+@media (max-width:767px){.schedact{width:100%;margin-left:0}.schedact .btn{flex:1;padding-inline:8px}}
+/* 工具列：固定高度，細節收在展開面板 */
+.tools{position:relative;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:8px 32px;min-height:56px;margin-top:8px;border-top:1px solid var(--line2);background:var(--bg)}
+.seg{display:inline-flex;align-items:center;gap:12px}
+.seg .lb{font-size:14px;line-height:20px;color:var(--ink2);white-space:nowrap}
+.seg div{display:inline-flex;outline:1px solid var(--ink);outline-offset:-1px}
+.seg button{min-height:40px;padding-inline:16px;font-size:15px;line-height:20px;font-weight:600;color:var(--ink2);transition:background-color 150ms var(--ease),color 150ms var(--ease)}
+.seg button:hover{color:var(--ink);background:var(--bg2)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
+.toolset{display:flex;align-items:center;gap:4px}
+.toolset summary{display:flex;align-items:center;gap:6px;min-height:44px;padding-inline:14px;font-size:15px;line-height:20px;font-weight:600;color:var(--ink);cursor:pointer;list-style:none;-webkit-tap-highlight-color:transparent}
+.toolset summary::-webkit-details-marker{display:none}
+.toolset summary::after{content:"";width:6px;height:6px;margin-left:2px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2px) rotate(45deg);transition:transform 150ms var(--ease)}
+.toolset details[open] summary{background:var(--ink);color:var(--on-ink)}
+.toolset details[open] summary::after{transform:translateY(1px) rotate(225deg)}
+.toolset summary:hover{background:var(--bg2)}
+.toolset details[open] summary:hover{background:var(--ink)}
+#chkN{display:inline-grid;place-items:center;min-width:20px;height:20px;padding-inline:5px;font-family:var(--mono);font-size:13px;font-weight:600;background:var(--red);color:#FFFFFF}
+#chkN.zero{background:var(--bg3);color:var(--ink3)}
+.panel{position:absolute;left:0;right:0;top:100%;background:var(--bg);outline:1px solid var(--ink);box-shadow:var(--shadow);padding:16px 20px 20px}
+.panel .mxkey{gap:10px 20px}
+@media (max-width:767px){
+  .tools{display:grid;grid-template-columns:minmax(0,1fr);padding-block:12px 4px}
+  .seg{display:grid;width:100%;gap:6px}
+  .seg div{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+  .seg button{min-height:44px;padding-inline:0}
+  .toolset{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+  .toolset summary{justify-content:center;padding-inline:4px}
+  .panel{left:calc(-1*var(--pad));right:calc(-1*var(--pad));max-height:60dvh;overflow:auto}
+}
+.checks{display:grid;gap:0}
+.checks .head{display:none}
+.checks li{display:flex;align-items:center;gap:10px;min-height:44px;padding-block:2px;border-top:1px solid var(--line);font-size:14px;line-height:20px}
 .checks li:last-child{border-bottom:1px solid var(--line)}
 .checks li span{min-width:0}
-.checks li .acts{margin-left:auto;display:flex;gap:12px;flex:none}
-.dot-r{width:8px;height:8px;border-radius:9999px;background:var(--red);flex:none}
-.checks .ok{display:flex;gap:8px;align-items:center;padding-block:8px;color:var(--ink2);font-size:14px;line-height:20px}
-.mxwrap{margin-top:16px;width:max-content;min-width:100%;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
-.mx{border-collapse:separate;border-spacing:0;font-size:12px;line-height:16px;width:100%}
+.checks li .acts{margin-left:auto;display:flex;gap:10px;flex:none}
+.dot-r{width:8px;height:8px;background:var(--red);flex:none}
+.checks .ok{display:flex;gap:8px;align-items:center;color:var(--ink2);font-size:14px;line-height:20px}
+.confirmbox>.h2{display:none}
+.cfdays{display:grid;grid-template-columns:minmax(0,1fr);gap:16px 32px}
+@media (min-width:1100px){.cfdays{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.cfrow{display:flex;align-items:center;gap:8px;min-height:44px;padding-block:2px;border-top:1px solid var(--line);font-size:14px;line-height:20px}
+.cfrow .nm{font-weight:600;white-space:nowrap}
+.cfrow .acts{margin-left:auto;display:flex;gap:6px;align-items:center;flex:none}
+.cfrow .mini{min-height:36px;padding-inline:10px;font-size:14px;line-height:20px;font-weight:500;outline:1px solid var(--line2);outline-offset:-1px;white-space:nowrap}
+.cfrow .mini:hover{background:var(--bg2)}
+.cfrow .mini.on{background:var(--red-soft);color:var(--red);outline-color:var(--red)}
+.cfrow .done{color:var(--ink3);white-space:nowrap}
+.cfdate{font-size:15px;line-height:22px;font-weight:600;color:var(--ink);padding-block:0 8px}
+@media (min-width:1024px){.cfrow,.checks li{min-height:40px}.cfrow .mini{min-height:32px}}
+
+/* 班表：白底細線，一格一色塊 */
+.mxwrap{margin-top:0;width:max-content;min-width:100%;background:var(--bg)}
+.mx{--th0:56px;--w:46px;--h:40px;border-collapse:separate;border-spacing:0;font-size:14px;line-height:20px;width:100%;table-layout:auto}
 .mx th,.mx td{padding:0;background:var(--bg);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
-.mx thead th{position:sticky;z-index:3;font-weight:400;text-align:center;color:var(--ink3);vertical-align:middle}
-.mx thead tr.g th{top:0;height:32px;font-weight:600;color:var(--ink2);background:var(--bg2)}
-.mx thead tr.p th{top:32px;height:40px;min-width:48px;font-size:14px;line-height:20px;color:var(--ink);white-space:nowrap;transition:background-color 300ms var(--ease)}
-.mx .gs{border-left:2px solid var(--line2)}
-.mx thead th.corner{top:0;left:0;z-index:5;text-align:left;min-width:80px;padding-inline:12px;background:var(--bg)}
+.mx th:last-child,.mx td:last-child{border-right:0}
+.mx thead th{position:sticky;z-index:3;text-align:center;color:var(--ink);vertical-align:middle}
+.mx thead tr.g th{top:var(--th0);height:32px;font-size:14px;line-height:20px;font-weight:500;color:var(--ink2);text-align:left;padding-inline:8px;border-top:1px solid var(--ink);border-right-color:transparent;white-space:nowrap}
+.mx thead tr.p th{top:calc(var(--th0) + 32px);height:44px;min-width:var(--w);font-size:15px;line-height:20px;font-weight:600;letter-spacing:-.03em;white-space:nowrap;border-bottom:1px solid var(--ink);transition:background-color 150ms var(--ease)}
+.mx .gs{border-left:1px solid var(--line2)}
+.mx thead th.corner{top:var(--th0);left:0;z-index:5;text-align:left;min-width:76px;padding-inline:8px;font-size:14px;font-weight:500;color:var(--ink2);vertical-align:bottom;padding-bottom:12px;border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);border-right:1px solid var(--line2)}
 .mx thead tr.p th.hl{background:var(--bg3)}
 .mx th.flash .n{animation:pulse 1200ms var(--ease) 2}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
-.mx .dt{position:sticky;left:0;z-index:2;text-align:left;font-weight:400;min-width:80px;height:32px;padding-inline:12px;color:var(--ink3);white-space:nowrap;transition:background-color 300ms var(--ease)}
-.mx .dt .n{display:inline-block;min-width:24px;text-align:center;margin-right:4px;font-family:var(--mono);font-weight:600;color:var(--ink)}
+.mx .dt{position:sticky;left:0;z-index:2;text-align:left;font-weight:400;min-width:76px;height:var(--h);padding-inline:8px;color:var(--ink3);white-space:nowrap;border-right:1px solid var(--line2);cursor:pointer;transition:background-color 150ms var(--ease)}
+.mx .dt .n{display:inline-block;min-width:20px;text-align:right;margin-right:4px;font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.03em;color:var(--ink)}
+.mx .dt .nr{display:inline-block;margin-left:3px;padding-inline:1px;font-size:14px;line-height:18px;letter-spacing:-.05em;font-weight:600;background:var(--red-soft);color:var(--red)}
 .mx tr.we td,.mx tr.we .dt{background:var(--bg2)}
-.mx tr.wk td,.mx tr.wk .dt{border-top:1px solid var(--line2)}
-.mx tr.td td,.mx tr.td .dt{background:var(--today-soft);box-shadow:inset 0 2px 0 var(--today),inset 0 -2px 0 var(--today)}
+.mx tr.we .dt{color:var(--ink)}
+.mx tr.wk td,.mx tr.wk .dt{box-shadow:inset 0 1px 0 var(--ink3)}
+.mx tr.nr td{background-color:var(--bg);background-image:var(--hatch);background-size:8px 8px}
+.mx tr.td td{background:var(--today-soft);box-shadow:none}
+.mx tr.td .dt{background:var(--ink);color:var(--on-ink);box-shadow:none}
+.mx tr.td .dt .n{color:var(--on-ink)}
 .mx .dt.hl{background:var(--bg3)}
-.mx tfoot th,.mx tfoot td{position:sticky;bottom:0;z-index:3;height:32px;text-align:center;font-family:var(--mono);font-weight:600;color:var(--ink2);background:var(--bg2);border-top:1px solid var(--line2)}
-.mx tfoot th{left:0;z-index:5;text-align:left;padding-inline:12px;font-family:var(--sans)}
-.cell{display:grid;place-items:center;width:100%;min-width:32px;height:32px;position:relative;transition:background-color 300ms var(--ease),transform 300ms var(--ease)}
+.mx tr.td .dt.hl{background:var(--ink)}
+.mx tfoot th,.mx tfoot td{padding-block:8px;vertical-align:top;text-align:center;font-size:14px;line-height:20px;font-weight:600;letter-spacing:-.02em;color:var(--ink);background:var(--bg);border-top:1px solid var(--ink);border-bottom:0}
+.mx tfoot th{position:sticky;left:0;z-index:5;text-align:left;padding-inline:8px;letter-spacing:0;border-right:1px solid var(--line2)}
+.mx tfoot .fs{display:block;min-height:20px}
+.mx tfoot .short{color:var(--red)}
+.mx tfoot .over{color:var(--duty-ink)}
+.mx tfoot .short b,.mx tfoot .over b{display:block;font-weight:inherit}
+.mx td{height:var(--h)}
+.cell{display:flex;align-items:stretch;justify-content:stretch;width:100%;min-width:var(--w,32px);height:100%;min-height:var(--h,40px);padding:2px;position:relative;transition:background-color 150ms var(--ease)}
 .cell:hover{background:var(--bg3)}
-.cell:active{transform:scale(.98)}
 .cell:focus-visible{outline-offset:-2px}
 .cell:disabled{cursor:not-allowed}
 .cell:disabled:hover{background:transparent}
-.cell .gone{width:8px;height:2px;background:var(--line2)}
+.cell .gone{width:8px;height:2px;background:var(--line2);align-self:center;margin:auto}
 .cell.bad{background:var(--red-soft)}
-.cell.hit .pop{animation:pop 500ms var(--ease) both}
-@keyframes pop{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:none}}
+.cell>.pop{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.cell.hit .pop{animation:pop 300ms var(--ease) both}
+@keyframes pop{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:none}}
+.mx .tag-clean,.mx .tag-duty,.mx .tag-rest{display:grid;grid-auto-flow:column;place-content:center;place-items:center;flex:1;width:auto;min-width:0;height:auto;min-height:32px;padding-inline:0;font-size:14px;line-height:18px;letter-spacing:-.02em}
+.cell>.tag-rest{flex:1}
+.mx .tag-clean{font-weight:700}
+.mx .tag-duty{font-weight:700}
 .mx.loading .cell>*{opacity:0}
-.mx.loading .cell::after{content:"";position:absolute;width:16px;height:16px;border-radius:2px;background:var(--bg3);animation:breathe 700ms var(--ease) infinite alternate}
+.mx.loading .cell::after{content:"";position:absolute;inset:6px;background:var(--bg3);animation:breathe 700ms var(--ease) infinite alternate}
 @keyframes breathe{from{opacity:.4}to{opacity:1}}
-.mxkey{display:flex;flex-wrap:wrap;gap:4px 16px;color:var(--ink3);font-size:12px;line-height:16px;margin-top:12px}
-.mxkey span{display:inline-flex;align-items:center;gap:4px}
-.mxkey .sw{display:inline-block;width:16px;height:8px;border-radius:2px}
-.mxkey .sw2{display:inline-block;width:2px;height:12px;background:var(--ink)}
-/* 班表放大：格子 14 號字、列高 40；手機不讓浮動選單蓋住人名列 */
-/* 班表只跟整頁一起捲：選單固定在視窗上方，人名列貼在選單下面，日期欄貼左邊 */
+.mxkey{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--ink2);font-size:14px;line-height:20px}
+.mxkey span{display:inline-flex;align-items:center;gap:6px}
+.mxkey .tag-duty,.mxkey .tag-rest{display:inline-grid}
+.mxkey .sw{display:inline-block;width:16px;height:8px}
+.mxkey .sw2{display:inline-block;width:2px;height:14px;background:var(--ink)}
+
+/* 整頁捲動：選單固定、人名貼在選單下、日期貼左邊 */
 html:has(#mxwrap){overflow-x:visible}
-body:has(#mxwrap) .topwrap{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;background:var(--bg)}
-body:has(#mxwrap) #main{padding-top:60px}
-.mx{--th0:60px;font-size:14px;line-height:20px}
-.mx thead th.corner,.mx thead tr.g th{top:var(--th0)}
-.mx thead tr.p th{top:calc(var(--th0) + 32px)}
-.mx thead tr.p th{min-width:56px;height:44px;font-size:15px;font-weight:600}
-.mx thead tr.g th{font-size:14px}
-.mx .dt{height:40px;color:var(--ink2)}
-.mx .dt .n{font-size:15px}
-.mx tfoot th,.mx tfoot td{height:auto;padding-block:6px;font-family:var(--sans);font-size:12px;line-height:16px;font-weight:600}
-.mx tfoot .fs{display:block}
-.mx tfoot .short{color:var(--red)}
-.mx tfoot .over{color:var(--duty-ink)}
-.mx .cell{min-width:56px;height:40px}
-.mx .tag-clean{font-size:14px;line-height:22px;padding-inline:6px}
-.mx .tag-duty,.mx .tag-rest{width:22px;height:22px;font-size:14px;line-height:22px}
-.mxkey{font-size:14px;line-height:20px;color:var(--ink2)}
+body:has(#mxwrap){overflow-x:visible}
+body:has(#mxwrap) .topwrap{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0}
+body:has(#mxwrap) .shell{padding-top:var(--bar)}
+@media (max-width:1023px){.mx{--h:44px}}
 @media (max-width:767px){
-  body:has(#mxwrap) .topwrap{position:static;background:transparent}
-  body:has(#mxwrap) #main{padding-top:0}
+  body:has(#mxwrap) .topwrap{position:static}
+  body:has(#mxwrap) .shell{padding-top:0}
   /* 手機瀏覽器整頁橫向捲動時人名列固定不住，改班表滿版自己捲、不顯示捲軸 */
-  html:has(#mxwrap){overflow-x:clip}
-  .mxwrap{width:auto;min-width:0;overflow:auto;max-height:calc(100dvh - 8px);scrollbar-width:none}
+  html:has(#mxwrap),body:has(#mxwrap){overflow-x:clip}
+  .mxwrap{width:auto;min-width:0;margin-inline:calc(-1*var(--pad));overflow:auto;max-height:calc(100dvh - 8px);scrollbar-width:none;overscroll-behavior:contain}
   .mxwrap::-webkit-scrollbar{display:none}
-  .mx{--th0:0px}
-  .mx thead th.corner,.mx .dt{min-width:64px;padding-inline:6px}
-  .mx .dt .n{min-width:20px;margin-right:2px}
+  .mx{--th0:0px;--w:56px}
+  .mx thead th.corner,.mx .dt{min-width:68px;padding-inline:6px}
+  .mx .dt .n{margin-right:3px}
   .mx tfoot th{padding-inline:6px}
 }
 
 /* ---------- 4. 公平帳 ---------- */
-.fairgrp{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-top:48px}
-@media (min-width:1100px){.fairgrp{grid-template-columns:240px minmax(0,1fr);gap:48px;margin-top:64px}}
-.fairside h2{font-size:16px;line-height:24px;font-weight:600}
-.fairside .avg{color:var(--ink);font-size:24px;line-height:32px;font-weight:600;letter-spacing:-.02em;margin-top:4px;font-family:var(--mono)}
-.fairside .avg small{font-size:14px;line-height:20px;font-weight:400;letter-spacing:0;color:var(--ink3);font-family:var(--sans);margin-left:4px}
-.fairside p{font-size:14px;line-height:20px;color:var(--ink3);margin-top:4px}
-.frow{display:grid;grid-template-columns:64px minmax(0,1fr) 40px;align-items:center;gap:4px 12px;padding-block:8px;border-top:1px solid var(--line)}
+.fairgrp{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;margin-top:32px;padding-top:16px;border-top:1px solid var(--ink)}
+@media (min-width:1100px){.fairgrp{grid-template-columns:200px minmax(0,1fr);gap:40px;margin-top:40px}}
+.fairside h2{font-size:18px;line-height:26px;font-weight:600;letter-spacing:-.02em}
+.fairside .avg{font-family:var(--mono);font-size:44px;line-height:52px;font-weight:500;letter-spacing:-.05em;margin-top:6px}
+.fairside .avg small{font-family:var(--sans);font-size:14px;line-height:20px;font-weight:400;letter-spacing:0;color:var(--ink3);margin-left:6px}
+.frow{display:grid;grid-template-columns:64px minmax(0,1fr) 56px;align-items:center;gap:2px 12px;padding-block:10px;border-top:1px solid var(--line)}
 .frow:last-child{border-bottom:1px solid var(--line)}
-.frow.fhead{border-top:0;padding-block:0 4px}
-.fhead .avgtxt{grid-column:2;position:relative;height:16px;font-size:12px;line-height:16px;color:var(--ink2)}
-.fhead .avgtxt span{position:absolute;top:0;right:calc(100% - var(--x));padding-right:4px;white-space:nowrap}
-.frow.me .fname{font-weight:600}
-.fname{font-size:14px;line-height:20px;white-space:nowrap}
-.fbar{position:relative;height:8px;background:var(--bg2);border-radius:2px}
-.fbar i{position:absolute;left:0;top:0;bottom:0;display:block;width:100%;transform-origin:left;background:var(--ink3);border-radius:2px;animation:grow 500ms var(--ease) both}
-.fbar.over i{background:var(--duty)}
-.fbar.under i{background:var(--clean)}
-@keyframes grow{from{opacity:0}to{opacity:1}}
-.fbar b{position:absolute;top:-8px;bottom:-8px;left:var(--x);width:2px;margin-left:-1px;background:var(--ink)}
-.fmeta{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:0 8px;font-size:12px;line-height:16px;color:var(--ink3)}
-.fdiff{font-weight:600;white-space:nowrap}
-.fdiff.over{color:var(--duty-ink)}
-.fdiff.under{color:var(--clean-ink)}
-.fdiff.same{color:var(--ink3);font-weight:400}
-.ftot{order:2;text-align:right;font-weight:600;font-family:var(--mono);font-size:14px;line-height:20px;white-space:nowrap}
-.ftot small{font-size:12px;line-height:16px;color:var(--ink3);font-weight:400;font-family:var(--sans);margin-left:2px}
-.fmeta{order:3}
-@media (min-width:640px){
-  .frow{grid-template-columns:96px minmax(0,1fr) 40px 104px 176px}
-  .ftot{order:0}
-  .fmeta{order:0;display:contents;font-size:14px;line-height:20px}
-  .fdiff,.fdet{font-size:14px;line-height:20px}
-  .fdet{color:var(--ink3)}
-}
-.fairkey{margin-top:12px}
+.frow.fhead{border-top:0;padding-block:0 6px}
+.fscale{display:flex;justify-content:space-between;font-size:13px;line-height:18px;color:var(--ink3)}
+.fname{font-size:15px;line-height:22px;white-space:nowrap}
+.frow.me .fname{font-weight:700}
+.fdev{position:relative;height:18px}
+.fdev::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--ink)}
+.fdev i{position:absolute;top:4px;height:10px;display:block}
+.fdev i.over{left:50%;background:var(--ink)}
+.fdev i.under{right:50%;background:var(--ink3)}
+.fgap{font-family:var(--mono);font-size:17px;line-height:22px;font-weight:600;letter-spacing:-.03em;text-align:right;white-space:nowrap}
+.fgap.same,.fgap.under{color:var(--ink3)}
+.fdet{grid-column:1 / -1;font-size:14px;line-height:20px;color:var(--ink3)}
+@media (min-width:640px){.frow{grid-template-columns:96px minmax(0,1fr) 72px}.fdet{grid-column:2 / -1}}
 
-/* ---------- Toast ---------- */
-.toast{position:fixed;left:50%;bottom:max(24px,env(safe-area-inset-bottom,0px));z-index:50;transform:translate(-50%,16px);opacity:0;pointer-events:none;background:var(--ink);color:var(--on-ink);padding-block:8px;padding-inline:12px;border-radius:8px;font-size:14px;line-height:20px;box-shadow:var(--shadow);max-width:calc(100vw - 32px);transition:opacity 300ms var(--ease),transform 500ms var(--ease)}
+/* ---------- Toast / Modal / States ---------- */
+.toast{position:fixed;left:50%;bottom:max(24px,env(safe-area-inset-bottom,0px));z-index:50;transform:translate(-50%,16px);opacity:0;pointer-events:none;background:var(--ink);color:var(--on-ink);padding-block:10px;padding-inline:14px;font-size:14px;line-height:20px;box-shadow:var(--shadow);max-width:calc(100vw - 32px);transition:opacity 200ms var(--ease),transform 300ms var(--ease)}
 .toast.show{opacity:1;transform:translate(-50%,0)}
-.toast.err{background:var(--red);color:var(--on-ink)}
-
-@media (prefers-reduced-motion:reduce){
-  *,*::before,*::after{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important;scroll-behavior:auto!important}
-  .view{transform:none}
-}
-
-
-/* ---------- 新版追加 ---------- */
-.tag-clean.miss{background:var(--red-soft);color:var(--red);outline:1px solid var(--red);outline-offset:-1px}
-.mx tr.td .tag-clean.miss{background:var(--red-soft);color:var(--red)}
-.tag-duty.bad{background:var(--red);color:var(--on-ink);outline:0}
-.tag-duty.warn{background:var(--red-soft);color:var(--red);outline:1px solid var(--red);outline-offset:-1px}
-.tag-duty.trash,.mx .tag-duty.trash{width:auto;display:inline-flex;align-items:center;gap:2px;padding-inline:4px}
-.pill-miss{background:var(--red-soft);color:var(--red);outline:1px solid var(--red);outline-offset:-1px}
-.pill-rest.red{background:transparent;outline:1px solid var(--rest);outline-offset:-1px}
-.note .who-line{display:flex;gap:12px;align-items:center}
-.note .link{min-height:24px;font-size:12px;line-height:16px;font-weight:400;color:var(--ink3)}
-.monthnav{display:flex;align-items:center;gap:4px;margin-top:4px}
-.monthnav b{font-size:14px;line-height:20px;font-weight:600;min-width:96px;text-align:center}
-.monthnav .iconbtn{width:32px;height:32px;font-size:22px;line-height:1}
-@media (min-width:640px){.frow{grid-template-columns:96px minmax(0,1fr) 40px 104px 280px}}
-@media (min-width:768px){.whosel select{flex:none;width:260px}}
-.state{margin:48px auto;max-width:480px;text-align:center}
-.state h1{font-size:20px;line-height:28px;font-weight:600}
-.state p{margin-top:8px;color:var(--ink2);font-size:14px;line-height:20px}
-.state .btn{margin-top:16px;justify-content:center}
+.toast.err{background:var(--red);color:#FFFFFF}
+.state{margin:64px auto;max-width:480px}
+.state h1{font-size:32px;line-height:38px;font-weight:700;letter-spacing:-.03em}
+.state p{margin-top:12px;color:var(--ink2);font-size:15px;line-height:22px}
+.state .btn{margin-top:20px}
 .skel{display:grid;gap:12px;margin-top:24px}
-.skel i{display:block;height:20px;border-radius:4px;background:var(--bg3);animation:breathe 700ms var(--ease) infinite alternate}
+.skel i{display:block;height:16px;background:var(--bg3);animation:breathe 700ms var(--ease) infinite alternate}
 .skel i:nth-child(2){width:70%}.skel i:nth-child(3){width:50%}
-.modalback{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:16px;animation:fade 200ms var(--ease) both}
-.modal{background:var(--bg);color:var(--ink);border-radius:12px;max-width:440px;width:100%;max-height:calc(100dvh - 32px);overflow:auto;padding:20px;box-shadow:var(--shadow)}
-.modal h2{font-size:18px;line-height:28px;font-weight:600}
-.modal .body{margin-top:8px;font-size:14px;line-height:22px;color:var(--ink2)}
+.modalback{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{background:var(--bg);color:var(--ink);max-width:460px;width:100%;max-height:calc(100dvh - 32px);overflow:auto;padding:24px;box-shadow:var(--shadow);outline:1px solid var(--ink)}
+.modal h2{font-size:24px;line-height:30px;font-weight:700;letter-spacing:-.03em}
+.modal .body{margin-top:10px;font-size:15px;line-height:24px;color:var(--ink2)}
 .modal .body p+p{margin-top:8px}
 .modal .body b{color:var(--ink)}
 .modal .opts{display:grid;gap:8px;margin-top:16px}
-.modal .opts .btn{justify-content:center;white-space:normal;text-align:center}
-.modal.rules{max-width:560px}
-.modal .body h3{margin-top:16px;font-size:15px;line-height:22px;font-weight:600;color:var(--ink)}
-.modal .body ul{margin-top:4px;padding-left:20px;list-style:disc}
+.modal .opts .btn{white-space:normal;text-align:center}
+.modal.rules{max-width:600px}
+.modal .body h3{margin-top:20px;padding-top:12px;border-top:1px solid var(--line);font-size:15px;line-height:22px;font-weight:700;color:var(--ink)}
+.modal .body h3:first-child{margin-top:4px;padding-top:0;border-top:0}
+.modal .body ul{margin-top:4px;padding-left:18px;list-style:square}
 .modal .body li+li{margin-top:2px}
-#helpBtn{font-size:17px;font-weight:600}
-.modal .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
-.modal input[type=text]{width:100%;height:44px;margin-top:12px;padding-inline:12px;border:1px solid var(--line2);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
-.bar{height:8px;border-radius:4px;background:var(--bg3);margin-top:16px;overflow:hidden}
+.modal .body .tag-rest{min-width:22px;height:22px;line-height:22px}
+.modal .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}
+.modal input[type=text]{width:100%;height:44px;margin-top:12px;padding-inline:12px;border:1px solid var(--ink);border-radius:0;background:var(--bg);color:var(--ink);font:inherit}
+.bar{height:6px;background:var(--bg3);margin-top:16px;overflow:hidden}
 .bar i{display:block;height:100%;width:0;background:var(--ink);transition:width 200ms var(--ease)}
-.confirmbox{margin-top:24px;border:1px solid var(--line);border-radius:8px;padding:12px 16px}
-.confirmbox>.h2{display:flex;justify-content:space-between;gap:8px}
-.cfrow{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding-block:8px;border-top:1px solid var(--line);font-size:14px;line-height:20px}
-.cfrow:first-of-type{margin-top:8px}
-.cfrow .nm{font-weight:600;min-width:64px}
-.cfrow .acts{margin-left:auto;display:flex;gap:8px;align-items:center}
-.cfrow .mini{min-height:32px;padding-inline:12px;font-size:14px;line-height:20px;border-radius:6px;outline:1px solid var(--line2);outline-offset:-1px;white-space:nowrap}
-.cfrow .mini:hover{background:var(--bg2)}
-.cfrow .mini.on{background:var(--red-soft);color:var(--red);outline-color:var(--red)}
-.cfrow .done{color:var(--ink3)}
-.cfdate{font-size:12px;line-height:16px;font-weight:600;color:var(--ink3);margin-top:12px}
-.rcal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:12px}
-.rcal .dw{font-size:12px;line-height:16px;color:var(--ink3);text-align:center}
-.rcal button,.rcal span.blk{min-height:44px;border-radius:8px;border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:14px;line-height:16px;gap:2px}
+.rcal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;margin-top:12px}
+.rcal .dw{font-size:13px;line-height:18px;color:var(--ink3);text-align:center}
+.rcal button,.rcal span.blk{min-height:48px;outline:1px solid var(--line);outline-offset:-1px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--mono);font-size:15px;line-height:18px;font-weight:500;gap:0}
 .rcal button:hover:not(:disabled){background:var(--bg2)}
-.rcal button:disabled{opacity:.55}
-.rcal .rest{background:var(--rest-soft);border-color:var(--rest);color:var(--rest-ink);font-weight:600}
-.rcal .tdy{outline:2px solid var(--today);outline-offset:-2px}
-.rcal small{font-size:12px;line-height:14px;color:var(--ink3)}
-.rcal span.blk{border:0}
-.srow{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin-top:8px}
-.guard{margin-top:12px;padding:8px 12px;border-radius:8px;background:var(--bg2);font-size:14px;line-height:20px;color:var(--ink2)}
+.rcal button:disabled{color:var(--ink3)}
+.rcal .rest,.rcal .rest:disabled{background:var(--rest);outline-color:var(--rest);color:#FFFFFF;font-weight:600}
+.rcal .rest:hover:not(:disabled){background:var(--rest)}
+.rcal .rest.red,.rcal .rest.red:disabled{background:var(--rest-soft);outline-color:var(--rest-soft);color:var(--rest-ink)}
+.rcal .tdy{outline:2px solid var(--ink);outline-offset:-2px}
+.rcal .tdy:not(.rest){background:var(--today-soft)}
+.rcal small{font-family:var(--sans);font-size:13px;line-height:16px;color:var(--ink3)}
+.rcal .rest small{color:inherit}
+.rcal span.blk{outline:0}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important;scroll-behavior:auto!important}
+}
 </style>
 </head>
 <body>
 <a class="skip" href="#main">跳到內容</a>
+<div class="topwrap">
+  <nav class="top" aria-label="主要分頁" id="topnav">
+    <div class="mark" id="mark"></div>
+    <button class="tab" data-view="me">我的班</button>
+    <button class="tab" data-view="all">全體</button>
+    <button class="tab" data-view="sched" id="tabSched" hidden>排班</button>
+    <button class="tab" data-view="fair">公平帳</button>
+    <button class="iconbtn" id="helpBtn" aria-label="排班規則說明" title="排班規則說明">?</button>
+    <button class="iconbtn" id="theme" aria-label="切換深淺色"></button>
+  </nav>
+</div>
 <div class="shell">
-  <div class="topwrap">
-    <nav class="top" aria-label="主要分頁" id="topnav">
-      <div class="mark" id="mark"></div>
-      <button class="tab" data-view="me">我的班</button>
-      <button class="tab" data-view="all">全體</button>
-      <button class="tab" data-view="sched" id="tabSched" hidden>排班</button>
-      <button class="tab" data-view="fair">公平帳</button>
-      <button class="iconbtn" id="helpBtn" aria-label="排班規則說明" title="排班規則說明">?</button>
-      <button class="iconbtn" id="theme" aria-label="切換深淺色"></button>
-    </nav>
-  </div>
-  <div class="note"><span id="noteL">資料和舊版排班表是同一份。</span><span class="who-line" id="noteR"></span></div>
+  <div class="note"><span class="who-line" id="noteR"></span></div>
   <main id="main" tabindex="-1"></main>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div id="modalRoot"></div>
 
-<script src="schedule-common.js?v=20261031-5"></script>
-<script src="schedule-duty-v2.js?v=20261031-5"></script>
-<script src="schedule-next-core.js?v=20261031-5"></script>
+<script src="schedule-common.js?v=20261031-6"></script>
+<script src="schedule-duty-v2.js?v=20261031-6"></script>
+<script src="schedule-next-core.js?v=20261031-6"></script>
 <script src="js/staff-gate.js"></script>
 <script>
 (function(){
@@ -510,12 +520,12 @@ function fHero(f){return f.length===4?'整棟（一樓到四樓）':fText(f)}
 function fCell(f){return f.length===4?'整棟':f.length===2?f.join('＋'):f.length===3?f[0]+'～'+f[2]:f[0]+'F'}
 function cleanTag(f,miss){return '<span class="tag-clean'+(miss?' miss':'')+'">'+fCell(f)+'</span>'}
 var PILL_C='<span class="tag-clean">打掃</span>';
-function pillDuty(d){return '<span class="pill pill-duty'+(hasTruck(d)?'':' off')+'">值班</span>'}
+function pillDuty(d){return '<span class="pill pill-duty">值班</span>'}
 var PILL_R='<span class="pill pill-rest">休假</span>';
 function dutyTag(d,state){
   if(state==='noshow')return '<span class="tag-duty bad">值</span>';
   if(state==='notrash')return '<span class="tag-duty warn">值</span>';
-  return hasTruck(d)?'<span class="tag-duty trash">值🗑️</span>':'<span class="tag-duty">值</span>';
+  return hasTruck(d)?'<span class="tag-duty trash">值<i class="tr">🗑️</i></span>':'<span class="tag-duty">值</span>';
 }
 function dutyNote(d,x){
   if(x.state==='noshow')return '沒到班';
@@ -706,7 +716,7 @@ function monthHTML(n){
   for(var d=1;d<=S.M.dim;d++){
     var k=map[d]||'';
     ticks+='<i class="'+k+(isTodayD(d)?' t':'')+'" title="'+fmtMD(d)+'"></i>';
-    axis+='<span>'+((d===1||d%7===1)?d:'')+'</span>';
+    axis+='<span class="'+(d%7===1?'wk':'')+(isTodayD(d)?' t':'')+'">'+d+'</span>';
   }
   var red=SC.GOV_REST_NAMES.indexOf(n)>=0;
   var list=items.filter(function(i){return !(red&&i.k==='r'&&isRedDay(n,i.d))});
@@ -719,7 +729,7 @@ function monthHTML(n){
   }).join('');
   var nc=items.filter(function(i){return i.k==='c'}).length,nd=items.filter(function(i){return i.k==='d'}).length,nr=items.filter(function(i){return i.k==='r'}).length;
   var redRest=red?items.filter(function(i){return i.k==='r'&&isRedDay(n,i.d)}).length:0;
-  var redNote=red?'<p class="xs muted" style="margin-top:12px">六日和國定假日預設休假，本月共 '+redRest+' 天，要上班請珊珊調整。</p>':'';
+  var redNote='';
   return '<section class="block"><h2 class="h2"><span>我的 '+S.month+' 月</span><span class="muted" style="font-weight:400">打掃 '+nc+' 次・值班 '+nd+' 次・休假 '+nr+' 天</span></h2>'+
     '<div class="ruler" style="grid-template-columns:repeat('+S.M.dim+',minmax(0,1fr))" role="img" aria-label="'+S.month+' 月每天的班別刻度">'+ticks+'</div><div class="ruleraxis" style="grid-template-columns:repeat('+S.M.dim+',minmax(0,1fr))" aria-hidden="true">'+axis+'</div>'+
     '<div class="key"><span><b style="background:var(--clean)"></b>打掃</span><span><b style="background:var(--duty)"></b>值班</span><span><b style="background:var(--rest)"></b>休假</span></div>'+
@@ -745,12 +755,12 @@ function restEditHTML(n){
   for(var d=1;d<=S.M.dim;d++){
     var c=SC.nextCell(S.M,n,d),day=S.M.days[d];
     var chk=SC.nextCanEditRest({viewer:S.viewer,target:n,ds:ds(d),todayStr:TODAY,hasRedRecord:restIsRed(n,d,c)});
-    var lab=c.clean?'掃':c.duty?'值':'',cls=(c.rest?'rest ':'')+(isTodayD(d)?'tdy':'');
+    var lab=c.clean?'掃':c.duty?'值':'',cls=(c.rest?'rest ':'')+(restIsRed(n,d,c)?'red ':'')+(isTodayD(d)?'tdy':'');
     if(chk.ok)anyOpen=true;
     cells+='<button data-selfrest="'+d+'" class="'+cls+'"'+(chk.ok?'':' disabled')+' aria-label="'+fmtMD(d)+(c.rest?' 休假':' 上班')+'">'+d+'<small>'+(c.rest?'休':lab||(day.noRest?'禁休':''))+'</small></button>';
   }
-  var note=SC.isRestMonthOpen(S.year,S.month)?'點日期切換休假，到月底前都能改；正職休假的日子不能改。':'這個月已鎖定，要改請找珊珊。下個月起可以先排。';
-  return '<section class="block"><h2 class="h2"><span>我的排休</span><span class="muted" style="font-weight:400">本月已排休 '+countRest(n)+' 天，上限 '+SC.monthLeaveLimit(S.year,S.month)+' 天</span></h2><p class="xs muted">'+note+'</p><div class="rcal" role="group" aria-label="我的排休">'+head+cells+'</div></section>';
+  var note=SC.isRestMonthOpen(S.year,S.month)?'':'這個月已鎖定，要改請找珊珊。';
+  return '<section class="block"><h2 class="h2"><span>我的排休</span><span class="muted" style="font-weight:400">本月已排休 '+countRest(n)+' 天，上限 '+SC.monthLeaveLimit(S.year,S.month)+' 天</span></h2>'+(note?'<p class="xs muted">'+note+'</p>':'')+'<div class="rcal" role="group" aria-label="我的排休">'+head+cells+'</div></section>';
 }
 function countRest(n){var t=0;for(var d=1;d<=S.M.dim;d++)if(S.M.days[d].rest.some(function(x){return x.name===n&&x.kind==='排休'}))t++;return t}
 function restIsRed(n,d,c){
@@ -759,7 +769,18 @@ function restIsRed(n,d,c){
 }
 function renderMe(){
   var n=S.who;
-  return '<div class="view">'+whoSelect()+'<div class="mine"><div>'+heroHTML(n)+todayHTML(n)+'</div><div>'+monthHTML(n)+restEditHTML(n)+'</div></div></div>';
+  var re=restEditHTML(n);
+  return '<div class="view">'+whoSelect()+'<div class="mine"><div>'+heroHTML(n)+(re||todayHTML(n))+'</div><div>'+(re?todayHTML(n):'')+monthHTML(n)+'</div></div></div>';
+}
+
+/* 規格列：只顯示，不參與任何邏輯 */
+function specHTML(items){
+  return '<dl class="spec">'+items.map(function(i){return '<div><dt>'+i[0]+'</dt><dd>'+i[1]+(i[2]?'<small>'+i[2]+'</small>':'')+'</dd></div>'}).join('')+'</dl>';
+}
+function monthCounts(){
+  var noTruck=0,noRest=0;
+  for(var d=1;d<=S.M.dim;d++){if(!S.M.days[d].truck)noTruck++;if(S.M.days[d].noRest)noRest++}
+  return {noTruck:noTruck,noRest:noRest};
 }
 
 /* ================= 全體 ================= */
@@ -790,18 +811,17 @@ function renderAll(){
     var td=S.M.days[TD];
     var cleaners=td.clean.map(function(x){return dn(x.name)}).join('和')||'還沒排';
     var duty=td.duty.map(function(x){return dn(x.name)}).join('、')||'還沒排';
-    lede='今天 '+fmtMD(TD)+'打掃：'+cleaners+'；值班倒垃圾：'+duty+'。';
+    lede='今天 '+fmtMD(TD)+'　打掃 '+cleaners+'　值班 '+duty;
   }else lede=S.year+' 年 '+S.month+' 月每天的安排。';
   var noTruck=0;for(var d=1;d<=S.M.dim;d++)if(!S.M.days[d].truck)noTruck++;
-  lede+=' 本月 '+noTruck+' 天沒有垃圾車。';
   var dow=['一','二','三','四','五','六','日'].map(function(w){return '<div class="dow">週'+w+'</div>'}).join('');
   var lead=(c.dow+6)%7;
   var leadHtml=lead?'<div class="day blank lead" aria-hidden="true" style="grid-column:span '+lead+'"></div>':'';
-  var key='<div class="mxkey"><span>'+PILL_C+'整棟：一人掃一到四樓</span><span>'+PILL_C+'1F＋4F：掃一樓和四樓</span><span>'+PILL_C+'2F＋3F：掃二樓和三樓</span><span>'+pillDuty(2)+'要倒垃圾</span><span>'+pillDuty(1)+'不倒垃圾</span><span>'+IC.noTruck+'週三、週日清潔隊不收</span></div>';
   var cards='';for(d=1;d<=S.M.dim;d++)cards+=dayHTML(d);
   var pastN=0;for(d=1;d<=S.M.dim;d++)if(isPastD(d))pastN++;
   var fold=pastN?'<div class="foldpast"><button class="link" id="fold">'+(S.showPast?'收起已過的 '+pastN+' 天':'看已過的 '+pastN+' 天')+'</button></div>':'';
-  return '<div class="view"><h1 class="title">每天誰掃，誰倒垃圾</h1><p class="lede">'+lede+'</p>'+key+fold+
+  var mc=monthCounts();
+  return '<div class="view"><div class="pagehead"><div><h1 class="title">'+S.month+' 月全體</h1>'+(todayIn?'<p class="lede">'+lede+'</p>':'')+'</div>'+specHTML([['沒垃圾車',mc.noTruck,'天'],['禁休',mc.noRest,'天']])+'</div>'+fold+
     '<div class="days'+(S.showPast?' showpast':'')+'">'+dow+leadHtml+cards+'</div></div>';
 }
 
@@ -823,7 +843,7 @@ function cellInner(n,d){
     parts+='<span class="tag-clean'+(v.clean.missedFloors.length?' miss':'')+'">'+(allMiss?'未掃':fCell(v.clean.floors))+'</span>';
   }
   if(v.duty)parts+=dutyTag(d,v.duty.state);
-  if(parts)return '<span class="pop" style="display:inline-flex;gap:2px">'+parts+'</span>';
+  if(parts)return '<span class="pop">'+parts+'</span>';
   if(v.rest){
     if(v.rest.kind==='見紅休'||v.red)return '<span class="tag-rest red">休</span>';
     return '<span class="tag-rest">'+(v.rest.kind==='特休'?'特':v.rest.kind==='請假'?'假':'休')+'</span>';
@@ -842,8 +862,8 @@ function cellLabel(n,d){
 }
 function rowHTML(d,cols){
   var day=S.M.days[d];
-  var cl=[isWE(d)?'we':'',day.dow===1?'wk':'',isTodayD(d)?'td':''].join(' ');
-  var r='<th class="dt" scope="row" data-col="'+d+'"'+(day.truck?'':' title="清潔隊不收，沒垃圾車"')+'><span class="n">'+d+'</span>'+WEEK[day.dow]+(day.noRest?'<span class="vh">禁休</span>':'')+(day.truck?'':'<span class="vh">沒垃圾車</span>')+'</th>';
+  var cl=[isWE(d)?'we':'',day.dow===1?'wk':'',isTodayD(d)?'td':'',day.noRest?'nr':''].join(' ');
+  var r='<th class="dt" scope="row" data-col="'+d+'"'+(day.truck?'':' title="清潔隊不收，沒垃圾車"')+'><span class="n">'+d+'</span>'+WEEK[day.dow]+(day.noRest?'<span class="nr">禁休</span>':'')+(day.truck?'':'<span class="vh">沒垃圾車</span>')+'</th>';
   var gi=0;
   S.groups.forEach(function(g){
     g.people.forEach(function(p,i){
@@ -858,18 +878,18 @@ function restInfo(n,rests){
   return {t:t,target:target,st:SC.nextRestStatus(t,target)};
 }
 function footStats(n,rests,tally){
-  var r=restInfo(n,rests),t=r.t,rest=[],work=[],line='';
-  if(r.st.side==='short')line='<span class="fs short">未休'+r.st.diff+'天</span>';
-  if(r.st.side==='over')line='<span class="fs over">多休'+r.st.diff+'天</span>';
-  if(t.paixiu+t.gov)rest.push((t.paixiu+t.gov)+'休');if(t.texiu)rest.push(t.texiu+'特');if(t.qingjia)rest.push(t.qingjia+'假');
-  if(tally.dutyDays)work.push(tally.dutyDays+'班');
-  return line+'<span class="fs">'+(rest.join(' ')||'-')+'</span><span class="fs">'+(work.join(' ')||'-')+'</span>';
+  var r=restInfo(n,rests),t=r.t,off=[],xiu=t.paixiu+t.gov,line='';
+  if(t.texiu)off.push(t.texiu+'特');if(t.qingjia)off.push(t.qingjia+'假');
+  if(r.st.side==='short')line='<span class="fs short">未休<b>'+r.st.diff+'天</b></span>';
+  if(r.st.side==='over')line='<span class="fs over">多休<b>'+r.st.diff+'天</b></span>';
+  return '<span class="fs">'+(xiu?xiu+'休':'')+'</span><span class="fs">'+off.join('')+'</span><span class="fs">'+(tally.dutyDays?tally.dutyDays+'班':'')+'</span>'+line;
 }
 function tableHTML(){
   var g1='<th class="corner" rowspan="2" scope="col">日期</th>',g2='',foot='<th scope="row">合計</th>';
   var tally=SC.nextTally(S.M,TODAY),rests=SC.nextRestTally(S.M);
   S.groups.forEach(function(g){
-    g1+='<th class="gs" scope="colgroup" colspan="'+g.people.length+'">'+esc(g.label)+'</th>';
+    var gl=g.people.length===1?g.label.replace('（兼職）',''):g.label; // 只有一人的組欄寬放不下全名，完整名稱留在滑過提示
+    g1+='<th class="gs" scope="colgroup" colspan="'+g.people.length+'" title="'+esc(g.label)+'">'+esc(gl)+'</th>';
     g.people.forEach(function(p,i){
       var gs=i===0?' class="gs"':'';
       g2+='<th scope="col"'+gs+' data-row="'+esc(p.name)+'">'+dn(p.name)+'</th>';
@@ -885,15 +905,12 @@ function stepState(){
   return {noDuty:noDuty,noClean:noClean,s1:noDuty===0,s2:noClean===0};
 }
 function headHTML(){
-  var st=stepState(),list=SC.nextChecks(S.M,TODAY);
+  var st=stepState();
   var line=!st.s1?'下一步：預排值班。值班只排承攬業務，每天一位，倒垃圾歸值班的人。':
-    !st.s2?'下一步：預排值日。業務與兼職一人掃整棟，內勤兩人一組。':
-    list.length?'兩步都排好了，還有 '+list.length+' 件事要看。':'兩步都排好了，檢查也過了。';
-  var chk=function(done){return done?IC.check.replace('width="16" height="16"','width="12" height="12"'):''};
-  var one=st.s1?'done':'now',two=st.s1?(st.s2?'done':'now'):'';
-  return '<div class="schedhead"><div><h1 class="title">'+S.month+' 月排班</h1><p class="lede nextline">'+line+'</p>'+
-    '<ol class="steps"><li class="'+one+'"><b>'+(st.s1?chk(1):'1')+'</b>預排值班</li><li class="'+two+'"><b>'+(st.s2?chk(1):'2')+'</b>預排值日</li></ol></div>'+
-    '<div class="schedact"><button class="btn'+(st.s1?' btn2':'')+'" id="planZ">預排值班</button><button class="btn'+(st.s1&&!st.s2?'':' btn2')+'" id="planD">預排值日</button></div></div>';
+    !st.s2?'下一步：預排值日。業務與兼職一人掃整棟，內勤兩人一組。':'';
+  var chk=function(done){return done?IC.check:''};
+  return '<div class="schedhead"><h1 class="title">'+S.month+' 月排班</h1>'+(line?'<p class="lede nextline">'+line+'</p>':'')+
+    '<div class="schedact"><button class="btn'+(st.s1?' btn2':'')+'" id="planZ">'+chk(st.s1)+'預排值班</button><button class="btn'+(st.s1&&!st.s2?'':' btn2')+'" id="planD">'+chk(st.s2)+'預排值日</button></div></div>';
 }
 function checksHTML(){
   var list=SC.nextChecks(S.M,TODAY);
@@ -924,22 +941,31 @@ function confirmHTML(){
         (x.state==='ok'?'<span class="done">'+(tr?'已倒':'已值班')+'</span>'+(tr?'<button class="mini" data-cf="duty-notrash:'+d+':'+esc(x.name)+'">沒倒垃圾</button>':'')+'<button class="mini" data-cf="duty-noshow:'+d+':'+esc(x.name)+'">沒到班</button>':
         '<span class="done">'+(x.state==='noshow'?'沒到班':'未倒垃圾')+'</span><button class="mini" data-cf="duty-ok:'+d+':'+esc(x.name)+'">恢復</button>')+'</span></div>';
     });
-    out+='<div class="cfdate">'+fmtMD(d)+(isTodayD(d)?'・今天':'')+'</div>'+rows;
+    out+='<div class="cfday"><div class="cfdate">'+fmtMD(d)+(isTodayD(d)?'・今天':'')+'</div>'+rows+'</div>';
   }
   if(!out)out='<p class="xs muted" style="margin-top:8px">到今天為止還沒有排班可以確認。</p>';
-  return '<section class="confirmbox"><h2 class="h2"><span>確認有沒有做</span><span class="muted" style="font-weight:400">預設都算做完，只標例外</span></h2>'+out+
-    '<p class="xs muted" style="margin-top:12px">更早的日子，把上面「點格子改」切到「確認」再點格子。</p></section>';
+  return '<section class="confirmbox"><h2 class="h2"><span>確認有沒有做</span></h2><div class="cfdays">'+out+'</div></section>';
 }
 function renderSched(){
   if(!S.perms.schedule)return '<div class="view"><div class="state"><h1>這一頁只有珊珊和瓊安能用</h1><p>你可以看「我的班」「全體」「公平帳」。</p></div></div>';
   return '<div class="view"><div id="shead">'+headHTML()+'</div>'+
-    '<div class="ctrl"><div class="seg"><span class="lb">點格子改</span><div role="group" aria-label="點格子時要改的項目">'+
+    '<div class="tools"><div class="seg"><span class="lb">點格子改</span><div role="group" aria-label="點格子時要改的項目">'+
     [['rest','休假'],['duty','值班'],['clean','打掃'],['confirm','確認']].map(function(m){return '<button data-mode="'+m[0]+'" aria-pressed="'+(S.mode===m[0])+'">'+m[1]+'</button>'}).join('')+
-    '</div></div><div class="mxkey" style="margin-top:0"><span>'+cleanTag([1,2,3,4])+'一人掃一到四樓</span><span>'+cleanTag([1,4])+'掃一樓和四樓</span><span>'+cleanTag([2,3])+'掃二樓和三樓</span><span><span class="tag-duty trash">值🗑️</span>值班要倒垃圾</span><span><span class="tag-duty">值</span>值班沒垃圾車</span><span><span class="tag-rest">休</span>排休</span><span><span class="tag-rest red">休</span>正職休假</span><span>空白是上班</span></div></div>'+
-    '<div id="schk">'+checksHTML()+'</div>'+
-    '<div id="scf">'+confirmHTML()+'</div>'+
-    '<div class="mxwrap" id="mxwrap" tabindex="0" role="region" aria-label="'+S.month+' 月排班表，可上下左右捲動">'+tableHTML()+'</div>'+
-    '<p class="xs muted" style="margin-top:8px">人名和日期會固定。粗線分週，黃底是今天。點日期可設定或取消禁休。</p></div>';
+    '</div></div><div class="toolset">'+
+    '<details name="tools"><summary>檢查<b id="chkN"></b></summary><div class="panel"><div id="schk">'+checksHTML()+'</div></div></details>'+
+    '<details name="tools"'+(S.perms.confirm?'':' hidden')+'><summary>確認</summary><div class="panel"><div id="scf">'+confirmHTML()+'</div></div></details>'+
+    '<details name="tools"><summary>圖例</summary><div class="panel"><div class="mxkey">'+
+    '<span>'+cleanTag([1,2,3,4])+'一人掃一到四樓</span><span>'+cleanTag([1,4])+'掃一樓和四樓</span><span>'+cleanTag([2,3])+'掃二樓和三樓</span>'+
+    '<span><span class="tag-duty trash">值<i class="tr">🗑️</i></span>值班要倒垃圾</span><span><span class="tag-duty">值</span>值班沒垃圾車</span>'+
+    '<span><span class="tag-duty warn">值</span>外框：未倒垃圾</span><span><span class="tag-duty bad">值</span>斜線：沒到班</span><span><span class="tag-clean miss">未掃</span>斜線：沒掃</span>'+
+    '<span><span class="tag-rest">休</span>排休</span><span><span class="tag-rest">特</span>特休</span><span><span class="tag-rest">假</span>請假</span><span><span class="tag-rest red">休</span>正職休假</span><span>空白是上班</span>'+
+    '</div></div></details></div></div>'+
+    '<div class="mxwrap" id="mxwrap" tabindex="0" role="region" aria-label="'+S.month+' 月排班表，可上下左右捲動">'+tableHTML()+'</div></div>';
+}
+function paintCheckCount(){
+  var b=$('#chkN');if(!b)return;
+  var n=SC.nextChecks(S.M,TODAY).length;
+  b.textContent=n;b.className=n?'':'zero';
 }
 function refreshCell(n,d){
   var b=$('.cell[data-n="'+n.replace(/"/g,'\\"')+'"][data-d="'+d+'"]');
@@ -951,7 +977,7 @@ function refreshSched(){
   var w=$('#mxwrap');if(!w)return;
   var t=window.scrollY,l=window.scrollX,it=w.scrollTop,il=w.scrollLeft;
   w.innerHTML=tableHTML();w.scrollTop=it;w.scrollLeft=il;window.scrollTo(l,t);
-  $('#shead').innerHTML=headHTML();$('#schk').innerHTML=checksHTML();$('#scf').innerHTML=confirmHTML();
+  $('#shead').innerHTML=headHTML();$('#schk').innerHTML=checksHTML();$('#scf').innerHTML=confirmHTML();paintCheckCount();
 }
 function refreshAny(){
   if(S.view==='sched')refreshSched();else render();
@@ -1258,29 +1284,25 @@ function jump(d){
 
 /* ================= 公平帳 ================= */
 function fairGroup(g,scale){
-  var base=g.avg,x=(base/scale*100).toFixed(2)+'%';
-  var allSame=g.rows.every(function(r){return r.gap===0});
-  var note={biz:'掃整棟，加上值班倒垃圾。',office:'兩人一組，每次掃兩層，只排平日。',parttime:'每月一次，排六日，掃整棟。'}[g.kind];
-  var body=g.rows.map(function(r,i){
-    var diff=r.gap>0?'比平均多 '+r.gap:r.gap<0?'比平均少 '+Math.abs(r.gap):'跟平均相同';
-    var det='排定 '+r.floors+' 層'+(g.kind==='biz'&&r.trash?'・倒垃圾 '+r.trash+' 次':'')+'；到今天實際 '+r.done+' 層';
+  var body=g.rows.map(function(r){
+    var w=(Math.abs(r.gap)/scale*50).toFixed(2)+'%';
+    var sign=r.gap>0?'+'+r.gap:r.gap<0?'−'+Math.abs(r.gap):'0';
+    var det='排定 '+r.floors+' 層'+(g.kind==='biz'&&r.trash?'・倒垃圾 '+r.trash+' 次':'')+'・到今天實際 '+r.done+' 層';
     var ex=[];if(r.floorsMissed)ex.push('未掃 '+r.floorsMissed+' 層');if(r.trashMissed)ex.push('未倒垃圾 '+r.trashMissed+' 次');if(r.noShow)ex.push('沒到班 '+r.noShow+' 次');
     return '<div class="frow'+(r.name===S.who?' me':'')+'"><span class="fname">'+dn(r.name)+'</span>'+
-      '<div class="fbar '+r.side+'" style="--x:'+x+'" role="img" aria-label="排定 '+r.sched+' 層，平均 '+base+' 層"><i style="right:auto;width:'+(r.sched/scale*100).toFixed(2)+'%;animation-delay:'+Math.min(i*30,300)+'ms"></i><b></b></div>'+
-      '<span class="ftot">'+r.sched+'<small>層</small></span>'+
-      '<span class="fmeta"><span class="fdiff '+r.side+'">'+diff+'</span><span class="fdet">'+det+(ex.length?'・'+ex.join('・'):'')+'</span></span></div>';
+      '<div class="fdev" role="img" aria-label="比平均'+(r.gap>0?'多 '+r.gap:r.gap<0?'少 '+Math.abs(r.gap):'相同')+'"><i class="'+r.side+'" style="width:'+w+'"></i></div>'+
+      '<span class="fgap '+r.side+'">'+sign+'</span>'+
+      '<span class="fdet">'+det+(ex.length?'・'+ex.join('・'):'')+'</span></div>';
   }).join('');
-  return '<section class="fairgrp"><div class="fairside"><h2>'+g.label+' '+g.rows.length+' 人</h2><p class="avg">'+base+'<small>層／人</small></p><p>'+note+(allSame?'這組每人相同。':'')+'</p></div>'+
-    '<div><div class="frow fhead"><div class="avgtxt" style="--x:'+x+'"><span>平均 '+base+'</span></div></div>'+body+'</div></section>';
+  return '<section class="fairgrp"><div class="fairside"><h2>'+g.label+' '+g.rows.length+' 人</h2><p class="avg">'+g.avg+'<small>層／人</small></p></div>'+
+    '<div><div class="frow fhead"><span></span><div class="fscale"><span>比平均少</span><span>比平均多</span></div><span></span></div>'+body+'</div></section>';
 }
 function renderFair(){
   var people=S.allEmployees.map(function(e){return {name:e.name,kind:SC.dutyV2Kind(e)}});
   var tally=SC.nextTally(S.M,TODAY);
   var groups=SC.nextFairness(people,tally);
-  var scale=0;groups.forEach(function(g){g.rows.forEach(function(r){scale=Math.max(scale,r.sched)})});scale+=1;
-  return '<div class="view"><h1 class="title">這個月每人做多少</h1>'+
-    '<p class="lede">用層計算：掃一層算 1 層，倒垃圾一次算 1 層。每組跟自己的平均比。「排定」是整月排好的量；「實際」是到今天為止、扣掉珊珊標的例外之後做完的量。</p>'+
-    '<div class="mxkey fairkey"><span><b class="sw" style="background:var(--duty)"></b>比平均多</span><span><b class="sw" style="background:var(--clean)"></b>比平均少</span><span><b class="sw" style="background:var(--ink3)"></b>跟平均相同</span><span><b class="sw2"></b>黑線是平均</span></div>'+
+  var scale=0;groups.forEach(function(g){g.rows.forEach(function(r){scale=Math.max(scale,Math.abs(r.gap))})});scale=scale||1;
+  return '<div class="view"><div class="pagehead"><div><h1 class="title">'+S.month+' 月公平帳</h1></div></div>'+
     groups.map(function(g){return fairGroup(g,scale)}).join('')+'</div>';
 }
 
@@ -1303,7 +1325,7 @@ function render(){
   if(S.viewer){nr.innerHTML='<span>'+dn(S.viewer.name)+'・'+(S.viewer.role==='admin'?'可排班':'同仁')+'</span><button class="link" id="logout">登出</button>'}
   else nr.innerHTML='';
   if(S.boot!=='ready'){main.innerHTML=stateHTML();return}
-  main.innerHTML=monthNavHTML()+({me:renderMe,all:renderAll,sched:renderSched,fair:renderFair}[S.view]||renderMe)();
+  main.innerHTML=monthNavHTML()+({me:renderMe,all:renderAll,sched:renderSched,fair:renderFair}[S.view]||renderMe)();paintCheckCount();
 }
 function go(v){
   if(v==='sched'&&!S.perms.schedule)v='me';
@@ -1356,11 +1378,20 @@ document.addEventListener('mouseover',function(e){
   if(th)th.classList.add('hl');if(nm)nm.classList.add('hl');
 });
 
+/* 工具列展開面板：點班表先收起，不誤點到底下的格子；點其他地方收起後照常作用 */
+document.addEventListener('click',function(e){
+  var o=$('details[name="tools"][open]');if(!o)return;
+  if(e.target.closest('.modalback,#wh-bug-modal,#wh-bug-backdrop'))return;
+  if(o.contains(e.target)){if(e.target.closest('[data-go]'))o.open=false;return}
+  o.open=false;
+  if(e.target.closest('.mx')){e.stopPropagation();e.preventDefault()}
+},true);
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){var o=$('details[name="tools"][open]');if(o)o.open=false}});
+
 /* theme */
 function curTheme(){
   var a=document.documentElement.getAttribute('data-theme');
-  if(a)return a;
-  return window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+  return a||'light';
 }
 function rulesHTML(){
   var y=S.year,m=S.month,limit=SC.monthLeaveLimit(y,m),names=SC.GOV_REST_NAMES.map(SC.nextName).join('、');
@@ -1381,13 +1412,16 @@ function rulesHTML(){
     :'<li>週三、週日清潔隊不收，不排清運。</li>';
   return '<h2>排班規則說明</h2><div class="body">'+
     '<h3>班表怎麼看</h3><ul>'+
-    '<li>空白就是上班。</li>'+
+    '<li>空白就是上班，黃底是今天，粗線分週。</li>'+
     '<li><span class="tag-rest">休</span> 排休，<span class="tag-rest">特</span> 特休，<span class="tag-rest">假</span> 請假。</li>'+
     '<li><span class="tag-rest red">休</span> 正職休假（'+esc(names)+'），六日和國定假日休假，不算在月休內。</li>'+
-    '<li>其他同仁一個月休 '+limit+' 天。班表最下面統計每人的休假和值班，未休、多休會標出來；兼職不算。</li></ul>'+
+    '<li>其他同仁一個月休 '+limit+' 天。班表最下面統計每人的休假和值班，未休、多休會標出來；兼職不算。</li>'+
+    '<li>值班外框是未倒垃圾，斜線是沒到班；打掃斜線是沒掃。</li>'+
+    (S.perms.schedule?'<li>點日期可設定或取消禁休。</li>':'')+'</ul>'+
     '<h3>排休</h3><ul>'+
     '<li>在「我的班」自己排，下個月起都可以提前排。</li>'+
-    '<li>到當月最後一天都能改下個月的休假；月份開始後鎖定，要改請找珊珊。</li></ul>'+
+    '<li>到當月最後一天都能改下個月的休假；月份開始後鎖定，要改請找珊珊。</li>'+
+    '<li>在「我的排休」點日期切換休假；正職休假的日子不能改。</li></ul>'+
     '<h3>值班</h3><ul>'+
     '<li>19:00 到 20:00 多留一小時。</li>'+
     '<li>資格：承攬，到職滿 3 個月，社宅部除外。</li>'+
@@ -1395,6 +1429,9 @@ function rulesHTML(){
     '<li>每個月重新分配，新人不用補前人的次數。</li>'+trash+'</ul>'+
     '<h3>打掃</h3><ul>'+clean+'</ul>'+
     '<h3>今天以前的班</h3><ul><li>預排時今天以前（含今天）的日子鎖定不動，手動排的也會保留。</li></ul>'+
+    (S.perms.confirm?'<h3>確認</h3><ul><li>預設都算做完，只標例外。</li><li>最近兩天在上方「確認」；更早的日子把「點格子改」切到「確認」再點格子。</li></ul>':'')+
+    '<h3>公平帳</h3><ul><li>用層計算：掃一層算 1 層，倒垃圾一次算 1 層。每組跟自己的平均比。</li><li>「排定」是整月排好的量；「實際」是到今天為止、扣掉珊珊標的例外之後做完的量。</li></ul>'+
+    '<h3>資料</h3><ul><li>資料和舊版排班表是同一份。</li></ul>'+
     '</div><div class="acts"><button class="btn btn2" data-mv="report">回報問題或意見</button><button class="btn" data-mv="ok">知道了</button></div>';
 }
 function showRules(){
