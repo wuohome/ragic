@@ -158,6 +158,9 @@ SC.fmtDate = (y, m, d) => `${y}/${String(m).padStart(2, "0")}/${String(d).padSta
 SC.getHolidayName = (y, m, d) => SC.HOLIDAYS_2026[SC.fmtDate(y, m, d)] || "";
 SC.isGovHoliday = (dateStr, isWeekend) => isWeekend || dateStr in SC.HOLIDAYS_2026;
 SC.isOpenPeriod = () => new Date().getDate() >= 20;
+// 同仁自己排休（瓊安 2026-10-31）：下個月起都能提前排，到當月最後一天都能改；月份一開始就鎖定，只有珊珊能改
+SC.isRestMonthOpen = (year, month, now = new Date()) =>
+    year * 12 + month > now.getFullYear() * 12 + now.getMonth() + 1;
 
 // ── 見紅休判斷（集中版，2026-07-26 三度誤排事故根治）──
 // 本函式只判斷「該日是否為見紅休適用日」與「某人在該日是否見紅休」，

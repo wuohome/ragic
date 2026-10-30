@@ -52,7 +52,7 @@
 </head>
 <body style="margin:0;background:#f8fafc;min-height:100vh">
 <div id="root"></div>
-<script src="schedule-common.js"></script>
+<script src="schedule-common.js?v=20261031-5"></script>
 <script type="text/babel">
 
 /* ── Constants (from schedule-common.js) ───────────────────── */
@@ -603,10 +603,10 @@ function NameSelect({ emps, onSelect, onBack }) {
 /* ── Personal Calendar View ─────────────────────────────────── */
 function PersonalView({ emp, onBack }) {
   const today = new Date();
-  const open = isOpenPeriod();
   const initDate = getInitialMonth();
   const [year,        setYear]        = React.useState(initDate.y);
   const [month,       setMonth]       = React.useState(initDate.m);
+  const open = SC.isRestMonthOpen(year, month);
   const [leaves,      setLeaves]      = React.useState({});
   const [duties,      setDuties]      = React.useState({});
   const [noRest,      setNoRest]      = React.useState({});
@@ -676,7 +676,7 @@ function PersonalView({ emp, onBack }) {
   // ── Cell click handler ──────────────────────────────────────
   const handleCellClick = async (d) => {
     if (!open) {
-      showToast('每月 20 號後開放排班', 'error');
+      showToast('這個月已鎖定，要改請找珊珊', 'error');
       return;
     }
     const date = fmtDate(year, month, d);
@@ -860,8 +860,8 @@ function PersonalView({ emp, onBack }) {
         display: 'flex', alignItems: 'center', gap: 6,
       }}>
         {open
-          ? <><span>開放排班期間（每月 20–31 日）</span><span>· 點擊日期格子可新增／移除</span><StatusBadge type="排休"/></>
-          : <span>排班鎖定中（每月 1–19 日）· 每月 20 號後開放排班</span>
+          ? <><span>開放排班中（到月底前都能改）</span><span>· 點擊日期格子可新增／移除</span><StatusBadge type="排休"/></>
+          : <span>這個月已鎖定，要改請找珊珊 · 下個月起可以先排</span>
         }
         <span style={{ color: '#64748b', marginLeft: 4 }}>灰色格（正職休假）無法編輯</span>
       </div>
@@ -1123,7 +1123,7 @@ function TeamView({ emps, onBack }) {
                 <li>值班各自獨立，不受夫妻規則影響</li>
               </ul>
               <hr style={{ border:'none',borderTop:'1px solid #e5e7eb',margin:'12px 0' }}/>
-              <p><b>📅 權限</b>：每月 20 號後自動開放排下個月的休</p>
+              <p><b>📅 權限</b>：下個月起都可以提前排，到當月最後一天都能改；月份開始後鎖定，要改請找珊珊</p>
             </div>
             <button onClick={() => setShowRules(false)} style={{ marginTop:16,width:'100%',padding:'10px 0',background:'#f1f5f9',border:'none',borderRadius:8,fontWeight:700,color:'#64748b',cursor:'pointer',fontSize:14 }}>關閉</button>
           </div>

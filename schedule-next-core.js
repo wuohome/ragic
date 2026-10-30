@@ -34,15 +34,16 @@ SC.nextPerms = (viewer) => {
 /**
  * 能不能改某人某天的排休。
  * 珊珊／瓊安：任何人任何天。
- * 其他同仁：只能改自己，照舊版「我的排班」規則——每月 20 號後開放、見紅休紀錄那天不能點；另外今天以前的日子不給改。
+ * 其他同仁：只能改自己；下個月起都能排，到當月最後一天都能改，月份開始後鎖定（SC.isRestMonthOpen）；見紅休紀錄那天不能點。
  * @returns {{ok:boolean, why?:string}}
  */
 SC.nextCanEditRest = ({ viewer, target, ds, todayStr, hasRedRecord }) => {
     if (!viewer || !viewer.name) return { ok: false, why: "請先登入" };
     if (viewer.role === "admin") return { ok: true };
     if (viewer.name !== target) return { ok: false, why: "只能改自己的排休" };
-    if (Number(String(todayStr).slice(8, 10)) < 20) return { ok: false, why: "每月 20 號後開放自己排休" };
-    if (SC._cmpDateStr(ds, todayStr) <= 0) return { ok: false, why: "今天以前的日子不能改" };
+    const [ty, tm] = String(todayStr).split("/").map(Number);
+    const [y, m] = String(ds).split("/").map(Number);
+    if (!SC.isRestMonthOpen(y, m, new Date(ty, tm - 1, 1))) return { ok: false, why: "這個月已鎖定，要改請找珊珊" };
     if (hasRedRecord) return { ok: false, why: "正職休假的日子請珊珊調整" };
     return { ok: true };
 };

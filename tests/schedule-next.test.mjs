@@ -123,17 +123,20 @@ test("權限：珊珊、瓊安可排班與確認；一般同仁只能看；沒�
     eq([...SC.NEXT_ADMIN_NAMES], ["韓珊珊", "張瓊安"]);
 });
 
-test("權限：自己排休照舊版規則（20 號後開放、見紅休那天不能點、只能改自己）；珊珊不受限", () => {
+test("權限：下個月起都能排、到月底都能改、月份開始後鎖定；見紅休那天不能點、只能改自己；珊珊不受限", () => {
     const SC = plainSC();
     const staff = { name: "白欣宜", role: "staff" };
     const admin = { name: "韓珊珊", role: "admin" };
     const base = { viewer: staff, target: "白欣宜", ds: "2026/11/14", todayStr: "2026/10/30", hasRedRecord: false };
     assert.equal(SC.nextCanEditRest(base).ok, true);
-    assert.equal(SC.nextCanEditRest({ ...base, todayStr: "2026/10/19" }).ok, false, "19 號還沒開放");
-    assert.equal(SC.nextCanEditRest({ ...base, todayStr: "2026/10/20" }).ok, true, "20 號開放");
+    assert.equal(SC.nextCanEditRest({ ...base, todayStr: "2026/10/01" }).ok, true, "月初就能排下個月");
+    assert.equal(SC.nextCanEditRest({ ...base, todayStr: "2026/10/31" }).ok, true, "月底最後一天還能改");
+    assert.equal(SC.nextCanEditRest({ ...base, todayStr: "2026/11/01" }).ok, false, "月份開始就鎖定");
+    assert.equal(SC.nextCanEditRest({ ...base, todayStr: "2026/10/31", ds: "2026/12/05" }).ok, true, "可以提前排 12 月");
+    assert.equal(SC.nextCanEditRest({ ...base, todayStr: "2026/12/15", ds: "2027/01/05" }).ok, true, "跨年");
     assert.equal(SC.nextCanEditRest({ ...base, target: "詹張傳" }).ok, false, "不能改別人");
     assert.equal(SC.nextCanEditRest({ ...base, hasRedRecord: true }).ok, false, "見紅休紀錄那天要請珊珊");
-    assert.equal(SC.nextCanEditRest({ ...base, ds: "2026/10/30" }).ok, false, "今天以前不能改");
+    assert.equal(SC.nextCanEditRest({ ...base, ds: "2026/10/31" }).ok, false, "這個月不能改");
     assert.equal(SC.nextCanEditRest({ ...base, viewer: null }).ok, false);
     assert.equal(SC.nextCanEditRest({ ...base, viewer: admin, target: "詹張傳", todayStr: "2026/11/05", ds: "2026/11/02", hasRedRecord: true }).ok, true);
 });
