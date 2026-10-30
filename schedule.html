@@ -736,7 +736,7 @@ function restEditHTML(n){
     cells+='<button data-selfrest="'+d+'" class="'+cls+'"'+(chk.ok?'':' disabled')+' aria-label="'+fmtMD(d)+(c.rest?' 休假':' 上班')+'">'+d+'<small>'+(c.rest?'休':lab||(day.noRest?'禁休':''))+'</small></button>';
   }
   var open=TD>=20;
-  var note=open?'點日期切換休假。今天以前和見紅休的日子不能改。':'每月 20 號後開放自己排休；現在只能看。';
+  var note=open?'點日期切換休假。今天以前和正職休假的日子不能改。':'每月 20 號後開放自己排休；現在只能看。';
   return '<section class="block"><h2 class="h2"><span>我的排休</span><span class="muted" style="font-weight:400">本月已排休 '+countRest(n)+' 天，上限 '+SC.monthLeaveLimit(S.year,S.month)+' 天</span></h2><p class="xs muted">'+note+'</p><div class="rcal" role="group" aria-label="我的排休">'+head+cells+'</div></section>';
 }
 function countRest(n){var t=0;for(var d=1;d<=S.M.dim;d++)if(S.M.days[d].rest.some(function(x){return x.name===n&&x.kind==='排休'}))t++;return t}
@@ -823,8 +823,8 @@ function cellLabel(n,d){
   var bits=[];
   if(v.clean)bits.push('打掃'+fText(v.clean.floors)+(v.clean.missedFloors.length?'（'+fShort(v.clean.missedFloors)+'未掃）':''));
   if(v.duty)bits.push('值班'+(v.duty.state==='noshow'?'（沒到班）':v.duty.state==='notrash'?'（未倒垃圾）':''));
-  if(v.rest)bits.push(v.rest.kind==='見紅休'||v.red?'見紅休':v.rest.kind);
-  if(!bits.length)bits.push(v.red?'見紅休改上班':'未排');
+  if(v.rest)bits.push(v.rest.kind==='見紅休'||v.red?'正職休假':v.rest.kind);
+  if(!bits.length)bits.push(v.red?'正職休假改上班':'未排');
   return s+bits.join('、');
 }
 function rowHTML(d,cols){
@@ -910,7 +910,7 @@ function renderSched(){
   return '<div class="view"><div id="shead">'+headHTML()+'</div>'+
     '<div class="ctrl"><div class="seg"><span class="lb">點格子改</span><div role="group" aria-label="點格子時要改的項目">'+
     [['rest','休假'],['duty','值班'],['clean','打掃'],['confirm','確認']].map(function(m){return '<button data-mode="'+m[0]+'" aria-pressed="'+(S.mode===m[0])+'">'+m[1]+'</button>'}).join('')+
-    '</div></div><div class="mxkey" style="margin-top:0"><span>'+cleanTag([1,2,3,4])+'一人掃一到四樓</span><span>'+cleanTag([1,4])+'掃一樓和四樓</span><span>'+cleanTag([2,3])+'掃二樓和三樓</span><span><span class="tag-duty trash">值🗑️</span>值班要倒垃圾</span><span><span class="tag-duty">值</span>值班沒垃圾車</span><span><span class="tag-rest">休</span>排休</span><span><span class="tag-rest red">休</span>見紅休</span><span>空白是上班</span></div></div>'+
+    '</div></div><div class="mxkey" style="margin-top:0"><span>'+cleanTag([1,2,3,4])+'一人掃一到四樓</span><span>'+cleanTag([1,4])+'掃一樓和四樓</span><span>'+cleanTag([2,3])+'掃二樓和三樓</span><span><span class="tag-duty trash">值🗑️</span>值班要倒垃圾</span><span><span class="tag-duty">值</span>值班沒垃圾車</span><span><span class="tag-rest">休</span>排休</span><span><span class="tag-rest red">休</span>正職休假</span><span>空白是上班</span></div></div>'+
     '<div id="schk">'+checksHTML()+'</div>'+
     '<div id="scf">'+confirmHTML()+'</div>'+
     '<div class="mxwrap" id="mxwrap" tabindex="0" role="region" aria-label="'+S.month+' 月排班表，可上下左右捲動">'+tableHTML()+'</div>'+
@@ -975,7 +975,7 @@ function doRest(n,d,v){
   }
   if(v.cancelled){
     var rec=S.M.days[d].redCancelled.filter(function(x){return x.name===n})[0];
-    return apiUpdate(rec.id,(function(){var o={};o[F.IS_AUTO]='';return o})()).then(function(){toast(dn(n)+' '+fmtMD(d)+'還原成見紅休。')});
+    return apiUpdate(rec.id,(function(){var o={};o[F.IS_AUTO]='';return o})()).then(function(){toast(dn(n)+' '+fmtMD(d)+'還原成正職休假。')});
   }
   if(v.clean||v.duty){toast(dn(n)+' '+fmtMD(d)+'已排'+(v.duty?'值班':'打掃')+'，先取消才能排休假。',true);return}
   return restPreChecks(n,d).then(function(ok){
@@ -986,7 +986,7 @@ function doRest(n,d,v){
 }
 function doDuty(n,d,v,e){
   var bad=eligibleZhiban(e);if(bad){toast(bad+'。',true);return}
-  if(v.red){toast(dn(n)+'是見紅休，六日和國定假日不排值班。',true);return}
+  if(v.red){toast(dn(n)+'是正職，六日和國定假日不排值班。',true);return}
   var day=S.M.days[d];
   if(v.duty){
     var go=isFutureD(d)?Promise.resolve(true):uiConfirm('取消值班？',fmtMD(d)+'已經到了或過了，取消後這天的值班紀錄會消失。確定要取消 <b>'+dn(n)+'</b> 的值班嗎？','取消值班');
@@ -1007,7 +1007,7 @@ function doDuty(n,d,v,e){
 }
 function doClean(n,d,v,e){
   var kind=kindOf(n),day=S.M.days[d];
-  if(v.red){toast(dn(n)+'是見紅休，六日和國定假日不排打掃。',true);return}
+  if(v.red){toast(dn(n)+'是正職，六日和國定假日不排打掃。',true);return}
   if(kind==='office'&&!officeOkDay(d)){toast('內勤六日和國定假日不排打掃。',true);return}
   if(v.rest){toast(dn(n)+' '+fmtMD(d)+'休假，先取消才能排打掃。',true);return}
   var cur=v.clean,next;
@@ -1357,7 +1357,7 @@ function rulesHTML(){
     '<h3>班表怎麼看</h3><ul>'+
     '<li>空白就是上班。</li>'+
     '<li><span class="tag-rest">休</span> 排休，<span class="tag-rest">特</span> 特休，<span class="tag-rest">假</span> 請假。</li>'+
-    '<li><span class="tag-rest red">休</span> 見紅休（'+esc(names)+'），六日和國定假日休假，不算在月休內。</li>'+
+    '<li><span class="tag-rest red">休</span> 正職休假（'+esc(names)+'），六日和國定假日休假，不算在月休內。</li>'+
     '<li>一個月可以休 '+limit+' 天。</li></ul>'+
     '<h3>值班</h3><ul>'+
     '<li>19:00 到 20:00 多留一小時。</li>'+

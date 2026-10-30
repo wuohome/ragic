@@ -43,7 +43,7 @@ SC.nextCanEditRest = ({ viewer, target, ds, todayStr, hasRedRecord }) => {
     if (viewer.name !== target) return { ok: false, why: "只能改自己的排休" };
     if (Number(String(todayStr).slice(8, 10)) < 20) return { ok: false, why: "每月 20 號後開放自己排休" };
     if (SC._cmpDateStr(ds, todayStr) <= 0) return { ok: false, why: "今天以前的日子不能改" };
-    if (hasRedRecord) return { ok: false, why: "見紅休的日子請珊珊調整" };
+    if (hasRedRecord) return { ok: false, why: "正職休假的日子請珊珊調整" };
     return { ok: true };
 };
 
