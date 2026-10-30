@@ -4883,7 +4883,7 @@ async function ragicPostLite(env, sheetPath, paramsString, extraQuery = '', opts
 // 目前是 schema 缺口不是程式邏輯缺口，Worker 端無法建欄位）。
 const BUG_REPORT_FEEDBACK_SHEET = 'decorating/15';
 async function syncBugReportToRagic(env, { safeType, safeTitle, safeUrl, safeDesc, uaShort, nowTW, hasScreenshot, extraLines = [], shotWhere = 'Discord 系統部「警報」頻道' }) {
-  const title = `[問題回報] ${safeType} — ${safeTitle || '（無標題）'}`.slice(0, 200);
+  const title = `${safeType === '意見回饋' ? '[意見回饋]' : `[問題回報] ${safeType}`} — ${safeTitle || '（無標題）'}`.slice(0, 200);
   const body = [
     safeDesc,
     '',
@@ -8359,10 +8359,10 @@ export default {
         const screenshot = body.screenshot;
         const uploads    = body.uploads;
 
-        if (!bugDesc || typeof bugDesc !== 'string' || bugDesc.trim().length < 3) {
+        if (!bugDesc || typeof bugDesc !== 'string' || bugDesc.trim().length < 1) {
           return jsonResp({ error: 'description_required' }, 400, allowedOrigin);
         }
-        const VALID_TYPES = ['功能異常', '版面問題', '資料錯誤', '建議', '其他'];
+        const VALID_TYPES = ['功能異常', '版面問題', '資料錯誤', '建議', '意見回饋', '其他'];
         const safeType  = (typeof bugType === 'string' && VALID_TYPES.includes(bugType)) ? bugType : '其他';
         const safeDesc  = bugDesc.trim().slice(0, 1000);
         const safeUrl   = redactReportUrl(typeof pageUrl === 'string' ? pageUrl : '').slice(0, 500);
@@ -8394,8 +8394,9 @@ export default {
           hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
         });
 
+        const reportHead = safeType === '意見回饋' ? '💡 意見回饋' : '🐛 問題回報';
         var captionParts = [
-          '🐛 問題回報',
+          reportHead,
           '類型：' + safeType,
           '頁面：' + (safeTitle || '（無標題）') + '（' + (safeUrl || '—') + '）',
           '描述：' + safeDesc,
@@ -8447,7 +8448,7 @@ export default {
         }
         if (hubOk && hubBytes <= 8 * 1024 * 1024 && await notifyHubIngest(env, {
           source: '問題回報', key: 'bugreport.' + Date.now(), channel: 'assign',
-          title: '🐛 問題回報（' + safeType + '）', body: captionParts.slice(2).join('\n'), images: hubImgs,
+          title: safeType === '意見回饋' ? reportHead : reportHead + '（' + safeType + '）', body: captionParts.slice(2).join('\n'), images: hubImgs,
         })) {
           syncBugReportNonBlocking(hubImgs.length > 0, 'Discord 系統部「交辦」頻道');
           return jsonResp({ ok: true }, 200, allowedOrigin);

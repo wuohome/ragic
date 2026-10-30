@@ -1,4 +1,4 @@
-// bug-report.js — 問題回報 widget（共用，任何頁面加 <script src="bug-report.js"></script> 即可）
+// bug-report.js — 問題回報＋意見回饋 widget（共用，任何頁面加 <script src="bug-report.js"></script> 即可）
 // Worker endpoint — 日後改位置只動這一行
 const BUG_REPORT_ENDPOINT = 'https://wuohome-ragic-proxy.wuohome.workers.dev/reportBug';
 
@@ -63,7 +63,7 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
 
     // Tooltip
     '#wh-bug-report-btn::after{',
-      'content:"問題回報";',
+      'content:"問題回報・意見回饋";',
       'position:absolute;right:56px;top:50%;transform:translateY(-50%);',
       'background:rgba(30,30,30,.88);color:#fff;font-size:12px;',
       'padding:4px 10px;border-radius:6px;white-space:nowrap;',
@@ -185,6 +185,23 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
     '.wh-btn-submit:hover{background:#e85c28;}',
     '.wh-btn-submit:disabled{opacity:.6;cursor:default;}',
 
+    // 問題回報／意見回饋切換
+    '.wh-tabs{display:flex;gap:6px;margin-bottom:10px;}',
+    '.wh-tab{flex:1;padding:9px 0;border-radius:8px;border:1px solid #d9e2f0;background:#fff;color:#555;font-size:15px;font-weight:600;cursor:pointer;}',
+    '.wh-tab.wh-on{background:#ff6b35;border-color:#ff6b35;color:#fff;}',
+
+    // 框選畫面
+    '#wh-mark{display:none;position:fixed;inset:0;z-index:99995;background:#111;color:#fff;flex-direction:column;',
+      'font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;}',
+    '#wh-mark.wh-open{display:flex;}',
+    '.wh-mark-top{padding:12px 16px;text-align:center;font-size:17px;font-weight:700;}',
+    '.wh-mark-top small{display:block;font-size:13px;font-weight:400;color:#bbb;margin-top:2px;}',
+    '.wh-mark-stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 12px;}',
+    '#wh-mark-canvas{max-width:100%;max-height:100%;touch-action:none;cursor:crosshair;background:#fff;}',
+    '.wh-mark-bar{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));}',
+    '.wh-mark-btn{padding:10px 16px;border-radius:8px;border:1px solid #555;background:#222;color:#fff;font-size:15px;cursor:pointer;}',
+    '.wh-mark-btn.wh-primary{background:#ff6b35;border-color:#ff6b35;font-weight:700;}',
+
     // Toast
     '#wh-toast{',
       'position:fixed;bottom:32px;left:50%;transform:translateX(-50%) translateY(20px);',
@@ -220,21 +237,25 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
   modal.id = 'wh-bug-modal';
   modal.setAttribute('role', 'dialog');
   modal.setAttribute('aria-modal', 'true');
-  modal.setAttribute('aria-label', '問題回報');
+  modal.setAttribute('aria-label', '問題回報與意見回饋');
   modal.innerHTML = [
     '<div class="wh-modal-header">',
-      '<p class="wh-modal-title">🐛 問題回報</p>',
-      '<p class="wh-modal-sub">請描述您遇到的問題，我們會協助處理。</p>',
+      '<div class="wh-tabs">',
+        '<button type="button" class="wh-tab wh-on" id="wh-tab-bug">🐛 問題回報</button>',
+        '<button type="button" class="wh-tab" id="wh-tab-idea">💡 意見回饋</button>',
+      '</div>',
+      '<p class="wh-modal-sub" id="wh-modal-sub">請告訴我們哪裡有問題，我們會協助處理。</p>',
     '</div>',
     '<div class="wh-modal-body">',
 
       // Screenshot
       '<div class="wh-section">',
-        '<span class="wh-label">📷 自動截圖</span>',
+        '<span class="wh-label" id="wh-shot-label">📷 自動截圖</span>',
         '<div id="wh-screenshot-wrap">',
           '<div id="wh-screenshot-placeholder">截圖擷取中…</div>',
           '<img id="wh-screenshot-img" alt="截圖預覽">',
           '<div id="wh-screenshot-actions" style="display:none">',
+            '<button class="wh-ss-btn" id="wh-mark-btn">框選問題 ✏️</button>',
             '<button class="wh-ss-btn" id="wh-retake-btn">重新截圖 🔄</button>',
             '<button class="wh-ss-btn" id="wh-remove-ss-btn">移除 ✕</button>',
           '</div>',
@@ -258,13 +279,12 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
       '</div>',
 
       // Type
-      '<div class="wh-section">',
+      '<div class="wh-section" id="wh-type-section">',
         '<span class="wh-label">問題類型</span>',
         '<select id="wh-bug-type">',
           '<option value="功能異常">🐛 功能異常</option>',
           '<option value="版面問題">🖼️ 版面問題</option>',
           '<option value="資料錯誤">📊 資料錯誤</option>',
-          '<option value="建議">💡 建議</option>',
           '<option value="其他">📝 其他</option>',
         '</select>',
       '</div>',
@@ -277,9 +297,9 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
 
       // Description
       '<div class="wh-section">',
-        '<span class="wh-label">問題描述 <span class="wh-required">*</span></span>',
-        '<textarea id="wh-bug-desc" placeholder="請描述您遇到的問題，例如：點擊某個按鈕後沒有反應、頁面顯示異常…" maxlength="1000"></textarea>',
-        '<div id="wh-desc-err">請填寫問題描述（至少 3 個字）</div>',
+        '<span class="wh-label"><span id="wh-desc-label">問題描述</span> <span class="wh-required" id="wh-desc-star">*</span></span>',
+        '<textarea id="wh-bug-desc" placeholder="寫一句就好，例如：這顆按鈕壞了" maxlength="1000"></textarea>',
+        '<div id="wh-desc-err">請寫一句話，或在截圖上框出問題</div>',
       '</div>',
 
     '</div>',// end body
@@ -294,6 +314,21 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
   toast.id = 'wh-toast';
   document.body.appendChild(toast);
 
+  // 框選畫面：截圖一好就直接進來，同仁把壞掉的地方框起來就好
+  var markEl = document.createElement('div');
+  markEl.id = 'wh-mark';
+  markEl.innerHTML = [
+    '<div class="wh-mark-top">用手指或滑鼠，把有問題的地方框起來<small>點一下也可以，會在那裡放一個框</small></div>',
+    '<div class="wh-mark-stage"><canvas id="wh-mark-canvas"></canvas></div>',
+    '<div class="wh-mark-bar">',
+      '<button type="button" class="wh-mark-btn" id="wh-mark-undo">復原</button>',
+      '<button type="button" class="wh-mark-btn" id="wh-mark-idea">我是要給意見</button>',
+      '<button type="button" class="wh-mark-btn" id="wh-mark-skip">不框，直接寫</button>',
+      '<button type="button" class="wh-mark-btn wh-primary" id="wh-mark-done">框好了</button>',
+    '</div>',
+  ].join('');
+  document.body.appendChild(markEl);
+
   // Trigger button
   var btn = document.createElement('button');
   btn.id = 'wh-bug-report-btn';
@@ -304,6 +339,11 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
 
   // ── State ──
   var screenshotDataUrl = null;
+  var baseShot = null;    // 沒框過的原圖，重新框選時用
+  var baseImage = null;
+  var marks = [];         // 框選的位置，單位是原圖像素
+  var drag = null;
+  var mode = 'bug';       // bug 問題回報、idea 意見回饋
   var uploadFiles = []; // array of dataURL strings
   var html2canvasLoaded = false;
   var isSubmitting = false;
@@ -315,8 +355,28 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
     setTimeout(function () { toast.classList.remove('wh-show'); }, duration || 3000);
   }
 
+  function setMode(next) {
+    mode = next;
+    var idea = next === 'idea';
+    document.getElementById('wh-tab-bug').classList.toggle('wh-on', !idea);
+    document.getElementById('wh-tab-idea').classList.toggle('wh-on', idea);
+    document.getElementById('wh-type-section').style.display = idea ? 'none' : '';
+    document.getElementById('wh-modal-sub').textContent = idea ? '想新增什麼、哪裡可以更好用，都可以寫。' : '請告訴我們哪裡有問題，我們會協助處理。';
+    document.getElementById('wh-desc-label').textContent = idea ? '你的意見' : '問題描述';
+    document.getElementById('wh-bug-desc').placeholder = idea ? '例如：希望這裡可以多一個搜尋' : '寫一句就好，例如：這顆按鈕壞了';
+    document.getElementById('wh-shot-label').textContent = idea ? '📷 截圖（用不到可以按移除）' : '📷 自動截圖';
+    document.getElementById('wh-submit-btn').textContent = idea ? '送出意見' : '送出回報';
+    document.getElementById('wh-desc-err').style.display = 'none';
+  }
+
   function setScreenshot(dataUrl) {
     screenshotDataUrl = dataUrl;
+    baseShot = dataUrl;
+    marks = [];
+    showShot(dataUrl);
+  }
+
+  function showShot(dataUrl) {
     var img = document.getElementById('wh-screenshot-img');
     var placeholder = document.getElementById('wh-screenshot-placeholder');
     var actions = document.getElementById('wh-screenshot-actions');
@@ -333,6 +393,87 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
       actions.style.display = 'none';
     }
   }
+
+  // ── 框選 ──
+  function drawMarks() {
+    var c = document.getElementById('wh-mark-canvas');
+    var ctx = c.getContext('2d');
+    ctx.drawImage(baseImage, 0, 0);
+    ctx.lineWidth = Math.max(4, c.width / 250);
+    ctx.strokeStyle = '#e8112d';
+    marks.concat(drag ? [drag] : []).forEach(function (m) { ctx.strokeRect(m.x, m.y, m.w, m.h); });
+  }
+
+  function openMark() {
+    if (!baseShot) return;
+    var img = new Image();
+    img.onload = function () {
+      baseImage = img;
+      var c = document.getElementById('wh-mark-canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      drawMarks();
+      markEl.classList.add('wh-open');
+    };
+    img.src = baseShot;
+  }
+
+  function closeMark() { markEl.classList.remove('wh-open'); }
+
+  function finishMark() {
+    closeMark();
+    if (!marks.length) { screenshotDataUrl = baseShot; showShot(baseShot); return; }
+    var c = document.getElementById('wh-mark-canvas');
+    compressImage(c.toDataURL('image/jpeg', 0.92), 1600, 0.8, function (done) {
+      screenshotDataUrl = done;
+      showShot(done);
+    });
+  }
+
+  function canvasPoint(c, e) {
+    var r = c.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * c.width / r.width, y: (e.clientY - r.top) * c.height / r.height, scale: c.width / r.width };
+  }
+
+  (function () {
+    var c = document.getElementById('wh-mark-canvas');
+    var start = null;
+    c.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      start = canvasPoint(c, e);
+      drag = { x: start.x, y: start.y, w: 0, h: 0 };
+      try { c.setPointerCapture(e.pointerId); } catch (err) { /* 舊瀏覽器沒有也能畫 */ }
+    });
+    c.addEventListener('pointermove', function (e) {
+      if (!start) return;
+      var p = canvasPoint(c, e);
+      drag = { x: Math.min(start.x, p.x), y: Math.min(start.y, p.y), w: Math.abs(p.x - start.x), h: Math.abs(p.y - start.y) };
+      drawMarks();
+    });
+    function end() {
+      if (!start) return;
+      var m = drag, s = start;
+      start = null; drag = null;
+      // 只點一下：在那裡放一個框，手指比較好用
+      var min = 12 * s.scale;
+      if (m.w < min && m.h < min) {
+        var b = 90 * s.scale;
+        m = { x: s.x - b / 2, y: s.y - b / 2, w: b, h: b };
+      }
+      marks.push(m);
+      drawMarks();
+    }
+    c.addEventListener('pointerup', end);
+    c.addEventListener('pointercancel', end);
+  })();
+
+  document.getElementById('wh-mark-undo').addEventListener('click', function () { marks.pop(); drawMarks(); });
+  document.getElementById('wh-mark-skip').addEventListener('click', function () { marks = []; finishMark(); });
+  document.getElementById('wh-mark-done').addEventListener('click', finishMark);
+  document.getElementById('wh-mark-idea').addEventListener('click', function () { marks = []; finishMark(); setMode('idea'); });
+  document.getElementById('wh-mark-btn').addEventListener('click', openMark);
+  document.getElementById('wh-tab-bug').addEventListener('click', function () { setMode('bug'); });
+  document.getElementById('wh-tab-idea').addEventListener('click', function () { setMode('idea'); });
 
   function updateUploadCount() {
     document.getElementById('wh-upload-cnt').textContent = uploadFiles.length;
@@ -392,14 +533,16 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
       if (err) { cb(null); return; } // graceful: no screenshot
       // ponytail-debt: html2canvas 對跨域圖片預設失敗，useCORS:true 嘗試但不保證；
       // 若頁面有跨域圖片截圖會有空白區塊，可接受（仍傳其他部分）。
+      // 只截眼前這個畫面：整頁長圖縮小後根本框不到按鈕
       window.html2canvas(document.body, {
+        x: window.scrollX, y: window.scrollY, width: window.innerWidth, height: window.innerHeight,
         useCORS: true,
         allowTaint: false,
         logging: false,
         scale: Math.min(window.devicePixelRatio || 1, 2),
         // 忽略高 z-index 的 bug report UI（截圖時 modal 未開，按鈕本身 z-index 較高但 small）
         ignoreElements: function (el) {
-          return el.id === 'wh-bug-report-btn';
+          return el.id === 'wh-bug-report-btn' || el.id === 'wh-mark';
         },
       }).then(function (canvas) {
         compressImage(canvas.toDataURL('image/jpeg', 1), 1600, 0.8, function (compressed) {
@@ -422,6 +565,7 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
     document.getElementById('wh-bug-desc').value = '';
     document.getElementById('wh-desc-err').style.display = 'none';
     document.getElementById('wh-bug-type').value = '功能異常';
+    setMode('bug');
     document.getElementById('wh-reporter-section').style.display = staffEmail() ? 'none' : '';
     try { document.getElementById('wh-bug-reporter').value = localStorage.getItem('wh_bug_reporter') || ''; } catch (e) { /* 無痕模式：留空 */ }
     uploadFiles = [];
@@ -453,6 +597,7 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
       openModal();
       if (dataUrl) {
         setScreenshot(dataUrl);
+        openMark();
       } else {
         document.getElementById('wh-screenshot-placeholder').textContent = '截圖失敗（仍可送出純文字回報）';
       }
@@ -467,7 +612,7 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
     setScreenshot(null);
     document.getElementById('wh-screenshot-placeholder').style.display = 'block';
     takeScreenshot(function (dataUrl) {
-      if (dataUrl) setScreenshot(dataUrl);
+      if (dataUrl) { setScreenshot(dataUrl); openMark(); }
       else document.getElementById('wh-screenshot-placeholder').textContent = '截圖失敗';
     });
   });
@@ -516,7 +661,9 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
   document.getElementById('wh-submit-btn').addEventListener('click', function () {
     if (isSubmitting) return;
     var desc = document.getElementById('wh-bug-desc').value.trim();
-    if (desc.length < 3) {
+    // 同仁常常只框起來、寫「壞了」，這樣就夠修了
+    if (!desc && marks.length) desc = '（已在截圖框出問題位置）';
+    if (!desc) {
       document.getElementById('wh-desc-err').style.display = 'block';
       document.getElementById('wh-bug-desc').focus();
       return;
@@ -538,7 +685,7 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
       caseRef: caseRef(),
       errors: pageErrors.slice(),
       audience: isCustomerPage ? 'customer' : 'staff',
-      type: document.getElementById('wh-bug-type').value,
+      type: mode === 'idea' ? '意見回饋' : document.getElementById('wh-bug-type').value,
       url: location.origin + location.pathname + safeSearch() + location.hash.replace(/token=[^&]*/gi, 'token=***'),
       title: document.title,
       userAgent: navigator.userAgent,
@@ -555,10 +702,10 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
       .then(function (json) {
         isSubmitting = false;
         submitBtn.disabled = false;
-        submitBtn.textContent = '送出回報';
+        submitBtn.textContent = mode === 'idea' ? '送出意見' : '送出回報';
         if (json.ok) {
           closeModal();
-          showToast(isCustomerPage ? '已收到，我們會盡快處理；急件請直接聯絡您的業務' : '已送出，謝謝回報 🎉', 4500);
+          showToast(mode === 'idea' ? '已收到你的意見，謝謝' : isCustomerPage ? '已收到，我們會盡快處理；急件請直接聯絡您的業務' : '已送出，謝謝回報 🎉', 4500);
         } else {
           showToast(json.error === 'rate_limited' ? '回報次數太多，請一小時後再試' : '送出失敗：' + (json.error || '未知錯誤') + '，請再試一次', 4000);
         }
@@ -566,14 +713,16 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
       .catch(function (err) {
         isSubmitting = false;
         submitBtn.disabled = false;
-        submitBtn.textContent = '送出回報';
+        submitBtn.textContent = mode === 'idea' ? '送出意見' : '送出回報';
         showToast('網路錯誤，請再試一次', 3500);
       });
   });
 
   // ESC to close
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && modal.classList.contains('wh-open')) closeModal();
+    if (e.key !== 'Escape') return;
+    if (markEl.classList.contains('wh-open')) { marks = []; finishMark(); return; }
+    if (modal.classList.contains('wh-open')) closeModal();
   });
 
   // ── 避讓：右下角有可操作元件時，回報鈕縮成右側中段的靠邊小標籤（不藏起來，否則短頁的「下一步」會讓它永遠看不到）──
@@ -589,7 +738,7 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
     var HIDE_LIMIT = 8000, startedAt = Date.now(); // hideWhen 只在開頁前 8 秒有效：載入卡住或失敗時，客戶才按得到回報
     var TAB_W = 24, TAB_H = 52;
 
-    function inWidget(el) { return el.closest && el.closest('#wh-bug-report-btn,#wh-bug-modal,#wh-bug-backdrop,#wh-toast'); }
+    function inWidget(el) { return el.closest && el.closest('#wh-bug-report-btn,#wh-bug-modal,#wh-bug-backdrop,#wh-toast,#wh-mark'); }
 
     function nextState() {
       try {
