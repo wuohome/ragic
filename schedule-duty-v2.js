@@ -6,7 +6,7 @@
  *  2. 內勤五人兩人一組：一人 1F+4F、另一人 2F+3F，搭檔與兩層分配每次輪替。內勤六日/國定假日不排。
  *  3. 兼職每月一次，優先排六日（SC.PARTTIME_DUTY_FIRST_DATE 以前不排）；六日不夠的排平日。排除名單 SC.PARTTIME_DUTY_EXCLUDE。
  *  4. 值班與打掃脫鉤；倒垃圾歸值班的人，所以這裡完全不產生清運紀錄。
- *  5. 次數平均：業務每人約 1 次；剩下的平日給內勤組，五人次數盡量平均。同一人不連續兩天。
+ *  5. 次數平均：業務每人約 1 次；剩下的平日給內勤組，五人次數盡量平均。同一人不連續兩天；SC.DUTY_NOT_ADJACENT_PAIRS 的兩人打掃日不相鄰。
  *  6. 今天以前（含今天）鎖定、手動紀錄不覆蓋（由呼叫端傳進 fixedByDate，這裡只補空缺）。
  */
 
@@ -122,7 +122,10 @@ SC.planDutyV2 = (o) => {
     });
     Object.values(assignedOn).forEach(set => set.forEach(n => { doneDays[n] = (doneDays[n] || 0) + 1; }));
     const done = (n) => doneDays[n] || 0;
-    const adjacent = (name, d) => [d - 1, d + 1].some(x => x >= 1 && x <= dim && assignedOn[dsOf(x)] && assignedOn[dsOf(x)].has(name));
+    const hasDuty = (name, d) => d >= 1 && d <= dim && !!assignedOn[dsOf(d)] && assignedOn[dsOf(d)].has(name);
+    const notAdjacentWith = (name) => SC.DUTY_NOT_ADJACENT_PAIRS.filter(p => p.includes(name)).flat().filter(n => n !== name);
+    const adjacent = (name, d) => [d - 1, d + 1].some(x => hasDuty(name, x))
+        || notAdjacentWith(name).some(n => [d - 1, d, d + 1].some(x => hasDuty(n, x)));
     const place = (ds, name) => { (assignedOn[ds] ||= new Set()).add(name); };
 
     // ── 要排的日子：未鎖定、非禁休、還有空樓層 ──
@@ -291,16 +294,30 @@ SC.planDutyV2 = (o) => {
     const needers = bizPeople.filter(p => done(p.name) === 0)
         .sort((a, b) => (carry[a.name] - carry[b.name]) || (rand() - 0.5));
     // 值班的人當天已留晚，盡量不再叫他掃整棟（配對時擋掉，配不到才放寬）
-    const orderedDays = shuffle(bizDays.filter(x => !x.partial));
-    const ownerBiz = matchOnce(needers, orderedDays, (p, x) => bizFeasible(p, x) && zhibanOf(x.ds) !== p.name);
-    // 值班撞日而配不到的人，放寬值班限制再配一輪（剩下的日子）
-    const matchedNames = new Set(Object.values(ownerBiz));
-    const left = needers.filter(p => !matchedNames.has(p.name));
-    if (left.length) {
-        const free = orderedDays.filter(x => !ownerBiz[x.ds]);
-        const o2 = matchOnce(left, free, bizFeasible);
-        Object.assign(ownerBiz, o2);
+    const matchBiz = (days) => {
+        const owner = matchOnce(needers, days, (p, x) => bizFeasible(p, x) && zhibanOf(x.ds) !== p.name);
+        // 值班撞日而配不到的人，放寬值班限制再配一輪（剩下的日子）
+        const matchedNames = new Set(Object.values(owner));
+        const left = needers.filter(p => !matchedNames.has(p.name));
+        if (left.length) {
+            const free = days.filter(x => !owner[x.ds]);
+            Object.assign(owner, matchOnce(left, free, bizFeasible));
+        }
+        return owner;
+    };
+    // 配對是同時決定所有人的日子，DUTY_NOT_ADJACENT_PAIRS 擋不到彼此，配完檢查、撞到就換一組亂數重配
+    const pairClash = (owner) => {
+        const dayOf = {};
+        planDays.forEach(x => { if (owner[x.ds]) dayOf[owner[x.ds]] = x.d; });
+        return SC.DUTY_NOT_ADJACENT_PAIRS.some(([a, b]) => dayOf[a] && dayOf[b] && Math.abs(dayOf[a] - dayOf[b]) <= 1);
+    };
+    let orderedDays = [], ownerBiz = {};
+    for (let i = 0; i < 50; i++) {
+        orderedDays = shuffle(bizDays.filter(x => !x.partial));
+        ownerBiz = matchBiz(orderedDays);
+        if (!pairClash(ownerBiz)) break;
     }
+    if (pairClash(ownerBiz)) warnings.push(`${SC.DUTY_NOT_ADJACENT_PAIRS.map(p => p.join("、")).join("；")} 的打掃日排不開，排在相鄰兩天`);
     orderedDays.forEach(x => { if (ownerBiz[x.ds]) give(x, ownerBiz[x.ds], "biz", x.remaining); });
 
     // 還沒人的日子（業務比日子少、或有人配不到）→ 逐日挑本月次數少者
