@@ -14,6 +14,7 @@
   --clean:#2563EB;
   --clean-soft:#E7EEFC;--clean-ink:#1E40AF;
   --duty:#F97316;--duty-soft:#FEEFE3;--duty-ink:#9A3412;
+  --rest:#15803D;--rest-soft:#DCFCE7;--rest-ink:#166534;
   --today:#EAB308;--today-soft:#FEFCE8;
   --red:#C2261E;--red-soft:#FCEDEC;
   --on-ink:#FFFFFF;
@@ -31,6 +32,7 @@
   --clean:#2563EB;
   --clean-soft:#0F1B38;--clean-ink:#A9C6FF;
   --duty:#F97316;--duty-soft:#2E1A0A;--duty-ink:#FDBA74;
+  --rest:#15803D;--rest-soft:#0B2E1A;--rest-ink:#86EFAC;
   --today:#EAB308;--today-soft:#251D01;
   --red:#FF8A80;--red-soft:#1F1F1F;
   --on-ink:#000000;
@@ -45,6 +47,7 @@
   --clean:#2563EB;
   --clean-soft:#0F1B38;--clean-ink:#A9C6FF;
   --duty:#F97316;--duty-soft:#2E1A0A;--duty-ink:#FDBA74;
+  --rest:#15803D;--rest-soft:#0B2E1A;--rest-ink:#86EFAC;
   --today:#EAB308;--today-soft:#251D01;
   --red:#FF8A80;--red-soft:#1F1F1F;
   --on-ink:#000000;
@@ -103,12 +106,14 @@ main{padding-block:16px 96px;min-height:80vh}
 .tag-clean.bad{background:var(--red);color:var(--on-ink)}
 .pill-duty{background:var(--duty-soft);color:var(--duty-ink)}
 .pill-duty.off{background:transparent;color:var(--duty-ink);outline:1px solid var(--duty);outline-offset:-1px}
-.pill-rest{background:var(--bg3);color:var(--ink2);font-weight:400}
+.pill-rest{background:var(--rest-soft);color:var(--rest-ink);font-weight:500}
+.pill-off{background:var(--bg3);color:var(--ink2);font-weight:400}
 .tag-duty{display:grid;place-items:center;width:16px;height:16px;flex:none;border-radius:2px;background:var(--duty-soft);color:var(--duty-ink);font-size:12px;line-height:16px;font-weight:600}
 .tag-duty.off{background:transparent;color:var(--duty-ink);outline:1px solid var(--duty);outline-offset:-1px}
 .mx tr.td .tag-clean:not(.bad),.day.today .tag-clean{background:var(--clean);color:#FFFFFF}
 .mx tr.td .tag-duty:not(.off),.day.today .pill-duty:not(.off){background:var(--duty);color:#FFFFFF}
-.tag-rest{display:grid;place-items:center;width:16px;height:16px;flex:none;border-radius:2px;background:var(--bg3);color:var(--ink2);font-size:12px;line-height:16px}
+.tag-rest{display:grid;place-items:center;width:16px;height:16px;flex:none;border-radius:2px;background:var(--rest);color:#FFFFFF;font-size:12px;font-weight:600;line-height:16px}
+.tag-rest.red{background:var(--rest-soft);color:var(--rest-ink);outline:1px solid var(--rest);outline-offset:-1px}
 .btn{min-height:40px;padding-block:8px;padding-inline:12px;font-size:16px;line-height:24px;font-weight:600;background:var(--ink);color:var(--on-ink);border-radius:0;white-space:nowrap;display:inline-flex;align-items:center;gap:8px;transition:opacity 300ms var(--ease),transform 300ms var(--ease)}
 .btn:hover{opacity:.84}
 .btn:active{transform:scale(.98)}
@@ -266,7 +271,6 @@ main{padding-block:16px 96px;min-height:80vh}
 .cell:focus-visible{outline-offset:-2px}
 .cell:disabled{cursor:not-allowed}
 .cell:disabled:hover{background:transparent}
-.cell .soft{color:var(--ink3);font-size:12px;line-height:16px}
 .cell .gone{width:8px;height:2px;background:var(--line2)}
 .cell.bad{background:var(--red-soft)}
 .cell.hit .pop{animation:pop 500ms var(--ease) both}
@@ -333,7 +337,7 @@ main{padding-block:16px 96px;min-height:80vh}
 .tag-duty.bad{background:var(--red);color:var(--on-ink);outline:0}
 .tag-duty.warn{background:var(--red-soft);color:var(--red);outline:1px solid var(--red);outline-offset:-1px}
 .pill-miss{background:var(--red-soft);color:var(--red);outline:1px solid var(--red);outline-offset:-1px}
-.pill-rest.red{background:transparent;outline:1px solid var(--line2);outline-offset:-1px}
+.pill-rest.red{background:transparent;outline:1px solid var(--rest);outline-offset:-1px}
 .note .who-line{display:flex;gap:12px;align-items:center}
 .note .link{min-height:24px;font-size:12px;line-height:16px;font-weight:400;color:var(--ink3)}
 .monthnav{display:flex;align-items:center;gap:4px;margin-top:4px}
@@ -376,7 +380,7 @@ main{padding-block:16px 96px;min-height:80vh}
 .rcal button,.rcal span.blk{min-height:44px;border-radius:8px;border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:14px;line-height:16px;gap:2px}
 .rcal button:hover:not(:disabled){background:var(--bg2)}
 .rcal button:disabled{opacity:.55}
-.rcal .rest{background:var(--bg3);border-color:var(--line2);font-weight:600}
+.rcal .rest{background:var(--rest-soft);border-color:var(--rest);color:var(--rest-ink);font-weight:600}
 .rcal .tdy{outline:2px solid var(--today);outline-offset:-2px}
 .rcal small{font-size:12px;line-height:14px;color:var(--ink3)}
 .rcal span.blk{border:0}
@@ -675,7 +679,7 @@ function monthHTML(n){
   var redNote=red?'<p class="xs muted" style="margin-top:12px">六日和國定假日預設休假，本月共 '+redRest+' 天，要上班請珊珊調整。</p>':'';
   return '<section class="block"><h2 class="h2"><span>我的 '+S.month+' 月</span><span class="muted" style="font-weight:400">打掃 '+nc+' 次・值班 '+nd+' 次・休假 '+nr+' 天</span></h2>'+
     '<div class="ruler" style="grid-template-columns:repeat('+S.M.dim+',minmax(0,1fr))" role="img" aria-label="'+S.month+' 月每天的班別刻度">'+ticks+'</div><div class="ruleraxis" style="grid-template-columns:repeat('+S.M.dim+',minmax(0,1fr))" aria-hidden="true">'+axis+'</div>'+
-    '<div class="key"><span><b style="background:var(--clean)"></b>打掃</span><span><b style="background:var(--duty)"></b>值班</span><span><b style="background:var(--ink3)"></b>休假</span></div>'+
+    '<div class="key"><span><b style="background:var(--clean)"></b>打掃</span><span><b style="background:var(--duty)"></b>值班</span><span><b style="background:var(--rest)"></b>休假</span></div>'+
     '<ul class="lines" style="margin-top:16px">'+(rows||'<li><span class="muted">這個月沒有排班。</span></li>')+'</ul>'+redNote+'</section>';
 }
 function whoSelect(){
@@ -731,7 +735,7 @@ function dayHTML(d){
   if(!rows)rows='<div class="rw muted">還沒排。</div>';
   var names=day.rest.map(function(x){return x.name});
   var open=!!S.openRest[d];
-  return '<article class="'+cls+'" aria-label="'+fmtMD(d)+'"><div class="dh"><span class="n">'+d+'</span><span class="w">週'+WEEK[day.dow]+'</span>'+(day.noRest?'<span class="pill pill-rest">禁休</span>':'')+flag+'</div>'+
+  return '<article class="'+cls+'" aria-label="'+fmtMD(d)+'"><div class="dh"><span class="n">'+d+'</span><span class="w">週'+WEEK[day.dow]+'</span>'+(day.noRest?'<span class="pill pill-off">禁休</span>':'')+flag+'</div>'+
     '<div class="rows">'+rows+'</div>'+
     '<button class="restbtn" data-rest="'+d+'" aria-expanded="'+open+'">休假 '+names.length+' 人'+IC.caret+'</button>'+
     (open?'<p class="restnames">'+(names.map(dn).join('、')||'沒有人休假')+'</p>':'')+'</article>';
@@ -779,10 +783,9 @@ function cellInner(n,d){
   if(v.duty)parts+=dutyTag(d,v.duty.state);
   if(parts)return '<span class="pop" style="display:inline-flex;gap:2px">'+parts+'</span>';
   if(v.rest){
-    if(v.rest.kind==='見紅休'||v.red)return '<span class="soft">休</span>';
+    if(v.rest.kind==='見紅休'||v.red)return '<span class="tag-rest red">休</span>';
     return '<span class="tag-rest">'+(v.rest.kind==='特休'?'特':v.rest.kind==='請假'?'假':'休')+'</span>';
   }
-  if(v.red)return '<span class="soft">班</span>';
   return '';
 }
 function cellLabel(n,d){
@@ -878,7 +881,7 @@ function renderSched(){
   return '<div class="view"><div id="shead">'+headHTML()+'</div>'+
     '<div class="ctrl"><div class="seg"><span class="lb">點格子改</span><div role="group" aria-label="點格子時要改的項目">'+
     [['rest','休假'],['duty','值班'],['clean','打掃'],['confirm','確認']].map(function(m){return '<button data-mode="'+m[0]+'" aria-pressed="'+(S.mode===m[0])+'">'+m[1]+'</button>'}).join('')+
-    '</div></div><div class="mxkey" style="margin-top:0"><span>'+cleanTag([1,2,3,4])+'一人掃一到四樓</span><span>'+cleanTag([1,4])+'掃一樓和四樓</span><span>'+cleanTag([2,3])+'掃二樓和三樓</span><span><span class="tag-duty">值</span>值班倒垃圾</span><span><span class="tag-duty off">值</span>值班沒垃圾車</span><span><span class="tag-rest">休</span>排休</span><span><span class="soft">休</span>見紅休</span></div></div>'+
+    '</div></div><div class="mxkey" style="margin-top:0"><span>'+cleanTag([1,2,3,4])+'一人掃一到四樓</span><span>'+cleanTag([1,4])+'掃一樓和四樓</span><span>'+cleanTag([2,3])+'掃二樓和三樓</span><span><span class="tag-duty">值</span>值班倒垃圾</span><span><span class="tag-duty off">值</span>值班沒垃圾車</span><span><span class="tag-rest">休</span>排休</span><span><span class="tag-rest red">休</span>見紅休</span><span>空白是上班</span></div></div>'+
     '<div id="schk">'+checksHTML()+'</div>'+
     '<div id="scf">'+confirmHTML()+'</div>'+
     '<div class="mxwrap" id="mxwrap" tabindex="0" role="region" aria-label="'+S.month+' 月排班表，可上下左右捲動">'+tableHTML()+'</div>'+
