@@ -305,8 +305,11 @@ body:has(#mxwrap) #main{padding-top:60px}
 @media (max-width:767px){
   body:has(#mxwrap) .topwrap{position:static;background:transparent}
   body:has(#mxwrap) #main{padding-top:0}
+  /* 手機瀏覽器整頁橫向捲動時人名列固定不住，改班表滿版自己捲、不顯示捲軸 */
+  html:has(#mxwrap){overflow-x:clip}
+  .mxwrap{width:auto;min-width:0;overflow:auto;max-height:calc(100dvh - 8px);scrollbar-width:none}
+  .mxwrap::-webkit-scrollbar{display:none}
   .mx{--th0:0px}
-  .mx tfoot th,.mx tfoot td{position:static}
   .mx thead th.corner,.mx .dt{min-width:64px;padding-inline:6px}
   .mx .dt .n{min-width:20px;margin-right:2px}
   .mx tfoot th{padding-inline:6px}
@@ -443,9 +446,9 @@ body:has(#mxwrap) #main{padding-top:60px}
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div id="modalRoot"></div>
 
-<script src="schedule-common.js?v=20261031-3"></script>
-<script src="schedule-duty-v2.js?v=20261031-3"></script>
-<script src="schedule-next-core.js?v=20261031-3"></script>
+<script src="schedule-common.js?v=20261031-4"></script>
+<script src="schedule-duty-v2.js?v=20261031-4"></script>
+<script src="schedule-next-core.js?v=20261031-4"></script>
 <script src="js/staff-gate.js"></script>
 <script>
 (function(){
@@ -947,8 +950,8 @@ function refreshCell(n,d){
 function refreshSched(){
   if(S.view!=='sched'||!S.perms.schedule)return;
   var w=$('#mxwrap');if(!w)return;
-  var t=window.scrollY,l=window.scrollX;
-  w.innerHTML=tableHTML();window.scrollTo(l,t);
+  var t=window.scrollY,l=window.scrollX,it=w.scrollTop,il=w.scrollLeft;
+  w.innerHTML=tableHTML();w.scrollTop=it;w.scrollLeft=il;window.scrollTo(l,t);
   $('#shead').innerHTML=headHTML();$('#schk').innerHTML=checksHTML();$('#scf').innerHTML=confirmHTML();
 }
 function refreshAny(){
@@ -1247,9 +1250,10 @@ function fixDay(d,kind){
   }).catch(function(e){toast('補上失敗：'+(e&&e.message||e),true)}).then(function(){S.busy=false});
 }
 function jump(d){
-  var th=$('th[data-col="'+d+'"]');if(!th)return;
+  var w=$('#mxwrap'),th=$('th[data-col="'+d+'"]');if(!w||!th)return;
   var head=$('.mx thead').offsetHeight+(parseInt(getComputedStyle($('.mx')).getPropertyValue('--th0'))||0);
-  window.scrollTo({top:Math.max(0,th.getBoundingClientRect().top+window.scrollY-head-8),behavior:'smooth'});
+  if(getComputedStyle(w).overflowY==='auto'){w.scrollIntoView({block:'nearest'});w.scrollTo({top:Math.max(0,th.parentNode.offsetTop-head),behavior:'smooth'})}
+  else window.scrollTo({top:Math.max(0,th.getBoundingClientRect().top+window.scrollY-head-8),behavior:'smooth'});
   th.classList.remove('flash');void th.offsetWidth;th.classList.add('flash');
 }
 
