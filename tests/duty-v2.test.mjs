@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const commonSrc = fs.readFileSync(path.join(root, "schedule-common.js"), "utf8");
 const v2Src = fs.readFileSync(path.join(root, "schedule-duty-v2.js"), "utf8");
-const html = fs.readFileSync(path.join(root, "schedule.html"), "utf8").replace(/\r\n/g, "\n");
+const html = fs.readFileSync(path.join(root, "schedule-legacy.html"), "utf8").replace(/\r\n/g, "\n");
 const start = html.indexOf("    const handleAutoSchedule = async () => {");
 assert.ok(start >= 0, "找不到 handleAutoSchedule");
 const handlerSrc = html.slice(start, html.indexOf("\n    };\n", start) + "\n    };".length);
