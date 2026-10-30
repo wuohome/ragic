@@ -191,6 +191,29 @@ test("上月負擔分數：標了未倒垃圾的值班，倒垃圾那 1 層不�
     eq(SC.dutyV2PrevPoints(SC.nextPrevPointsInput(raw), 2026, 10), SC.dutyV2PrevPoints(raw, 2026, 10));
 });
 
+test("休假統計：見紅休名單的應休天數是六日與國定假日；兼職不算；少休多休判斷", () => {
+    const SC = plainSC();
+    const days = {};
+    for (let d = 1; d <= 30; d++) days[d] = { rest: [], noRest: null };
+    days[1].rest.push({ name: "張瓊安", kind: "見紅休" }, { name: "張忠豪", kind: "排休" });
+    days[2].rest.push({ name: "張忠豪", kind: "特休" });
+    days[3].rest.push({ name: "張忠豪", kind: "請假" });
+    const M = { year: 2026, month: 11, dim: 30, days };
+    const t = SC.nextRestTally(M);
+    assert.equal(t["張忠豪"].total, 3);
+    assert.equal(t["張瓊安"].gov, 1);
+    assert.equal(SC.nextRestTarget(M, { name: "張忠豪", hire: "承攬" }), 8);
+    assert.equal(SC.nextRestTarget(M, { name: "張玉慧", hire: "兼職" }), null);
+    const red = Array.from({ length: 30 }, (_, i) => i + 1).filter((d) => SC.isGovRestDay(2026, 11, d)).length;
+    assert.equal(SC.nextRestTarget(M, { name: "張瓊安", hire: "正職" }), red);
+    days[1].noRest = { reason: "測試" };
+    assert.equal(SC.nextRestTarget(M, { name: "張瓊安", hire: "正職" }), red - 1);
+    assert.deepEqual({ ...SC.nextRestStatus(6, 8) }, { side: "short", diff: 2 });
+    assert.deepEqual({ ...SC.nextRestStatus(9, 8) }, { side: "over", diff: 1 });
+    assert.deepEqual({ ...SC.nextRestStatus(8, 8) }, { side: "ok", diff: 0 });
+    assert.equal(SC.nextRestStatus(3, null).side, "none");
+});
+
 test("公平帳：每組自己的平均、標比平均多／少、只有 over／under／same，沒有欠帳或罰款欄", () => {
     const SC = plainSC();
     const people = [{ name: "甲", kind: "biz" }, { name: "乙", kind: "biz" }, { name: "丙", kind: "biz" }, { name: "丁", kind: "office" }, { name: "戊", kind: "office" }];
