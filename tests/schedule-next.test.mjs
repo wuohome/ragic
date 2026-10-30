@@ -14,7 +14,7 @@ const read = (f) => fs.readFileSync(path.join(root, f), "utf8").replace(/\r\n/g,
 const commonSrc = read("schedule-common.js");
 const v2Src = read("schedule-duty-v2.js");
 const nextSrc = read("schedule-next-core.js");
-const html = read("schedule.html");
+const html = read("schedule-legacy.html");
 
 const cut = (startMark) => {
     const start = html.indexOf(startMark);
@@ -471,7 +471,7 @@ test("快照：刪除前的紀錄格式與舊頁相容（含 ragicId、全部欄
 });
 
 test("舊頁沒被動到：舊檔不引用新檔的任何東西（新檔只新增）", () => {
-    ["schedule.html", "schedule-view.html", "schedule-common.js", "schedule-duty-v2.js"].forEach((f) => assert.ok(!/NEXT_MARK|nextPlan|nextBuild|schedule-next/.test(read(f)), f));
+    ["schedule-legacy.html", "schedule-view.html", "schedule-common.js", "schedule-duty-v2.js"].forEach((f) => assert.ok(!/NEXT_MARK|nextPlan|nextBuild|schedule-next/.test(read(f)), f));
 });
 
 let fail = 0;

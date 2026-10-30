@@ -1,0 +1,2492 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>窩的家 — 排班表（排班模式）</title>
+    <script>
+    (function(){
+      var u = new URL(location.href);
+      if (!u.searchParams.has('v')) {
+        u.searchParams.set('v', new Date().toISOString().slice(0,10).replace(/-/g,''));
+        location.replace(u.toString());
+      }
+    })();
+    </script>
+    <script>
+        /* LINE WKWebView fix: native confirm() freezes JS thread. Mobile redirected silently. */
+        if (/iPhone|iPad|Android/i.test(navigator.userAgent) && !new URLSearchParams(location.search).has('readonly')) {
+            window.location.href = "schedule-view.html";
+        }
+    </script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.7/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #f8fafc; font-family: "Microsoft JhengHei","Noto Sans TC",sans-serif; }
+        .cell-spin { animation: spin .6s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        table { border-collapse: collapse; }
+        th, td { border: 1px solid #e2e8f0; }
+        tbody td { height: 32px; }
+        .emp-cell { min-width: 48px; box-sizing: border-box; }
+        .sticky-left { position: sticky; left: 0; z-index: 2; }
+        /* 十字準星高亮 */
+        tbody tr:hover { background: rgba(250,204,21,0.15) !important; }
+        tbody tr:hover td { background: inherit; }
+        tbody tr:hover td.sticky-left { background: #fefce8 !important; }
+        table { position: relative; }
+        .emp-col-highlight { position: relative; }
+        td.col-hover, th.col-hover { background: rgba(250,204,21,0.15) !important; }
+    </style>
+</head>
+<body>
+<div id="root"></div>
+<script src="schedule-common.js"></script>
+<script src="schedule-duty-v2.js"></script>
+<script type="text/babel">
+
+const CONFIG = {
+    F_EMP: SC.F_EMP, F_LEAVE: SC.F_LEAVE,
+};
+
+// leaveQuery → SC.leaveQuery（共用常數檔）
+
+// proxyFetch → SC.proxyFetch（共用常數檔）
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// 逐筆 POST（Ragic batch JSON API 在此表單會建空白紀錄，改逐筆送）
+const apiBatchCreate = async (records, onProgress) => {
+    const results = [];
+    for (let i = 0; i < records.length; i++) {
+        if (onProgress) onProgress(i + 1, records.length);
+        const res = await SC.proxyFetch("createLeave", {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify(records[i])
+        });
+        results.push({ ragicId: String(res.ragicId || "") });
+        if (i < records.length - 1) await sleep(150);
+    }
+    return results;
+};
+
+// ── 一鍵重排刪除前安全快照（技術債修復 2026-07-26，見 技術筆記/技術債.md）──
+// 把即將被刪除的紀錄完整下載成 JSON 檔到使用者本機，作為 Ragic 回收桶之外的第二道復原保險。
+// 復原步驟：開啟下載的 JSON，取 records 陣列，逐筆移除 ragicId 欄位後，
+// 用 SC.proxyFetch("createLeave", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(record)}) 重新建立。
+const exportScheduleSnapshot = (type, year, month, rawEntries) => {
+    const now = new Date();
+    const ts = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const payload = {
+        _meta: {
+            purpose: "schedule.html 一鍵預排／排值班：刪除前自動快照（技術債修復 2026-07-26）",
+            type, year, month,
+            exportedAt: now.toISOString(),
+            recordCount: rawEntries.length,
+            restoreHint: "逐筆移除 ragicId 欄位後，用 SC.proxyFetch('createLeave', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(record)}) 重建；或優先嘗試 Ragic 網頁版回收桶還原（同一批刪除通常還在桶內）。"
+        },
+        records: rawEntries.map(([id, f]) => ({
+            ragicId: id,
+            [CONFIG.F_LEAVE.EMP]: f[CONFIG.F_LEAVE.EMP] || "",
+            [CONFIG.F_LEAVE.DATE]: f[CONFIG.F_LEAVE.DATE] || "",
+            [CONFIG.F_LEAVE.YEAR]: f[CONFIG.F_LEAVE.YEAR] || "",
+            [CONFIG.F_LEAVE.MONTH]: f[CONFIG.F_LEAVE.MONTH] || "",
+            [CONFIG.F_LEAVE.TYPE]: f[CONFIG.F_LEAVE.TYPE] || "",
+            [CONFIG.F_LEAVE.DEPT]: f[CONFIG.F_LEAVE.DEPT] || "",
+            [CONFIG.F_LEAVE.NOTE]: f[CONFIG.F_LEAVE.NOTE] || "",
+            [CONFIG.F_LEAVE.IS_AUTO]: f[CONFIG.F_LEAVE.IS_AUTO] || "",
+        }))
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `schedule-snapshot_${type}_${year}-${String(month).padStart(2,"0")}_${ts}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+const DAYS = SC.DAYS_TW;
+const DEPT_COLORS = SC.DEPT_COLORS;
+const DEPT_ORDER = SC.DEPT_ORDER;
+// 社宅部不排值班，只排值日生
+
+// 見紅休人員（2026-08-24 起：瓊安 + 設計部沈郁雯/呂鴻墀 + 行銷部王芳瑜）
+const GOV_REST_EMPLOYEES = new Set(SC.GOV_REST_NAMES);
+
+// 見紅休「已取消」標記（存在 IS_AUTO 欄位，沿用值班「未值班」的標記模式）。
+// 新制下取消見紅休不刪紀錄而是標記，否則「刻意取消」與「還沒預排」在資料上無法區分，
+// 重跑一鍵預排時會把取消掉的那天又排回來。詳見 handleClick 見紅休分支的註解。
+const GOV_REST_CANCELLED = SC.GOV_REST_CANCELLED;
+
+// 2026/07 起：1F/2F/3F 每天；4F 只在週五
+const FLOORS = SC.FLOORS;
+const FLOOR_COLORS = SC.FLOOR_COLORS;
+
+// 2026 台灣國定假日（非週末的放假日）— 含名稱
+const GOV_HOLIDAYS_2026 = SC.HOLIDAYS_2026;
+
+// 見紅休判斷（日期/人員命中）已集中到 SC.isGovRestDay / SC.isGovRestFor（2026-07-26 三度誤排事故根治），
+// 本檔不再自行組合 GOV_REST_EMPLOYEES.has(name) + isGovHoliday(dateStr, isWeekend)
+
+const EDIT_PASSWORD = "0718";
+const isOpenPeriod = SC.isOpenPeriod;
+const IS_READONLY = new URLSearchParams(window.location.search).has('readonly');
+
+
+/* ── Inline Modal Components (WKWebView fix) ─────────────────── */
+function ModalBase({ children }) {
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 9999, padding: 16,
+            fontFamily: '"Microsoft JhengHei","Noto Sans TC",sans-serif',
+        }}>
+            <div style={{
+                background: '#fff', borderRadius: 16,
+                boxShadow: '0 8px 32px rgba(0,0,0,0.22)',
+                maxWidth: 380, width: '100%', padding: '28px 24px',
+            }}>
+                {children}
+            </div>
+        </div>
+    );
+}
+
+function ConfirmModal({ open, message, onConfirm, onCancel }) {
+    if (!open) return null;
+    return (
+        <ModalBase>
+            <div style={{ fontSize: 15, color: '#1e293b', marginBottom: 24, lineHeight: 1.6, whiteSpace: 'pre-wrap', textAlign: 'center' }}>{message}</div>
+            <div style={{ display: 'flex', gap: 12 }}>
+                <button onClick={onCancel} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: '1.5px solid #cbd5e1', background: '#f8fafc', color: '#475569', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>取消</button>
+                <button onClick={onConfirm} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', background: '#3f5262', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>確定</button>
+            </div>
+        </ModalBase>
+    );
+}
+
+function AlertModal({ open, message, onClose }) {
+    if (!open) return null;
+    return (
+        <ModalBase>
+            <div style={{ fontSize: 15, color: '#1e293b', marginBottom: 24, lineHeight: 1.6, whiteSpace: 'pre-wrap', textAlign: 'center' }}>{message}</div>
+            <button onClick={onClose} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', background: '#3f5262', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>確定</button>
+        </ModalBase>
+    );
+}
+
+function PromptModal({ open, message, onConfirm, onCancel }) {
+    if (!open) return null;
+    const [val, setVal] = React.useState('');
+    React.useEffect(() => { if (open) setVal(''); }, [open]);
+    return (
+        <ModalBase>
+            <div style={{ fontSize: 15, color: '#1e293b', marginBottom: 16, lineHeight: 1.6, whiteSpace: 'pre-wrap', textAlign: 'center' }}>{message}</div>
+            <input
+                autoFocus
+                value={val}
+                onChange={e => setVal(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && onConfirm(val)}
+                style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #cbd5e1', fontSize: 15, marginBottom: 16, boxSizing: 'border-box', outline: 'none' }}
+                placeholder="請輸入..."
+            />
+            <div style={{ display: 'flex', gap: 12 }}>
+                <button onClick={onCancel} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: '1.5px solid #cbd5e1', background: '#f8fafc', color: '#475569', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>取消</button>
+                <button onClick={() => onConfirm(val)} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', background: '#3f5262', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>確定</button>
+            </div>
+        </ModalBase>
+    );
+}
+
+function ActionSelectModal({ open, message, actions, onCancel }) {
+    if (!open) return null;
+    return (
+        <ModalBase>
+            <div style={{ fontSize: 15, color: '#1e293b', marginBottom: 20, lineHeight: 1.6, whiteSpace: 'pre-wrap', textAlign: 'center' }}>{message}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+                {actions.map((a, i) => (
+                    <button key={i} onClick={a.onClick} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', background: '#3f5262', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>{a.label}</button>
+                ))}
+            </div>
+            <button onClick={onCancel} style={{ width: '100%', padding: '10px 0', borderRadius: 10, border: '1.5px solid #cbd5e1', background: '#f8fafc', color: '#475569', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>取消</button>
+        </ModalBase>
+    );
+}
+
+const App = () => {
+    const [unlocked, setUnlocked] = React.useState(IS_READONLY ? true : isOpenPeriod());
+    const [pwInput, setPwInput] = React.useState("");
+    const [pwError, setPwError] = React.useState(false);
+    // 20號後自動顯示下個月
+    const initDate = (() => {
+        const now = new Date();
+        let y = now.getFullYear(), m = now.getMonth() + 1;
+        if (isOpenPeriod()) { m++; if (m > 12) { m = 1; y++; } }
+        return { y, m };
+    })();
+    const [year, setYear] = React.useState(initDate.y);
+    const [month, setMonth] = React.useState(initDate.m);
+    const [employees, setEmployees] = React.useState([]);
+    const [allEmployees, setAllEmployees] = React.useState([]);
+    const [leaves, setLeaves] = React.useState({});
+    const [loading, setLoading] = React.useState(true);
+    const [saving, setSaving] = React.useState({});
+    const [duties, setDuties] = React.useState({});
+    const [prevStats, setPrevStats] = React.useState({}); // { name: { duty: N, zhiban: N } }
+    const [toast, setToast] = React.useState(null);
+    const [autoScheduling, setAutoScheduling] = React.useState(false);
+    const [autoZhiban, setAutoZhiban] = React.useState(false);
+    const [autoGovRest, setAutoGovRest] = React.useState(false);
+    const [showRules, setShowRules] = React.useState(false);
+    const [progress, setProgress] = React.useState(null); // { text, current, total }
+    const [mode, setMode] = React.useState("排休");
+    const [noRest, setNoRest] = React.useState({}); // { dateStr: { ragicId, reason } }
+    const tableRef = React.useRef(null);
+    const hoverStyleRef = React.useRef(null);
+    React.useEffect(() => {
+        const style = document.createElement("style");
+        document.head.appendChild(style);
+        hoverStyleRef.current = style;
+        return () => style.remove();
+    }, []);
+    const handleTableHover = React.useCallback((e) => {
+        const td = e.target.closest("td, th");
+        if (!td || !tableRef.current) return;
+        const ci = td.cellIndex;
+        const isHeader = td.tagName === "TH";
+        // 表頭第二行沒有日期欄（rowSpan=2），所以 emp[0] 的 cellIndex=0
+        // body 行有日期欄，emp[0] 的 cellIndex=1
+        const empIdx = isHeader ? ci : ci - 1; // 0-based 員工索引
+        if (empIdx < 0) { hoverStyleRef.current.textContent = ""; return; }
+        const bodyNth = empIdx + 2; // body td: nth-child 1-based + 日期欄
+        const headerNth = empIdx + 1; // 表頭 th: nth-child 1-based, 無日期欄
+        hoverStyleRef.current.textContent =
+            `table.sched-table tbody td:nth-child(${bodyNth}), table.sched-table thead tr:last-child th:nth-child(${headerNth}) { background-color: rgba(250,204,21,0.15) !important; }`;
+    }, []);
+    const handleTableLeave = React.useCallback(() => {
+        if (hoverStyleRef.current) hoverStyleRef.current.textContent = "";
+    }, []);
+
+    const showToast = (msg, ok=true) => {
+        setToast({msg, ok});
+        setTimeout(() => setToast(null), 2500);
+    };
+    // ── Inline modal state (WKWebView fix) ──
+    const [confirmModal, setConfirmModal] = React.useState({ open: false, message: '', resolve: null });
+    const [alertModal, setAlertModal] = React.useState({ open: false, message: '', resolve: null });
+    const [promptModal, setPromptModal] = React.useState({ open: false, message: '', resolve: null });
+    const [actionModal, setActionModal] = React.useState({ open: false, message: '', actions: [], resolve: null });
+
+    const openConfirm = React.useCallback((msg) => new Promise(resolve => setConfirmModal({ open: true, message: msg, resolve })), []);
+    const openAlert = React.useCallback((msg) => new Promise(resolve => setAlertModal({ open: true, message: msg, resolve })), []);
+    const openPrompt = React.useCallback((msg) => new Promise(resolve => setPromptModal({ open: true, message: msg, resolve })), []);
+    const openActionSelect = React.useCallback((msg, actionLabels) => new Promise(resolve => {
+        const actions = actionLabels.map((label, i) => ({ label, onClick: () => { setActionModal(s => ({...s, open: false})); resolve(String(i + 1)); } }));
+        setActionModal({ open: true, message: msg, actions, resolve });
+    }), []);
+
+    const closeConfirm = (val) => setConfirmModal(s => { if (s.resolve) s.resolve(val); return { open: false, message: '', resolve: null }; });
+    const closeAlert = () => setAlertModal(s => { if (s.resolve) s.resolve(); return { open: false, message: '', resolve: null }; });
+    const closePrompt = (val) => setPromptModal(s => { if (s.resolve) s.resolve(val); return { open: false, message: '', resolve: null }; });
+    const closeActionModal = () => setActionModal(s => { if (s.resolve) s.resolve(null); return { open: false, message: '', actions: [], resolve: null }; });
+
+    const load = async () => {
+        setLoading(true);
+        try {
+            const empJson = await SC.proxyFetch("listEmployees");
+            // 樓層累計次數：從歷史值日紀錄即時計算（員工表 FL 欄位已不可寫）
+            // 起算點：2026/03/30（平安街樓層制度啟用）
+            const histEnd = `${year}/${String(month).padStart(2,"0")}/${String(new Date(year, month, 0).getDate()).padStart(2,"0")}`;
+            const fcHistJson = await SC.proxyFetch(`listLeaves?type=${encodeURIComponent("值日")}&dateFrom=2026%2F03%2F30&dateTo=${encodeURIComponent(histEnd)}`);
+            const fcHist = {};
+            Object.entries(fcHistJson)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([id, f]) => {
+                    const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
+                    if (isAuto === "未掃") return;
+                    const name = f[CONFIG.F_LEAVE.EMP] || "";
+                    const note = f[CONFIG.F_LEAVE.NOTE] || "";
+                    const floor = /^(1F|2F|3F|4F)$/.test(note) ? note : null;
+                    if (!name || !floor) return;
+                    if (!fcHist[name]) fcHist[name] = {"1F":0,"2F":0,"3F":0,"4F":0};
+                    fcHist[name][floor]++;
+                });
+            const allEmps = Object.entries(empJson)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .map(([id, f]) => {
+                    const name = f[CONFIG.F_EMP.NAME] || "";
+                    return {
+                        ragicId: id,
+                        name,
+                        display: name,
+                        dept: f[CONFIG.F_EMP.DEPT] || "",
+                        status: f[CONFIG.F_EMP.STATUS] || "",
+                        hire: f[CONFIG.F_EMP.HIRE] || "",
+                        hireDate: f[CONFIG.F_EMP.HIRE_DATE] || "9999/12/31",
+                        birthday: f[CONFIG.F_EMP.BIRTHDAY] || "",
+                        fc: fcHist[name] ? {...fcHist[name]} : {"1F":0,"2F":0,"3F":0,"4F":0}
+                    };
+                })
+                .filter(e => e.status === "在職" && e.dept !== "經營階層");
+            // 2026/11 新制：在職兼職也進值日人員池（每月一次、排六日），並在排班表多一個「兼職」欄組讓珊珊看得到、點得到；
+            // 排除名單 SC.PARTTIME_DUTY_EXCLUDE（高晶晶、謝佳芬、曾正煌）不進。舊月份行為不變。
+            const dutyV2Month = SC.isDutyV2Month(year, month);
+            const isDutyPartTime = (e) => dutyV2Month && e.hire === "兼職" && !SC.PARTTIME_DUTY_EXCLUDE.includes(e.name);
+            setAllEmployees(allEmps.filter(e => e.hire !== "兼職" || isDutyPartTime(e)).sort((a,b) => a.dept.localeCompare(b.dept) || a.hireDate.localeCompare(b.hireDate)));
+
+            // 排休用：承攬 + 正職（2026-10-29 小鐘轉租賃部正職，原本不在任何一類會整列消失）+ 韓珊珊 + 設計部 + 行銷部 + 瓊安 + 社宅部
+            const getDeptOrder = (dept) => {
+                if (dept.startsWith("管理部")) return 0;
+                if (dept === "設計部") return 1;
+                if (dept === "行銷部") return 2;
+                if (dept === "租賃部") return 3;
+                if (dept === "兼職") return 3.5; // 兼職都是租賃部同仁，緊接租賃部欄組
+                if (dept === "社宅部") return 4;
+                return 5; // 其他部門（買賣部）放最右邊
+            };
+            const emps = allEmps
+                .filter(e => e.hire === "承攬" || e.hire === "正職" || e.name === "韓珊珊" || e.dept === "設計部" || e.dept === "行銷部" || e.name === "張瓊安" || e.dept === "社宅部" || isDutyPartTime(e))
+                .map(e => isDutyPartTime(e) ? {...e, dept: "兼職"} : e.name === "韓珊珊" ? {...e, dept: "管理部/秘書"} : e.name === "張瓊安" ? {...e, dept: "管理部/特助"} : e)
+                .sort((a,b) => getDeptOrder(a.dept) - getDeptOrder(b.dept) || a.hireDate.localeCompare(b.hireDate));
+            setEmployees(emps);
+            console.log("生日資料:", emps.map(e => e.name + ":" + (e.birthday || "無")).join(", "));
+
+            // 只拉當月+上月（不拉全表）
+            const pm = month === 1 ? 12 : month - 1;
+            const py = month === 1 ? year - 1 : year;
+            const leaveJson = await SC.proxyFetch("listLeaves" + SC.leaveQuery(py, pm, year, month));
+            const lmap = {};
+            const dmap = {};
+            const nrmap = {};
+            const pStats = {};
+            Object.entries(leaveJson)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([id, f]) => {
+                    const emp = f[CONFIG.F_LEAVE.EMP] || "";
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    const type = f[CONFIG.F_LEAVE.TYPE] || "排休";
+                    if (!emp || !date) return;
+                    const parts = date.replace(/\//g,"-").split("-");
+                    const y = parseInt(parts[0]), m = parseInt(parts[1]);
+                    // 上月值日/值班統計
+                    if (y === py && m === pm) {
+                        if (!pStats[emp]) pStats[emp] = { duty: 0, zhiban: 0 };
+                        if (type === "值日") {
+                            const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
+                            if (isAuto !== "未掃") pStats[emp].duty++;
+                        } else if (type === "值班") {
+                            const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
+                            if (isAuto !== "未值班") pStats[emp].zhiban++;
+                        }
+                    }
+                    if (y !== year || m !== month) return;
+                    if (type === "禁休") {
+                        const reason = f[CONFIG.F_LEAVE.NOTE] || "";
+                        nrmap[date] = { ragicId: id, reason };
+                    } else if (type === "值日") {
+                        const note = f[CONFIG.F_LEAVE.NOTE] || "";
+                        const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
+                        const floor = (note.match(/^(1F|2F|3F|4F)$/) || [""])[0];
+                        // 清運值日：備註含清運關鍵字（不是樓層），純顯示標記，不佔樓層格
+                        const isTrash = SC.isTrashDuty(note);
+                        if (!dmap[date]) dmap[date] = [];
+                        const missed = isAuto === "未掃";
+                        dmap[date].push({ ragicId: id, empName: emp, isAuto, note, floor, missed, isTrash });
+                    } else {
+                        // leaves[key] 為陣列，支援同日多種類型（如 排休+值班）
+                        const k = `${emp}|${date}`;
+                        if (!lmap[k]) lmap[k] = [];
+                        const isAutoVal = f[CONFIG.F_LEAVE.IS_AUTO] || "";
+                        lmap[k].push({ ragicId: id, type, isAuto: isAutoVal });
+                    }
+                });
+            setLeaves(lmap);
+            setDuties(dmap);
+            setNoRest(nrmap);
+            setPrevStats(pStats);
+        } catch(e) {
+            console.error(e);
+            showToast("載入失敗: " + e.message, false);
+        }
+        setLoading(false);
+    };
+
+    React.useEffect(() => { load(); }, [year, month]);
+
+    const handleUnlock = () => {
+        if (pwInput === EDIT_PASSWORD) {
+            setUnlocked(true);
+            setPwError(false);
+        } else {
+            setPwError(true);
+        }
+    };
+
+    if (!unlocked && !IS_READONLY) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-gray-50">
+                <div className="bg-white rounded-2xl shadow-lg p-8 max-w-sm w-full mx-4">
+                    <h1 className="text-xl font-bold text-center mb-2" style={{color:"#3f5262"}}>🔒 排班模式</h1>
+                    <p className="text-gray-500 text-sm text-center mb-6">每月 20 號後自動開放排班<br/>其他時間需輸入密碼</p>
+                    <input type="password" value={pwInput} onChange={e => setPwInput(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && handleUnlock()}
+                        className={`w-full px-4 py-3 rounded-lg border-2 text-center text-lg ${pwError ? "border-red-400" : "border-gray-200"} focus:outline-none focus:border-blue-400`}
+                        placeholder="密碼" autoFocus />
+                    {pwError && <p className="text-red-500 text-sm text-center mt-2">密碼錯誤</p>}
+                    <button onClick={handleUnlock} className="w-full mt-4 py-3 bg-blue-500 text-white rounded-lg font-bold hover:bg-blue-600">進入排班</button>
+                    <a href="schedule-view.html" className="block text-center text-sm text-gray-400 mt-4 hover:text-gray-600">← 回到閱覽模式</a>
+                </div>
+            </div>
+        );
+    }
+
+    // 禁休：點日期欄設定/取消
+    const handleNoRest = async (dateStr) => {
+        if (IS_READONLY) return;
+        const savingKey = `norest|${dateStr}`;
+        if (saving[savingKey]) return;
+        setSaving(s => ({...s, [savingKey]: true}));
+        try {
+            const existing = noRest[dateStr];
+            if (existing) {
+                await SC.proxyFetch(`deleteLeave/${existing.ragicId}`, { method: "DELETE" });
+                setNoRest(nr => { const n = {...nr}; delete n[dateStr]; return n; });
+                showToast(`${dateStr} 禁休已取消`);
+            } else {
+                const reason = await openPrompt("禁休原因（如：開幕活動）：");
+                if (reason === null) { setSaving(s => { const n = {...s}; delete n[savingKey]; return n; }); return; }
+                const res = await SC.proxyFetch("createLeave", {
+                    method: "POST",
+                    headers: {"Content-Type":"application/json"},
+                    body: JSON.stringify({
+                        [CONFIG.F_LEAVE.EMP]: "韓珊珊",
+                        [CONFIG.F_LEAVE.DATE]: dateStr,
+                        [CONFIG.F_LEAVE.YEAR]: String(year),
+                        [CONFIG.F_LEAVE.MONTH]: String(month),
+                        [CONFIG.F_LEAVE.TYPE]: "禁休",
+                        [CONFIG.F_LEAVE.NOTE]: reason || "",
+                        [CONFIG.F_LEAVE.DEPT]: "禁休設定",
+                    })
+                });
+                setNoRest(nr => ({...nr, [dateStr]: { ragicId: String(res.ragicId), reason: reason || "" }}));
+                showToast(`${dateStr} 已設為禁休${reason ? "（" + reason + "）" : ""}`);
+            }
+        } catch(e) {
+            console.error(e);
+            showToast("禁休設定失敗: " + e.message, false);
+        }
+        setSaving(s => { const n = {...s}; delete n[savingKey]; return n; });
+    };
+
+    const handleClick = async (empName, dateStr) => {
+        if (mode === "值日") {
+            // 值日模式：寫入/清除值日生表（支援多樓層）
+            const dutyKey = `duty|${dateStr}`;
+            if (saving[dutyKey]) return;
+            const current = duties[dateStr] || [];
+            const myDuties = current.filter(d => d.empName === empName);
+            const dutyDay = parseInt(dateStr.split("/")[2], 10);
+            const allowedFloors = SC.expectedDutyFloors(year, month, dutyDay);
+
+            const empObj = allEmployees.find(e => e.name === empName);
+            setSaving(s => ({...s, [dutyKey]: true}));
+            try {
+                if (myDuties.length >= 2 && SC.isDutyV2Month(year, month)) {
+                    // 新制：一人一天多層（整棟 4 層／內勤 2 層）。舊流程只對「最後一筆」操作，連點會把那層刪掉，
+                    // 整棟沒掃最多只標得到 1 層（2026-10-29 審查發現）。改成一次處理這個人當天全部的層。
+                    const okDuties = myDuties.filter(d => !d.missed);
+                    const missedDuties = myDuties.filter(d => d.missed);
+                    const fl = (arr) => arr.map(d => d.floor || "值日").join("+");
+                    const opts = [];
+                    if (okDuties.length > 0) opts.push({ label: `${fl(okDuties)} 全部標記未掃（${okDuties.length} 層，罰 ${okDuties.length * SC.CLEANING_FEE.FLOOR_DUTY} 元）`, run: "markAll" });
+                    if (okDuties.length > 1) opts.push({ label: "只標其中一層未掃", run: "markOne" });
+                    if (missedDuties.length > 0) opts.push({ label: `取消未掃（${fl(missedDuties)} 恢復成已掃）`, run: "unmark" });
+                    opts.push({ label: `刪除這天 ${empName} 的值日（${fl(myDuties)}）`, run: "deleteAll" });
+                    const pickedIdx = await openActionSelect(`${empName} ${dateStr} 值日 ${fl(myDuties)}${missedDuties.length ? `（未掃：${fl(missedDuties)}）` : ""}，要做什麼？`, opts.map(o => o.label));
+                    const picked = pickedIdx ? opts[Number(pickedIdx) - 1].run : null;
+                    let targets = [];
+                    if (picked === "markAll") targets = okDuties;
+                    else if (picked === "markOne") {
+                        const fIdx = await openActionSelect(`${empName} ${dateStr} 哪一層沒掃？`, okDuties.map(d => d.floor || "值日"));
+                        targets = fIdx ? [okDuties[Number(fIdx) - 1]] : [];
+                    }
+                    if (picked === "markAll" || picked === "markOne") {
+                        for (const d of targets) {
+                            await SC.proxyFetch(`updateLeave/${d.ragicId}`, {
+                                method: "POST",
+                                headers: {"Content-Type":"application/json"},
+                                body: JSON.stringify({ [CONFIG.F_LEAVE.IS_AUTO]: "未掃" })
+                            });
+                        }
+                        const ids = new Set(targets.map(d => d.ragicId));
+                        if (ids.size) {
+                            setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).map(x => ids.has(x.ragicId) ? {...x, missed: true} : x)}));
+                            showToast(`${empName} ${dateStr} ${fl(targets)} 標記未掃 ❌`);
+                        }
+                    } else if (picked === "unmark") {
+                        // 恢復成已掃：IS_AUTO 寫 "No"（手動紀錄，一鍵預排不會覆蓋；過去的日子本來就鎖定）
+                        for (const d of missedDuties) {
+                            await SC.proxyFetch(`updateLeave/${d.ragicId}`, {
+                                method: "POST",
+                                headers: {"Content-Type":"application/json"},
+                                body: JSON.stringify({ [CONFIG.F_LEAVE.IS_AUTO]: "No" })
+                            });
+                        }
+                        const ids = new Set(missedDuties.map(d => d.ragicId));
+                        setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).map(x => ids.has(x.ragicId) ? {...x, missed: false, isAuto: "No"} : x)}));
+                        showToast(`${empName} ${dateStr} ${fl(missedDuties)} 已恢復成已掃`);
+                    } else if (picked === "deleteAll") {
+                        const okDel = await openConfirm(`確定刪除 ${empName} ${dateStr} 的值日（${fl(myDuties)}）？`);
+                        if (okDel) {
+                            for (const d of myDuties) {
+                                await SC.proxyFetch(`deleteLeave/${d.ragicId}`, { method: "DELETE" });
+                                if (d.floor && empObj) empObj.fc[d.floor] = Math.max(0, (empObj.fc[d.floor]||0) - 1);
+                            }
+                            const ids = new Set(myDuties.map(d => d.ragicId));
+                            setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => !ids.has(x.ragicId))}));
+                            showToast(`${empName} ${dateStr} 值日已刪除`);
+                        }
+                    }
+                } else if (myDuties.length > 0) {
+                    // 同人多層：檢查是否還有空樓層可加
+                    const myFloors = myDuties.map(d => d.floor);
+                    const usedFloors = current.map(d => d.floor);
+                    const canAddFloor = allowedFloors.filter(f => !usedFloors.includes(f) && !myFloors.includes(f));
+                    if (canAddFloor.length > 0 && !myDuties.some(d => d.missed)) {
+                        // 還有空樓層且沒有未掃狀態 → 問要加層還是標未掃
+                        const action = await openActionSelect(`${empName} 已排 ${myFloors.join("+")}，要做什麼？`, [
+                            `加排 ${canAddFloor[0]}`,
+                            `標記 ${myFloors[myFloors.length-1]} 未掃`,
+                            `清除 ${myFloors[myFloors.length-1]}`
+                        ]);
+                        if (action === "1") {
+                            // 加排新樓層
+                            const floor = canAddFloor.sort((a, b) => (empObj?.fc[a]||0) - (empObj?.fc[b]||0))[0];
+                            const res = await SC.proxyFetch("createLeave", {
+                                method: "POST",
+                                headers: {"Content-Type":"application/json"},
+                                body: JSON.stringify({
+                                    [CONFIG.F_LEAVE.EMP]: empName,
+                                    [CONFIG.F_LEAVE.DATE]: dateStr,
+                                    [CONFIG.F_LEAVE.YEAR]: String(year),
+                                    [CONFIG.F_LEAVE.MONTH]: String(month),
+                                    [CONFIG.F_LEAVE.TYPE]: "值日",
+                                    [CONFIG.F_LEAVE.NOTE]: floor,
+                                    [CONFIG.F_LEAVE.IS_AUTO]: "No",
+                                    [CONFIG.F_LEAVE.DEPT]: "手動變更",
+                                })
+                            });
+                            if (floor && empObj) {
+                                empObj.fc[floor] = (empObj.fc[floor] || 0) + 1;
+                            }
+                            setDuties(d => ({...d, [dateStr]: [...(d[dateStr]||[]), {ragicId: String(res.ragicId), empName, isAuto: "No", note: floor, floor}]}));
+                            showToast(`${dateStr} ${empName} 加排 ${floor}`);
+                            setSaving(s => { const n = {...s}; delete n[dutyKey]; return n; });
+                            return;
+                        } else if (action === "3") {
+                            // 清除最後一層
+                            const lastDuty = myDuties[myDuties.length - 1];
+                            await SC.proxyFetch(`deleteLeave/${lastDuty.ragicId}`, { method: "DELETE" });
+                            if (lastDuty.floor && empObj) {
+                                empObj.fc[lastDuty.floor] = Math.max(0, (empObj.fc[lastDuty.floor]||0) - 1);
+                            }
+                            setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => x.ragicId !== lastDuty.ragicId)}));
+                            showToast(`${empName} ${dateStr} ${lastDuty.floor || "值日"}已清除`);
+                            setSaving(s => { const n = {...s}; delete n[dutyKey]; return n; });
+                            return;
+                        }
+                        // action === "2" 或其他 → 繼續走標未掃
+                    }
+                    // 標記未掃 / 清除（原邏輯，針對最後一筆操作）
+                    const lastDuty = myDuties[myDuties.length - 1];
+                    if (lastDuty.missed) {
+                        // 未掃 → 再點 = 清除
+                        await SC.proxyFetch(`deleteLeave/${lastDuty.ragicId}`, { method: "DELETE" });
+                        if (lastDuty.floor && empObj) {
+                            empObj.fc[lastDuty.floor] = Math.max(0, (empObj.fc[lastDuty.floor]||0) - 1);
+                        }
+                        setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => x.ragicId !== lastDuty.ragicId)}));
+                        showToast(`${empName} ${dateStr} ${lastDuty.floor || "值日"}已清除`);
+                    } else {
+                        // 正常 → 標記未掃
+                        await SC.proxyFetch(`updateLeave/${lastDuty.ragicId}`, {
+                            method: "POST",
+                            headers: {"Content-Type":"application/json"},
+                            body: JSON.stringify({ [CONFIG.F_LEAVE.IS_AUTO]: "未掃" })
+                        });
+                        setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).map(x => x.ragicId === lastDuty.ragicId ? {...x, missed: true} : x)}));
+                        showToast(`${empName} ${dateStr} 標記未掃 ❌`);
+                    }
+                } else {
+                    // 分配空樓層中此人次數最少的
+                    const usedFloors = current.map(d => d.floor);
+                    const availFloors = allowedFloors.filter(f => !usedFloors.includes(f));
+                    if (availFloors.length === 0 && current.length >= allowedFloors.length) {
+                        showToast(`${dateStr} 已有 ${allowedFloors.length} 位值日生`, false);
+                        setSaving(s => { const n = {...s}; delete n[dutyKey]; return n; });
+                        return;
+                    }
+                    // 此人累計次數最少的樓層優先
+                    const fc = empObj ? empObj.fc : {};
+                    const floor = availFloors.length > 0
+                        ? availFloors.sort((a, b) => (fc[a]||0) - (fc[b]||0))[0]
+                        : "";
+                    const res = await SC.proxyFetch("createLeave", {
+                        method: "POST",
+                        headers: {"Content-Type":"application/json"},
+                        body: JSON.stringify({
+                            [CONFIG.F_LEAVE.EMP]: empName,
+                            [CONFIG.F_LEAVE.DATE]: dateStr,
+                            [CONFIG.F_LEAVE.YEAR]: String(year),
+                            [CONFIG.F_LEAVE.MONTH]: String(month),
+                            [CONFIG.F_LEAVE.TYPE]: "值日",
+                            [CONFIG.F_LEAVE.NOTE]: floor || "手動變更",
+                            [CONFIG.F_LEAVE.IS_AUTO]: "No",
+                            [CONFIG.F_LEAVE.DEPT]: "手動變更",
+                        })
+                    });
+                    // 更新本地樓層次數（員工表 FL 欄位不可寫，僅記憶體內追蹤）
+                    if (floor && empObj) {
+                        empObj.fc[floor] = (empObj.fc[floor] || 0) + 1;
+                    }
+                    setDuties(d => ({...d, [dateStr]: [...(d[dateStr]||[]), {ragicId: String(res.ragicId), empName, isAuto: "No", note: floor || "手動變更", floor}]}));
+                    showToast(`${dateStr} 值日生：${empName}${floor ? " ("+floor+")" : ""}`);
+                }
+            } catch(e) {
+                console.error(e);
+                showToast("儲存失敗: " + e.message, false);
+            }
+            setSaving(s => { const n = {...s}; delete n[dutyKey]; return n; });
+            return;
+        }
+
+        if (mode === "清運") {
+            // 清運模式：一天只排一位清運值日生，不佔樓層格、不受 allowedFloors 限制（見 排班表_規格書.md § 清運值日生）
+            const trashKey = `trash|${dateStr}`;
+            if (saving[trashKey]) return;
+            const current = duties[dateStr] || [];
+            const myTrash = current.find(d => d.empName === empName && d.isTrash);
+            const otherTrash = current.find(d => d.empName !== empName && d.isTrash);
+            const trashDay = parseInt(dateStr.split("/")[2], 10);
+
+            // 週三、週日清潔隊不收垃圾：新增/換人時跳確認，標記未倒/清除不受影響
+            if (!myTrash && !SC.isTrashCollectionDay(year, month, trashDay)) {
+                const dowLabel = DAYS[new Date(year, month - 1, trashDay).getDay()];
+                const okTrashDay = await openConfirm(`${dateStr}（週${dowLabel}）清潔隊不收垃圾，仍要排清運值日嗎？`);
+                if (!okTrashDay) return;
+            }
+
+            // 清運免排名單（2026/10 起）：內勤 19:00 前下班、垃圾 20:00 才丟，自動預排不會排到他們。
+            // 手動仍可排（珊珊臨時代班的實際需求），但跳確認框避免誤點；標記未倒/清除不受影響。
+            if (!myTrash && SC.isTrashExemptFor(empName, year, month)) {
+                const okExempt = await openConfirm(`${empName} 在清運免排名單內（內勤 19:00 前下班，垃圾 20:00 才丟），仍要排 ${dateStr} 的清運值日嗎？`);
+                if (!okExempt) return;
+            }
+
+            setSaving(s => ({...s, [trashKey]: true}));
+            try {
+                if (otherTrash) {
+                    // 換人：先問，DELETE 舊筆成功才 POST 新人（原子操作，比照值班換人邏輯）
+                    const okSwitch = await openConfirm(`${dateStr} 目前清運值日是 ${otherTrash.empName}，要換成 ${empName} 嗎？`);
+                    if (!okSwitch) { setSaving(s => { const n = {...s}; delete n[trashKey]; return n; }); return; }
+                    try {
+                        await SC.proxyFetch(`deleteLeave/${otherTrash.ragicId}`, { method: "DELETE" });
+                    } catch (delErr) {
+                        await openAlert(`換清運值日失敗：舊紀錄（${otherTrash.empName}）沒刪掉。請重新整理頁面後再試。\n\n錯誤：${delErr.message}`);
+                        throw delErr;
+                    }
+                    setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => x.ragicId !== otherTrash.ragicId)}));
+                    let res;
+                    try {
+                        res = await SC.proxyFetch("createLeave", {
+                            method: "POST",
+                            headers: {"Content-Type":"application/json"},
+                            body: JSON.stringify({
+                                [CONFIG.F_LEAVE.EMP]: empName,
+                                [CONFIG.F_LEAVE.DATE]: dateStr,
+                                [CONFIG.F_LEAVE.YEAR]: String(year),
+                                [CONFIG.F_LEAVE.MONTH]: String(month),
+                                [CONFIG.F_LEAVE.TYPE]: "值日",
+                                [CONFIG.F_LEAVE.NOTE]: SC.TRASH_DUTY_NOTE_DEFAULT,
+                                [CONFIG.F_LEAVE.IS_AUTO]: "No",
+                                [CONFIG.F_LEAVE.DEPT]: "手動變更",
+                            })
+                        });
+                    } catch (postErr) {
+                        await openAlert(`換清運值日只完成一半：${otherTrash.empName} 已從 Ragic 刪除，但 ${empName} 沒寫進去。\n請重新整理頁面後再點 ${empName} 一次。\n\n錯誤：${postErr.message}`);
+                        throw postErr;
+                    }
+                    if (!res || !res.ragicId) {
+                        await openAlert(`換清運值日疑似失敗：${otherTrash.empName} 已刪、但 ${empName} 寫入沒拿到 ragicId。請重新整理確認資料狀態。`);
+                        throw new Error("POST 沒拿到 ragicId");
+                    }
+                    setDuties(d => ({...d, [dateStr]: [...(d[dateStr]||[]), {ragicId: String(res.ragicId), empName, isAuto: "No", note: SC.TRASH_DUTY_NOTE_DEFAULT, floor: "", missed: false, isTrash: true}]}));
+                    showToast(`${dateStr} 清運值日已換成 ${empName}`);
+                } else if (myTrash) {
+                    if (myTrash.missed) {
+                        // 未倒 → 再點 = 刪除
+                        await SC.proxyFetch(`deleteLeave/${myTrash.ragicId}`, { method: "DELETE" });
+                        setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).filter(x => x.ragicId !== myTrash.ragicId)}));
+                        showToast(`${empName} ${dateStr} 清運值日已清除`);
+                    } else {
+                        // 正常 → 標記未倒（沿用值日「未掃」欄位語意，SC.computeFairnessLedger / computeCleaningFeePreview 靠它算 300 元）
+                        await SC.proxyFetch(`updateLeave/${myTrash.ragicId}`, {
+                            method: "POST",
+                            headers: {"Content-Type":"application/json"},
+                            body: JSON.stringify({ [CONFIG.F_LEAVE.IS_AUTO]: "未掃" })
+                        });
+                        setDuties(d => ({...d, [dateStr]: (d[dateStr]||[]).map(x => x.ragicId === myTrash.ragicId ? {...x, missed: true, isAuto: "未掃"} : x)}));
+                        showToast(`${empName} ${dateStr} 清運標記未倒 ❌`);
+                    }
+                } else {
+                    // 新增
+                    const res = await SC.proxyFetch("createLeave", {
+                        method: "POST",
+                        headers: {"Content-Type":"application/json"},
+                        body: JSON.stringify({
+                            [CONFIG.F_LEAVE.EMP]: empName,
+                            [CONFIG.F_LEAVE.DATE]: dateStr,
+                            [CONFIG.F_LEAVE.YEAR]: String(year),
+                            [CONFIG.F_LEAVE.MONTH]: String(month),
+                            [CONFIG.F_LEAVE.TYPE]: "值日",
+                            [CONFIG.F_LEAVE.NOTE]: SC.TRASH_DUTY_NOTE_DEFAULT,
+                            [CONFIG.F_LEAVE.IS_AUTO]: "No",
+                            [CONFIG.F_LEAVE.DEPT]: "手動變更",
+                        })
+                    });
+                    setDuties(d => ({...d, [dateStr]: [...(d[dateStr]||[]), {ragicId: String(res.ragicId), empName, isAuto: "No", note: SC.TRASH_DUTY_NOTE_DEFAULT, floor: "", missed: false, isTrash: true}]}));
+                    showToast(`${dateStr} 清運值日：${empName} 🗑️`);
+                }
+            } catch(e) {
+                console.error(e);
+                showToast("儲存失敗: " + e.message, false);
+            }
+            setSaving(s => { const n = {...s}; delete n[trashKey]; return n; });
+            return;
+        }
+
+        // 排休/請假/值班/特休模式：每種類型獨立 toggle，可同日並存（如 排休+值班）
+        const key = `${empName}|${dateStr}`;
+        if (saving[key]) return;
+        const existingList = leaves[key] || [];
+        const sameTypeEntry = existingList.find(e => e.type === mode);
+
+        // 值班模式：當天每人最多 1 位，點別人 = 換值班（原子操作）
+        // 找出當天已有的其他人值班（不含自己）
+        let otherZhibanEntries = [];
+        if (mode === "值班" && !sameTypeEntry) {
+            Object.entries(leaves).forEach(([k, arr]) => {
+                if (!k.endsWith("|" + dateStr)) return;
+                const otherEmp = k.split("|")[0];
+                if (otherEmp === empName) return;
+                if (!Array.isArray(arr)) return;
+                arr.forEach(e => {
+                    if (e.type === "值班") otherZhibanEntries.push({ key: k, empName: otherEmp, ragicId: e.ragicId });
+                });
+            });
+            if (otherZhibanEntries.length > 0) {
+                const oldNames = otherZhibanEntries.map(e => e.empName).join("、");
+                const okSwitch = await openConfirm(`${dateStr} 目前值班是 ${oldNames}，要換成 ${empName} 嗎？`);
+                if (!okSwitch) return;
+            }
+        }
+
+        // 排休上限警告（當月有三節 → 9 天，否則 8 天；只在新增時檢查）
+        if (mode === "排休" && !sameTypeEntry) {
+            const count = Object.entries(leaves).filter(([k,arr]) =>
+                k.startsWith(empName + "|") && Array.isArray(arr) && arr.some(e => e.type === "排休")
+            ).length;
+            const limit = SC.monthLeaveLimit(year, month);
+            if (count >= limit) {
+                const okLimit = await openConfirm(`${empName} 本月已排休 ${count} 天，超過 ${limit} 天上限，確定要繼續？`);
+                if (!okLimit) return;
+            }
+        }
+
+        // 禁休日排休/特休需確認（請假不擋）
+        const nrInfo = noRest[dateStr];
+        if (nrInfo && (mode === "排休" || mode === "特休") && !sameTypeEntry) {
+            const okNoRest = await openConfirm(`${dateStr} 為禁休日${nrInfo.reason ? "（" + nrInfo.reason + "）" : ""}，確定要排${mode}？`);
+            if (!okNoRest) return;
+        }
+
+        setSaving(s => ({...s, [key]: true}));
+        // 值班換人：把舊值班所有人的 key 也鎖住，避免同時點
+        if (otherZhibanEntries.length > 0) {
+            setSaving(s => {
+                const n = {...s};
+                otherZhibanEntries.forEach(e => { n[e.key] = true; });
+                return n;
+            });
+        }
+        try {
+            if (sameTypeEntry) {
+                // 值班模式：支援「未值班」標記
+                if (mode === "值班") {
+                    if (sameTypeEntry.isAuto === "未值班") {
+                        // 未值班 → 再點 = 清除（對齊未掃邏輯）
+                        await SC.proxyFetch(`deleteLeave/${sameTypeEntry.ragicId}`, { method:"DELETE" });
+                        setLeaves(l => {
+                            const newList = (l[key] || []).filter(e => e.ragicId !== sameTypeEntry.ragicId);
+                            const n = {...l};
+                            if (newList.length === 0) delete n[key]; else n[key] = newList;
+                            return n;
+                        });
+                        showToast(`${empName} ${dateStr} 值班已清除`);
+                    } else {
+                        // 正常值班 → 問「標記未值班 / 清除值班」
+                        const action = await openActionSelect(
+                            `${empName} ${dateStr} 值班，要做什麼？`,
+                            ["標記未值班（放鴿子）", "清除值班"]
+                        );
+                        if (action === "1") {
+                            // 標記未值班
+                            await SC.proxyFetch(`updateLeave/${sameTypeEntry.ragicId}`, {
+                                method: "POST",
+                                headers: {"Content-Type":"application/json"},
+                                body: JSON.stringify({ [CONFIG.F_LEAVE.IS_AUTO]: "未值班" })
+                            });
+                            setLeaves(l => ({...l, [key]: (l[key]||[]).map(e => e.ragicId === sameTypeEntry.ragicId ? {...e, isAuto:"未值班"} : e)}));
+                            showToast(`${empName} ${dateStr} 標記未值班 ❌`);
+                        } else if (action === "2") {
+                            // 清除值班
+                            await SC.proxyFetch(`deleteLeave/${sameTypeEntry.ragicId}`, { method:"DELETE" });
+                            setLeaves(l => {
+                                const newList = (l[key] || []).filter(e => e.ragicId !== sameTypeEntry.ragicId);
+                                const n = {...l};
+                                if (newList.length === 0) delete n[key]; else n[key] = newList;
+                                return n;
+                            });
+                            showToast(`${empName} ${dateStr} 值班已清除`);
+                        }
+                        // action === null → 取消，不做任何事
+                    }
+                } else if (mode === "見紅休" && sameTypeEntry.isAuto !== GOV_REST_CANCELLED) {
+                    // 見紅休取消 → 不刪紀錄，改標記「已取消」（沿用值班「未值班」的標記模式）。
+                    // 原因：若直接 DELETE，該格會變成「沒有紀錄」，與「還沒預排過」在資料上無法區分，
+                    // 之後重跑「一鍵預排休假」時會把刻意取消的那天又排回來（例如週六去當助教卻被標成休假）。
+                    // 標記保留後，預排會跳過它；再點一次即可還原成正常見紅休。
+                    await SC.proxyFetch(`updateLeave/${sameTypeEntry.ragicId}`, {
+                        method: "POST",
+                        headers: {"Content-Type":"application/json"},
+                        body: JSON.stringify({ [CONFIG.F_LEAVE.IS_AUTO]: GOV_REST_CANCELLED })
+                    });
+                    setLeaves(l => ({...l, [key]: (l[key]||[]).map(e => e.ragicId === sameTypeEntry.ragicId ? {...e, isAuto: GOV_REST_CANCELLED} : e)}));
+                    showToast(`${empName} ${dateStr} 見紅休已取消（該天上班）`);
+                } else if (mode === "見紅休") {
+                    // 已取消狀態再點一次 → 還原成正常見紅休
+                    await SC.proxyFetch(`updateLeave/${sameTypeEntry.ragicId}`, {
+                        method: "POST",
+                        headers: {"Content-Type":"application/json"},
+                        body: JSON.stringify({ [CONFIG.F_LEAVE.IS_AUTO]: "" })
+                    });
+                    setLeaves(l => ({...l, [key]: (l[key]||[]).map(e => e.ragicId === sameTypeEntry.ragicId ? {...e, isAuto: ""} : e)}));
+                    showToast(`${empName} ${dateStr} 見紅休已還原`);
+                } else {
+                // 其他類型（排休/請假/特休）→ 原邏輯：清除
+                await SC.proxyFetch(`deleteLeave/${sameTypeEntry.ragicId}`, { method:"DELETE" });
+                setLeaves(l => {
+                    const newList = (l[key] || []).filter(e => e.ragicId !== sameTypeEntry.ragicId);
+                    const n = {...l};
+                    if (newList.length === 0) delete n[key]; else n[key] = newList;
+                    return n;
+                });
+                showToast(`${empName} ${dateStr} ${mode}已清除`);
+                }
+            } else {
+                // 換值班原子操作：先 DELETE 所有舊值班紀錄，全部成功才 POST 新人
+                // 任一 DELETE 失敗 → throw → 不更新 state、不 POST 新人，避免狀態漂移
+                if (otherZhibanEntries.length > 0) {
+                    for (const oldZ of otherZhibanEntries) {
+                        try {
+                            await SC.proxyFetch(`deleteLeave/${oldZ.ragicId}`, { method:"DELETE" });
+                        } catch (delErr) {
+                            // DELETE 失敗：alert 並中止，不 POST 新人，state 維持原樣
+                            const msg = `換值班失敗：舊紀錄（${oldZ.empName}）沒刪掉。請重新整理頁面後再試，或聯絡 Joan 處理。\n\n錯誤：${delErr.message}`;
+                            await openAlert(msg);
+                            throw new Error(`DELETE old 值班 ${oldZ.empName}/${oldZ.ragicId} 失敗：${delErr.message}`);
+                        }
+                        await sleep(150);
+                    }
+                    // DELETE 都成功 → 從 state 移除舊值班
+                    setLeaves(l => {
+                        const n = {...l};
+                        otherZhibanEntries.forEach(oldZ => {
+                            const newList = (n[oldZ.key] || []).filter(e => e.ragicId !== oldZ.ragicId);
+                            if (newList.length === 0) delete n[oldZ.key]; else n[oldZ.key] = newList;
+                        });
+                        return n;
+                    });
+                }
+
+                // 新增當前類型（不影響其他類型紀錄）
+                const empObj = employees.find(e => e.name === empName);
+                const deptVal = (mode === "值班" && otherZhibanEntries.length > 0) ? "手動變更"
+                    : (empObj && empObj.dept ? empObj.dept : "");
+                const createBody = {
+                    [CONFIG.F_LEAVE.EMP]: empName,
+                    [CONFIG.F_LEAVE.DATE]: dateStr,
+                    [CONFIG.F_LEAVE.YEAR]: String(year),
+                    [CONFIG.F_LEAVE.MONTH]: String(month),
+                    [CONFIG.F_LEAVE.TYPE]: mode,
+                };
+                if (deptVal) createBody[CONFIG.F_LEAVE.DEPT] = deptVal;
+                let res;
+                try {
+                    res = await SC.proxyFetch("createLeave", {
+                        method: "POST",
+                        headers: {"Content-Type":"application/json"},
+                        body: JSON.stringify(createBody)
+                    });
+                } catch (postErr) {
+                    // POST 新人失敗：舊值班已刪、新值班沒進去 → 警告 Joan
+                    if (otherZhibanEntries.length > 0) {
+                        const oldNames = otherZhibanEntries.map(e => e.empName).join("、");
+                        await openAlert(`換值班只完成一半：${oldNames} 已從 Ragic 刪除，但 ${empName} 沒寫進去。\n請重新整理頁面後再點 ${empName} 一次。\n\n錯誤：${postErr.message}`);
+                    }
+                    throw postErr;
+                }
+                if (!res || !res.ragicId) {
+                    if (otherZhibanEntries.length > 0) {
+                        const oldNames = otherZhibanEntries.map(e => e.empName).join("、");
+                        await openAlert(`換值班疑似失敗：${oldNames} 已刪、但 ${empName} 寫入沒拿到 ragicId。請重新整理確認資料狀態。`);
+                    }
+                    throw new Error("POST 沒拿到 ragicId");
+                }
+                setLeaves(l => ({...l, [key]: [...(l[key] || []), { ragicId: String(res.ragicId), type: mode }]}));
+                if (otherZhibanEntries.length > 0) {
+                    showToast(`${dateStr} 值班已換成 ${empName}`);
+                } else {
+                    showToast(`${empName} ${dateStr} ${mode}`);
+                }
+            }
+        } catch(e) {
+            console.error(e);
+            showToast("儲存失敗: " + e.message, false);
+        }
+        setSaving(s => {
+            const n = {...s};
+            delete n[key];
+            otherZhibanEntries.forEach(oz => { delete n[oz.key]; });
+            return n;
+        });
+    };
+
+    const handleAutoSchedule = async () => {
+        const isV2 = SC.isDutyV2Month(year, month); // 2026/11 起新制（整棟 1F–4F、業務兼職一人掃整棟、內勤兩人一組、值班倒垃圾），見 schedule-duty-v2.js
+        if (employees.length === 0) { showToast("尚未載入員工資料", false); return; }
+        // 過去鎖定（2026-10-06）：今天以前（含今天）的值日一律不動，見 SC.isDutyLocked
+        const lockTodayStr = SC.todayStr();
+        const monthLastStr = `${year}/${String(month).padStart(2,"0")}/${String(new Date(year, month, 0).getDate()).padStart(2,"0")}`;
+        if (SC.isDutyLocked(monthLastStr, lockTodayStr)) {
+            await openAlert(`${year} 年 ${month} 月的日子都已經過去，這個月已經鎖定，按這顆鈕不會改任何東西。\n要改個別日子（例如標未掃），請直接點格子。`);
+            return;
+        }
+        const monthFirstStr = `${year}/${String(month).padStart(2,"0")}/01`;
+        const lockNote = SC.isDutyLocked(monthFirstStr, lockTodayStr)
+            ? `今天以前（含今天 ${lockTodayStr.slice(5)}）的值日都不會動，只重排明天起的日子。已經掃過的次數會算進去，掃比較多的人之後會少排一點。`
+            : `這個月還沒開始，會重排整個月。`;
+        const okAutoDuty = await openConfirm(isV2
+            ? `確定要自動預排 ${year} 年 ${month} 月的值日生？\n\n${lockNote}\n\n【新制】每天掃整棟 1F–4F：業務、兼職一個人掃整棟（兼職每月一次、排六日，${SC.PARTTIME_DUTY_FIRST_DATE.slice(5)} 起）；內勤兩人一組，一人 1F+4F、一人 2F+3F，只排平日。倒垃圾由當天值班的人負責，不另外排清運。你手動排的值日會保留。`
+            : `確定要自動預排 ${year} 年 ${month} 月的值日生？\n\n${lockNote}\n\n每天 3 位（1F/2F/3F），週五加排 4F。清運（🗑️）已經有人的日子不動，沒人的日子會自動補（週三、週日不排，六日只排承攬同仁，當天休假的人跳過，內勤五位不排清運，次數少的人優先）。你手動排的值日會保留。`);
+        if (!okAutoDuty) return;
+
+        setAutoScheduling(true);
+        try {
+            setProgress({ text: "載入資料...", current: 0, total: 0 });
+            // 讀取累計樓層打掃次數（從歷史值日紀錄即時計算）
+            const fcMap = {}; // fcMap[name] = { "1F":n, "2F":n, "3F":n, "4F":n }
+            const empRagicIds = {}; // empRagicIds[name] = ragicId
+            allEmployees.forEach(e => {
+                fcMap[e.name] = { ...e.fc };
+                empRagicIds[e.name] = e.ragicId;
+            });
+
+            // 讀上月+當月（上月算 countMap，當月刪舊紀錄+建 zhibanByDate）
+            const prevMonth = month === 1 ? 12 : month - 1;
+            const prevYear = month === 1 ? year - 1 : year;
+            const allLeaveForDuty = await SC.proxyFetch("listLeaves" + SC.leaveQuery(prevYear, prevMonth, year, month));
+            const countMap = {};
+            allEmployees.forEach(e => { countMap[e.name] = 0; });
+            Object.entries(allLeaveForDuty)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([id, f]) => {
+                    const type = f[CONFIG.F_LEAVE.TYPE] || "";
+                    if (type !== "值日") return;
+                    const isAutoVal = f[CONFIG.F_LEAVE.IS_AUTO] || "";
+                    if (isAutoVal === "未掃") return; // 未掃不計入次數
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    const empName = f[CONFIG.F_LEAVE.EMP] || "";
+                    if (!date || !empName) return;
+                    const parts = date.replace(/\//g,"-").split("-");
+                    const y = parseInt(parts[0]), m = parseInt(parts[1]);
+                    if (y === prevYear && m === prevMonth && countMap.hasOwnProperty(empName)) {
+                        countMap[empName]++;
+                    }
+                });
+
+            // 新人入池：上月還沒到職的人，起始次數 = 在池老員工的平均（不追入池前的債）
+            const prevStart = new Date(prevYear, prevMonth - 1, 1);
+            const veteranNames = [];
+            const newNames = [];
+            allEmployees.forEach(e => {
+                const p = e.hireDate.split("/");
+                const hired = new Date(+p[0], +p[1]-1, +p[2]);
+                if (hired < prevStart) veteranNames.push(e.name);
+                else newNames.push(e.name);
+            });
+            // 長假免追債：上月整月請假者（列於 SC.LONG_LEAVE_CREDIT），該月比照新人給平均、不追債
+            const prevKey = `${prevYear}/${String(prevMonth).padStart(2,"0")}`;
+            const creditNames = allEmployees
+                .filter(e => (SC.LONG_LEAVE_CREDIT?.[e.name] || []).includes(prevKey))
+                .map(e => e.name);
+            // 補平均的對象 = 新人 ∪ 長假者；基準 = 老員工但排除長假者（避免長假者的 0 次拉低平均）
+            const avgTargets = [...new Set([...newNames, ...creditNames])];
+            const baseNames = veteranNames.filter(n => !creditNames.includes(n));
+            if (baseNames.length > 0 && avgTargets.length > 0) {
+                const avg = baseNames.reduce((s, n) => s + (countMap[n]||0), 0) / baseNames.length;
+                avgTargets.forEach(n => { countMap[n] = Math.round(avg); });
+
+                // 對齊各樓層 fcMap：起始值 = 老員工平均
+                // 避免「fc=0 永遠排 1F 排序最前」造成的 1F 偏向（bug：曾宇謙/高晶晶/鐘晟鈺 1F 比例 67-100%）
+                for (const fl of ["1F", "2F", "3F", "4F"]) {
+                    const fcAvg = baseNames.reduce((s, n) => s + (fcMap[n]?.[fl] || 0), 0) / baseNames.length;
+                    avgTargets.forEach(n => {
+                        if (!fcMap[n]) fcMap[n] = {"1F":0, "2F":0, "3F":0, "4F":0};
+                        fcMap[n][fl] = Math.round(fcAvg);
+                    });
+                }
+            }
+
+            // 上月補差上限（2026-10-08 瓊安：怕要補掃超多）：上月比平均多/少的次數最多帶 2 次進這個月，
+            // 不會因為上月請假多就被一口氣補排 3、4 次
+            {
+                const names = Object.keys(countMap);
+                const avgPrev = names.reduce((s, n) => s + countMap[n], 0) / (names.length || 1);
+                names.forEach(n => { countMap[n] = avgPrev + Math.max(-SC.DUTY_CARRY_CAP, Math.min(SC.DUTY_CARRY_CAP, countMap[n] - avgPrev)); });
+            }
+
+            // === DEBUG: 值日排班診斷 ===
+            console.log("=== 值日排班診斷 ===");
+            console.log("排班月份:", year, "/", month);
+            console.log("上月 countMap (排序):", Object.entries(countMap).sort((a,b) => a[1]-b[1]).map(([n,c]) => `${n}:${c}`).join(", "));
+            console.log("新人(用平均):", newNames?.join(", ") || "無");
+            console.log("長假免追債(用平均):", creditNames?.join(", ") || "無");
+            console.log("老員工數:", veteranNames?.length || "N/A");
+
+            // 掃描當月值日：保留手動(isAuto=No)並登記佔用樓層/人，其他(Yes/未掃)列入刪除
+            setProgress({ text: "清除舊紀錄...", current: 0, total: 0 });
+            const manualByDate = {}; // dateStr -> [{ empName, floor }]
+            const trashByDate = {}; // dateStr -> [清運值日的人]（保留不刪、當天不重複排樓層）
+            const toDelete = [];
+            let lockedKeptCount = 0; // 過去鎖定保留的系統預排筆數
+            Object.entries(allLeaveForDuty)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([id, f]) => {
+                    const type = f[CONFIG.F_LEAVE.TYPE] || "";
+                    if (type !== "值日") return;
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    if (!date) return;
+                    const parts = date.replace(/\//g,"-").split("-");
+                    const y = parseInt(parts[0]), m = parseInt(parts[1]);
+                    if (y !== year || m !== month) return;
+                    const isAuto = f[CONFIG.F_LEAVE.IS_AUTO] || "";
+                    const dept = f[CONFIG.F_LEAVE.DEPT] || "";
+                    const noteRaw = f[CONFIG.F_LEAVE.NOTE] || "";
+                    // 清運值日（🗑️）既有紀錄一律保留不刪（不管來源是手動還是先前自動預排），並記下當天清運的人；
+                    // 沒有紀錄的日子改由下面新增的清運自動補位邏輯處理（2026-08-02 新增，見 newTrashDuties）
+                    if (isV2 && SC.isTrashDuty(noteRaw) && dept === "系統預排" && isAuto !== "No" && isAuto !== "未掃" && !SC.isDutyLocked(date, lockTodayStr)) {
+                        // 新制不再另排清運（值班的人倒垃圾）：先前系統預排、尚未到的日子的清運紀錄一併清掉；手動排的、已標未掃的、今天以前的不動
+                        toDelete.push([id, f]);
+                        return;
+                    }
+                    if (SC.isTrashDuty(noteRaw)) {
+                        const tEmp = f[CONFIG.F_LEAVE.EMP] || "";
+                        if (!trashByDate[date]) trashByDate[date] = [];
+                        if (tEmp) trashByDate[date].push(tEmp);
+                        // 倒一次垃圾算掃一次（2026-10-08 瓊安拍板「算吧」）：當月清運也計入次數，業務倒得多、樓層就少排
+                        if (tEmp && isAuto !== "未掃") countMap[tEmp] = (countMap[tEmp] || 0) + 1;
+                        return;
+                    }
+                    // 防呆②（2026-08-03）：原本只看 isAuto==="No" 判斷「是否為手動排班、免被刪除」，
+                    // 但 1000966（是否計入8天）是一欄多語義（Yes/No/未掃/未值班），手動紀錄若為了計入
+                    // 公平帳而設 Yes（如 Kelly 案補位 5478-5481、5484）就會失去保護，7/9 87 筆誤重排即
+                    // 因此發生。改用 1002026（部門）判斷排班來源＝「這筆是不是系統自動產生的」，因為
+                    // handleClick（手動點格）與這裡的自動排班寫入，兩個現行程式碼路徑永遠成對正確寫入
+                    // (No,手動變更/4F手動排班) 或 (Yes,系統預排)，不會有語意混淆。
+                    // 用 OR 合併新舊兩個條件（isAuto==="No" 或 dept!=="系統預排"，任一成立就保護），
+                    // 保護範圍只會比單看任一條件更大、不會更小：除了修掉「手動紀錄設 Yes 就失去保護」
+                    // 的主要漏洞，也同時保住 2 筆歷史資料（5426/5429，7/1 一次性補位腳本把 dept 誤標成
+                    // 系統預排、但 isAuto 正確寫了 No）。真正「系統自動排、日後被標記未掃」的紀錄
+                    // （isAuto="未掃" 且 dept="系統預排"）兩個條件都不成立，維持原行為照常可被刪除重排。
+                    if (isAuto === "No" || dept !== "系統預排") {
+                        const empName = f[CONFIG.F_LEAVE.EMP] || "";
+                        const note = f[CONFIG.F_LEAVE.NOTE] || "";
+                        const floor = /^(1F|2F|3F|4F)$/.test(note) ? note : "";
+                        if (!manualByDate[date]) manualByDate[date] = [];
+                        manualByDate[date].push({ empName, floor });
+                        if (empName) countMap[empName] = (countMap[empName] || 0) + 1;
+                    } else if (SC.isDutyLocked(date, lockTodayStr)) {
+                        // 過去鎖定：系統預排但日子已過（含今天）→ 保留不刪，比照手動佔用樓層/人，
+                        // 並計入當月次數（未掃不計，與上月 countMap 同口徑），之後的日子才會少排掃過的人
+                        const empName = f[CONFIG.F_LEAVE.EMP] || "";
+                        const note = f[CONFIG.F_LEAVE.NOTE] || "";
+                        const floor = /^(1F|2F|3F|4F)$/.test(note) ? note : "";
+                        if (!manualByDate[date]) manualByDate[date] = [];
+                        manualByDate[date].push({ empName, floor });
+                        if (empName && isAuto !== "未掃") countMap[empName] = (countMap[empName] || 0) + 1;
+                        lockedKeptCount++;
+                    } else {
+                        toDelete.push([id, f]);
+                    }
+                });
+            console.log("保留手動值日天數:", Object.keys(manualByDate).length, "；過去鎖定保留筆數:", lockedKeptCount);
+
+            // ══════════════════════════════════════════════════════════════
+            // 清運值日自動預排（2026-08-02 新增，Joan 看流程圖拍板「可以 改吧」）
+            // 只補「當月尚未有任何清運紀錄」的日子；已有紀錄（含上面 trashByDate 記錄到的
+            // 手動/歷史保留紀錄）一律不覆蓋，維持既有「保留清運不刪」行為不變。
+            // 四條規則：①週三/週日不排（三重清潔隊不收）②週六僅承攬同仁可排③當天排休/
+            // 特休/請假者跳過④已有紀錄的日子不補。選人：近期（上月+當月）次數少者優先，
+            // 同次數比最後一次值清運日期，越久沒排的越優先。
+            // ══════════════════════════════════════════════════════════════
+            const trashCountMap = {}; // trashCountMap[name] = 近期（上月+當月）清運次數
+            const trashLastDateMap = {}; // trashLastDateMap[name] = 最後一次清運日期（YYYY/MM/DD）
+            allEmployees.forEach(e => { trashCountMap[e.name] = 0; trashLastDateMap[e.name] = ""; });
+            Object.entries(allLeaveForDuty)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([id, f]) => {
+                    if ((f[CONFIG.F_LEAVE.TYPE] || "") !== "值日") return;
+                    const noteRaw = f[CONFIG.F_LEAVE.NOTE] || "";
+                    if (!SC.isTrashDuty(noteRaw)) return;
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    const empName = f[CONFIG.F_LEAVE.EMP] || "";
+                    if (!date || !empName) return;
+                    if (!trashCountMap.hasOwnProperty(empName)) { trashCountMap[empName] = 0; trashLastDateMap[empName] = ""; }
+                    trashCountMap[empName]++;
+                    if (!trashLastDateMap[empName] || date > trashLastDateMap[empName]) trashLastDateMap[empName] = date;
+                });
+            // 當月排休/特休/請假名單（清運跳過用；不含見紅休/生日/值班，四條規則沒提到的不額外加）
+            const trashOffByDate = {}; // dateStr -> Set(empName)
+            Object.entries(allLeaveForDuty)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([id, f]) => {
+                    const type = f[CONFIG.F_LEAVE.TYPE] || "";
+                    if (!["排休","特休","請假"].includes(type)) return;
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    if (!date) return;
+                    const parts = date.replace(/\//g,"-").split("-");
+                    if (parseInt(parts[0]) !== year || parseInt(parts[1]) !== month) return;
+                    const empName = f[CONFIG.F_LEAVE.EMP] || "";
+                    if (!empName) return;
+                    if (!trashOffByDate[date]) trashOffByDate[date] = new Set();
+                    trashOffByDate[date].add(empName);
+                });
+            console.log("清運近期次數 (排序):", Object.entries(trashCountMap).sort((a,b) => a[1]-b[1]).map(([n,c]) => `${n}:${c}`).join(", "));
+
+            // ── 二次確認（技術債修復 2026-07-26）：顯示實際即將刪除的筆數/月份/樓層，並在真的動手前自動匯出 JSON 快照 ──
+            if (toDelete.length > 0) {
+                const affectedDates = [...new Set(toDelete.map(([, f]) => f[CONFIG.F_LEAVE.DATE] || ""))].filter(Boolean).sort();
+                const affectedFloors = [...new Set(toDelete.map(([, f]) => {
+                    const note = f[CONFIG.F_LEAVE.NOTE] || "";
+                    return /^(1F|2F|3F|4F)$/.test(note) ? note : null;
+                }).filter(Boolean))].sort();
+                const manualKeptCount = Object.values(manualByDate).reduce((s, a) => s + a.length, 0);
+                const okFinalDuty = await openConfirm(
+                    `⚠️ 最終確認：即將「刪除」${toDelete.length} 筆值日紀錄並重新產生新排班\n\n` +
+                    `影響月份：${year}-${String(month).padStart(2, "0")}（共 ${affectedDates.length} 天）\n` +
+                    `影響樓層：${affectedFloors.join("、") || "（無樓層標記）"}\n` +
+                    `今天以前已排的值日（鎖定、不會動）：${lockedKeptCount} 筆\n` +
+                    `手動排班（不受影響、會保留）：${manualKeptCount - lockedKeptCount} 筆\n\n` +
+                    `按「確定」會先自動下載一份 JSON 備份到你的電腦，再執行刪除＋重排。\n` +
+                    `此動作無法在頁面內復原，請確認是本人操作、且真的要重排${affectedDates[0].slice(5)}起的日子。`
+                );
+                if (!okFinalDuty) {
+                    showToast("已取消，未做任何變更");
+                    setProgress(null);
+                    setAutoScheduling(false);
+                    return;
+                }
+                try {
+                    exportScheduleSnapshot("值日", year, month, toDelete);
+                } catch (snapErr) {
+                    console.error("快照匯出失敗", snapErr);
+                    await openAlert("快照匯出失敗，為安全起見已中止本次預排（尚未刪除任何紀錄）：\n" + snapErr.message);
+                    setProgress(null);
+                    setAutoScheduling(false);
+                    return;
+                }
+            }
+
+            for (let di = 0; di < toDelete.length; di++) {
+                const [id, f] = toDelete[di];
+                setProgress({ text: "清除舊值日紀錄", current: di + 1, total: toDelete.length });
+                const empName = f[CONFIG.F_LEAVE.EMP] || "";
+                const note = f[CONFIG.F_LEAVE.NOTE] || "";
+                const floor = /^(1F|2F|3F|4F)$/.test(note) ? note : "";
+                if (floor && fcMap[empName]) {
+                    fcMap[empName][floor] = Math.max(0, (fcMap[empName][floor] || 0) - 1);
+                }
+                await SC.proxyFetch(`deleteLeave/${id}`, { method: "DELETE" });
+                await sleep(200);
+            }
+
+            // Generate schedule — 每天 3 位值日生，樓層按累計次數公平分配
+            const daysInMonth = new Date(year, month, 0).getDate();
+            const newDuties = {};
+            const newTrashDuties = {}; // newTrashDuties[dateStr] = empName（清運值日新補的人，2026-08-02 新增）
+            const lastAssigned = new Set();
+            const weeklyAssigned = {}; // weeklyAssigned[name] = Set of week numbers
+
+            // 建立值班表：從 API 直接讀（不依賴 React state，避免時序問題）
+            const zhibanByDate = {};
+            Object.entries(allLeaveForDuty)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([id, f]) => {
+                    const type = f[CONFIG.F_LEAVE.TYPE] || "";
+                    if (type !== "值班") return;
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    const emp = f[CONFIG.F_LEAVE.EMP] || "";
+                    if (!date || !emp) return;
+                    const parts = date.replace(/\//g,"-").split("-");
+                    const y = parseInt(parts[0]), m = parseInt(parts[1]);
+                    if (y === year && m === month) zhibanByDate[date] = emp;
+                });
+            console.log("值班天數:", Object.keys(zhibanByDate).length, "筆");
+
+            // 計算週數（週一起算）
+            const getWeekNum = (day) => {
+                const d = new Date(year, month-1, day);
+                const jan1 = new Date(year, 0, 1);
+                return Math.ceil(((d - jan1) / 86400000 + jan1.getDay()) / 7);
+            };
+
+            // 夫妻同排設定（迴圈外宣告，避免重複建立）
+            const COUPLES = SC.COUPLES;
+            const coupleSet = new Set(COUPLES.flat());
+
+            // 預算夫妻的值班值日天數：值班那天夫妻會一起掃地，先算進 countMap
+            // 這樣 Plan A/B 在其他天就會少排他們，總次數跟大家一樣
+            const coupleZhibanDays = Object.values(zhibanByDate).filter(emp => coupleSet.has(emp)).length;
+            if (!isV2 && coupleZhibanDays > 0) {
+                for (const name of coupleSet) {
+                    countMap[name] = (countMap[name] || 0) + coupleZhibanDays;
+                }
+                console.log("夫妻值班值日預算:", coupleZhibanDays, "天，countMap 各 +", coupleZhibanDays);
+            }
+
+            for (let day = 1; !isV2 && day <= daysInMonth; day++) { // 新制月份不走這個舊迴圈，改由下方 SC.planDutyV2
+                const mm = String(month).padStart(2,"0");
+                const dd = String(day).padStart(2,"0");
+                const dateStr = `${year}/${mm}/${dd}`;
+
+                // 禁休日不排值日生（全員打掃）
+                if (noRest[dateStr]) continue;
+
+                // 過去鎖定（2026-10-06）：今天以前（含今天）不新增樓層、不回填清運；
+                // 只把當天已排的人登記為「有排過」，讓明天不連續排同一人、同週加權照算
+                if (SC.isDutyLocked(dateStr, lockTodayStr)) {
+                    const lockedWeek = getWeekNum(day);
+                    lastAssigned.clear();
+                    (manualByDate[dateStr] || []).forEach(({ empName }) => {
+                        if (!empName) return;
+                        lastAssigned.add(empName);
+                        if (!weeklyAssigned[empName]) weeklyAssigned[empName] = new Set();
+                        weeklyAssigned[empName].add(lockedWeek);
+                    });
+                    continue;
+                }
+
+                // ── 清運值日自動補位（2026-08-02 新增，獨立於樓層值日邏輯，不影響下方樓層排班）──
+                // Joan 拍板五條規則：①週三/週日不排 ②週六僅承攬同仁可排 ③當天排休/特休/請假跳過
+                // ④已有紀錄（trashByDate，含手動/歷史保留）的日子不補
+                // ⑤清運免排名單（2026-09-10 Joan 拍板，2026/10 起）：張瓊安/韓珊珊/沈郁雯/呂鴻墀/王芳瑜
+                //   五位內勤 19:00 前下班、垃圾 20:00 才丟，自動預排一律不排他們（手動仍可排，跳確認框）。
+                //   注意這份清單與見紅休名單是兩件事，只是剛好有四人重疊，詳見 SC.TRASH_DUTY_EXEMPT_NAMES 註解。
+                // 額外技術性排除（非第 5 條業務規則，是尊重既有伺服器端硬規則）：見紅休名單
+                // （張瓊安/沈郁雯/呂鴻墀/王芳瑜，2026-08-24 陳勁豪轉承攬移除、王芳瑜加入）在週末/國定假日一律不可被排「值日」類型，Cloudflare Worker
+                // createLeave 會直接 400 拒絕（2026-07-26 三度誤排事故後加的安全閘），清運紀錄類型
+                // 同樣是「值日」，若排到見紅休的人會導致整批寫入中途失敗，故必須排除，理由詳見
+                // 排班表_規格書.md § 已知問題「一次性資料操作繞過見紅休檢查」。
+                const trashDow = new Date(year, month - 1, day).getDay();
+                if (SC.isTrashCollectionDay(year, month, day) && !(trashByDate[dateStr] && trashByDate[dateStr].length > 0)) {
+                    const isTrashSaturday = trashDow === 6;
+                    const trashOffToday = trashOffByDate[dateStr] || new Set();
+                    const trashCandidates = allEmployees
+                        .filter(e => !trashOffToday.has(e.name)) // ③當天排休/特休/請假跳過
+                        .filter(e => !isTrashSaturday || e.hire === "承攬") // ②週六僅承攬同仁可排
+                        .filter(e => !SC.isGovRestFor(e.name, year, month, day)) // 見紅休日不可排（伺服器端硬擋，見上方註解）
+                        .filter(e => !SC.isTrashExemptFor(e.name, year, month)) // ⑤清運免排名單：內勤 19:00 前下班，垃圾 20:00 才丟（2026/10 起，見 schedule-common.js）
+                        .map(e => ({ name: e.name, count: trashCountMap[e.name] || 0, last: trashLastDateMap[e.name] || "" }))
+                        .sort((a, b) => (a.count - b.count) || SC._cmpDateStr(a.last || "0000/00/00", b.last || "0000/00/00"));
+                    if (trashCandidates.length > 0) {
+                        const pick = trashCandidates[0].name;
+                        newTrashDuties[dateStr] = pick;
+                        trashCountMap[pick] = (trashCountMap[pick] || 0) + 1;
+                        trashLastDateMap[pick] = dateStr;
+                        countMap[pick] = (countMap[pick] || 0) + 1; // 倒一次垃圾算掃一次
+                        // 併入 trashByDate，讓下方樓層排班的「當天清運的人不重複排樓層」判斷（第 1099 行附近）
+                        // 也涵蓋這筆新補的清運，維持既有「清運與樓層不同天/不重複」的設計一致
+                        if (!trashByDate[dateStr]) trashByDate[dateStr] = [];
+                        trashByDate[dateStr].push(pick);
+                    }
+                }
+
+                // 尊重手動值日：跳過已被手動佔用的樓層與人員
+                const todayManual = manualByDate[dateStr] || [];
+                const manualFloors = new Set(todayManual.map(m => m.floor).filter(f => f));
+                const manualEmps = new Set(todayManual.map(m => m.empName).filter(n => n));
+                // 4 樓只在週五排（週三沒垃圾車、六日多數人沒上班 → 4 樓定週五掃）；其他天只排 1F/2F/3F
+                const baseFloors = SC.expectedDutyFloors(year, month, day);
+                const availFloors = baseFloors.filter(f => !manualFloors.has(f));
+                if (availFloors.length === 0) continue; // 全部手動排完，無需自動補
+
+                const weekNum = getWeekNum(day);
+                // 明天值班的人（夫妻含配偶）明天一定要掃，今天先不排，避免連兩天（2026-10-08 稽核：10 月 10 筆都是這型）
+                const nextD = new Date(year, month - 1, day + 1);
+                const tmrZhiban = zhibanByDate[`${nextD.getFullYear()}/${String(nextD.getMonth()+1).padStart(2,"0")}/${String(nextD.getDate()).padStart(2,"0")}`] || "";
+                const tomorrowForced = new Set(tmrZhiban ? [tmrZhiban] : []);
+                for (const [a, b] of SC.COUPLES) {
+                    if (tmrZhiban === a) tomorrowForced.add(b);
+                    if (tmrZhiban === b) tomorrowForced.add(a);
+                }
+                const restedYesterday = (n) => !lastAssigned.has(n) && !tomorrowForced.has(n);
+                const onLeaveToday = new Set();
+                Object.entries(leaves).forEach(([k, arr]) => {
+                    if (!k.endsWith("|" + dateStr)) return;
+                    if (Array.isArray(arr) && arr.some(e => e.type !== "值班")) onLeaveToday.add(k.split("|")[0]);
+                });
+                if (!noRest[dateStr] && SC.isGovRestDay(year, month, day)) {
+                    GOV_REST_EMPLOYEES.forEach(name => onLeaveToday.add(name));
+                }
+                // 生日當天不排值日生
+                allEmployees.forEach(e => {
+                    if (SC.isBirthday(e, month, day)) onLeaveToday.add(e.name);
+                });
+                // 手動已排的人今天不重複排
+                manualEmps.forEach(n => onLeaveToday.add(n));
+                // 當天清運值日（🗑️）的人不重複排樓層
+                (trashByDate[dateStr] || []).forEach(n => onLeaveToday.add(n));
+
+                // 值班+值日重疊（夫妻也適用，已預算進 countMap）
+                const todayZhiban = zhibanByDate[dateStr] || "";
+                const zhibanAvailable = todayZhiban && !onLeaveToday.has(todayZhiban);
+                const scoreFn = (name) => {
+                    let s = countMap[name] || 0;
+                    const wk = weeklyAssigned[name];
+                    if (wk && wk.has(weekNum)) s += SC.DUTY_SAME_WEEK_PENALTY;
+                    return s;
+                };
+                // 自動需補人數 = 可用樓層數 -（是否會 unshift 值班者）
+                const needCount = Math.max(0, availFloors.length - (zhibanAvailable ? 1 : 0));
+
+                // 非夫妻個人候選（按 score 排序）
+                const mkIndiv = (filterFn) => allEmployees
+                    .filter(e => !coupleSet.has(e.name) && filterFn(e) && e.name !== todayZhiban)
+                    .map(e => ({ name: e.name, score: scoreFn(e.name) }))
+                    .sort((a,b) => a.score - b.score);
+
+                // 值班的人是夫妻一方 → 配偶也一起掃（forcedSpouse）
+                let forcedSpouse = null;
+                if (zhibanAvailable && coupleSet.has(todayZhiban)) {
+                    for (const [a, b] of COUPLES) {
+                        const sp = todayZhiban === a ? b : (todayZhiban === b ? a : null);
+                        if (sp && !onLeaveToday.has(sp)) forcedSpouse = sp;
+                    }
+                }
+
+                let chosen;
+                if (forcedSpouse) {
+                    // 夫妻值班日：配偶保留名額，剩餘從個人選
+                    const indivs = mkIndiv(e => restedYesterday(e.name) && !onLeaveToday.has(e.name));
+                    chosen = [forcedSpouse, ...indivs.slice(0, needCount - 1).map(c => c.name)];
+                } else {
+                    // 非夫妻值班日：Plan A vs Plan B 公平比較
+                    let coupleNames = null;
+                    for (const [a, b] of COUPLES) {
+                        const aOk = restedYesterday(a) && !onLeaveToday.has(a) && a !== todayZhiban;
+                        const bOk = restedYesterday(b) && !onLeaveToday.has(b) && b !== todayZhiban;
+                        if (aOk && bOk && needCount >= 2) coupleNames = [a, b];
+                    }
+                    const indivs = mkIndiv(e => restedYesterday(e.name) && !onLeaveToday.has(e.name));
+
+                    if (coupleNames) {
+                        // Plan A：夫妻 + (N-2) 個人 vs Plan B：N 個人
+                        const planA = [...coupleNames, ...indivs.slice(0, needCount - 2).map(c => c.name)];
+                        const planB = indivs.slice(0, needCount).map(c => c.name);
+                        const scoreA = planA.reduce((s, n) => s + scoreFn(n), 0);
+                        const scoreB = planB.reduce((s, n) => s + scoreFn(n), 0);
+                        chosen = scoreA < scoreB ? planA : planB;
+                    } else {
+                        chosen = indivs.slice(0, needCount).map(c => c.name);
+                    }
+                }
+                // Fallback：放寬 lastAssigned
+                if (chosen.length < needCount) {
+                    const relaxed = mkIndiv(e => !onLeaveToday.has(e.name)).filter(c => !chosen.includes(c.name));
+                    while (chosen.length < needCount && relaxed.length > 0) chosen.push(relaxed.shift().name);
+                }
+                // Final fallback
+                if (chosen.length < needCount) {
+                    const last = allEmployees.filter(e => e.name !== todayZhiban && !chosen.includes(e.name))
+                        .map(e => ({ name: e.name, score: scoreFn(e.name) })).sort((a,b) => a.score - b.score);
+                    while (chosen.length < needCount && last.length > 0) chosen.push(last.shift().name);
+                }
+                if (zhibanAvailable) chosen.unshift(todayZhiban);
+
+                // 分配樓層：僅分配未被手動佔用的樓層，次數最少的人掃該層
+                // 樓層處理順序隨機化（原本寫死 1F→3F→2F 造成同類員工持續吃同樓層 stacking）
+                // 先洗牌（當 fc 全同時，順序隨機；穩定排序會保留 tie 時的隨機序）
+                const remaining = [...chosen].sort(() => Math.random() - 0.5);
+                const floorOrder = [...availFloors].sort(() => Math.random() - 0.5);
+                const assignments = [];
+                for (const floor of floorOrder) {
+                    if (remaining.length === 0) break;
+                    remaining.sort((a, b) => (fcMap[a][floor]||0) - (fcMap[b][floor]||0));
+                    const pick = remaining.shift();
+                    assignments.push({ empName: pick, floor });
+                    fcMap[pick][floor] = (fcMap[pick][floor] || 0) + 1;
+                    countMap[pick] = (countMap[pick] || 0) + 1;
+                }
+
+                lastAssigned.clear();
+                assignments.forEach(a => {
+                    lastAssigned.add(a.empName);
+                    if (!weeklyAssigned[a.empName]) weeklyAssigned[a.empName] = new Set();
+                    weeklyAssigned[a.empName].add(weekNum);
+                });
+                // 手動已排的人也算今日有排班，避免明天連續
+                manualEmps.forEach(n => {
+                    lastAssigned.add(n);
+                    if (!weeklyAssigned[n]) weeklyAssigned[n] = new Set();
+                    weeklyAssigned[n].add(weekNum);
+                });
+                newDuties[dateStr] = assignments;
+            }
+
+            // ══ 2026/11 新制：整棟 1F–4F，演算法在 schedule-duty-v2.js（純函式，可離線試排）══
+            let planWarnings = [];
+            if (isV2) {
+                const offByDate = {};
+                Object.entries(leaves).forEach(([k, arr]) => {
+                    if (!Array.isArray(arr)) return;
+                    const [nm, ds] = k.split("|");
+                    if (arr.some(e => e.type !== "值班" && !(e.type === "見紅休" && e.isAuto === SC.GOV_REST_CANCELLED))) (offByDate[ds] ||= new Set()).add(nm);
+                });
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const ds = SC.fmtDate(year, month, day);
+                    allEmployees.forEach(e => { if (SC.isBirthday(e, month, day)) (offByDate[ds] ||= new Set()).add(e.name); });
+                    // 到職日以前不排（2026-10-29：花那 11/3 到職，11/1、11/2 不可排到她）
+                    allEmployees.forEach(e => {
+                        const h = (e.hireDate || "").split("/").map(Number);
+                        if (h.length === 3 && h[0] < 9999 && SC._cmpDateStr(ds, SC.fmtDate(h[0], h[1], h[2])) < 0) (offByDate[ds] ||= new Set()).add(e.name);
+                    });
+                }
+                const plan = SC.planDutyV2({
+                    year, month, todayStr: lockTodayStr,
+                    people: allEmployees.map(e => ({ name: e.name, hire: e.hire, useAvg: avgTargets.includes(e.name) })),
+                    offByDate, zhibanByDate, noRest, fixedByDate: manualByDate,
+                    prevDayCounts: SC.dutyV2PrevPoints(allLeaveForDuty, prevYear, prevMonth), // 上月負擔分數：每層 1、倒垃圾 1 層
+                });
+                Object.assign(newDuties, plan.duties);
+                planWarnings = plan.warnings;
+                console.log("新制排班人天數:", JSON.stringify(plan.counts), "警告:", planWarnings.join("；") || "無");
+            }
+
+            // === DEBUG: 排班結果統計 ===
+            const dutyCounts = {};
+            Object.values(newDuties).forEach(arr => arr.forEach(a => {
+                dutyCounts[a.empName] = (dutyCounts[a.empName] || 0) + 1;
+            }));
+            console.log("=== 排班結果 ===");
+            const plannedSlots = Object.values(newDuties).reduce((s, arr) => s + arr.length, 0);
+            console.log("總天數:", Object.keys(newDuties).length, "天，實際預排筆數 =", plannedSlots, "slots");
+            console.log("分配結果 (排序):", Object.entries(dutyCounts).sort((a,b) => b[1]-a[1]).map(([n,c]) => `${n}:${c}`).join(", "));
+            console.log("夫妻 Plan A 選中天數:", Object.entries(newDuties).filter(([d, arr]) => {
+                const names = arr.map(a => a.empName);
+                return names.includes("張忠豪") || names.includes("蕭頤臻");
+            }).length);
+            console.log("清運值日新補天數:", Object.keys(newTrashDuties).length, "－", Object.entries(newTrashDuties).map(([d,n]) => `${d}:${n}`).join(", ") || "無");
+
+            // 逐筆寫入值日紀錄
+            setProgress({ text: "寫入值日紀錄...", current: 0, total: 0 });
+            const batchRecords = [];
+            const batchMeta = []; // 記錄順序對照
+            for (const [dateStr, assignments] of Object.entries(newDuties)) {
+                for (const { empName, floor } of assignments) {
+                    batchRecords.push({
+                        [CONFIG.F_LEAVE.EMP]: empName,
+                        [CONFIG.F_LEAVE.DATE]: dateStr,
+                        [CONFIG.F_LEAVE.YEAR]: String(year),
+                        [CONFIG.F_LEAVE.MONTH]: String(month),
+                        [CONFIG.F_LEAVE.TYPE]: "值日",
+                        [CONFIG.F_LEAVE.NOTE]: floor,
+                        [CONFIG.F_LEAVE.IS_AUTO]: "Yes",
+                        [CONFIG.F_LEAVE.DEPT]: "系統預排"
+                    });
+                    batchMeta.push({ dateStr, empName, floor });
+                }
+            }
+            // 清運值日新補紀錄（2026-08-02 新增；沿用樓層值日同一批次寫入，備註/部門格式對齊既有人工排班慣例）
+            for (const [dateStr, empName] of Object.entries(newTrashDuties)) {
+                batchRecords.push({
+                    [CONFIG.F_LEAVE.EMP]: empName,
+                    [CONFIG.F_LEAVE.DATE]: dateStr,
+                    [CONFIG.F_LEAVE.YEAR]: String(year),
+                    [CONFIG.F_LEAVE.MONTH]: String(month),
+                    [CONFIG.F_LEAVE.TYPE]: "值日",
+                    [CONFIG.F_LEAVE.NOTE]: SC.TRASH_DUTY_NOTE_DEFAULT,
+                    [CONFIG.F_LEAVE.IS_AUTO]: "Yes",
+                    [CONFIG.F_LEAVE.DEPT]: "系統預排"
+                });
+                batchMeta.push({ dateStr, empName, floor: "", isTrash: true });
+            }
+            const batchRes = await apiBatchCreate(batchRecords, (cur, tot) => {
+                setProgress({ text: "寫入值日紀錄...", current: cur, total: tot });
+            });
+            const results = batchMeta.map((m, i) => ({ ...m, ragicId: batchRes[i]?.ragicId || "" }));
+
+            // 員工表 FL1/2/3 欄位已移除、不可寫。樓層累計次數改由 load() 直接從 LEAVE 歷史計算。
+            // 僅更新記憶體：changedEmps 的 fc 值會透過下方 setAllEmployees 同步到 state。
+            const changedEmps = new Set();
+            Object.values(newDuties).forEach(arr => arr.forEach(a => changedEmps.add(a.empName)));
+
+            const dmap = {};
+            Object.entries(duties).forEach(([dateStr, arr]) => {
+                const manual = (arr||[]).filter(d => d.isAuto === "No");
+                if (manual.length) dmap[dateStr] = manual;
+            });
+            results.forEach(({ dateStr, empName, floor, ragicId, isTrash }) => {
+                if (!dmap[dateStr]) dmap[dateStr] = [];
+                dmap[dateStr].push(isTrash
+                    ? { ragicId, empName, isAuto: "Yes", note: SC.TRASH_DUTY_NOTE_DEFAULT, floor: "", isTrash: true }
+                    : { ragicId, empName, isAuto: "Yes", note: floor, floor });
+            });
+            setDuties(dmap);
+            // 更新本地員工樓層次數
+            setAllEmployees(prev => prev.map(e => changedEmps.has(e.name) ? {...e, fc: {...fcMap[e.name]}} : e));
+            const totalRecords = Object.values(newDuties).reduce((s, a) => s + a.length, 0);
+            const trashAddedCount = Object.keys(newTrashDuties).length;
+            showToast(isV2
+                ? `已完成自動預排 ${Object.keys(newDuties).length} 天，共 ${totalRecords} 筆（每天整棟 1F–4F）${planWarnings.length ? "；注意：" + planWarnings.join("；") : ""}`
+                : `已完成自動預排 ${Object.keys(newDuties).length} 天，共 ${totalRecords} 筆（平日 3 樓、週五 4 樓）${trashAddedCount > 0 ? `；另新補清運值日 ${trashAddedCount} 筆` : ""}`);
+            if (planWarnings.length) await openAlert("預排完成，但有幾件事要看一下：\n\n" + planWarnings.join("\n"));
+        } catch(e) {
+            console.error(e);
+            showToast("自動預排失敗: " + e.message, false);
+        }
+        setProgress(null);
+        setAutoScheduling(false);
+    };
+
+    const handleAutoZhiban = async () => {
+        const zLockToday = SC.todayStr(); // 今天以前（含今天）的值班鎖定不動（含「未值班」罰款標記），只重排明天起（2026-10-29）
+        const okAutoZhiban = await openConfirm(`確定要自動預排 ${year} 年 ${month} 月的值班？\n每天 1 人（承攬滿 3 個月）。今天以前（含今天）的值班不動，明天起的值班會清除重排。`);
+        if (!okAutoZhiban) return;
+        setAutoZhiban(true);
+        try {
+            setProgress({ text: "載入資料...", current: 0, total: 0 });
+            // 承攬 + 到職滿 3 個月
+            const schedStart = new Date(year, month - 1, 1);
+            const eligible = employees.filter(e => {
+                if (e.hire !== "承攬") return false;
+                if (e.dept === "社宅部") return false; // 社宅部不值班
+                if (e.dept === "設計部") return false; // 設計部不值班
+                if (SC.ZHIBAN_BLACKLIST && SC.ZHIBAN_BLACKLIST.includes(e.name)) return false; // 不值班名單
+                if (!e.hireDate || e.hireDate === "9999/12/31") return false;
+                const p = e.hireDate.split("/");
+                const hired = new Date(+p[0], +p[1]-1, +p[2]);
+                return (schedStart - hired) / (1000*60*60*24) >= 90;
+            });
+            if (eligible.length === 0) { showToast("沒有符合條件的值班人員", false); setAutoZhiban(false); return; }
+
+            // 只讀當月（刪除舊紀錄 + 建 onLeave 用，值班不追債不需上月）
+            const allLeaveJson = await SC.proxyFetch("listLeaves" + SC.leaveQuery(year, month, year, month));
+            // 本月從零開始，跨月不追債（新人入池不用補歷史）
+            const zCount = {};
+            eligible.forEach(e => { zCount[e.name] = 0; });
+
+            // 刪除本月所有值班紀錄（系統預排 + 手動）
+            const toDelete = Object.entries(allLeaveJson)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .filter(([id, f]) => {
+                    const type = f[CONFIG.F_LEAVE.TYPE] || "";
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    if (type !== "值班") return false;
+                    const p = date.replace(/\//g,"-").split("-");
+                    if (SC.isDutyLocked(SC.fmtDate(+p[0], +p[1], +p[2]), zLockToday)) return false; // 已過的日子鎖定
+                    return parseInt(p[0]) === year && parseInt(p[1]) === month;
+                });
+            // 鎖定日子的既有值班：照算本月值班次數、倒垃圾次數，並當作「前一天的人」避免連排
+            const zLocked = {};
+            Object.entries(allLeaveJson)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .forEach(([, f]) => {
+                    if ((f[CONFIG.F_LEAVE.TYPE] || "") !== "值班") return;
+                    const p = (f[CONFIG.F_LEAVE.DATE] || "").split("/").map(Number);
+                    if (p[0] !== year || p[1] !== month) return;
+                    const ds = SC.fmtDate(p[0], p[1], p[2]);
+                    if (!SC.isDutyLocked(ds, zLockToday)) return;
+                    zLocked[ds] = { name: f[CONFIG.F_LEAVE.EMP] || "", missed: (f[CONFIG.F_LEAVE.IS_AUTO] || "") === "未值班" };
+                });
+
+            // ── 二次確認（技術債修復 2026-07-26）：顯示實際即將刪除的筆數/月份/人數，並在真的動手前自動匯出 JSON 快照 ──
+            if (toDelete.length > 0) {
+                const affectedDates = [...new Set(toDelete.map(([, f]) => f[CONFIG.F_LEAVE.DATE] || ""))].filter(Boolean).sort();
+                const affectedEmps = [...new Set(toDelete.map(([, f]) => f[CONFIG.F_LEAVE.EMP] || "").filter(Boolean))];
+                const okFinalZhiban = await openConfirm(
+                    `⚠️ 最終確認：即將「刪除」${toDelete.length} 筆值班紀錄並重新產生新排班\n\n` +
+                    `影響月份：${year}-${String(month).padStart(2, "0")}（共 ${affectedDates.length} 天）\n` +
+                    `涉及人員：${affectedEmps.length} 人（含手動排的也會一併清除重排）\n\n` +
+                    `按「確定」會先自動下載一份 JSON 備份到你的電腦，再執行刪除＋重排。\n` +
+                    `此動作無法在頁面內復原，請確認是本人操作、且真的要重排整月。`
+                );
+                if (!okFinalZhiban) {
+                    showToast("已取消，未做任何變更");
+                    setProgress(null);
+                    setAutoZhiban(false);
+                    return;
+                }
+                try {
+                    exportScheduleSnapshot("值班", year, month, toDelete);
+                } catch (snapErr) {
+                    console.error("快照匯出失敗", snapErr);
+                    await openAlert("快照匯出失敗，為安全起見已中止本次預排（尚未刪除任何紀錄）：\n" + snapErr.message);
+                    setProgress(null);
+                    setAutoZhiban(false);
+                    return;
+                }
+            }
+
+            for (let di = 0; di < toDelete.length; di++) {
+                setProgress({ text: "清除舊值班紀錄", current: di + 1, total: toDelete.length });
+                await SC.proxyFetch(`deleteLeave/${toDelete[di][0]}`, { method: "DELETE" });
+                await sleep(200);
+            }
+
+            setProgress({ text: "計算排班...", current: 0, total: 0 });
+            // 每天排 1 人，月內均勻分配
+            const totalDays = new Date(year, month, 0).getDate();
+
+            const newZhiban = {};
+            const zTrash = {}; // 新制：本月倒垃圾次數（值班落在有垃圾車的日子）
+            const zIsV2 = SC.isDutyV2Month(year, month);
+            let lastPick = "";
+            for (let day = 1; day <= totalDays; day++) {
+                const mm = String(month).padStart(2,"0");
+                const dd = String(day).padStart(2,"0");
+                const dateStr = `${year}/${mm}/${dd}`;
+                if (SC.isDutyLocked(dateStr, zLockToday)) {
+                    const lk = zLocked[dateStr];
+                    if (lk && lk.name) {
+                        zCount[lk.name] = (zCount[lk.name] || 0) + 1;
+                        if (zIsV2 && !lk.missed && SC.isTrashCollectionDay(year, month, day)) zTrash[lk.name] = (zTrash[lk.name] || 0) + 1;
+                    }
+                    lastPick = lk ? lk.name : "";
+                    continue;
+                }
+                const onLeave = new Set();
+                Object.entries(leaves).forEach(([k, arr]) => {
+                    if (!k.endsWith("|" + dateStr)) return;
+                    if (Array.isArray(arr) && arr.some(e => e.type !== "值班")) onLeave.add(k.split("|")[0]);
+                });
+                if (!noRest[dateStr] && SC.isGovRestDay(year, month, day)) {
+                    GOV_REST_EMPLOYEES.forEach(n => onLeave.add(n));
+                }
+                // 排序：本月次數少的優先（月內均勻），同分時保持原始順序（部門+年資）
+                // 跨月不追債：不用歷史次數影響排序
+                // 新制月份同分再平均倒垃圾次數（週三/週日沒垃圾車，見 SC.zhibanCompare）
+                const isTrashDayZ = SC.isTrashCollectionDay(year, month, day);
+                const sortFn = SC.zhibanCompare(zCount, zTrash, isTrashDayZ, zIsV2);
+                // 生日當天不排值班
+                const isBirthdayToday = (emp) => SC.isBirthday(emp, month, day);
+                const cands = eligible
+                    .filter(e => e.name !== lastPick && !onLeave.has(e.name) && !isBirthdayToday(e))
+                    .sort(sortFn);
+                const pool = cands.length > 0 ? cands
+                    : eligible.filter(e => !onLeave.has(e.name) && !isBirthdayToday(e)).sort(sortFn);
+                const final = pool.length > 0 ? pool
+                    : eligible.map(e => ({ name: e.name })).sort(sortFn);
+                const chosen = final[0].name;
+                zCount[chosen] = (zCount[chosen] || 0) + 1;
+                if (zIsV2 && isTrashDayZ) zTrash[chosen] = (zTrash[chosen] || 0) + 1;
+                lastPick = chosen;
+                newZhiban[dateStr] = chosen;
+            }
+
+            setProgress({ text: "寫入值班紀錄...", current: 0, total: 0 });
+            // 逐筆寫入 Ragic
+            const zBatchRecords = [];
+            const zBatchMeta = [];
+            for (const [dateStr, empName] of Object.entries(newZhiban)) {
+                zBatchRecords.push({
+                    [CONFIG.F_LEAVE.EMP]: empName,
+                    [CONFIG.F_LEAVE.DATE]: dateStr,
+                    [CONFIG.F_LEAVE.YEAR]: String(year),
+                    [CONFIG.F_LEAVE.MONTH]: String(month),
+                    [CONFIG.F_LEAVE.TYPE]: "值班",
+                    [CONFIG.F_LEAVE.DEPT]: "系統預排值班"
+                });
+                zBatchMeta.push({ empName, dateStr });
+            }
+            const zBatchRes = await apiBatchCreate(zBatchRecords, (cur, tot) => {
+                setProgress({ text: "寫入值班紀錄...", current: cur, total: tot });
+            });
+            const newZhibanEntries = []; // [{key, entry}]
+            zBatchMeta.forEach((m, i) => {
+                newZhibanEntries.push({
+                    key: `${m.empName}|${m.dateStr}`,
+                    entry: { ragicId: String(zBatchRes[i]?.ragicId || ""), type: "值班" }
+                });
+            });
+            // 更新 state：從每個 key 的陣列移除被刪的 ragicId，再加入新的 值班 entry
+            const deletedIds = new Set(toDelete.map(([id]) => id));
+            setLeaves(prev => {
+                const next = {};
+                for (const [k, arr] of Object.entries(prev)) {
+                    const filtered = (arr || []).filter(e => !deletedIds.has(e.ragicId));
+                    if (filtered.length > 0) next[k] = filtered;
+                }
+                newZhibanEntries.forEach(({ key, entry }) => {
+                    if (!next[key]) next[key] = [];
+                    next[key].push(entry);
+                });
+                return next;
+            });
+            showToast(`已完成自動預排值班 ${Object.keys(newZhiban).length} 天`);
+        } catch(e) {
+            console.error(e);
+            showToast("自動預排值班失敗: " + e.message, false);
+        }
+        setProgress(null);
+        setAutoZhiban(false);
+    };
+
+    // ── 一鍵預排休假（見紅休新制，2026-08-24 新增，Joan 拍板自 2026/09 起生效）──
+    // 把「見紅休」從即時計算改為月初一鍵預排成真實紀錄，之後可比照排休自由編輯（可取消/可補休）。
+    // 骨架比照 handleAutoZhiban：二次確認 → 刪除前快照 → 進度條 → 逐筆寫入間 sleep(200)。
+    // 型別決策：TYPE 寫 "見紅休"（獨立型別，不寫 "排休"），理由見交付摘要 § 型別決策。
+    const handleAutoGovRest = async () => {
+        if (!SC.isPrescheduledRestMonth(year, month)) {
+            showToast("新制自 2026 年 9 月起適用，8 月以前維持原本自動判斷、不可預排", false);
+            return;
+        }
+        const okAutoGovRest = await openConfirm(
+            `確定要一鍵預排 ${year} 年 ${month} 月的見紅休？\n` +
+            `會對見紅休名單（${SC.GOV_REST_NAMES.join("、")}）在本月每個週末/國定假日各排一筆休假紀錄（禁休日除外）。\n` +
+            `重跑時只會清除「系統預排」產生的舊紀錄再重建，手動改過（例如取消某天去當助教、或補休調到平日）的紀錄不會被動到。`
+        );
+        if (!okAutoGovRest) return;
+        setAutoGovRest(true);
+        try {
+            setProgress({ text: "載入資料...", current: 0, total: 0 });
+            const totalDays = new Date(year, month, 0).getDate();
+            const targetDates = [];
+            for (let day = 1; day <= totalDays; day++) {
+                const dateStr = SC.fmtDate(year, month, day);
+                if (noRest[dateStr]) continue; // 禁休日排除，全員上班
+                if (SC.isGovRestDay(year, month, day)) targetDates.push(dateStr);
+            }
+            if (targetDates.length === 0) { showToast("本月沒有可預排的見紅休日期", false); setAutoGovRest(false); return; }
+
+            const allLeaveJson = await SC.proxyFetch("listLeaves" + SC.leaveQuery(year, month, year, month));
+
+            // 只刪「系統預排見紅休」產生的舊紀錄，手動改過的（dept !== "系統預排見紅休"）一律保留
+            const toDelete = Object.entries(allLeaveJson)
+                .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                .filter(([id, f]) => {
+                    const type = f[CONFIG.F_LEAVE.TYPE] || "";
+                    if (type !== "見紅休") return false;
+                    // 標記為「已取消」的一律保留：它是珊珊刻意把那天改成上班的紀錄，
+                    // 刪掉的話重跑預排會把休假又排回去（dept 仍是系統預排，光看 dept 判斷不出來）。
+                    if ((f[CONFIG.F_LEAVE.IS_AUTO] || "") === SC.GOV_REST_CANCELLED) return false;
+                    const dept = f[CONFIG.F_LEAVE.DEPT] || "";
+                    if (dept !== "系統預排見紅休") return false; // 手動改過的保留
+                    const date = f[CONFIG.F_LEAVE.DATE] || "";
+                    const p = date.replace(/\//g,"-").split("-");
+                    return parseInt(p[0]) === year && parseInt(p[1]) === month;
+                });
+
+            if (toDelete.length > 0) {
+                const affectedDates = [...new Set(toDelete.map(([, f]) => f[CONFIG.F_LEAVE.DATE] || ""))].filter(Boolean).sort();
+                const okFinalGovRest = await openConfirm(
+                    `⚠️ 最終確認：即將「刪除」${toDelete.length} 筆系統預排的見紅休紀錄並重新產生\n\n` +
+                    `影響月份：${year}-${String(month).padStart(2, "0")}（共 ${affectedDates.length} 天）\n` +
+                    `手動改過的見紅休紀錄不受影響、會保留。\n\n` +
+                    `按「確定」會先自動下載一份 JSON 備份到你的電腦，再執行刪除＋重建。\n` +
+                    `此動作無法在頁面內復原，請確認是本人操作、且真的要重排整月。`
+                );
+                if (!okFinalGovRest) {
+                    showToast("已取消，未做任何變更");
+                    setProgress(null);
+                    setAutoGovRest(false);
+                    return;
+                }
+                try {
+                    exportScheduleSnapshot("見紅休", year, month, toDelete);
+                } catch (snapErr) {
+                    console.error("快照匯出失敗", snapErr);
+                    await openAlert("快照匯出失敗，為安全起見已中止本次預排（尚未刪除任何紀錄）：\n" + snapErr.message);
+                    setProgress(null);
+                    setAutoGovRest(false);
+                    return;
+                }
+            }
+
+            for (let di = 0; di < toDelete.length; di++) {
+                setProgress({ text: "清除舊見紅休紀錄", current: di + 1, total: toDelete.length });
+                await SC.proxyFetch(`deleteLeave/${toDelete[di][0]}`, { method: "DELETE" });
+                await sleep(200);
+            }
+
+            // 已存在的紀錄（含保留下來的手動紀錄、以及標記為「已取消」的）不重複寫入。
+            // 「已取消」的紀錄之所以必須留在這份集合裡：它代表珊珊刻意把那天改成上班（例如去當助教），
+            // 重跑預排時必須跳過，不能又補一筆休假回去。
+            const existingKeys = new Set(
+                Object.entries(allLeaveJson)
+                    .filter(([k,v]) => typeof v === "object" && !k.startsWith("_"))
+                    .filter(([id, f]) => (f[CONFIG.F_LEAVE.TYPE] || "") === "見紅休" && !toDelete.some(([tid]) => tid === id))
+                    .map(([id, f]) => `${f[CONFIG.F_LEAVE.EMP] || ""}|${f[CONFIG.F_LEAVE.DATE] || ""}`)
+            );
+
+            setProgress({ text: "寫入見紅休紀錄...", current: 0, total: 0 });
+            const grBatchRecords = [];
+            const grBatchMeta = [];
+            targetDates.forEach(dateStr => {
+                SC.GOV_REST_NAMES.forEach(empName => {
+                    const k = `${empName}|${dateStr}`;
+                    if (existingKeys.has(k)) return; // 手動保留的紀錄已存在，不重複寫
+                    // 到職日以前不預排（2026-10-29 花那 11/3 到職）；查不到員工資料就照排
+                    const hd = ((allEmployees.find(e => e.name === empName) || {}).hireDate || "").split("/").map(Number);
+                    if (hd.length === 3 && hd[0] < 9999 && SC._cmpDateStr(dateStr, SC.fmtDate(hd[0], hd[1], hd[2])) < 0) return;
+                    grBatchRecords.push({
+                        [CONFIG.F_LEAVE.EMP]: empName,
+                        [CONFIG.F_LEAVE.DATE]: dateStr,
+                        [CONFIG.F_LEAVE.YEAR]: String(year),
+                        [CONFIG.F_LEAVE.MONTH]: String(month),
+                        [CONFIG.F_LEAVE.TYPE]: "見紅休",
+                        [CONFIG.F_LEAVE.DEPT]: "系統預排見紅休",
+                    });
+                    grBatchMeta.push({ empName, dateStr });
+                });
+            });
+
+            if (grBatchRecords.length === 0) {
+                showToast("本月見紅休紀錄已是最新，沒有需要新增的");
+                setProgress(null);
+                setAutoGovRest(false);
+                return;
+            }
+
+            const grResults = [];
+            for (let i = 0; i < grBatchRecords.length; i++) {
+                setProgress({ text: "寫入見紅休紀錄...", current: i + 1, total: grBatchRecords.length });
+                const res = await SC.proxyFetch("createLeave", {
+                    method: "POST",
+                    headers: {"Content-Type":"application/json"},
+                    body: JSON.stringify(grBatchRecords[i])
+                });
+                grResults.push({ ragicId: String(res.ragicId || "") });
+                await sleep(200);
+            }
+
+            const deletedIds = new Set(toDelete.map(([id]) => id));
+            setLeaves(prev => {
+                const next = {};
+                for (const [k, arr] of Object.entries(prev)) {
+                    const filtered = (arr || []).filter(e => !deletedIds.has(e.ragicId));
+                    if (filtered.length > 0) next[k] = filtered;
+                }
+                grBatchMeta.forEach((m, i) => {
+                    const key = `${m.empName}|${m.dateStr}`;
+                    if (!next[key]) next[key] = [];
+                    next[key].push({ ragicId: grResults[i]?.ragicId || "", type: "見紅休", isAuto: "" });
+                });
+                return next;
+            });
+            showToast(`已完成一鍵預排見紅休，共 ${targetDates.length} 天、新增 ${grBatchRecords.length} 筆`);
+        } catch(e) {
+            console.error(e);
+            showToast("一鍵預排見紅休失敗: " + e.message, false);
+        }
+        setProgress(null);
+        setAutoGovRest(false);
+    };
+
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const dates = Array.from({length: daysInMonth}, (_, i) => {
+        const d = new Date(year, month-1, i+1);
+        return { day: i+1, dow: DAYS[d.getDay()], isWeekend: d.getDay()===0||d.getDay()===6 };
+    });
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}/${String(today.getMonth()+1).padStart(2,"0")}/${String(today.getDate()).padStart(2,"0")}`;
+
+    const changeMonth = (offset) => {
+        let m = month + offset, y = year;
+        if (m < 1) { m = 12; y--; }
+        if (m > 12) { m = 1; y++; }
+        setYear(y); setMonth(m);
+    };
+
+    const getStats = (empName) => {
+        let trash = 0, paixiu = 0, texiu = 0, qingjia = 0, zhiban = 0, zhibanMissed = 0, f1 = 0, f2 = 0, f3 = 0, f4 = 0, dutyOther = 0, govRestDays = 0;
+        Object.entries(leaves).forEach(([k, arr]) => {
+            if (!k.startsWith(empName + "|") || !Array.isArray(arr)) return;
+            arr.forEach(v => {
+                if (v.type === "排休") paixiu++;
+                else if (v.type === "特休") texiu++;
+                else if (v.type === "值班") {
+                    if (v.isAuto === "未值班") zhibanMissed++;
+                    else {
+                        zhiban++;
+                        const day = Number(k.split("|")[1].split("/")[2]);
+                        if (SC.isDutyV2Month(year, month) && SC.isTrashCollectionDay(year, month, day)) trash++; // 新制：值班的人倒垃圾
+                    }
+                }
+                // 新制真實紀錄，獨立計數，不算進請假；標記「已取消」的那天是上班日，不計入休假
+                else if (v.type === "見紅休") { if (v.isAuto !== GOV_REST_CANCELLED) govRestDays++; }
+                else qingjia++;
+            });
+        });
+        let missed = 0;
+        Object.values(duties).forEach(arr => {
+            (arr||[]).forEach(d => {
+                if (d.empName !== empName) return;
+                if (d.missed) { missed++; return; }
+                if (d.floor === "1F") f1++;
+                else if (d.floor === "2F") f2++;
+                else if (d.floor === "3F") f3++;
+                else if (d.floor === "4F") f4++;
+                else dutyOther++;
+            });
+        });
+        // 見紅休天數：9 月起（新制）數上面 leaves 迴圈算出的真實紀錄 govRestDays；
+        // 8 月以前（舊制）維持即時計算（該月週末+國定假日，扣除禁休日）
+        if (!SC.isPrescheduledRestMonth(year, month)) {
+            govRestDays = 0;
+            if (GOV_REST_EMPLOYEES.has(empName)) {
+                const dim = new Date(year, month, 0).getDate();
+                for (let d = 1; d <= dim; d++) {
+                    const ds = SC.fmtDate(year, month, d);
+                    if (noRest[ds]) continue; // 禁休日不算
+                    if (SC.isGovRestDay(year, month, d)) govRestDays++;
+                }
+            }
+        }
+        const totalRest = paixiu + texiu + qingjia + govRestDays;
+        const floorsDone = f1 + f2 + f3 + f4 + dutyOther;
+        const points = floorsDone + trash * SC.DUTY_V2_TRASH_FLOORS; // 新制負擔分數（層）：每掃一層 1、倒一次垃圾 1 層
+        return { paixiu, texiu, qingjia, zhiban, zhibanMissed, f1, f2, f3, f4, dutyOther, missed, govRestDays, totalRest, trash, floorsDone, points };
+    };
+
+    const pct = progress && progress.total > 0 ? Math.round(progress.current / progress.total * 100) : null;
+
+    return (
+        <div className="max-w-full mx-auto p-4">
+            {progress && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100]">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center">
+                        <div className="cell-spin w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full mx-auto mb-4"></div>
+                        <div className="text-lg font-bold mb-2" style={{color:"#3f5262"}}>{progress.text}</div>
+                        {progress.total > 0 && (
+                            <>
+                                <div className="w-full bg-gray-200 rounded-full h-4 mb-2 overflow-hidden">
+                                    <div className="h-full rounded-full transition-all duration-300" style={{width: pct + "%", background: "linear-gradient(90deg, #3b82f6, #8b5cf6)"}}></div>
+                                </div>
+                                <div className="text-sm text-gray-500">{progress.current} / {progress.total}（{pct}%）</div>
+                            </>
+                        )}
+                        {!progress.total && <div className="text-sm text-gray-400">請稍候...</div>}
+                    </div>
+                </div>
+            )}
+            <div className="flex items-center justify-between mb-4 bg-white rounded-xl shadow-sm p-4">
+                <h1 className="text-xl font-bold" style={{color:"#3f5262"}}>🗓️ 窩的家 — 排班表{IS_READONLY ? "（閱覽）" : ""}</h1>
+                <div className="flex items-center gap-3">
+                    <button onClick={() => changeMonth(-1)} className="px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 font-bold">◀</button>
+                    <span className="text-lg font-bold min-w-[140px] text-center">{year} 年 {month} 月</span>
+                    <button onClick={() => changeMonth(1)} className="px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 font-bold">▶</button>
+                    <button onClick={load} className="ml-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 text-sm">重新載入</button>
+                    {!IS_READONLY && <button
+                        onClick={handleAutoSchedule}
+                        disabled={autoScheduling || loading}
+                        className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                        {autoScheduling ? "預排中..." : "一鍵預排值日生"}
+                    </button>}
+                    {!IS_READONLY && <button
+                        onClick={handleAutoZhiban}
+                        disabled={autoZhiban || loading}
+                        className="px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                        {autoZhiban ? "預排中..." : "一鍵排值班"}
+                    </button>}
+                    {!IS_READONLY && <button
+                        onClick={handleAutoGovRest}
+                        disabled={autoGovRest || loading || !SC.isPrescheduledRestMonth(year, month)}
+                        title={SC.isPrescheduledRestMonth(year, month) ? "" : "新制自 2026 年 9 月起適用"}
+                        className="px-3 py-1.5 bg-pink-50 text-pink-600 rounded-lg hover:bg-pink-100 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                        {autoGovRest ? "預排中..." : "一鍵預排休假"}
+                    </button>}
+                    <button
+                        onClick={() => setShowRules(true)}
+                        className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700 text-sm font-bold flex items-center justify-center"
+                        title="排班規則說明">?</button>
+                </div>
+            </div>
+
+            {showRules && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowRules(false)}>
+                    <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-lg font-bold" style={{color:"#3f5262"}}>排班規則說明</h2>
+                            <button onClick={() => setShowRules(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                        </div>
+                        <div className="space-y-4 text-sm text-gray-700 leading-relaxed">
+                            <div>
+                                <h3 className="font-bold text-base mb-1">📋 狀態說明</h3>
+                                <table className="w-full text-left text-sm">
+                                    <tbody>
+                                        <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-green-100 text-green-700">排休</span></td><td>月休（計入 {SC.monthLeaveLimit(year, month)} 天上限{SC.monthLeaveLimit(year, month) === 9 ? "，三節月 +1" : ""}）</td></tr>
+                                        <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-yellow-100 text-yellow-700">特休</span></td><td>特別休假</td></tr>
+                                        <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-red-100 text-red-700">請假</span></td><td>事假/病假</td></tr>
+                                        <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-orange-100 text-orange-700">值班</span></td><td>{SC.isDutyV2Month(year, month) ? "19:00-20:00 多留 1 小時，並負責倒垃圾 🗑️" : "19:00-20:00 多留 1 小時"}</td></tr>
+                                        <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-blue-100 text-blue-700">值日</span></td><td>{SC.isDutyV2Month(year, month) ? "打掃（整棟 1F–4F 每天；業務/兼職一人掃整棟，內勤兩人一組）" : "打掃（1F/2F/3F 每天各 1 人，4F 只在週五）"}</td></tr>
+                                        <tr><td className="pr-2 py-0.5"><span className="inline-block px-1.5 rounded bg-gray-100 text-gray-500">休假</span></td><td>見紅休（{SC.GOV_REST_NAMES.join("、")}，週末/國定假日{SC.isPrescheduledRestMonth(year, month) ? "，月初一鍵預排，可自由編輯（不計入月休上限）" : "自動標記，不可編輯"}）</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <hr className="border-gray-200" />
+                            <div>
+                                <h3 className="font-bold text-base mb-1">⚡ 一鍵排值班</h3>
+                                <ul className="list-disc pl-4 space-y-1">
+                                    <li><b>資格</b>：承攬＋到職滿 3 個月（社宅部除外）</li>
+                                    <li><b>每月從零開始</b>：不追歷史累計，當月均勻分配</li>
+                                    <li>每天 1 人，月內次數差距 ≤ 1</li>
+                                    <li>不連續排同一人，排除當天休假者</li>
+                                    <li>新人入池不用補前人的值班次數</li>
+                                </ul>
+                            </div>
+                            <hr className="border-gray-200" />
+                            <div>
+                                <h3 className="font-bold text-base mb-1">🌸 一鍵預排休假（見紅休新制，2026/09 起）</h3>
+                                <ul className="list-disc pl-4 space-y-1">
+                                    <li><b>對象</b>：{SC.GOV_REST_NAMES.join("、")}</li>
+                                    <li>對每個週末/國定假日各排一筆休假紀錄（禁休日除外）</li>
+                                    <li><b>排好之後就是一般紀錄</b>：跟排休一樣可自由點格取消/新增，不會被強制鎖住</li>
+                                    <li>常見情境：小吳哥課程排在六日、內勤要去當助教 → 先把該天見紅休取消，平日再補休一天</li>
+                                    <li>見紅休不佔 {SC.monthLeaveLimit(year, month)} 天月休上限，獨立計算</li>
+                                    <li>重跑只清除系統預排的舊紀錄，手動改過的（例如已取消的那天）不會被覆蓋</li>
+                                    <li>2026/08 以前的月份維持舊制，即時判斷、格子不可點</li>
+                                </ul>
+                            </div>
+                            <hr className="border-gray-200" />
+                            {SC.isDutyV2Month(year, month) ? (
+                            <div>
+                                <h3 className="font-bold text-base mb-1">🧹 一鍵預排值日生（2026/11 新制）</h3>
+                                <ul className="list-disc pl-4 space-y-1">
+                                    <li><b>每天掃整棟 1F–4F</b>（4F 也是每天）</li>
+                                    <li><b>業務、兼職：一個人一天掃整棟</b>（表上會看到同一個人 1F+2F+3F+4F）</li>
+                                    <li><b>內勤六位兩人一組</b>：一人 1F+4F、一人 2F+3F，搭檔和樓層每次輪替；只排平日，六日與國定假日不排</li>
+                                    <li><b>兼職每月一次</b>，由系統排在六日（{SC.PARTTIME_DUTY_FIRST_DATE.slice(5)} 起），六日不夠的排平日；不用值班、不用倒垃圾</li>
+                                    <li><b>倒垃圾歸當天值班的人</b>（值班格會標 🗑️；週三、週日清潔隊不收）。不再另外排清運</li>
+                                    <li>值班和打掃各排各的，互不綁定</li>
+                                    <li>次數平均：業務約每月 1 次整棟，剩下的平日由內勤兩人一組補；同一個人不連續兩天</li>
+                                    <li>今天以前（含今天）鎖定、手動排的保留、休假與見紅休的人跳過、禁休日全員打掃不排</li>
+                                    <li>罰款：沒掃每層 200（整棟 800）；沒倒垃圾 300（罰值班的人，標「未值班」）。只罰錢不補掃</li>
+                                </ul>
+                            </div>
+                            ) : (
+                            <div>
+                                <h3 className="font-bold text-base mb-1">🧹 一鍵預排值日生</h3>
+                                <ul className="list-disc pl-4 space-y-1">
+                                    <li><b>資格</b>：全部在職（不含經營階層、兼職）</li>
+                                    <li><b>公平輪轉</b>：上月次數少的人優先排，多的少排</li>
+                                    <li><b>新人不追入池前的債</b>：起始次數 = 老員工平均值</li>
+                                    <li>每天 3 位（1F / 2F / 3F），週五加排 4F</li>
+                                    <li>盡量一週排一次（本週已排過 +5 分降低優先）</li>
+                                    <li>不連續排同一人，排除當天休假/見紅休者</li>
+                                    <li>值班的人同天順便掃地（佔 1 個值日名額）</li>
+                                    <li>禁休日全員打掃，不排值日生</li>
+                                </ul>
+                                <div className="mt-3 p-3 bg-blue-50 rounded-lg text-xs text-blue-800">
+                                    <p className="font-bold mb-1">💡 怎麼決定誰多排？（舉例）</p>
+                                    <p>假設上個月大家平均打掃 2 次：</p>
+                                    <table className="w-full mt-1 text-xs">
+                                        <thead><tr className="text-left"><th className="pr-2">人</th><th className="pr-2">上月實際</th><th className="pr-2">跟平均的差</th><th>本月結果</th></tr></thead>
+                                        <tbody>
+                                            <tr><td>瓊安</td><td>2 次</td><td>剛好</td><td>排 ~4 次（正常）</td></tr>
+                                            <tr><td>瓊安（如果上月 0 次）</td><td>0 次</td><td>少 2 次</td><td>排 ~6 次（多排 2 次拉平）</td></tr>
+                                        </tbody>
+                                    </table>
+                                    <p className="mt-1.5 text-blue-600">大家都是按上月打掃次數排的 — 次數少的這個月多排一點，次數多的少排一點，確保長期下來每個人差不多。每位員工名字下方的 🧹 數字就是上月打掃次數，可以對照確認。</p>
+                                </div>
+                            </div>
+                            )}
+                            <hr className="border-gray-200" />
+                            <div>
+                                <h3 className="font-bold text-base mb-1">💑 夫妻同排（張忠豪 &amp; 蕭頤臻）</h3>
+                                <ul className="list-disc pl-4 space-y-1">
+                                    <li>值日生必須一起排（一組佔 2 個名額）</li>
+                                    <li>作為一個「家庭單位」跟個人公平競爭</li>
+                                    <li>只有兩人的「合計次數」比 2 個最該排的個人更少時，才會被排</li>
+                                    <li>值班各自獨立，不受夫妻規則影響</li>
+                                </ul>
+                            </div>
+                            <hr className="border-gray-200" />
+                            <div>
+                                <h3 className="font-bold text-base mb-1">🚫 禁休</h3>
+                                <ul className="list-disc pl-4 space-y-1">
+                                    <li>珊珊設定禁休日（輸入原因）</li>
+                                    <li>禁休日排休/特休會跳警告，請假不擋</li>
+                                    <li>禁休覆蓋見紅休（全員上班）</li>
+                                </ul>
+                            </div>
+                            <hr className="border-gray-200" />
+                            <div>
+                                <h3 className="font-bold text-base mb-1">📅 權限</h3>
+                                <ul className="list-disc pl-4 space-y-1">
+                                    <li>每月 20 號後自動開放（免密碼），顯示下個月</li>
+                                    <li>1-19 號需密碼進入</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <button onClick={() => setShowRules(false)} className="mt-5 w-full py-2.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 font-bold">關閉</button>
+                    </div>
+                </div>
+            )}
+
+            <div className="flex items-center gap-2 mb-3">
+                {!IS_READONLY && <>
+                <span className="text-sm text-gray-500 mr-1">模式：</span>
+                {[
+                    {id:"排休", color:"bg-green-500", label:"排休"},
+                    {id:"特休", color:"bg-yellow-500", label:"特休"},
+                    {id:"請假", color:"bg-red-500", label:"請假"},
+                    {id:"值班", color:"bg-orange-500", label:"值班"},
+                    {id:"值日", color:"bg-blue-500", label:"值日生"},
+                    // 2026/11 新制：倒垃圾歸值班的人，不再有獨立清運模式
+                    ...(SC.isDutyV2Month(year, month) ? [] : [{id:"清運", color:"bg-slate-600", label:"清運🗑️"}]),
+                    // 見紅休手動模式：9 月起（新制）才顯示，8 月以前見紅休仍是即時計算、手動點無意義
+                    ...(SC.isPrescheduledRestMonth(year, month) ? [{id:"見紅休", color:"bg-gray-500", label:"見紅休"}] : []),
+                    {id:"禁休", color:"bg-rose-700", label:"禁休"},
+                ].map(m => (
+                    <button key={m.id} onClick={() => setMode(m.id)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${mode === m.id ? m.color + " text-white shadow-md scale-105" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                        {m.label}
+                    </button>
+                ))}
+                </>}
+                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-green-500 inline-block"></span> 排休</span>
+                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-yellow-500 inline-block"></span> 特休</span>
+                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#7a7b7a"}}></span> 請假</span>
+                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-orange-500 inline-block"></span> 值班</span>
+                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#3b82f6"}}></span> 1F</span>
+                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#8b5cf6"}}></span> 2F</span>
+                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#0891b2"}}></span> 3F</span>
+                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded inline-block" style={{background:"#ea580c"}}></span> 4F</span>
+                <span className="flex items-center gap-1 text-sm">{SC.isDutyV2Month(year, month) ? "🗑️ 值班倒垃圾" : "🗑️ 清運"}</span>
+                <span className="flex items-center gap-1 text-sm"><span className="w-4 h-4 rounded bg-gray-200 inline-block"></span> 見紅休</span>
+                <span className="flex items-center gap-1 text-sm">🚫 禁休</span>
+                {!IS_READONLY && <span className="ml-2 text-gray-400 text-sm">{mode === "禁休" ? "點左邊日期欄設定/取消禁休" : `點格子=${mode}，再點=清除`}</span>}
+            </div>
+
+            {loading ? (
+                <div className="flex items-center justify-center py-20">
+                    <div className="cell-spin w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full"></div>
+                    <span className="ml-3 text-gray-500">載入中...</span>
+                </div>
+            ) : (
+                <div className="overflow-x-auto bg-white rounded-xl shadow-sm">
+                    <table ref={tableRef} className="w-full text-sm sched-table" style={{tableLayout:"fixed"}} onMouseMove={handleTableHover} onMouseLeave={handleTableLeave}>
+                        <thead>
+                            <tr>
+                                <th className="sticky-left bg-white p-2" style={{width:"60px"}} rowSpan={2}>
+                                    <span className="text-gray-500 text-xs">日期</span>
+                                </th>
+                                {(() => {
+                                    const result = [];
+                                    let i = 0;
+                                    while (i < employees.length) {
+                                        const dept = employees[i].dept;
+                                        let count = 0;
+                                        while (i + count < employees.length && employees[i + count].dept === dept) count++;
+                                        // 內部 dept 維持「兼職」（手動點格會寫進 Ragic），只改顯示
+                                        const color = dept === "兼職" ? DEPT_COLORS["租賃部"] : (DEPT_COLORS[dept] || "#6b7280");
+                                        result.push(
+                                            <th key={dept} colSpan={count} className="p-1 text-white text-xs font-medium" style={{backgroundColor: color}}>
+                                                {dept === "兼職" ? "租賃部（兼職）" : dept}
+                                            </th>
+                                        );
+                                        i += count;
+                                    }
+                                    return result;
+                                })()}
+                            </tr>
+                            <tr className="bg-gray-50">
+                                {employees.map(emp => {
+                                    const ps = prevStats[emp.name];
+                                    const pm = month === 1 ? 12 : month - 1;
+                                    return (
+                                        <th key={emp.name} className="emp-cell p-1 text-center font-medium text-gray-700 text-xs whitespace-nowrap">
+                                            <div>{emp.display}</div>
+                                            {ps && <div className="font-normal text-gray-400" style={{fontSize:"9px", lineHeight:"1.2"}}>
+                                                {pm}月 🧹{ps.duty.toFixed(0)}{emp.hire === "承攬" && emp.dept !== "社宅部" ? ` 🕗${ps.zhiban.toFixed(0)}` : ""}
+                                            </div>}
+                                        </th>
+                                    );
+                                })}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {dates.map(({day, dow, isWeekend}) => {
+                                const mm = String(month).padStart(2,"0");
+                                const dd = String(day).padStart(2,"0");
+                                const dateStr = `${year}/${mm}/${dd}`;
+                                const isToday = dateStr === todayStr;
+                                const nrInfo = noRest[dateStr];
+                                const holidayName = GOV_HOLIDAYS_2026[dateStr] || "";
+                                const isHoliday = isWeekend || !!holidayName;
+                                const rowBg = nrInfo ? "" : isToday ? "bg-yellow-50" : isHoliday ? "bg-blue-50/40" : "";
+                                const dutyList = duties[dateStr] || [];
+                                const dutyKey = `duty|${dateStr}`;
+                                const isDutySaving = saving[dutyKey];
+                                const noRestSaving = saving[`norest|${dateStr}`];
+
+                                // 每日驗證：值日每樓層 1 人、值班每天 1 人
+                                // 未來日期（含今天之後）不驗，避免「尚未排班」被誤判為異常
+                                const warnMsgs = [];
+                                const isPastOrToday = dateStr <= todayStr;
+                                if (!nrInfo && isPastOrToday) {
+                                    const floorGroup = { "1F": [], "2F": [], "3F": [], "4F": [], "_none": [] };
+                                    dutyList.forEach(d => {
+                                        if (d.isTrash) return; // 清運值日不佔樓層格，不列入樓層驗證
+                                        const slot = ["1F","2F","3F","4F"].includes(d.floor) ? d.floor : "_none";
+                                        floorGroup[slot].push(d.empName);
+                                    });
+                                    // 舊制 4 樓只在週五排；2026/11 起每天 1F–4F（SC.expectedDutyFloors 依月份判斷）
+                                    const expectFloors = SC.expectedDutyFloors(year, month, day);
+                                    const expect4F = expectFloors.includes("4F");
+                                    expectFloors.forEach(f => {
+                                        const n = floorGroup[f].length;
+                                        if (n === 0) warnMsgs.push(`缺 ${f} 值日`);
+                                        else if (n > 1) warnMsgs.push(`${f} 多排：${floorGroup[f].join("、")}`);
+                                    });
+                                    if (!expect4F && floorGroup["4F"].length > 0) warnMsgs.push(`4F 非週五不排：${floorGroup["4F"].join("、")}`);
+                                    if (floorGroup["_none"].length > 0) warnMsgs.push(`未註樓層：${floorGroup["_none"].join("、")}`);
+                                    const zhibanEmps = [];
+                                    Object.entries(leaves).forEach(([k, arr]) => {
+                                        if (!k.endsWith("|" + dateStr) || !Array.isArray(arr)) return;
+                                        arr.forEach(e => { if (e.type === "值班") zhibanEmps.push(k.split("|")[0]); });
+                                    });
+                                    if (zhibanEmps.length === 0) warnMsgs.push("缺值班");
+                                    else if (zhibanEmps.length > 1) warnMsgs.push(`值班多排：${zhibanEmps.join("、")}`);
+                                }
+                                const hasWarn = warnMsgs.length > 0;
+                                const dateTitle = [
+                                    nrInfo ? "禁休：" + (nrInfo.reason || "無原因") : holidayName || "",
+                                    hasWarn ? "⚠ " + warnMsgs.join("；") : ""
+                                ].filter(Boolean).join("\n");
+
+                                return (
+                                    <tr key={day} className={rowBg} style={nrInfo ? {background:"#fff1f2", outline:"2px solid #fda4af", outlineOffset:"-1px"} : undefined}>
+                                        <td className={`sticky-left p-2 text-center font-medium whitespace-nowrap ${nrInfo ? "text-rose-700" : isToday ? "bg-yellow-50" : hasWarn ? "bg-amber-100" : isHoliday ? "bg-blue-50" : "bg-white"} ${!nrInfo && isHoliday ? "text-red-500" : !nrInfo ? "text-gray-700" : ""} ${mode === "禁休" && !IS_READONLY ? "cursor-pointer hover:bg-rose-100" : ""}`}
+                                            style={nrInfo ? {background:"#ffe4e6", borderLeft:"3px solid #e11d48"} : hasWarn && !isToday ? {borderLeft:"3px solid #f59e0b"} : undefined}
+                                            onClick={() => mode === "禁休" && handleNoRest(dateStr)}
+                                            title={dateTitle}>
+                                            <span className="text-sm">{day}</span>
+                                            <span className="text-xs ml-1 text-gray-400">({dow})</span>
+                                            {hasWarn && <span className="ml-1 text-amber-600" title={warnMsgs.join("\n")}>⚠</span>}
+                                            {holidayName && !nrInfo && <span className="block text-[9px] text-red-400 font-medium leading-tight">{holidayName}</span>}
+                                            {nrInfo && <span className="block text-[9px] text-rose-600 font-bold leading-tight mt-0.5">🚫{nrInfo.reason ? " "+nrInfo.reason : ""}</span>}
+                                        </td>
+                                        {employees.map(emp => {
+                                            const key = `${emp.name}|${dateStr}`;
+                                            const leaveList = leaves[key] || [];
+                                            const myDuties = dutyList.filter(d => d.empName === emp.name);
+                                            const myDuty = myDuties[0] || null;
+                                            const hasMultiFloor = myDuties.length > 1;
+                                            // 見紅休新制分界（2026-08-24，PRESCHEDULED_REST_START 起）：
+                                            // 9 月起見紅休是月初預排出來的真實紀錄（type==="見紅休"，含在 leaveList 裡），
+                                            // 不再即時計算、格子也恢復可點擊（isGovRestClickBlock 決定要不要 gate）；
+                                            // 8 月以前維持舊制：即時算 + 格子不可點。
+                                            // 標記「已取消」的見紅休那天是上班日，不算休假、不顯示灰底「休」。
+                                            const isNewRestMonth = SC.isPrescheduledRestMonth(year, month);
+                                            const isGovRest = isNewRestMonth
+                                                ? leaveList.some(l => l.type === "見紅休" && l.isAuto !== GOV_REST_CANCELLED)
+                                                : !nrInfo && SC.isGovRestFor(emp.name, year, month, day);
+                                            const isGovRestClickBlock = !isNewRestMonth && isGovRest;
+                                            const savingKey = mode === "值日" ? `duty|${dateStr}` : mode === "清運" ? `trash|${dateStr}` : key;
+                                            const cellSaving = saving[savingKey];
+                                            const floorLabel = hasMultiFloor
+                                                ? myDuties.map(d => d.floor || "值").join("+")
+                                                : myDuty ? (myDuty.floor || "值") : "";
+                                            // 組合所有彩色段（C 項重構：未值班/未掃融入 segments，不蓋掉式）
+                                            const MISSED_BG = "#ef4444";  // 未做 = 紅色
+                                            const MISSED_BORDER = "#fca5a5";
+                                            const segments = [];
+
+                                            // leave 類型段（值班支援未值班）
+                                            // 見紅休（type==="見紅休"）不進這裡組 segment：它由上方 isGovRest 分支
+                                            // 獨立顯示灰底「休」字，跟其他假別混色會蓋掉原本「休」的清楚辨識度。
+                                            leaveList.forEach(l => {
+                                                if (l.type === "見紅休") return;
+                                                if (l.type === "值班") {
+                                                    if (l.isAuto === "未值班") {
+                                                        segments.push({ color: MISSED_BG, label: "值班", short: "班", missed: true });
+                                                    } else if (SC.isDutyV2Month(year, month) && SC.isTrashCollectionDay(year, month, day)) {
+                                                        // 新制：值班的人負責當天倒垃圾（週三/週日清潔隊不收，不標）
+                                                        segments.push({ color: "#f97316", label: "值班🗑️", short: "班🗑️", missed: false, title: "值班：留到 20:00 並倒垃圾" });
+                                                    } else {
+                                                        segments.push({ color: "#f97316", label: "值班", short: "班", missed: false });
+                                                    }
+                                                } else if (l.type === "排休") {
+                                                    segments.push({ color: "#22c55e", label: "排休", short: "休", missed: false });
+                                                } else if (l.type === "特休") {
+                                                    segments.push({ color: "#eab308", label: "特休", short: "特", missed: false });
+                                                } else {
+                                                    segments.push({ color: "#7a7b7a", label: l.type, short: "假", missed: false });
+                                                }
+                                            });
+
+                                            // 值日段（missed = 未掃，正常 = 樓層色 / 清運🗑️沿用值日藍）
+                                            if (myDuties.length > 0) {
+                                                myDuties.forEach(d => {
+                                                    if (d.missed) {
+                                                        const floorShort = d.isTrash ? "🗑️" : (d.floor || "值");
+                                                        segments.push({ color: "#ffb3c6", label: `${floorShort}未掃`, short: `${floorShort}掃`, missed: true, title: d.isTrash ? d.note : undefined });
+                                                    } else if (d.isTrash) {
+                                                        segments.push({ color: "#3b82f6", label: "🗑️", short: "🗑️", missed: false, title: d.note });
+                                                    } else {
+                                                        const floorShort = d.floor || "值";
+                                                        segments.push({ color: FLOOR_COLORS[d.floor] || "#3b82f6", label: floorShort, short: floorShort, missed: false });
+                                                    }
+                                                });
+                                            }
+
+                                            const nSeg = segments.length;
+                                            const hasMissedSeg = segments.some(s => s.missed);
+
+                                            const bg = nSeg === 0 ? null :
+                                                nSeg === 1 ? segments[0].color :
+                                                "linear-gradient(135deg, " + segments.map((s, i) => {
+                                                    const p1 = (i / nSeg * 100).toFixed(1);
+                                                    const p2 = ((i + 1) / nSeg * 100).toFixed(1);
+                                                    return s.color + " " + p1 + "%, " + s.color + " " + p2 + "%";
+                                                }).join(", ") + ")";
+
+                                            // 文字：單段用 label，多段用 short，未做段同樣參與，字級隨段數縮
+                                            // 2026/11 新制：一人掃整棟 = 同一人四筆 1F/2F/3F/4F，格子上合併顯示「整棟」（四色斜條仍保留）
+                                            const isWholeBuilding = SC.isDutyV2Month(year, month) && SC.FLOORS.every(f => myDuties.some(d => d.floor === f && !d.missed));
+                                            const label = nSeg === 0 ? "" : isWholeBuilding
+                                                ? [...segments.filter(sg => !SC.FLOORS.includes(sg.label)).map(sg => sg.short), "整棟"].join("·")
+                                                : nSeg === 1 ? segments[0].label : segments.map(s => s.short).join("·");
+                                            const textSizeClass = isWholeBuilding ? "text-[10px]" : nSeg >= 4 ? "text-[8px]" : nSeg >= 3 ? "text-[9px]" : nSeg === 2 ? "text-[10px]" : "text-xs";
+                                            // 單段粉色未掃：文字改黑（蓋掉 text-white）
+                                            const singleTextStyle = (nSeg === 1 && segments[0].color === "#ffb3c6") ? { color: "#000" } : {};
+
+                                            // 生日判斷
+                                            const isBirthday = SC.isBirthday(emp, month, day);
+                                            const birthdayStyle = isBirthday
+                                                ? {outline:"2px dashed #eab308", outlineOffset:"-2px", ...((nSeg === 0 && !isGovRest) ? {background:"#fef9c3"} : {})}
+                                                : undefined;
+
+                                            // title tooltip 包含所有 labels
+                                            const allMissedLabels = segments.filter(s => s.missed).map(s => s.label);
+                                            const titleText = isBirthday ? `🎂 ${emp.name} 生日`
+                                                : nSeg > 1 ? `${emp.name}：${segments.map(s => s.label).join(" + ")}`
+                                                : hasMultiFloor ? `${emp.name} 值日：${floorLabel}`
+                                                : undefined;
+
+                                            // 未做狀態（有任一 missed segment）→ 外框紅虛線
+                                            const missedBorderStyle = hasMissedSeg
+                                                ? { outline: "2px dashed #f87171", outlineOffset: "-2px" }
+                                                : {};
+
+                                            return (
+                                                <td key={key}
+                                                    onClick={() => !IS_READONLY && !isGovRestClickBlock && mode !== "禁休" && handleClick(emp.name, dateStr)}
+                                                    className={`emp-cell p-0 text-center transition-colors select-none ${isGovRestClickBlock ? "cursor-default" : mode === "禁休" ? "cursor-default" : "cursor-pointer hover:bg-gray-100"} ${cellSaving ? "opacity-50" : ""}`}
+                                                    style={{...(nrInfo && nSeg === 0 && !isGovRest ? {background:"#fff1f2"} : undefined), ...birthdayStyle, ...missedBorderStyle}}
+                                                    title={titleText}>
+                                                    {cellSaving ? (
+                                                        <span className="cell-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full"></span>
+                                                    ) : isGovRest ? (
+                                                        <span className="inline-block w-full leading-[32px] text-xs font-bold text-gray-400 bg-gray-100">休</span>
+                                                    ) : nSeg > 0 ? (
+                                                        <span className={`inline-block w-full leading-[32px] ${textSizeClass} font-bold text-white`} style={{background: bg, ...singleTextStyle}}>{label}</span>
+                                                    ) : isBirthday ? (
+                                                        <span className="inline-block w-full leading-[32px] text-sm">🎂</span>
+                                                    ) : null}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                        <tfoot>
+                            <tr className="bg-gray-50 font-medium">
+                                <td className="sticky-left bg-gray-50 p-2 text-center text-xs text-gray-500">合計</td>
+                                {employees.map(emp => {
+                                    const s = getStats(emp.name);
+                                    return (
+                                        <td key={emp.name} className="emp-cell p-1 text-center text-xs whitespace-nowrap">
+                                            {(() => {
+                                                const monthLimit = SC.monthLeaveLimit(year, month);
+                                                const restShort = monthLimit - s.totalRest;
+                                                return restShort > 0 && emp.hire !== "兼職" // 兼職不吃月休上限（只為了打掃才出現在表上）
+                                                    ? <div className="text-red-500 font-bold" title={`總休 ${s.totalRest} 天（排休${s.paixiu}+特休${s.texiu}+請假${s.qingjia}${s.govRestDays > 0 ? "+見紅休" + s.govRestDays : ""}），還差 ${restShort} 天（上限 ${monthLimit}${monthLimit === 9 ? "，三節月 +1" : ""}）`}>未休{restShort}天</div>
+                                                    : null;
+                                            })()}
+                                            <div>
+                                                {s.paixiu > 0 && <span className="text-green-600">{s.paixiu}休</span>}
+                                                {s.texiu > 0 && <span className="text-yellow-600"> {s.texiu}特</span>}
+                                                {s.qingjia > 0 && <span className="text-red-600"> {s.qingjia}假</span>}
+                                            </div>
+                                            <div>
+                                                {s.zhiban > 0 && <span className="text-orange-600">{s.zhiban}班</span>}
+                                                {s.zhibanMissed > 0 && <span className="text-red-600 font-bold"> {s.zhibanMissed}未值班</span>}
+                                                {(s.f1 + s.f2 + s.f3 + s.f4 + s.dutyOther) > 0 && <span className="text-blue-600"> {s.f1 + s.f2 + s.f3 + s.f4 + s.dutyOther}值</span>}
+                                                {s.missed > 0 && <span className="text-red-500"> {s.missed}未掃</span>}
+                                            </div>
+                                            {SC.isDutyV2Month(year, month) && s.points > 0 && (
+                                                <div className="text-purple-700 font-medium" title={`負擔分數：打掃 ${s.floorsDone} 層＋倒垃圾 ${s.trash} 次（每次算 ${SC.DUTY_V2_TRASH_FLOORS} 層）`}>{s.points}層</div>
+                                            )}
+                                            {s.paixiu === 0 && s.texiu === 0 && s.qingjia === 0 && s.zhiban === 0 && s.zhibanMissed === 0 && s.f1 === 0 && s.f2 === 0 && s.f3 === 0 && s.f4 === 0 && s.dutyOther === 0 && s.missed === 0 && <span className="text-gray-300">-</span>}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            )}
+
+            {toast && (
+                <div className={`fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-lg text-white font-medium z-50 ${toast.ok ? "bg-gray-800" : "bg-red-500"}`}>
+                    {toast.msg}
+                </div>
+            )}
+            <ConfirmModal open={confirmModal.open} message={confirmModal.message} onConfirm={() => closeConfirm(true)} onCancel={() => closeConfirm(false)} />
+            <AlertModal open={alertModal.open} message={alertModal.message} onClose={closeAlert} />
+            <PromptModal open={promptModal.open} message={promptModal.message} onConfirm={(v) => closePrompt(v)} onCancel={() => closePrompt(null)} />
+            <ActionSelectModal open={actionModal.open} message={actionModal.message} actions={actionModal.actions} onCancel={closeActionModal} />
+        </div>
+    );
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+<script>window.WH_BUG_REPORT = Object.assign({ screenshot: true }, window.WH_BUG_REPORT);</script>
+<script src="bug-report.js" defer></script>
+</body>
+</html>
