@@ -171,6 +171,35 @@ SC.nextTally = (M, todayStr) => {
     return out;
 };
 
+// ── 休假統計：對照舊版合計列，排休＋特休＋請假＋見紅休（已取消的不算）──
+SC.nextRestTally = (M) => {
+    const out = {};
+    for (let d = 1; d <= M.dim; d++) {
+        M.days[d].rest.forEach((x) => {
+            const t = (out[x.name] ||= { paixiu: 0, texiu: 0, qingjia: 0, gov: 0, total: 0 });
+            if (x.kind === "排休") t.paixiu++;
+            else if (x.kind === "特休") t.texiu++;
+            else if (x.kind === "請假") t.qingjia++;
+            else if (x.kind === "見紅休") t.gov++;
+            t.total++;
+        });
+    }
+    return out;
+};
+// 應休天數：見紅休名單＝當月六日與國定假日（扣禁休日）；兼職不算（回 null）；其他人＝月休上限
+SC.nextRestTarget = (M, emp) => {
+    if (!emp || emp.hire === "兼職") return null;
+    if (!SC.GOV_REST_NAMES.includes(emp.name)) return SC.monthLeaveLimit(M.year, M.month);
+    let n = 0;
+    for (let d = 1; d <= M.dim; d++) if (SC.isGovRestDay(M.year, M.month, d) && !M.days[d].noRest) n++;
+    return n;
+};
+SC.nextRestStatus = (total, target) => {
+    if (target === null) return { side: "none", diff: 0 };
+    const diff = total - target;
+    return { side: diff < 0 ? "short" : diff > 0 ? "over" : "ok", diff: Math.abs(diff) };
+};
+
 // ── 公平帳：每組（業務／內勤／兼職）各自的平均，標比平均多／少，沒有欠帳、追債、罰款字眼 ──
 // people = [{name, kind}]（kind 來自 SC.dutyV2Kind：biz／office／parttime）
 SC.NEXT_KIND_LABEL = { biz: "業務", office: "內勤", parttime: "兼職" };
