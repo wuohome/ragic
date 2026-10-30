@@ -208,10 +208,11 @@ test("休假統計：見紅休名單的應休天數是六日與國定假日；�
     assert.equal(SC.nextRestTarget(M, { name: "張瓊安", hire: "正職" }), red);
     days[1].noRest = { reason: "測試" };
     assert.equal(SC.nextRestTarget(M, { name: "張瓊安", hire: "正職" }), red - 1);
-    assert.deepEqual({ ...SC.nextRestStatus(6, 8) }, { side: "short", diff: 2 });
-    assert.deepEqual({ ...SC.nextRestStatus(9, 8) }, { side: "over", diff: 1 });
-    assert.deepEqual({ ...SC.nextRestStatus(8, 8) }, { side: "ok", diff: 0 });
-    assert.equal(SC.nextRestStatus(3, null).side, "none");
+    const mk = (paixiu, gov, other) => ({ paixiu, gov, total: paixiu + gov + other });
+    assert.deepEqual({ ...SC.nextRestStatus(mk(5, 0, 1), 8) }, { side: "short", diff: 2 }, "特休假算休到");
+    assert.deepEqual({ ...SC.nextRestStatus(mk(9, 0, 0), 8) }, { side: "over", diff: 1 });
+    assert.equal(SC.nextRestStatus(mk(8, 0, 2), 8).side, "ok", "特休假不算多休");
+    assert.equal(SC.nextRestStatus(mk(3, 0, 0), null).side, "none");
 });
 
 test("公平帳：每組自己的平均、標比平均多／少、只有 over／under／same，沒有欠帳或罰款欄", () => {
