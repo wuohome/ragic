@@ -246,7 +246,7 @@ main{padding-block:16px 96px;min-height:80vh}
 .checks li .acts{margin-left:auto;display:flex;gap:12px;flex:none}
 .dot-r{width:8px;height:8px;border-radius:9999px;background:var(--red);flex:none}
 .checks .ok{display:flex;gap:8px;align-items:center;padding-block:8px;color:var(--ink2);font-size:14px;line-height:20px}
-.mxwrap{scroll-margin-top:64px;margin-top:16px;overflow:auto;max-height:calc(100dvh - 80px);border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.mxwrap{margin-top:16px;width:max-content;min-width:100%;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
 .mx{border-collapse:separate;border-spacing:0;font-size:12px;line-height:16px;width:100%}
 .mx th,.mx td{padding:0;background:var(--bg);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
 .mx thead th{position:sticky;z-index:3;font-weight:400;text-align:center;color:var(--ink3);vertical-align:middle}
@@ -283,33 +283,30 @@ main{padding-block:16px 96px;min-height:80vh}
 .mxkey .sw{display:inline-block;width:16px;height:8px;border-radius:2px}
 .mxkey .sw2{display:inline-block;width:2px;height:12px;background:var(--ink)}
 /* 班表放大：格子 14 號字、列高 40；手機不讓浮動選單蓋住人名列 */
-.mx{font-size:14px;line-height:20px}
+/* 班表只跟整頁一起捲：選單固定在視窗上方，人名列貼在選單下面，日期欄貼左邊 */
+html:has(#mxwrap){overflow-x:visible}
+body:has(#mxwrap) .topwrap{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;background:var(--bg)}
+body:has(#mxwrap) #main{padding-top:60px}
+.mx{--th0:60px;font-size:14px;line-height:20px}
+.mx thead th.corner,.mx thead tr.g th{top:var(--th0)}
+.mx thead tr.p th{top:calc(var(--th0) + 32px)}
 .mx thead tr.p th{min-width:56px;height:44px;font-size:15px;font-weight:600}
 .mx thead tr.g th{font-size:14px}
 .mx .dt{height:40px;color:var(--ink2)}
 .mx .dt .n{font-size:15px}
-.mx tfoot th,.mx tfoot td{height:40px}
-.mx tfoot tr.dutyrow th,.mx tfoot tr.dutyrow td{bottom:40px}
-.mx tfoot tr.layerrow th,.mx tfoot tr.layerrow td{border-top:0}
-.mx thead tr.r th{top:76px;height:48px;background:var(--bg2);line-height:18px}
-.mx thead tr.r .rt{display:block;font-family:var(--mono);font-size:14px;font-weight:600;color:var(--ink)}
-.mx thead tr.r .rs{display:block;font-size:12px;font-weight:600;color:var(--ink3)}
-.mx thead tr.r th.short .rt,.mx thead tr.r th.short .rs{color:var(--red)}
-.mx thead tr.r th.short{background:var(--red-soft)}
-.mx thead tr.r th.over .rt,.mx thead tr.r th.over .rs{color:var(--duty-ink)}
-.mx thead tr.r th.over{background:var(--duty-soft)}
-.mx thead tr.r th.ok .rs{color:var(--rest-ink)}
-.restsum{margin-top:12px;font-size:14px;line-height:22px;color:var(--ink2)}
-.restsum b{color:var(--ink)}
-.restsum .short{color:var(--red);font-weight:600}
-.restsum .over{color:var(--duty-ink);font-weight:600}
+.mx tfoot th,.mx tfoot td{height:auto;padding-block:6px;font-family:var(--sans);font-size:12px;line-height:16px;font-weight:600}
+.mx tfoot .fs{display:block}
+.mx tfoot .short{color:var(--red)}
+.mx tfoot .over{color:var(--duty-ink)}
 .mx .cell{min-width:56px;height:40px}
 .mx .tag-clean{font-size:14px;line-height:22px;padding-inline:6px}
 .mx .tag-duty,.mx .tag-rest{width:22px;height:22px;font-size:14px;line-height:22px}
 .mxkey{font-size:14px;line-height:20px;color:var(--ink2)}
 @media (max-width:767px){
-  body:has(#mxwrap) .topwrap{position:static}
-  .mxwrap{max-height:calc(100dvh - 16px)}
+  body:has(#mxwrap) .topwrap{position:static;background:transparent}
+  body:has(#mxwrap) #main{padding-top:0}
+  .mx{--th0:0px}
+  .mx tfoot th,.mx tfoot td{position:static}
   .mx thead th.corner,.mx .dt{min-width:64px;padding-inline:6px}
   .mx .dt .n{min-width:20px;margin-right:2px}
   .mx tfoot th{padding-inline:6px}
@@ -446,9 +443,9 @@ main{padding-block:16px 96px;min-height:80vh}
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div id="modalRoot"></div>
 
-<script src="schedule-common.js?v=20261031-2"></script>
-<script src="schedule-duty-v2.js?v=20261031-2"></script>
-<script src="schedule-next-core.js?v=20261031-2"></script>
+<script src="schedule-common.js?v=20261031-3"></script>
+<script src="schedule-duty-v2.js?v=20261031-3"></script>
+<script src="schedule-next-core.js?v=20261031-3"></script>
 <script src="js/staff-gate.js"></script>
 <script>
 (function(){
@@ -858,45 +855,27 @@ function restInfo(n,rests){
   var t=rests[n]||{paixiu:0,texiu:0,qingjia:0,gov:0,total:0},target=SC.nextRestTarget(S.M,S.byName[n]);
   return {t:t,target:target,st:SC.nextRestStatus(t,target)};
 }
-function restHead(n,rests,first){
-  var r=restInfo(n,rests),t=r.t,bits=[];
-  if(t.gov)bits.push('正職休假 '+t.gov);if(t.paixiu)bits.push('排休 '+t.paixiu);if(t.texiu)bits.push('特休 '+t.texiu);if(t.qingjia)bits.push('請假 '+t.qingjia);
-  var title=dn(n)+' 共休 '+t.total+' 天'+(bits.length?'（'+bits.join('、')+'）':'');
-  var cls=[first?'gs':'',r.st.side==='none'?'':r.st.side].join(' ').trim();
-  var txt=r.target===null?t.total+' 天':t.total+'/'+r.target;
-  var sub=r.st.side==='short'?'少 '+r.st.diff+' 天':r.st.side==='over'?'多 '+r.st.diff+' 天':r.st.side==='ok'?(t.total>r.target?'含特休假':'剛好'):'兼職';
-  return '<th scope="col"'+(cls?' class="'+cls+'"':'')+' title="'+esc(title)+'"><span class="rt">'+txt+'</span><span class="rs">'+sub+'</span></th>';
-}
-function restSumHTML(){
-  var rests=SC.nextRestTally(S.M),short=[],over=[],ok=0;
-  S.groups.forEach(function(g){g.people.forEach(function(p){
-    var r=restInfo(p.name,rests);
-    if(r.st.side==='short')short.push(dn(p.name)+' 少 '+r.st.diff);
-    else if(r.st.side==='over')over.push(dn(p.name)+' 多 '+r.st.diff);
-    else if(r.st.side==='ok')ok++;
-  })});
-  var lead='<b>休假檢查：</b>';
-  if(!short.length&&!over.length)return '<p class="restsum">'+lead+'全部 '+ok+' 人都剛好（兼職不算）。</p>';
-  return '<p class="restsum">'+lead+
-    (short.length?'<span class="short">少休 '+short.length+' 人</span>：'+short.join('、')+'。':'')+
-    (over.length?'<span class="over">多休 '+over.length+' 人</span>：'+over.join('、')+'。':'')+
-    (ok?'其他 '+ok+' 人剛好。':'')+'</p>';
+function footStats(n,rests,tally){
+  var r=restInfo(n,rests),t=r.t,rest=[],work=[],line='';
+  if(r.st.side==='short')line='<span class="fs short">未休'+r.st.diff+'天</span>';
+  if(r.st.side==='over')line='<span class="fs over">多休'+r.st.diff+'天</span>';
+  if(t.paixiu+t.gov)rest.push((t.paixiu+t.gov)+'休');if(t.texiu)rest.push(t.texiu+'特');if(t.qingjia)rest.push(t.qingjia+'假');
+  if(tally.dutyDays)work.push(tally.dutyDays+'班');if(tally.schedLayers)work.push(tally.schedLayers+'層');
+  return line+'<span class="fs">'+(rest.join(' ')||'-')+'</span><span class="fs">'+(work.join(' ')||'-')+'</span>';
 }
 function tableHTML(){
-  var g1='<th class="corner" rowspan="3" scope="col">日期</th>',g2='',g3='',foot='<th scope="row" title="本月層數">層</th>',footD='<th scope="row" title="本月值班次數">值班</th>';
+  var g1='<th class="corner" rowspan="2" scope="col">日期</th>',g2='',foot='<th scope="row">合計</th>';
   var tally=SC.nextTally(S.M,TODAY),rests=SC.nextRestTally(S.M);
   S.groups.forEach(function(g){
     g1+='<th class="gs" scope="colgroup" colspan="'+g.people.length+'">'+esc(g.label)+'</th>';
     g.people.forEach(function(p,i){
       var gs=i===0?' class="gs"':'';
       g2+='<th scope="col"'+gs+' data-row="'+esc(p.name)+'">'+dn(p.name)+'</th>';
-      g3+=restHead(p.name,rests,i===0);
-      footD+='<td'+gs+'>'+((tally[p.name]||{}).dutyDays||0)+'</td>';
-      foot+='<td'+gs+' data-tot="'+esc(p.name)+'">'+((tally[p.name]||{}).schedLayers||0)+'</td>';
+      foot+='<td'+gs+' data-tot="'+esc(p.name)+'">'+footStats(p.name,rests,tally[p.name]||{})+'</td>';
     });
   });
   var body='';for(var d=1;d<=S.M.dim;d++)body+=rowHTML(d);
-  return '<table class="mx" id="mx"><thead><tr class="g">'+g1+'</tr><tr class="p">'+g2+'</tr><tr class="r">'+g3+'</tr></thead><tbody>'+body+'</tbody><tfoot><tr class="dutyrow">'+footD+'</tr><tr class="layerrow">'+foot+'</tr></tfoot></table>';
+  return '<table class="mx" id="mx"><thead><tr class="g">'+g1+'</tr><tr class="p">'+g2+'</tr></thead><tbody>'+body+'</tbody><tfoot><tr>'+foot+'</tr></tfoot></table>';
 }
 function stepState(){
   var noDuty=0,noClean=0;
@@ -955,11 +934,10 @@ function renderSched(){
     '<div class="ctrl"><div class="seg"><span class="lb">點格子改</span><div role="group" aria-label="點格子時要改的項目">'+
     [['rest','休假'],['duty','值班'],['clean','打掃'],['confirm','確認']].map(function(m){return '<button data-mode="'+m[0]+'" aria-pressed="'+(S.mode===m[0])+'">'+m[1]+'</button>'}).join('')+
     '</div></div><div class="mxkey" style="margin-top:0"><span>'+cleanTag([1,2,3,4])+'一人掃一到四樓</span><span>'+cleanTag([1,4])+'掃一樓和四樓</span><span>'+cleanTag([2,3])+'掃二樓和三樓</span><span><span class="tag-duty trash">值🗑️</span>值班要倒垃圾</span><span><span class="tag-duty">值</span>值班沒垃圾車</span><span><span class="tag-rest">休</span>排休</span><span><span class="tag-rest red">休</span>正職休假</span><span>空白是上班</span></div></div>'+
-    '<div id="srest">'+restSumHTML()+'</div>'+
     '<div id="schk">'+checksHTML()+'</div>'+
     '<div id="scf">'+confirmHTML()+'</div>'+
     '<div class="mxwrap" id="mxwrap" tabindex="0" role="region" aria-label="'+S.month+' 月排班表，可上下左右捲動">'+tableHTML()+'</div>'+
-    '<p class="xs muted" style="margin-top:8px">上下左右都能捲，人名和日期會固定。粗線分週，黃底是今天。點日期可設定或取消禁休。</p></div>';
+    '<p class="xs muted" style="margin-top:8px">人名和日期會固定。粗線分週，黃底是今天。點日期可設定或取消禁休。</p></div>';
 }
 function refreshCell(n,d){
   var b=$('.cell[data-n="'+n.replace(/"/g,'\\"')+'"][data-d="'+d+'"]');
@@ -969,9 +947,9 @@ function refreshCell(n,d){
 function refreshSched(){
   if(S.view!=='sched'||!S.perms.schedule)return;
   var w=$('#mxwrap');if(!w)return;
-  var t=w.scrollTop,l=w.scrollLeft;
-  w.innerHTML=tableHTML();w.scrollTop=t;w.scrollLeft=l;
-  $('#shead').innerHTML=headHTML();$('#srest').innerHTML=restSumHTML();$('#schk').innerHTML=checksHTML();$('#scf').innerHTML=confirmHTML();
+  var t=window.scrollY,l=window.scrollX;
+  w.innerHTML=tableHTML();window.scrollTo(l,t);
+  $('#shead').innerHTML=headHTML();$('#schk').innerHTML=checksHTML();$('#scf').innerHTML=confirmHTML();
 }
 function refreshAny(){
   if(S.view==='sched')refreshSched();else render();
@@ -1269,10 +1247,10 @@ function fixDay(d,kind){
   }).catch(function(e){toast('補上失敗：'+(e&&e.message||e),true)}).then(function(){S.busy=false});
 }
 function jump(d){
-  var w=$('#mxwrap'),th=$('th[data-col="'+d+'"]');if(!w||!th)return;
-  w.scrollTo({top:Math.max(0,th.parentNode.offsetTop-80),behavior:'smooth'});
+  var th=$('th[data-col="'+d+'"]');if(!th)return;
+  var head=$('.mx thead').offsetHeight+(parseInt(getComputedStyle($('.mx')).getPropertyValue('--th0'))||0);
+  window.scrollTo({top:Math.max(0,th.getBoundingClientRect().top+window.scrollY-head-8),behavior:'smooth'});
   th.classList.remove('flash');void th.offsetWidth;th.classList.add('flash');
-  w.scrollIntoView({block:'nearest'});
 }
 
 /* ================= 公平帳 ================= */
@@ -1403,7 +1381,7 @@ function rulesHTML(){
     '<li>空白就是上班。</li>'+
     '<li><span class="tag-rest">休</span> 排休，<span class="tag-rest">特</span> 特休，<span class="tag-rest">假</span> 請假。</li>'+
     '<li><span class="tag-rest red">休</span> 正職休假（'+esc(names)+'），六日和國定假日休假，不算在月休內。</li>'+
-    '<li>其他同仁一個月休 '+limit+' 天。排班表人名下方會顯示已休天數，少休、多休會標出來；兼職不算。</li></ul>'+
+    '<li>其他同仁一個月休 '+limit+' 天。班表最下面統計每人的休假和值班，未休、多休會標出來；兼職不算。</li></ul>'+
     '<h3>值班</h3><ul>'+
     '<li>19:00 到 20:00 多留一小時。</li>'+
     '<li>資格：承攬，到職滿 3 個月，社宅部除外。</li>'+
