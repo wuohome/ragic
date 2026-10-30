@@ -863,7 +863,7 @@ function footStats(n,rests,tally){
   if(r.st.side==='short')line='<span class="fs short">未休'+r.st.diff+'天</span>';
   if(r.st.side==='over')line='<span class="fs over">多休'+r.st.diff+'天</span>';
   if(t.paixiu+t.gov)rest.push((t.paixiu+t.gov)+'休');if(t.texiu)rest.push(t.texiu+'特');if(t.qingjia)rest.push(t.qingjia+'假');
-  if(tally.dutyDays)work.push(tally.dutyDays+'班');if(tally.schedLayers)work.push(tally.schedLayers+'層');
+  if(tally.dutyDays)work.push(tally.dutyDays+'班');
   return line+'<span class="fs">'+(rest.join(' ')||'-')+'</span><span class="fs">'+(work.join(' ')||'-')+'</span>';
 }
 function tableHTML(){
