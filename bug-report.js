@@ -12,6 +12,25 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
   var WH_CFG = window.WH_BUG_REPORT || {};
   // 自動截圖只開給內部頁（有員工登入或明確設定）：客戶頁的畫面常有姓名、電話、簽名，預設不截，需要時客戶自己上傳
   function autoShotAllowed() { return WH_CFG.screenshot === true || !!window.StaffGate; }
+  function staffEmail() { try { return (window.StaffGate && window.StaffGate.email && window.StaffGate.email()) || ''; } catch (e) { return ''; } }
+
+  // 記下頁面最近的錯誤：客戶頁不截圖，打不開時只能靠這個判斷原因（只留錯誤訊息，網址參數遮掉）
+  var pageErrors = [];
+  function noteError(msg) {
+    var m = String(msg || '').replace(/(token|t|key|apikey)=[^&\s]*/gi, '$1=***').slice(0, 200);
+    if (m) { pageErrors.push(m); if (pageErrors.length > 3) pageErrors.shift(); }
+  }
+  window.addEventListener('error', function (e) { if (e.message) noteError(e.message); });
+  window.addEventListener('unhandledrejection', function (e) { noteError(e.reason && e.reason.message || e.reason); });
+
+  // 案件編號：網址通行碼會遮掉，要靠頁面上的編號才查得到是哪一筆；頁面可用 caseSelector 指定元素
+  function caseRef() {
+    try {
+      var el = document.querySelector(WH_CFG.caseSelector || '#show_no');
+      var t = el ? el.textContent.trim() : '';
+      return t && t !== '-' ? t.slice(0, 60) : '';
+    } catch (e) { return ''; }
+  }
 
   // 回報裡不能帶同仁的專屬通行碼（?token=…），只保留其他參數
   function safeSearch() {
@@ -205,7 +224,7 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
   modal.innerHTML = [
     '<div class="wh-modal-header">',
       '<p class="wh-modal-title">🐛 問題回報</p>',
-      '<p class="wh-modal-sub">已截取頁面畫面，請描述您遇到的問題。</p>',
+      '<p class="wh-modal-sub">請描述您遇到的問題，我們會協助處理。</p>',
     '</div>',
     '<div class="wh-modal-body">',
 
@@ -248,6 +267,12 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
           '<option value="建議">💡 建議</option>',
           '<option value="其他">📝 其他</option>',
         '</select>',
+      '</div>',
+
+      // Reporter：員工登入頁自動帶入，其他頁選填
+      '<div class="wh-section" id="wh-reporter-section">',
+        '<span class="wh-label">您的姓名或電話（選填，方便我們聯絡您）</span>',
+        '<input id="wh-bug-reporter" maxlength="80" autocomplete="name" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #d6dbe6;border-radius:8px;font-size:16px;">',
       '</div>',
 
       // Description
@@ -397,6 +422,8 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
     document.getElementById('wh-bug-desc').value = '';
     document.getElementById('wh-desc-err').style.display = 'none';
     document.getElementById('wh-bug-type').value = '功能異常';
+    document.getElementById('wh-reporter-section').style.display = staffEmail() ? 'none' : '';
+    try { document.getElementById('wh-bug-reporter').value = localStorage.getItem('wh_bug_reporter') || ''; } catch (e) { /* 無痕模式：留空 */ }
     uploadFiles = [];
     updateUploadCount();
     renderThumbs();
@@ -501,8 +528,16 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span class="wh-spinner"></span>送出中…';
 
+    var reporter = staffEmail() || document.getElementById('wh-bug-reporter').value.trim();
+    if (!staffEmail() && reporter) { try { localStorage.setItem('wh_bug_reporter', reporter); } catch (e) { /* 存不了就下次重填 */ } }
+    var isCustomerPage = !autoShotAllowed();
+
     var payload = {
       description: desc,
+      reporter: reporter,
+      caseRef: caseRef(),
+      errors: pageErrors.slice(),
+      audience: isCustomerPage ? 'customer' : 'staff',
       type: document.getElementById('wh-bug-type').value,
       url: location.origin + location.pathname + safeSearch() + location.hash.replace(/token=[^&]*/gi, 'token=***'),
       title: document.title,
@@ -523,7 +558,7 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
         submitBtn.textContent = '送出回報';
         if (json.ok) {
           closeModal();
-          showToast('已送出，謝謝回報 🎉', 3500);
+          showToast(isCustomerPage ? '已收到，我們會盡快處理；急件請直接聯絡您的業務' : '已送出，謝謝回報 🎉', 4500);
         } else {
           showToast(json.error === 'rate_limited' ? '回報次數太多，請一小時後再試' : '送出失敗：' + (json.error || '未知錯誤') + '，請再試一次', 4000);
         }
@@ -551,13 +586,14 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
     var SEL = 'button,input,select,textarea,canvas,[role="button"],[type="submit"],[class*="btn"],[class*="button"]' +
       (opts.guard ? ',' + opts.guard : '');
     var scheduled = false, last = 0, state = 'full';
+    var HIDE_LIMIT = 8000, startedAt = Date.now(); // hideWhen 只在開頁前 8 秒有效：載入卡住或失敗時，客戶才按得到回報
     var TAB_W = 24, TAB_H = 52;
 
     function inWidget(el) { return el.closest && el.closest('#wh-bug-report-btn,#wh-bug-modal,#wh-bug-backdrop,#wh-toast'); }
 
     function nextState() {
       try {
-        if (opts.hideWhen) {
+        if (opts.hideWhen && Date.now() - startedAt < HIDE_LIMIT) {
           var o = document.querySelectorAll(opts.hideWhen);
           for (var k = 0; k < o.length; k++) { if (o[k].getClientRects().length) return 'hide'; }
         }
@@ -624,5 +660,6 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
       for (var i = 0; i < muts.length; i++) { if (!inWidget(muts[i].target.nodeType === 1 ? muts[i].target : muts[i].target.parentNode || document.body)) { schedule(); return; } }
     }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'disabled', 'open'] });
     schedule();
+    setTimeout(schedule, HIDE_LIMIT + 200);
   })();
 })();

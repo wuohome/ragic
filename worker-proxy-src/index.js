@@ -382,6 +382,8 @@ const ALLOWED_ACTIONS = {
   // 2026-10-21 同仁 Google 登入閘（searchStaff／searchDeposits 個資接口）：換 session／登出
   staffSession:          { method: 'POST' },
   staffLogout:           { method: 'POST' },
+  // 2026-10-30 排班新版（schedule-next.html）：同仁 Google 登入後問「我是誰、能不能排班」。只新增，不動其他 action。
+  scheduleWhoami:        { method: 'GET' },
   // Group V: 修繕報價單產生器 → Ragic 化（maintenance-management/15，2026-07-24）。無固定
   // WORKER secret token gate（不像 Group S/T/U）——rqGet 的守門是「建單當下產生、僅該筆記錄
   // 持有」的分享token 逐筆交叉比對，token-only IDOR 防護見下方 handler 註解。
@@ -2561,6 +2563,22 @@ async function handleStaffLogout(request, env, origin) {
     try { await env.EARNEST_QUEUE.delete(await staffSessionKey(tok)); } catch { return jsonResp({ error: 'kv_unavailable' }, 500, origin); }
   }
   return jsonResp({ ok: true }, 200, origin); // 冪等：不論 session 存不存在都回 ok
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 排班新版（schedule-next.html）身分查詢（2026-10-30）。同仁 Google 登入後問「我是誰、能不能排班」。
+// 沿用上面的 authenticateStaffGoogle（Worker session `sts_` 或 Google ID token，以人事表 Email 欄 3000976
+// 對到在職／試用同仁，離職與非員工回 403 not_whitelisted），不另做一套。
+// 只回姓名、部門、角色，不回其他個資。角色：韓珊珊、張瓊安＝admin（可排班與確認），其餘在職同仁＝staff。
+// 名單與前端 schedule-next-core.js 的 SC.NEXT_ADMIN_NAMES 同步，兩邊要一起改。
+// 只新增這一支 action，不改任何既有 action。
+// ═══════════════════════════════════════════════════════════════════════════════
+const SCHEDULE_ADMIN_NAMES = new Set(['韓珊珊', '張瓊安']);
+async function handleScheduleWhoami(request, env, origin) {
+  const identity = await authenticateStaffGoogle(request, env, origin);
+  if (!identity) return jsonResp({ error: 'invalid_session' }, 401, origin);
+  if (identity.__authError) return identity.__authError;
+  return jsonResp({ ok: true, name: identity.name, department: identity.department, role: SCHEDULE_ADMIN_NAMES.has(identity.name) ? 'admin' : 'staff' }, 200, origin);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -4864,11 +4882,12 @@ async function ragicPostLite(env, sheetPath, paramsString, extraQuery = '', opts
 // 只有 3 個文字/單選欄位可寫，無截圖附件欄位（ponytail-debt：附件欄位需 Joan 或 ragic agent 後續在 Ragic 後台手動新增，
 // 目前是 schema 缺口不是程式邏輯缺口，Worker 端無法建欄位）。
 const BUG_REPORT_FEEDBACK_SHEET = 'decorating/15';
-async function syncBugReportToRagic(env, { safeType, safeTitle, safeUrl, safeDesc, uaShort, nowTW, hasScreenshot, shotWhere = 'Discord 系統部「警報」頻道' }) {
+async function syncBugReportToRagic(env, { safeType, safeTitle, safeUrl, safeDesc, uaShort, nowTW, hasScreenshot, extraLines = [], shotWhere = 'Discord 系統部「警報」頻道' }) {
   const title = `[問題回報] ${safeType} — ${safeTitle || '（無標題）'}`.slice(0, 200);
   const body = [
     safeDesc,
     '',
+    ...extraLines,
     '頁面：' + (safeUrl || '—'),
     '裝置：' + uaShort,
     '時間：' + nowTW,
@@ -6020,6 +6039,7 @@ export default {
     if (action === 'worklogLogout') return handleWorklogLogout(request, env, allowedOrigin);
     if (action === 'staffSession') return handleStaffSession(request, env, allowedOrigin);
     if (action === 'staffLogout') return handleStaffLogout(request, env, allowedOrigin);
+    if (action === 'scheduleWhoami') return handleScheduleWhoami(request, env, allowedOrigin);
     // 同仁 Google 登入閘（2026-10-21）：searchStaff／searchDeposits 回租客姓名電話與同仁手機信箱。
     if (STAFF_GATED_ACTIONS.has(action)) {
       const stIdentity = await authenticateStaffGoogle(request, env, allowedOrigin);
@@ -8348,6 +8368,15 @@ export default {
         const safeUrl   = redactReportUrl(typeof pageUrl === 'string' ? pageUrl : '').slice(0, 500);
         const safeTitle = (typeof pageTitle === 'string' ? pageTitle : '').slice(0, 200);
         const safeUA    = (typeof userAgent === 'string' ? userAgent : '').slice(0, 300);
+        // 回報人、案件、頁面錯誤都是使用者端文字：去換行與標記字元，不得變成多行或 Discord 提及（2026-10-30）
+        const cleanReportText = (v, n) => (typeof v === 'string' ? v : '').replace(/[\r\n<>@`]+/g, ' ').trim().slice(0, n);
+        const safeReporter = cleanReportText(body.reporter, 80);
+        const safeCaseRef  = cleanReportText(body.caseRef, 60);
+        const safeErrors   = Array.isArray(body.errors) ? body.errors.slice(0, 3).map((e) => cleanReportText(e, 200)).filter(Boolean).join(' ｜ ') : '';
+        const reportExtraLines = ['回報人：' + (safeReporter || '未填')];
+        if (body.audience === 'customer') reportExtraLines.push('對象：客戶／外部頁面（客戶卡住時優先處理）');
+        if (safeCaseRef) reportExtraLines.push('案件：' + safeCaseRef);
+        if (safeErrors) reportExtraLines.push('頁面錯誤：' + safeErrors);
 
         var uaShort = (function() {
           if (!safeUA) return '未知';
@@ -8370,6 +8399,7 @@ export default {
           '類型：' + safeType,
           '頁面：' + (safeTitle || '（無標題）') + '（' + (safeUrl || '—') + '）',
           '描述：' + safeDesc,
+          ...reportExtraLines,
           '裝置：' + uaShort,
           '時間：' + nowTW,
         ];
@@ -8401,7 +8431,7 @@ export default {
 
         // Ragic「意見回饋」同步：Discord 是主流程，這裡失敗不得擋主流程，只記 log（見 syncBugReportToRagic 上方註解）。
         function syncBugReportNonBlocking(hasScreenshot, shotWhere) {
-          var p = syncBugReportToRagic(env, { safeType, safeTitle, safeUrl, safeDesc, uaShort, nowTW, hasScreenshot, shotWhere })
+          var p = syncBugReportToRagic(env, { safeType, safeTitle, safeUrl, safeDesc, uaShort, nowTW, hasScreenshot, extraLines: reportExtraLines, shotWhere })
             .catch(function(e) { console.error('[reportBug->ragic] sync failed', e); });
           if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
         }
