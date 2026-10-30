@@ -221,6 +221,22 @@ test("高晶晶、謝佳芬、曾正煌（排除名單）一次都不排", async
     }
 });
 
+test("張忠豪、蕭頤臻打掃日不相鄰（拿掉規則時確實會撞，證明這條測試有守到）", async () => {
+    const clash = (created) => {
+        const days = byDay(created);
+        const dayOf = (n) => Object.keys(days).filter(k => days[k][n]).map(k => Number(k.split("/")[2]));
+        return dayOf("張忠豪").some(x => dayOf("蕭頤臻").some(y => Math.abs(x - y) <= 1));
+    };
+    let without = 0;
+    for (let k = 0; k < 60; k++) {
+        const { log } = await run({ todayStr: "2026/10/29" });
+        assert.ok(!clash(log.created), "兩人排在相鄰兩天");
+        const off = await run({ todayStr: "2026/10/29", tweak: (SC) => { SC.DUTY_NOT_ADJACENT_PAIRS = []; } });
+        if (clash(off.log.created)) without++;
+    }
+    assert.ok(without > 0, "拿掉規則也從未撞到，測試沒有鑑別力");
+});
+
 test("不產生獨立清運紀錄（備註不含清運/垃圾/全棟關鍵字）；也不再回填清運", async () => {
     const { log } = await run({ todayStr: "2026/10/29" });
     assert.equal(log.created.filter(r => trashNote(r[F.NOTE])).length, 0);

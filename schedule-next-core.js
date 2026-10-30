@@ -222,6 +222,14 @@ SC.nextChecks = (M, todayStr) => {
             }
         }
     });
+    SC.DUTY_NOT_ADJACENT_PAIRS.forEach(([a, b]) => {
+        const has = (n, d) => M.days[d].clean.some((g) => g.name === n);
+        for (let d = 1; d < M.dim; d++) {
+            if ((has(a, d) && has(b, d + 1)) || (has(b, d) && has(a, d + 1))) {
+                out.push({ d, kind: "twice", fix: null, text: `${SC.nextName(a)}、${SC.nextName(b)}排在相鄰兩天打掃：${lab(d)}、${lab(d + 1)}` });
+            }
+        }
+    });
     return out.sort((a, b) => a.d - b.d);
 };
 
