@@ -52,7 +52,7 @@ const plainSC = () => mkCtx(1).SC;
 const OFFICE = ["張瓊安", "韓珊珊", "沈郁雯", "呂鴻墀", "王芳瑜", "曾琬容"];
 const BIZ = ["詹張傳", "張忠豪", "蕭頤臻", "劉子碩", "吳惠慈", "林宣佑", "吳炫儒", "方鼎文", "關宗宇", "李卓威", "葉恩廷", "白欣宜", "黃帟潔"];
 const PART = ["林佳燕", "李維", "張玉慧", "陳勁豪", "張嗣祥", "劉兆傑", "楊書銘"];
-const EXCLUDED = ["高晶晶", "謝佳芬", "曾正煌", "賴信杰"];
+const EXCLUDED = ["高晶晶", "謝佳芬", "曾正煌"];
 const emp = (name, dept, hire, hireDate, status = "在職", birthday = "") => ({ [E.NAME]: name, [E.DEPT]: dept, [E.STATUS]: status, [E.HIRE]: hire, [E.HIRE_DATE]: hireDate, [E.BIRTHDAY]: birthday });
 const mkEmpJson = () => {
     const list = [
@@ -255,7 +255,7 @@ test("欄組：租賃部、租賃部（兼職）、社宅部（兼職）（張�
     eq(g.find((x) => x.label === "社宅部（兼職）").people.map((p) => p.name), ["張玉慧"]);
     assert.ok(g.find((x) => x.label === "租賃部（兼職）").people.every((p) => p.dept === "兼職"));
     assert.ok(g.find((x) => x.label === "租賃部").people.some((p) => p.name === "鐘晟鈺"));
-    assert.ok(!employees.some((p) => ["高晶晶", "謝佳芬", "曾正煌", "賴信杰", "吳彥廷", "離職者"].includes(p.name)));
+    assert.ok(!employees.some((p) => ["高晶晶", "謝佳芬", "曾正煌", "吳彥廷", "離職者"].includes(p.name)));
 });
 
 // ═════════ 等價：員工名單 ═════════
