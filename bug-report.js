@@ -512,7 +512,7 @@ const BUG_REPORT_ENDPOINT = 'https://wuohome-ragic-proxy.wuohome.workers.dev/rep
           closeModal();
           showToast('已送出，謝謝回報 🎉', 3500);
         } else {
-          showToast('送出失敗：' + (json.error || '未知錯誤') + '，請再試一次', 4000);
+          showToast(json.error === 'rate_limited' ? '回報次數太多，請一小時後再試' : '送出失敗：' + (json.error || '未知錯誤') + '，請再試一次', 4000);
         }
       })
       .catch(function (err) {
@@ -528,7 +528,8 @@ const BUG_REPORT_ENDPOINT = 'https://wuohome-ragic-proxy.wuohome.workers.dev/rep
     if (e.key === 'Escape' && modal.classList.contains('wh-open')) closeModal();
   });
 
-  // ── 避讓：右下角有可操作元件（按鈕／輸入框／簽名板等）時暫時藏起回報鈕 ──
+  // ── 避讓：右下角有可操作元件時，回報鈕縮成右側中段的靠邊小標籤（不藏起來，否則短頁的「下一步」會讓它永遠看不到）──
+  // 標籤只有在壓到簽名板時才整個藏起；hideWhen 符合時也整個藏起
   // 頁面可在載入本檔「之前」設定 window.WH_BUG_REPORT = { guard: '額外選擇器', hideWhen: '符合時整個藏起的選擇器' }
   (function () {
     var opts = window.WH_BUG_REPORT || {};
@@ -536,17 +537,28 @@ const BUG_REPORT_ENDPOINT = 'https://wuohome-ragic-proxy.wuohome.workers.dev/rep
     var BAND_Y = 96;  // 按鈕 48 + 底距 24 + 餘裕
     var SEL = 'button,input,select,textarea,canvas,[role="button"],[type="submit"],[class*="btn"],[class*="button"]' +
       (opts.guard ? ',' + opts.guard : '');
-    var scheduled = false, last = 0, hidden = false;
+    var scheduled = false, last = 0, state = 'full';
+    var TAB_W = 24, TAB_H = 52;
 
     function inWidget(el) { return el.closest && el.closest('#wh-bug-report-btn,#wh-bug-modal,#wh-bug-backdrop,#wh-toast'); }
 
-    function shouldHide() {
+    function nextState() {
       try {
         if (opts.hideWhen) {
           var o = document.querySelectorAll(opts.hideWhen);
-          for (var k = 0; k < o.length; k++) { if (o[k].getClientRects().length) return true; }
+          for (var k = 0; k < o.length; k++) { if (o[k].getClientRects().length) return 'hide'; }
         }
       } catch (e) { /* 選擇器寫錯就略過 */ }
+      var vw = window.innerWidth, vh = window.innerHeight;
+      var tabTop = vh / 2 - TAB_H / 2, pads = document.querySelectorAll('canvas');
+      for (var c = 0; c < pads.length; c++) {
+        var pr = pads[c].getBoundingClientRect();
+        if (pr.width >= 4 && pr.right > vw - TAB_W && pr.top < tabTop + TAB_H && pr.bottom > tabTop && cornerBusy()) return 'hide';
+      }
+      return cornerBusy() ? 'tab' : 'full';
+    }
+
+    function cornerBusy() {
       var vw = window.innerWidth, vh = window.innerHeight;
       var list = document.querySelectorAll(SEL);
       for (var i = 0; i < list.length; i++) {
@@ -560,7 +572,7 @@ const BUG_REPORT_ENDPOINT = 'https://wuohome-ragic-proxy.wuohome.workers.dev/rep
         // 被其他東西完整蓋住（例如登入覆蓋層、關著的抽屜）不算
         var cx = Math.min(Math.max(r.left + r.width / 2, 0), vw - 1), cy = Math.min(Math.max(r.top + r.height / 2, 0), vh - 1);
         var top = document.elementFromPoint(cx, cy);
-        if (top && top !== el && !el.contains(top) && !top.contains(el)) continue;
+        if (top && !inWidget(top) && top !== el && !el.contains(top) && !top.contains(el)) continue;
         return true;
       }
       return false;
@@ -568,8 +580,12 @@ const BUG_REPORT_ENDPOINT = 'https://wuohome-ragic-proxy.wuohome.workers.dev/rep
 
     function update() {
       scheduled = false; last = Date.now();
-      var h = shouldHide();
-      if (h !== hidden) { hidden = h; btn.classList.toggle('wh-guard-hide', h); }
+      var n = nextState();
+      if (n !== state) {
+        state = n;
+        btn.classList.toggle('wh-guard-hide', n === 'hide');
+        btn.classList.toggle('wh-guard-tab', n === 'tab');
+      }
     }
 
     function schedule() {
@@ -580,7 +596,10 @@ const BUG_REPORT_ENDPOINT = 'https://wuohome-ragic-proxy.wuohome.workers.dev/rep
     }
 
     var st = document.createElement('style');
-    st.textContent = '#wh-bug-report-btn.wh-guard-hide{display:none!important}';
+    st.textContent = '#wh-bug-report-btn.wh-guard-hide{display:none!important}' +
+      '#wh-bug-report-btn.wh-guard-tab{right:0;bottom:auto;top:calc(50% - ' + (TAB_H / 2) + 'px);width:' + TAB_W + 'px;height:' + TAB_H + 'px;' +
+      'border-radius:10px 0 0 10px;font-size:13px;box-shadow:-2px 2px 8px rgba(255,107,53,.4)}' +
+      '#wh-bug-report-btn.wh-guard-tab:hover{transform:none}';
     document.head.appendChild(st);
 
     window.addEventListener('scroll', schedule, { passive: true, capture: true });
