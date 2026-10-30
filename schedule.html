@@ -354,6 +354,7 @@ main{padding-block:16px 96px;min-height:80vh}
 .mx tr.td .tag-clean.miss{background:var(--red-soft);color:var(--red)}
 .tag-duty.bad{background:var(--red);color:var(--on-ink);outline:0}
 .tag-duty.warn{background:var(--red-soft);color:var(--red);outline:1px solid var(--red);outline-offset:-1px}
+.tag-duty.trash,.mx .tag-duty.trash{width:auto;display:inline-flex;align-items:center;gap:2px;padding-inline:4px}
 .pill-miss{background:var(--red-soft);color:var(--red);outline:1px solid var(--red);outline-offset:-1px}
 .pill-rest.red{background:transparent;outline:1px solid var(--rest);outline-offset:-1px}
 .note .who-line{display:flex;gap:12px;align-items:center}
@@ -378,6 +379,11 @@ main{padding-block:16px 96px;min-height:80vh}
 .modal .body b{color:var(--ink)}
 .modal .opts{display:grid;gap:8px;margin-top:16px}
 .modal .opts .btn{justify-content:center;white-space:normal;text-align:center}
+.modal.rules{max-width:560px}
+.modal .body h3{margin-top:16px;font-size:15px;line-height:22px;font-weight:600;color:var(--ink)}
+.modal .body ul{margin-top:4px;padding-left:20px;list-style:disc}
+.modal .body li+li{margin-top:2px}
+#helpBtn{font-size:17px;font-weight:600}
 .modal .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
 .modal input[type=text]{width:100%;height:44px;margin-top:12px;padding-inline:12px;border:1px solid var(--line2);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
 .bar{height:8px;border-radius:4px;background:var(--bg3);margin-top:16px;overflow:hidden}
@@ -416,6 +422,7 @@ main{padding-block:16px 96px;min-height:80vh}
       <button class="tab" data-view="all">全體</button>
       <button class="tab" data-view="sched" id="tabSched" hidden>排班</button>
       <button class="tab" data-view="fair">公平帳</button>
+      <button class="iconbtn" id="helpBtn" aria-label="排班規則說明" title="排班規則說明">?</button>
       <button class="iconbtn" id="theme" aria-label="切換深淺色"></button>
     </nav>
   </div>
@@ -491,7 +498,11 @@ function cleanTag(f,miss){return '<span class="tag-clean'+(miss?' miss':'')+'">'
 var PILL_C='<span class="tag-clean">打掃</span>';
 function pillDuty(d){return '<span class="pill pill-duty'+(hasTruck(d)?'':' off')+'">值班</span>'}
 var PILL_R='<span class="pill pill-rest">休假</span>';
-function dutyTag(d,state){return '<span class="tag-duty'+(state==='noshow'?' bad':state==='notrash'?' warn':hasTruck(d)?'':' off')+'">值</span>'}
+function dutyTag(d,state){
+  if(state==='noshow')return '<span class="tag-duty bad">值</span>';
+  if(state==='notrash')return '<span class="tag-duty warn">值</span>';
+  return hasTruck(d)?'<span class="tag-duty trash">值🗑️</span>':'<span class="tag-duty">值</span>';
+}
 function dutyNote(d,x){
   if(x.state==='noshow')return '沒到班';
   if(x.state==='notrash')return '未倒垃圾';
@@ -899,7 +910,7 @@ function renderSched(){
   return '<div class="view"><div id="shead">'+headHTML()+'</div>'+
     '<div class="ctrl"><div class="seg"><span class="lb">點格子改</span><div role="group" aria-label="點格子時要改的項目">'+
     [['rest','休假'],['duty','值班'],['clean','打掃'],['confirm','確認']].map(function(m){return '<button data-mode="'+m[0]+'" aria-pressed="'+(S.mode===m[0])+'">'+m[1]+'</button>'}).join('')+
-    '</div></div><div class="mxkey" style="margin-top:0"><span>'+cleanTag([1,2,3,4])+'一人掃一到四樓</span><span>'+cleanTag([1,4])+'掃一樓和四樓</span><span>'+cleanTag([2,3])+'掃二樓和三樓</span><span><span class="tag-duty">值</span>值班倒垃圾</span><span><span class="tag-duty off">值</span>值班沒垃圾車</span><span><span class="tag-rest">休</span>排休</span><span><span class="tag-rest red">休</span>見紅休</span><span>空白是上班</span></div></div>'+
+    '</div></div><div class="mxkey" style="margin-top:0"><span>'+cleanTag([1,2,3,4])+'一人掃一到四樓</span><span>'+cleanTag([1,4])+'掃一樓和四樓</span><span>'+cleanTag([2,3])+'掃二樓和三樓</span><span><span class="tag-duty trash">值🗑️</span>值班要倒垃圾</span><span><span class="tag-duty">值</span>值班沒垃圾車</span><span><span class="tag-rest">休</span>排休</span><span><span class="tag-rest red">休</span>見紅休</span><span>空白是上班</span></div></div>'+
     '<div id="schk">'+checksHTML()+'</div>'+
     '<div id="scf">'+confirmHTML()+'</div>'+
     '<div class="mxwrap" id="mxwrap" tabindex="0" role="region" aria-label="'+S.month+' 月排班表，可上下左右捲動">'+tableHTML()+'</div>'+
@@ -1282,6 +1293,7 @@ function changeMonth(delta){
 document.addEventListener('click',function(e){
   var t=e.target.closest('button');if(!t)return;
   if(t.dataset.view){go(t.dataset.view);return}
+  if(t.id==='helpBtn'){showRules();return}
   if(t.id==='theme'){toggleTheme();return}
   if(t.id==='reloadBtn'){location.reload();return}
   if(t.id==='retryBtn'){if(S.viewer)loadData();else start();return}
@@ -1323,6 +1335,45 @@ function curTheme(){
   var a=document.documentElement.getAttribute('data-theme');
   if(a)return a;
   return window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+}
+function rulesHTML(){
+  var y=S.year,m=S.month,limit=SC.monthLeaveLimit(y,m),names=SC.GOV_REST_NAMES.map(SC.nextName).join('、');
+  var v2=SC.isDutyV2Month(y,m);
+  var clean=v2?
+    '<li><b>每天掃整棟一到四樓</b>，四樓也是每天掃。</li>'+
+    '<li><b>業務、兼職：</b>一個人一天掃整棟，當天做完就好，可以分時段。</li>'+
+    '<li><b>內勤：</b>兩人一組，一人 1＋4 樓、一人 2＋3 樓，搭檔和樓層會輪替；只排平日，六日和國定假日不排。</li>'+
+    '<li><b>兼職：</b>每月一次，排在六日，六日不夠才排平日；不值班、不倒垃圾。</li>'+
+    '<li>值班和打掃各排各的；同一個人不連續兩天打掃。</li>'+
+    '<li>私下換班、代掃都可以，當天有人掃完就好。</li>'+
+    '<li>有沒有打掃、有沒有倒垃圾由珊珊確認，同仁不用回報。</li>'+
+    '<li>沒掃每層 200 元（整棟 800 元），沒倒垃圾 300 元；只罰錢不補掃。</li>'
+    :'<li>這個月份是舊制：一到三樓每天各一人，四樓只在週五，倒垃圾另外排清運。</li>';
+  var trash=v2?
+    '<li><b>值班的人負責倒垃圾。</b>班表上「值🗑️」是當天要倒垃圾，只有「值」是當天沒垃圾車。</li>'+
+    '<li>週三、週日清潔隊不收，沒有垃圾車。</li>'
+    :'<li>週三、週日清潔隊不收，不排清運。</li>';
+  return '<h2>排班規則說明</h2><div class="body">'+
+    '<h3>班表怎麼看</h3><ul>'+
+    '<li>空白就是上班。</li>'+
+    '<li><span class="tag-rest">休</span> 排休，<span class="tag-rest">特</span> 特休，<span class="tag-rest">假</span> 請假。</li>'+
+    '<li><span class="tag-rest red">休</span> 見紅休（'+esc(names)+'），六日和國定假日休假，不算在月休內。</li>'+
+    '<li>一個月可以休 '+limit+' 天。</li></ul>'+
+    '<h3>值班</h3><ul>'+
+    '<li>19:00 到 20:00 多留一小時。</li>'+
+    '<li>資格：承攬，到職滿 3 個月，社宅部除外。</li>'+
+    '<li>每天一人，每人次數平均，不連續排同一人，當天休假的人不排。</li>'+
+    '<li>每個月重新分配，新人不用補前人的次數。</li>'+trash+'</ul>'+
+    '<h3>打掃</h3><ul>'+clean+'</ul>'+
+    '<h3>今天以前的班</h3><ul><li>預排時今天以前（含今天）的日子鎖定不動，手動排的也會保留。</li></ul>'+
+    '</div><div class="acts"><button class="btn btn2" data-mv="report">回報問題或意見</button><button class="btn" data-mv="ok">知道了</button></div>';
+}
+function showRules(){
+  openModal(rulesHTML()).then(function(v){
+    if(v!=='report')return;
+    var b=document.getElementById('wh-bug-report-btn');if(b)b.click();
+  });
+  var m=$('.modal',modalRoot);if(m)m.classList.add('rules');
 }
 function paintTheme(){$('#theme').innerHTML=curTheme()==='dark'?IC.sun:IC.moon}
 function toggleTheme(){
