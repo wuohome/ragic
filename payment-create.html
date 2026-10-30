@@ -1635,6 +1635,37 @@ function setDepositChoice(hasDeposit) {
   if (state.caseName && !state.isManual) autoLookupDepositsByCase(state.caseName);
 }
 
+// 定金單清單：資料不塞進 onclick 字串（引號會截斷屬性），改用 textContent + addEventListener
+function renderDepositItems(listEl, deps) {
+  const fmt = new Intl.NumberFormat('zh-TW');
+  listEl.innerHTML = '';
+  deps.forEach(d => {
+    const li = document.createElement('li');
+    li.className = 'case-item';
+    const icon = document.createElement('span');
+    icon.className = 'case-item-icon';
+    icon.textContent = '📋';
+    const text = document.createElement('span');
+    text.className = 'case-item-text';
+    const nm = document.createElement('div');
+    nm.className = 'case-item-name';
+    nm.textContent = (d.depositNo || '') + '　' + (d.tenantName || '');
+    const cd = document.createElement('div');
+    cd.className = 'case-item-code';
+    cd.textContent = (d.caseName || '（無案名）') + '　定金 $ ' + fmt.format(d.earnestAmt || 0);
+    text.appendChild(nm);
+    text.appendChild(cd);
+    const chk = document.createElement('span');
+    chk.className = 'case-check';
+    chk.textContent = '✓';
+    li.appendChild(icon);
+    li.appendChild(text);
+    li.appendChild(chk);
+    li.addEventListener('click', () => selectDeposit(d.rid, d.depositNo, d.tenantName, d.tenantPhone, d.earnestAmt, d.caseName));
+    listEl.appendChild(li);
+  });
+}
+
 async function autoLookupDepositsByCase(caseName) {
   const list = document.getElementById('depositList');
   const hint = document.getElementById('depositSearchHint');
@@ -1647,21 +1678,11 @@ async function autoLookupDepositsByCase(caseName) {
     const json = await resp.json().catch(() => ({}));
     if (!resp.ok || !json.ok) { list.innerHTML = '<li style="padding:8px;color:#c00">自動查詢失敗，請手動搜尋</li>'; return; }
     const deps = json.deposits || [];
-    const fmt = new Intl.NumberFormat('zh-TW');
     if (deps.length === 0) {
       list.innerHTML = '<li style="padding:8px;color:#888">此物件查無定金單，請改用下方搜尋框</li>';
       return;
     }
-    list.innerHTML = deps.map(d => `
-      <li class="case-item" onclick="selectDeposit(${d.rid}, ${JSON.stringify(d.depositNo)}, ${JSON.stringify(d.tenantName)}, ${JSON.stringify(d.tenantPhone)}, ${d.earnestAmt}, ${JSON.stringify(d.caseName)})">
-        <span class="case-item-icon">📋</span>
-        <span class="case-item-text">
-          <div class="case-item-name">${d.depositNo}　${d.tenantName}</div>
-          <div class="case-item-code">${d.caseName || '（無案名）'}　定金 $ ${fmt.format(d.earnestAmt)}</div>
-        </span>
-        <span class="case-check">✓</span>
-      </li>
-    `).join('');
+    renderDepositItems(list, deps);
   } catch (e) {
     list.innerHTML = '<li style="padding:8px;color:#c00">網路錯誤，請重試或手動搜尋</li>';
   }
@@ -1684,17 +1705,7 @@ function handleDepositSearch(val) {
       const deps = json.deposits || [];
       const searchList = document.getElementById('depositSearchList') || list;
       if (deps.length === 0) { searchList.innerHTML = '<li style="padding:8px;color:#888">沒有符合的定金單</li>'; return; }
-      const fmt = new Intl.NumberFormat('zh-TW');
-      searchList.innerHTML = deps.map(d => `
-        <li class="case-item" onclick="selectDeposit(${d.rid}, ${JSON.stringify(d.depositNo)}, ${JSON.stringify(d.tenantName)}, ${JSON.stringify(d.tenantPhone)}, ${d.earnestAmt}, ${JSON.stringify(d.caseName)})">
-          <span class="case-item-icon">📋</span>
-          <span class="case-item-text">
-            <div class="case-item-name">${d.depositNo}　${d.tenantName}</div>
-            <div class="case-item-code">${d.caseName || '（無案名）'}　定金 $ ${fmt.format(d.earnestAmt)}</div>
-          </span>
-          <span class="case-check">✓</span>
-        </li>
-      `).join('');
+      renderDepositItems(searchList, deps);
     } catch (e) {
       hint.style.display = 'none';
       const sl = document.getElementById('depositSearchList') || list; sl.innerHTML = '<li style="padding:8px;color:#c00">網路錯誤，請重試</li>';
@@ -1712,8 +1723,14 @@ function selectDeposit(rid, depositNo, tenantName, tenantPhone, earnestAmt, case
   const ds2 = document.getElementById('depositSearch'); if (ds2) ds2.value = '';
   const dm2 = document.getElementById('depositManualSearch'); if (dm2) dm2.removeAttribute('open');
   const fmt = new Intl.NumberFormat('zh-TW');
-  document.getElementById('depositSelectedInfo').innerHTML =
-    '<b>' + depositNo + '</b>　' + tenantName + '　' + tenantPhone + '<br>' + (caseName || '');
+  const info = document.getElementById('depositSelectedInfo');
+  info.textContent = '';
+  const bEl = document.createElement('b');
+  bEl.textContent = depositNo || '';
+  info.appendChild(bEl);
+  info.appendChild(document.createTextNode('　' + (tenantName || '') + '　' + (tenantPhone || '')));
+  info.appendChild(document.createElement('br'));
+  info.appendChild(document.createTextNode(caseName || ''));
   document.getElementById('depositEarnestDisplay').textContent =
     '此定金單要約定金：$ ' + fmt.format(earnestAmt);
   document.getElementById('depositSelected').style.display = 'block';
