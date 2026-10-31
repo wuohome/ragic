@@ -425,6 +425,7 @@ for (const [label, todayStr] of [["整月未來（10/29）", "2026/10/29"], ["�
         const o = await runOldZhiban({ todayStr, raw });
         const ctx = mkCtx(1, todayStr);
         const SC = ctx.SC;
+        SC.DUTY_WEEKDAY_ONLY_NAMES = []; // 舊頁沒有這條，新規則另有專屬測試
         const { employees } = SC.nextBuildEmployees(mkEmpJson(), 2026, 11);
         const noRest = {};
         SC.nextParse(raw).forEach((r) => { if (r.type === "禁休" && SC.nextInMonth(r, 2026, 11)) noRest[r.date] = { ragicId: r.id }; });
@@ -520,6 +521,18 @@ test("值班名單：存過就只排勾選的人，沒存過照舊規則；新�
     assert.equal(r.creates.length, 0);
     const ok = SC.nextPlanZhiban({ year: 2026, month: 12, todayStr: "2026/10/29", employees: list, raw: {}, noRest: {}, poolNames: ["新業務", "正職甲"] });
     assert.deepEqual([...new Set(Object.values(ok.newZhiban))].sort(), ["新業務", "正職甲"].sort());
+});
+
+test("蕭頤臻值班不排六日；拿掉規則會排到", () => {
+    const SC = mkCtx(1, "2026/10/29").SC;
+    const list = ["蕭頤臻", "甲", "乙"].map((name) => ({ name, hire: "承攬", dept: "租賃部", hireDate: "2020/01/01" }));
+    const hit = () => {
+        const r = SC.nextPlanZhiban({ year: 2026, month: 12, todayStr: "2026/10/29", employees: list, raw: {}, noRest: {} });
+        return Object.entries(r.newZhiban).filter(([ds, n]) => n === "蕭頤臻" && [0, 6].includes(new Date(ds).getDay())).length;
+    };
+    assert.equal(hit(), 0);
+    SC.DUTY_WEEKDAY_ONLY_NAMES = [];
+    assert.ok(hit() > 0);
 });
 
 let fail = 0;

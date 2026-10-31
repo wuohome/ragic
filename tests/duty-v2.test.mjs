@@ -242,14 +242,17 @@ test("蕭頤臻打掃不排六日；拿掉規則會排到，證明測試有鑑�
         const days = byDay(created);
         return Object.keys(days).some(k => days[k]["蕭頤臻"] && [0, 6].includes(new Date(k).getDay()));
     };
-    let without = 0;
     for (let k = 0; k < 60; k++) {
         const { log } = await run({ todayStr: "2026/10/29" });
         assert.ok(!onWeekend(log.created), "排到六日");
-        const off = await run({ todayStr: "2026/10/29", tweak: (SC) => { SC.DUTY_WEEKDAY_ONLY_NAMES = []; } });
-        if (onWeekend(off.log.created)) without++;
     }
-    assert.ok(without > 0, "拿掉規則也從未排到六日");
+    // 六日多由兼職掃，業務排到六日的機率低，所以多跑幾輪，遇到一次就停
+    let hit = false;
+    for (let k = 0; k < 1000 && !hit; k++) {
+        const off = await run({ todayStr: "2026/10/29", tweak: (SC) => { SC.DUTY_WEEKDAY_ONLY_NAMES = []; } });
+        hit = onWeekend(off.log.created);
+    }
+    assert.ok(hit, "拿掉規則也從未排到六日");
 });
 
 test("不產生獨立清運紀錄（備註不含清運/垃圾/全棟關鍵字）；也不再回填清運", async () => {

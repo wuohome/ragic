@@ -516,12 +516,14 @@ SC.nextPlanZhiban = (o) => {
         }
         const onLeave = new Set(onLeaveByDate[dateStr] || []);
         if (!noRest[dateStr] && SC.isGovRestDay(year, month, day)) SC.GOV_REST_NAMES.forEach((n) => onLeave.add(n));
+        const dowZ = new Date(year, month - 1, day).getDay();
+        const weekdayOnly = (e) => (dowZ === 0 || dowZ === 6) && SC.DUTY_WEEKDAY_ONLY_NAMES.includes(e.name);
         const isTrashDayZ = SC.isTrashCollectionDay(year, month, day);
         const sortFn = SC.zhibanCompare(zCount, zTrash, isTrashDayZ, zIsV2);
         const isBirthdayToday = (emp) => SC.isBirthday(emp, month, day);
-        const cands = eligible.filter((e) => e.name !== lastPick && !onLeave.has(e.name) && !isBirthdayToday(e)).sort(sortFn);
-        const pool = cands.length > 0 ? cands : eligible.filter((e) => !onLeave.has(e.name) && !isBirthdayToday(e)).sort(sortFn);
-        const final = pool.length > 0 ? pool : eligible.map((e) => ({ name: e.name })).sort(sortFn);
+        const cands = eligible.filter((e) => e.name !== lastPick && !onLeave.has(e.name) && !isBirthdayToday(e) && !weekdayOnly(e)).sort(sortFn);
+        const pool = cands.length > 0 ? cands : eligible.filter((e) => !onLeave.has(e.name) && !isBirthdayToday(e) && !weekdayOnly(e)).sort(sortFn);
+        const final = pool.length > 0 ? pool : eligible.filter((e) => !weekdayOnly(e)).map((e) => ({ name: e.name })).sort(sortFn);
         const chosen = final[0].name;
         zCount[chosen] = (zCount[chosen] || 0) + 1;
         if (zIsV2 && isTrashDayZ) zTrash[chosen] = (zTrash[chosen] || 0) + 1;
