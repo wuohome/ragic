@@ -105,7 +105,8 @@ SC.planDutyV2 = (o) => {
     const dsOf = (d) => SC.fmtDate(year, month, d);
     const dowOf = (d) => new Date(year, month - 1, d).getDay();
     const shuffle = (arr) => arr.map(x => [rand(), x]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
-    const isOff = (name, ds) => !!(offByDate[ds] && offByDate[ds].has(name));
+    const isWeekendDs = (ds) => { const dw = new Date(ds).getDay(); return dw === 0 || dw === 6; };
+    const isOff = (name, ds) => !!(offByDate[ds] && offByDate[ds].has(name)) || (SC.DUTY_WEEKDAY_ONLY_NAMES.includes(name) && isWeekendDs(ds));
 
     const kindOf = {};
     people.forEach(p => { kindOf[p.name] = SC.dutyV2Kind(p); });

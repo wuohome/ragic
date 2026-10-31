@@ -237,6 +237,21 @@ test("張忠豪、蕭頤臻打掃日不相鄰（拿掉規則時確實會撞，�
     assert.ok(without > 0, "拿掉規則也從未撞到，測試沒有鑑別力");
 });
 
+test("蕭頤臻打掃不排六日；拿掉規則會排到，證明測試有鑑別力", async () => {
+    const onWeekend = (created) => {
+        const days = byDay(created);
+        return Object.keys(days).some(k => days[k]["蕭頤臻"] && [0, 6].includes(new Date(k).getDay()));
+    };
+    let without = 0;
+    for (let k = 0; k < 60; k++) {
+        const { log } = await run({ todayStr: "2026/10/29" });
+        assert.ok(!onWeekend(log.created), "排到六日");
+        const off = await run({ todayStr: "2026/10/29", tweak: (SC) => { SC.DUTY_WEEKDAY_ONLY_NAMES = []; } });
+        if (onWeekend(off.log.created)) without++;
+    }
+    assert.ok(without > 0, "拿掉規則也從未排到六日");
+});
+
 test("不產生獨立清運紀錄（備註不含清運/垃圾/全棟關鍵字）；也不再回填清運", async () => {
     const { log } = await run({ todayStr: "2026/10/29" });
     assert.equal(log.created.filter(r => trashNote(r[F.NOTE])).length, 0);
