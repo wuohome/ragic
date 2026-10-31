@@ -501,6 +501,27 @@ test("舊頁沒被動到：舊檔不引用新檔的任何東西（新檔只新�
     ["schedule-legacy.html", "schedule-view.html", "schedule-common.js", "schedule-duty-v2.js"].forEach((f) => assert.ok(!/NEXT_MARK|nextPlan|nextBuild|schedule-next/.test(read(f)), f));
 });
 
+test("值班名單：存過就只排勾選的人，沒存過照舊規則；新同仁沒勾不排；空名單回錯誤", () => {
+    const SC = mkCtx(1, "2026/10/29").SC;
+    const emp = (name, hire, dept, hireDate) => ({ name, hire, dept, hireDate });
+    const list = [
+        emp("老業務", "承攬", "租賃部", "2020/01/01"), emp("新業務", "承攬", "租賃部", "2026/10/20"),
+        emp("正職甲", "正職", "租賃部", "2020/01/01"), emp("內勤乙", "正職", "管理部", "2020/01/01"),
+        emp("設計丙", "承攬", "設計部", "2020/01/01"), emp("社宅丁", "承攬", "社宅部", "2020/01/01"),
+    ];
+    const names = (a) => a.map((e) => e.name);
+    assert.deepEqual(names(SC.nextZhibanEligible(list, 2026, 12, null)), ["老業務"]);
+    assert.deepEqual(names(SC.nextZhibanEligible(list, 2026, 12, ["新業務", "正職甲"])), ["新業務", "正職甲"]);
+    assert.deepEqual(names(SC.nextZhibanEligible(list, 2026, 12, ["老業務"])), ["老業務"]);
+    assert.deepEqual(names(SC.nextZhibanEligible(list, 2026, 12, ["設計丙", "內勤乙", "已離職"])), []);
+    assert.deepEqual(names(SC.nextZhibanCandidates(list)), ["老業務", "新業務", "正職甲"]);
+    const r = SC.nextPlanZhiban({ year: 2026, month: 12, todayStr: "2026/10/29", employees: list, raw: {}, noRest: {}, poolNames: [] });
+    assert.match(r.error, /值班名單/);
+    assert.equal(r.creates.length, 0);
+    const ok = SC.nextPlanZhiban({ year: 2026, month: 12, todayStr: "2026/10/29", employees: list, raw: {}, noRest: {}, poolNames: ["新業務", "正職甲"] });
+    assert.deepEqual([...new Set(Object.values(ok.newZhiban))].sort(), ["新業務", "正職甲"].sort());
+});
+
 let fail = 0;
 for (const t of tests) {
     try { await t.fn(); console.log("✅", t.name); }

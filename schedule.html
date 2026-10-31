@@ -262,6 +262,11 @@ main{padding-block:8px 112px;min-height:80vh}
 #chkN.zero{background:var(--bg3);color:var(--ink3)}
 .panel{position:absolute;left:0;right:0;top:100%;background:var(--bg);outline:1px solid var(--ink);box-shadow:var(--shadow);padding:16px 20px 20px}
 .panel .mxkey{gap:10px 20px}
+.dplist{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0 24px;margin-top:8px}
+.dprow{display:flex;align-items:center;gap:10px;min-height:44px;border-top:1px solid var(--line);cursor:pointer}
+.dprow input{width:20px;height:20px;flex:none;accent-color:var(--ink)}
+.dprow .nm{font-weight:600;white-space:nowrap}
+.dprow .muted{margin-left:auto;white-space:nowrap}
 @media (max-width:767px){
   .tools{display:grid;grid-template-columns:minmax(0,1fr);padding-block:12px 4px}
   .seg{display:grid;width:100%;gap:6px}
@@ -486,6 +491,7 @@ var S={
   boot:'login',            // login 等登入｜loading｜ready｜error
   err:'',errTitle:'',errAct:'retry',
   viewer:null,perms:{view:false,schedule:false,confirm:false},
+  dutyPool:null,
   year:0,month:0,
   raw:{},recs:[],M:null,
   allEmployees:[],employees:[],groups:[],byName:{},
@@ -611,6 +617,23 @@ function loadData(){
     S.boot='ready';render();
   }).catch(function(e){fail('資料載入失敗',e.message||String(e),'retry')});
 }
+/* 值班名單：珊珊、瓊安勾選誰排值班，存 Worker，沒存過是 null（照舊規則） */
+function loadDutyPool(){
+  return StaffGate.fetch('/scheduleDutyPool').then(function(res){
+    return res.json().catch(function(){return {}}).then(function(j){
+      if(!res.ok||!j.ok)throw new Error('值班名單讀取失敗（'+res.status+'）');
+      S.dutyPool=Array.isArray(j.names)?j.names:null;
+    });
+  });
+}
+function saveDutyPool(names){
+  return StaffGate.fetch('/scheduleDutyPoolSet',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({names:names})}).then(function(res){
+    return res.json().catch(function(){return {}}).then(function(j){
+      if(!res.ok||!j.ok)throw new Error('值班名單儲存失敗（'+res.status+'）');
+      S.dutyPool=j.names;
+    });
+  });
+}
 function fail(title,msg,act){S.boot='error';S.errTitle=title;S.err=msg;S.errAct=act||'retry';render()}
 
 /* ================= 登入 ================= */
@@ -634,7 +657,7 @@ function start(){
     S.perms=SC.nextPerms(S.viewer);
     $('#tabSched').hidden=!S.perms.schedule;
     if(S.view==='sched'&&!S.perms.schedule)S.view='me';
-    return loadData();
+    return (S.perms.schedule?loadDutyPool().catch(function(){}):Promise.resolve()).then(loadData);
   }).catch(function(e){
     fail('登入沒有完成',(e&&e.message?e.message:String(e))+'。請重新整理再試；仍然不行請用右下角的問題回報。','reload');
   });
@@ -906,7 +929,7 @@ function stepState(){
 }
 function headHTML(){
   var st=stepState();
-  var line=!st.s1?'下一步：預排值班。值班只排承攬業務，每天一位，倒垃圾歸值班的人。':
+  var line=!st.s1?'下一步：預排值班。值班照值班名單排，每天一位，倒垃圾歸值班的人。':
     !st.s2?'下一步：預排值日。業務與兼職一人掃整棟，內勤兩人一組。':'';
   var chk=function(done){return done?IC.check:''};
   return '<div class="schedhead"><h1 class="title">'+S.month+' 月排班</h1>'+(line?'<p class="lede nextline">'+line+'</p>':'')+
@@ -946,6 +969,14 @@ function confirmHTML(){
   if(!out)out='<p class="xs muted" style="margin-top:8px">到今天為止還沒有排班可以標記。</p>';
   return '<section class="confirmbox"><h2 class="h2"><span>標記沒做</span></h2><p class="xs muted" style="margin-top:8px">有人沒打掃、沒倒垃圾或沒到班才要標，其他都算做完。</p><div class="cfdays">'+out+'</div></section>';
 }
+function dutyPoolHTML(){
+  var eligible=SC.nextZhibanEligible(S.employees,S.year,S.month,S.dutyPool).map(function(e){return e.name});
+  var rows=SC.nextZhibanCandidates(S.employees).map(function(e){
+    var hd=e.hireDate&&e.hireDate!=='9999/12/31'?e.hireDate.slice(0,10)+' 到職':'';
+    return '<label class="dprow"><input type="checkbox" data-dp="'+esc(e.name)+'"'+(eligible.indexOf(e.name)>=0?' checked':'')+'><span class="nm">'+dn(e.name)+'</span><span class="xs muted">'+hd+'</span></label>';
+  }).join('');
+  return '<p class="xs muted">打勾的人才會被預排值班。改了不會動已排好的班，下次按「預排值班」才生效。新同仁要勾了才會排。</p><div class="dplist">'+rows+'</div>';
+}
 function renderSched(){
   if(!S.perms.schedule)return '<div class="view"><div class="state"><h1>這一頁只有珊珊和瓊安能用</h1><p>你可以看「我的班」「全體」「公平帳」。</p></div></div>';
   return '<div class="view"><div id="shead">'+headHTML()+'</div>'+
@@ -954,6 +985,7 @@ function renderSched(){
     '</div></div><div class="toolset">'+
     '<details name="tools"><summary>檢查<b id="chkN"></b></summary><div class="panel"><div id="schk">'+checksHTML()+'</div></div></details>'+
     '<details name="tools"'+(S.perms.confirm?'':' hidden')+'><summary>標記沒做</summary><div class="panel"><div id="scf">'+confirmHTML()+'</div></div></details>'+
+    '<details name="tools"'+(S.perms.schedule?'':' hidden')+'><summary>值班名單</summary><div class="panel"><div id="sdp">'+dutyPoolHTML()+'</div></div></details>'+
     '<details name="tools"><summary>圖例</summary><div class="panel"><div class="mxkey">'+
     '<span>'+cleanTag([1,2,3,4])+'一人掃一到四樓</span><span>'+cleanTag([1,4])+'掃一樓和四樓</span><span>'+cleanTag([2,3])+'掃二樓和三樓</span>'+
     '<span><span class="tag-duty trash">值<i class="tr">🗑️</i></span>值班要倒垃圾</span><span><span class="tag-duty">值</span>值班沒垃圾車</span>'+
@@ -986,6 +1018,7 @@ function refreshAny(){
 /* 點格子 */
 function eligibleZhiban(e){
   if(!e)return '找不到這位同仁';
+  if(S.dutyPool&&S.dutyPool.indexOf(e.name)>=0)return '';
   if(e.hire!=='承攬')return '值班只排承攬業務，'+SC.nextName(e.name)+'是'+groupLabel(e.name);
   if(e.dept==='社宅部'||e.dept==='設計部')return '社宅部、設計部不排值班';
   if(SC.ZHIBAN_BLACKLIST&&SC.ZHIBAN_BLACKLIST.indexOf(e.name)>=0)return SC.nextName(e.name)+'在不值班名單內';
@@ -1247,11 +1280,11 @@ function planZhiban(){
   if(!S.perms.schedule||!guardWrite())return;
   if(monthAllPast()){uiAlert('這個月已經鎖定',S.year+' 年 '+S.month+' 月的日子都過去了，按預排不會改任何東西。');return}
   S.busy=true;
-  fetchLeaves().then(function(raw){
+  loadDutyPool().then(fetchLeaves).then(function(raw){
     S.raw=raw||{};rebuild();
-    var r=SC.nextPlanZhiban({year:S.year,month:S.month,todayStr:TODAY,employees:S.employees,raw:S.raw,noRest:noRestMap()});
+    var r=SC.nextPlanZhiban({year:S.year,month:S.month,todayStr:TODAY,employees:S.employees,raw:S.raw,noRest:noRestMap(),poolNames:S.dutyPool});
     if(r.error){toast(r.error,true);return}
-    var body='<p>每天 1 人，承攬滿 3 個月的業務。今天以前（含今天）的值班不動，明天起的會清除重排（手動排的也會一起重排）。</p>'+
+    var body='<p>每天 1 人，從值班名單排。今天以前（含今天）的值班不動，明天起的會清除重排（手動排的也會一起重排）。</p>'+
       '<p>將<b>刪除 '+r.toDelete.length+' 筆</b>、<b>新增 '+r.creates.length+' 筆</b>。</p>'+(r.toDelete.length?'<p>按確定會先下載一份備份檔，再刪除並重排。</p>':'');
     return uiConfirm('預排 '+S.month+' 月值班？',body,'開始預排').then(function(ok){
       if(!ok)return;
@@ -1266,10 +1299,10 @@ function planZhiban(){
 function fixDay(d,kind){
   if(!S.perms.schedule||!guardWrite())return;
   S.busy=true;
-  fetchLeaves().then(function(raw){
+  loadDutyPool().then(fetchLeaves).then(function(raw){
     S.raw=raw||{};rebuild();
     var r=kind==='duty'
-      ?SC.nextPlanZhiban({year:S.year,month:S.month,todayStr:TODAY,employees:S.employees,raw:S.raw,noRest:noRestMap(),only:ds(d)})
+      ?SC.nextPlanZhiban({year:S.year,month:S.month,todayStr:TODAY,employees:S.employees,raw:S.raw,noRest:noRestMap(),only:ds(d),poolNames:S.dutyPool})
       :SC.nextPlanFillCleanDay({year:S.year,month:S.month,todayStr:TODAY,allEmployees:S.allEmployees,raw:S.raw,noRest:noRestMap()},ds(d));
     if(r.error){toast(r.error,true);return}
     if(!r.creates.length){toast(fmtMD(d)+'沒有可以補的人（可能都休假）。',true);return}
@@ -1380,6 +1413,17 @@ document.addEventListener('mouseover',function(e){
   if(th)th.classList.add('hl');if(nm)nm.classList.add('hl');
 });
 
+/* 值班名單：勾選就存，存失敗退回原狀 */
+document.addEventListener('change',function(e){
+  var box=e.target.closest&&e.target.closest('[data-dp]');if(!box)return;
+  var list=box.closest('.dplist'),boxes=[].slice.call(list.querySelectorAll('[data-dp]'));
+  var names=boxes.filter(function(b){return b.checked}).map(function(b){return b.getAttribute('data-dp')});
+  boxes.forEach(function(b){b.disabled=true});
+  saveDutyPool(names).then(function(){toast(dn(box.getAttribute('data-dp'))+(box.checked?' 已加入值班名單。':' 已移出值班名單。'))},function(err){
+    box.checked=!box.checked;toast(err.message||String(err),true);
+  }).then(function(){boxes.forEach(function(b){b.disabled=false})});
+});
+
 /* 工具列展開面板：點班表先收起，不誤點到底下的格子；點其他地方收起後照常作用 */
 document.addEventListener('click',function(e){
   var o=$('details[name="tools"][open]');if(!o)return;
@@ -1426,7 +1470,7 @@ function rulesHTML(){
     '<li>在「我的排休」點日期切換休假；正職休假的日子不能改。</li></ul>'+
     '<h3>值班</h3><ul>'+
     '<li>19:00 到 20:00 多留一小時。</li>'+
-    '<li>資格：承攬，到職滿 3 個月，社宅部除外。</li>'+
+    '<li>誰排值班由珊珊在「值班名單」勾選。</li>'+
     '<li>每天一人，每人次數平均，不連續排同一人，當天休假的人不排。</li>'+
     '<li>每個月重新分配，新人不用補前人的次數。</li>'+trash+'</ul>'+
     '<h3>打掃</h3><ul>'+clean+'</ul>'+

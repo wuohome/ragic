@@ -435,8 +435,19 @@ SC.nextPlanDuty = (o) => {
     return { toDelete, creates, warnings: plan.warnings, lockedKept, manualKept, plan };
 };
 
-// 值班預排的候選人：承攬、非社宅部／設計部、不在不值班名單、到職滿 90 天（對照 handleAutoZhiban）
-SC.nextZhibanEligible = (employees, year, month) => {
+// 值班名單面板列出的人：承攬與租賃部、買賣部正職，社宅部、設計部不列，不值班名單不列
+SC.nextZhibanCandidates = (employees) => employees.filter((e) => {
+    if (e.dept === "社宅部" || e.dept === "設計部") return false;
+    if (SC.ZHIBAN_BLACKLIST && SC.ZHIBAN_BLACKLIST.includes(e.name)) return false;
+    return e.hire === "承攬" || (e.hire === "正職" && (e.dept === "租賃部" || e.dept === "買賣部"));
+});
+
+// 值班預排的候選人。poolNames 是珊珊、瓊安在值班名單勾選的結果，有存過就只看它；
+// 沒存過（null）照舊規則：承攬、非社宅部／設計部、不在不值班名單、到職滿 90 天（對照 handleAutoZhiban）
+SC.nextZhibanEligible = (employees, year, month, poolNames) => {
+    if (Array.isArray(poolNames)) {
+        return SC.nextZhibanCandidates(employees).filter((e) => poolNames.includes(e.name));
+    }
     const schedStart = new Date(year, month - 1, 1);
     return employees.filter((e) => {
         if (e.hire !== "承攬") return false;
@@ -451,7 +462,7 @@ SC.nextZhibanEligible = (employees, year, month) => {
 };
 
 // ── 預排值班：對照 schedule.html handleAutoZhiban ──
-// o: { year, month, todayStr, employees, raw（listLeaves 當月以上原始物件）, noRest, only? }
+// o: { year, month, todayStr, employees, raw（listLeaves 當月以上原始物件）, noRest, only?, poolNames? }
 //   only = 'YYYY/MM/DD'：只補這一天（檢查清單「補上」用），不刪任何紀錄，其餘日子當作已定
 // 回傳 { error?, toDelete:[{id, rec}], creates, newZhiban }
 SC.nextPlanZhiban = (o) => {
@@ -460,8 +471,8 @@ SC.nextPlanZhiban = (o) => {
     const noRest = o.noRest || {};
     const only = o.only || "";
     const recs = SC.nextParse(o.raw).filter((r) => SC.nextInMonth(r, year, month));
-    const eligible = SC.nextZhibanEligible(employees, year, month);
-    if (eligible.length === 0) return { error: "沒有符合條件的值班人員", toDelete: [], creates: [], newZhiban: {} };
+    const eligible = SC.nextZhibanEligible(employees, year, month, o.poolNames);
+    if (eligible.length === 0) return { error: "值班名單沒有人，請先到「值班名單」勾選", toDelete: [], creates: [], newZhiban: {} };
     if (only && SC.isDutyLocked(only, todayStr)) return { error: "今天以前的日子已鎖定，不補", toDelete: [], creates: [], newZhiban: {} };
 
     const zCount = {};
