@@ -943,17 +943,17 @@ function confirmHTML(){
     });
     out+='<div class="cfday"><div class="cfdate">'+fmtMD(d)+(isTodayD(d)?'・今天':'')+'</div>'+rows+'</div>';
   }
-  if(!out)out='<p class="xs muted" style="margin-top:8px">到今天為止還沒有排班可以確認。</p>';
-  return '<section class="confirmbox"><h2 class="h2"><span>確認有沒有做</span></h2><div class="cfdays">'+out+'</div></section>';
+  if(!out)out='<p class="xs muted" style="margin-top:8px">到今天為止還沒有排班可以標記。</p>';
+  return '<section class="confirmbox"><h2 class="h2"><span>有人沒打掃、沒倒垃圾、沒到班才要標</span></h2><div class="cfdays">'+out+'</div></section>';
 }
 function renderSched(){
   if(!S.perms.schedule)return '<div class="view"><div class="state"><h1>這一頁只有珊珊和瓊安能用</h1><p>你可以看「我的班」「全體」「公平帳」。</p></div></div>';
   return '<div class="view"><div id="shead">'+headHTML()+'</div>'+
     '<div class="tools"><div class="seg"><span class="lb">點格子改</span><div role="group" aria-label="點格子時要改的項目">'+
-    [['rest','休假'],['duty','值班'],['clean','打掃'],['confirm','確認']].map(function(m){return '<button data-mode="'+m[0]+'" aria-pressed="'+(S.mode===m[0])+'">'+m[1]+'</button>'}).join('')+
+    [['rest','休假'],['duty','值班'],['clean','打掃'],['confirm','標記沒做']].map(function(m){return '<button data-mode="'+m[0]+'" aria-pressed="'+(S.mode===m[0])+'">'+m[1]+'</button>'}).join('')+
     '</div></div><div class="toolset">'+
     '<details name="tools"><summary>檢查<b id="chkN"></b></summary><div class="panel"><div id="schk">'+checksHTML()+'</div></div></details>'+
-    '<details name="tools"'+(S.perms.confirm?'':' hidden')+'><summary>確認</summary><div class="panel"><div id="scf">'+confirmHTML()+'</div></div></details>'+
+    '<details name="tools"'+(S.perms.confirm?'':' hidden')+'><summary>標記沒做</summary><div class="panel"><div id="scf">'+confirmHTML()+'</div></div></details>'+
     '<details name="tools"><summary>圖例</summary><div class="panel"><div class="mxkey">'+
     '<span>'+cleanTag([1,2,3,4])+'一人掃一到四樓</span><span>'+cleanTag([1,4])+'掃一樓和四樓</span><span>'+cleanTag([2,3])+'掃二樓和三樓</span>'+
     '<span><span class="tag-duty trash">值<i class="tr">🗑️</i></span>值班要倒垃圾</span><span><span class="tag-duty">值</span>值班沒垃圾車</span>'+
@@ -1102,7 +1102,7 @@ function markDuty(n,d,state){
   return setIsAuto(x,state==='noshow'?SC.NEXT_MARK.NO_SHOW:state==='notrash'?SC.NEXT_MARK.NO_TRASH:'');
 }
 function confirmGuard(d){
-  if(!S.perms.confirm){toast('只有珊珊和瓊安能確認。',true);return false}
+  if(!S.perms.confirm){toast('只有珊珊和瓊安能標記。',true);return false}
   if(isFutureD(d)){toast('還沒到的日子不能標。',true);return false}
   return true;
 }
@@ -1124,7 +1124,7 @@ function doConfirmCell(n,d,v){
     });
   }
   if(v.duty&&!v.clean)return duty3(n,d,v);
-  if(v.clean&&v.duty)return uiChoose(dn(n)+' '+fmtMD(d)+'要確認哪一項？',[{label:'打掃',value:'c'},{label:'值班',value:'d'}]).then(function(p){
+  if(v.clean&&v.duty)return uiChoose(dn(n)+' '+fmtMD(d)+'要標記哪一項？',[{label:'打掃',value:'c'},{label:'值班',value:'d'}]).then(function(p){
     if(!p)return;if(p==='d')return duty3(n,d,v);
     return markClean(n,d,null,v.clean.missedFloors.length===0).then(function(){toast('已更新打掃紀錄。')});
   });
@@ -1429,7 +1429,7 @@ function rulesHTML(){
     '<li>每個月重新分配，新人不用補前人的次數。</li>'+trash+'</ul>'+
     '<h3>打掃</h3><ul>'+clean+'</ul>'+
     '<h3>今天以前的班</h3><ul><li>預排時今天以前（含今天）的日子鎖定不動，手動排的也會保留。</li></ul>'+
-    (S.perms.confirm?'<h3>確認</h3><ul><li>預設都算做完，只標例外。</li><li>最近兩天在上方「確認」；更早的日子把「點格子改」切到「確認」再點格子。</li></ul>':'')+
+    (S.perms.confirm?'<h3>標記沒做</h3><ul><li>預設都算做完，只標沒做的人。</li><li>最近兩天在上方「標記沒做」；更早的日子把「點格子改」切到「標記沒做」再點格子。</li></ul>':'')+
     '<h3>公平帳</h3><ul><li>用層計算：掃一層算 1 層，倒垃圾一次算 1 層。每組跟自己的平均比。</li><li>「排定」是整月排好的量；「實際」是到今天為止、扣掉珊珊標的例外之後做完的量。</li></ul>'+
     '<h3>資料</h3><ul><li>資料和舊版排班表是同一份。</li></ul>'+
     '</div><div class="acts"><button class="btn btn2" data-mv="report">回報問題或意見</button><button class="btn" data-mv="ok">知道了</button></div>';
