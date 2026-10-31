@@ -1188,7 +1188,7 @@ const typesTenant = [
 const quickTypesTenant = ['押金','租金','服務費','定金轉服務費'];
 
 // 只有這個類型的金額允許（也必須）是負數：定金已收過，從應收款中扣掉。
-// 依據 Ragic payments/2 實際資料：定金轉服務費列 206 筆中 159 筆為負數；憑單合計(1000778)就是子表金額直接加總。
+// 依據 Ragic payments/2 實際資料：定金轉服務費列 206 筆中 154 筆為負數、47 筆正數；憑單合計(1000778)就是子表金額直接加總。
 const NEG_ALLOWED_TYPES = ['定金轉服務費'];
 
 const typesLandlord = [
