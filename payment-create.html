@@ -1181,11 +1181,15 @@ function selectStaff(emailOrName) {
 }
 
 const typesTenant = [
-  '押金','租金','服務費','管理費','水電瓦斯','網路第四台',
+  '押金','租金','服務費','管理費','水/電/瓦斯','網路/第四台',
   '清潔費','維修費','交接物品','定金轉服務費','預繳電費',
   '違約金','續約手續費','換約費用','屋主代墊服務費','其他'
 ];
 const quickTypesTenant = ['押金','租金','服務費','定金轉服務費'];
+
+// 只有這個類型的金額允許（也必須）是負數：定金已收過，從應收款中扣掉。
+// 依據 Ragic payments/2 實際資料：定金轉服務費列 206 筆中 159 筆為負數；憑單合計(1000778)就是子表金額直接加總。
+const NEG_ALLOWED_TYPES = ['定金轉服務費'];
 
 const typesLandlord = [
   '房東服務費','維修費用','水費','電費','瓦斯費','管理費',
@@ -1369,9 +1373,9 @@ function buildStep3() {
       addReceiptRow('定金轉服務費');
       const lastItem = state.receiptItems[state.receiptItems.length - 1];
       if (lastItem) {
-        lastItem.amount = _preAmt;
+        lastItem.amount = -Math.abs(_preAmt);
         const ai = document.getElementById('rowAmt-' + lastItem.id);
-        if (ai) { ai.value = _preAmt; }
+        if (ai) { ai.value = -Math.abs(_preAmt); }
         updateTotal();
       }
     }, 50);
@@ -1397,15 +1401,15 @@ function addReceiptRow(preType) {
       <div class="receipt-row-fields">
         <div class="type-amount-row">
           <div class="field-select-wrap">
-            <select class="field-select" id="rowType-${idx}" onchange="syncRow(${idx})">
+            <select class="field-select" id="rowType-${idx}" onchange="syncRow(${idx});normalizeNegRow(${idx})">
               ${opts}
             </select>
           </div>
           <div class="amount-input-wrap">
             <span class="amount-prefix">NT$</span>
             <input type="number" class="amount-input" id="rowAmt-${idx}"
-              placeholder="0" min="0" step="1" inputmode="numeric"
-              oninput="syncRow(${idx})">
+              placeholder="0" step="1" inputmode="numeric"
+              oninput="syncRow(${idx})" onchange="normalizeNegRow(${idx})">
           </div>
         </div>
         <input type="text" class="field-input" id="rowNote-${idx}"
@@ -1429,6 +1433,18 @@ function syncRow(idx) {
   item.note   = document.getElementById('rowNote-' + idx)?.value || '';
   item.amount = parseFloat(document.getElementById('rowAmt-' + idx)?.value) || 0;
   updateTotal();
+}
+
+// 定金轉服務費一律是負數：同仁填正數（手機數字鍵盤打不出負號）時自動轉成負數並提示
+function normalizeNegRow(idx, silent) {
+  const item = state.receiptItems.find(r => r.id === idx);
+  if (!item || !NEG_ALLOWED_TYPES.includes(item.type) || !(item.amount > 0)) return false;
+  item.amount = -item.amount;
+  const ai = document.getElementById('rowAmt-' + idx);
+  if (ai) ai.value = item.amount;
+  updateTotal();
+  if (!silent) showToast('「' + item.type + '」是從應收款扣掉，已自動改成負數 -' + fmt(-item.amount));
+  return true;
 }
 
 function deleteRow(idx) {
@@ -1995,8 +2011,23 @@ function validate(step) {
       const rawAmt = document.getElementById('rowAmt-' + r.id)?.value;
       const amt    = parseFloat(rawAmt) || 0;
       r.amount = amt;
-      if (amt <= 0) { showToast('每筆收款都要填金額'); return false; }
+      r.type   = document.getElementById('rowType-' + r.id)?.value || r.type;
     }
+    // 定金轉服務費填成正數 → 自動轉負數（手機數字鍵盤打不出負號）
+    let autoNeg = null;
+    for (const r of state.receiptItems) {
+      if (normalizeNegRow(r.id, true)) autoNeg = r;
+    }
+    for (let i = 0; i < state.receiptItems.length; i++) {
+      const r = state.receiptItems[i];
+      if (r.amount === 0) { showToast('每筆收款都要填金額（第 ' + (i + 1) + ' 筆「' + r.type + '」還是 0）'); return false; }
+      if (r.amount < 0 && !NEG_ALLOWED_TYPES.includes(r.type)) {
+        showToast('只有「' + NEG_ALLOWED_TYPES.join('、') + '」可以填負數，第 ' + (i + 1) + ' 筆「' + r.type + '」請改成正數');
+        return false;
+      }
+    }
+    if (calcTotal() < 0) { showToast('合計變成負數了，請確認是否漏填服務費等其他收款'); return false; }
+    if (autoNeg) showToast('「' + autoNeg.type + '」是從應收款扣掉，已自動改成負數 -' + fmt(-autoNeg.amount));
   }
   if (step === 4) {
     const rd = document.getElementById('receiveDate').value;
