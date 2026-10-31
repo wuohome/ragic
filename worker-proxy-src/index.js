@@ -384,6 +384,9 @@ const ALLOWED_ACTIONS = {
   staffLogout:           { method: 'POST' },
   // 2026-10-30 排班新版（schedule-next.html）：同仁 Google 登入後問「我是誰、能不能排班」。只新增，不動其他 action。
   scheduleWhoami:        { method: 'GET' },
+  // 2026-10-31 值班名單設定：珊珊、瓊安勾選誰排值班，存 KV。只有這兩人可讀寫，不碰 Ragic。
+  scheduleDutyPool:      { method: 'GET' },
+  scheduleDutyPoolSet:   { method: 'POST' },
   // Group V: 修繕報價單產生器 → Ragic 化（maintenance-management/15，2026-07-24）。無固定
   // WORKER secret token gate（不像 Group S/T/U）——rqGet 的守門是「建單當下產生、僅該筆記錄
   // 持有」的分享token 逐筆交叉比對，token-only IDOR 防護見下方 handler 註解。
@@ -2579,6 +2582,35 @@ async function handleScheduleWhoami(request, env, origin) {
   if (!identity) return jsonResp({ error: 'invalid_session' }, 401, origin);
   if (identity.__authError) return identity.__authError;
   return jsonResp({ ok: true, name: identity.name, department: identity.department, role: SCHEDULE_ADMIN_NAMES.has(identity.name) ? 'admin' : 'staff' }, 200, origin);
+}
+
+// 值班名單（2026-10-31）：排班頁「值班名單」面板勾選誰排值班。KV 存 { names, updatedAt, updatedBy }；
+// 從沒存過回 names:null，前端照舊規則（承攬滿 3 個月）。讀寫都限 SCHEDULE_ADMIN_NAMES，只新增不動既有 action。
+const SCHEDULE_DUTY_POOL_KEY = 'schedule:dutyPool';
+async function scheduleAdminOr401(request, env, origin) {
+  const identity = await authenticateStaffGoogle(request, env, origin);
+  if (!identity) return { resp: jsonResp({ error: 'invalid_session' }, 401, origin) };
+  if (identity.__authError) return { resp: identity.__authError };
+  if (!SCHEDULE_ADMIN_NAMES.has(identity.name)) return { resp: jsonResp({ error: 'forbidden' }, 403, origin) };
+  return { identity };
+}
+async function handleScheduleDutyPool(request, env, origin) {
+  const { resp } = await scheduleAdminOr401(request, env, origin);
+  if (resp) return resp;
+  const raw = await env.EARNEST_QUEUE.get(SCHEDULE_DUTY_POOL_KEY);
+  const saved = raw ? JSON.parse(raw) : null;
+  return jsonResp({ ok: true, names: saved ? saved.names : null, updatedAt: saved ? saved.updatedAt : '', updatedBy: saved ? saved.updatedBy : '' }, 200, origin);
+}
+async function handleScheduleDutyPoolSet(request, env, origin) {
+  const { resp, identity } = await scheduleAdminOr401(request, env, origin);
+  if (resp) return resp;
+  const body = await request.json().catch(() => null);
+  const names = body && body.names;
+  const valid = Array.isArray(names) && names.length <= 100 && names.every((n) => typeof n === 'string' && n.length > 0 && n.length <= 20);
+  if (!valid) return jsonResp({ error: 'invalid_names' }, 400, origin);
+  const saved = { names: [...new Set(names)], updatedAt: new Date().toISOString(), updatedBy: identity.name };
+  await env.EARNEST_QUEUE.put(SCHEDULE_DUTY_POOL_KEY, JSON.stringify(saved));
+  return jsonResp({ ok: true, ...saved }, 200, origin);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -6040,6 +6072,8 @@ export default {
     if (action === 'staffSession') return handleStaffSession(request, env, allowedOrigin);
     if (action === 'staffLogout') return handleStaffLogout(request, env, allowedOrigin);
     if (action === 'scheduleWhoami') return handleScheduleWhoami(request, env, allowedOrigin);
+    if (action === 'scheduleDutyPool') return handleScheduleDutyPool(request, env, allowedOrigin);
+    if (action === 'scheduleDutyPoolSet') return handleScheduleDutyPoolSet(request, env, allowedOrigin);
     // 同仁 Google 登入閘（2026-10-21）：searchStaff／searchDeposits 回租客姓名電話與同仁手機信箱。
     if (STAFF_GATED_ACTIONS.has(action)) {
       const stIdentity = await authenticateStaffGoogle(request, env, allowedOrigin);
