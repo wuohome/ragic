@@ -944,7 +944,7 @@ function confirmHTML(){
     out+='<div class="cfday"><div class="cfdate">'+fmtMD(d)+(isTodayD(d)?'・今天':'')+'</div>'+rows+'</div>';
   }
   if(!out)out='<p class="xs muted" style="margin-top:8px">到今天為止還沒有排班可以標記。</p>';
-  return '<section class="confirmbox"><h2 class="h2"><span>有人沒打掃、沒倒垃圾、沒到班才要標</span></h2><div class="cfdays">'+out+'</div></section>';
+  return '<section class="confirmbox"><h2 class="h2"><span>標記沒做</span></h2><p class="xs muted" style="margin-top:8px">有人沒打掃、沒倒垃圾或沒到班才要標，其他都算做完。</p><div class="cfdays">'+out+'</div></section>';
 }
 function renderSched(){
   if(!S.perms.schedule)return '<div class="view"><div class="state"><h1>這一頁只有珊珊和瓊安能用</h1><p>你可以看「我的班」「全體」「公平帳」。</p></div></div>';
