@@ -299,7 +299,7 @@ main{padding-block:8px 112px;min-height:80vh}
 .mx th:last-child,.mx td:last-child{border-right:0}
 .mx thead th{position:sticky;z-index:3;text-align:center;color:var(--ink);vertical-align:middle}
 .mx thead tr.g th{top:var(--th0);height:32px;font-size:14px;line-height:20px;font-weight:500;color:var(--ink2);text-align:left;padding-inline:8px;border-top:1px solid var(--ink);border-right-color:transparent;white-space:nowrap}
-.mx thead tr.p th{top:calc(var(--th0) + 32px);height:44px;min-width:var(--w);font-size:15px;line-height:20px;font-weight:600;letter-spacing:-.03em;white-space:nowrap;border-bottom:1px solid var(--ink);transition:background-color 150ms var(--ease)}
+.mx thead tr.p th{top:calc(var(--th0) + 32px);height:44px;min-width:var(--w);font-size:14px;line-height:20px;font-weight:600;letter-spacing:-.03em;white-space:nowrap;border-bottom:1px solid var(--ink);transition:background-color 150ms var(--ease)}
 .mx .gs{border-left:1px solid var(--line2)}
 .mx thead th.corner{top:var(--th0);left:0;z-index:5;text-align:left;min-width:76px;padding-inline:8px;font-size:14px;font-weight:500;color:var(--ink2);vertical-align:bottom;padding-bottom:12px;border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);border-right:1px solid var(--line2)}
 .mx thead tr.p th.hl{background:var(--bg3)}
@@ -1223,8 +1223,10 @@ function planDuty(){
     S.raw=raw||{};rebuild();
     var r=SC.nextPlanDuty({year:S.year,month:S.month,todayStr:TODAY,allEmployees:S.allEmployees,raw:S.raw,noRest:noRestMap()});
     var firstUnlocked=SC.isDutyLocked(SC.fmtDate(S.year,S.month,1),TODAY)?'今天以前（含今天 '+TODAY.slice(5)+'）的值日都不會動，只重排明天起的日子。':'這個月還沒開始，會重排整個月。';
+    var ptFirst=SC.PARTTIME_DUTY_FIRST_DATE;
+    var ptNote=ptFirst.slice(0,7)===SC.fmtDate(S.year,S.month,1).slice(0,7)?'每天都要掃；'+ptFirst.slice(5)+' 以前不自動排兼職，由業務掃。':'';
     var body='<p>'+firstUnlocked+'</p>'+
-      '<p>每天掃整棟：業務、兼職一人掃整棟（兼職每月一次，排六日，'+SC.PARTTIME_DUTY_FIRST_DATE.slice(5)+' 起）；內勤兩人一組，只排平日。倒垃圾由當天值班的人負責。</p>'+
+      '<p>業務、兼職一人掃整棟（兼職每月一次，排六日）；內勤兩人一組，只排平日。'+ptNote+'倒垃圾由當天值班的人負責。</p>'+
       '<p>將<b>刪除 '+r.toDelete.length+' 筆</b>未到的系統預排、<b>新增 '+r.creates.length+' 筆</b>。保留：手動排的 '+r.manualKept+' 筆、今天以前的 '+r.lockedKept+' 筆。</p>'+
       (r.toDelete.length?'<p>按確定會先下載一份備份檔，再刪除並重排。</p>':'');
     return uiConfirm('預排 '+S.month+' 月值日？',body,'開始預排').then(function(ok){
