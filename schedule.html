@@ -595,7 +595,7 @@ var base=SC.PROXY_BASE;
 function prevYM(){return S.month===1?{y:S.year-1,m:12}:{y:S.year,m:S.month-1}}
 function rebuild(){
   S.recs=SC.nextParse(S.raw);
-  S.M=SC.nextBuildMonth(S.recs,S.year,S.month);
+  S.M=SC.nextBuildMonth(S.recs,S.year,S.month);S.M.nameless=SC.nextNameless(S.raw,S.year,S.month);
 }
 function noRestMap(){
   var o={};
