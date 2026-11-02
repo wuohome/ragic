@@ -232,6 +232,8 @@ SC.nextFairness = (people, tally) => {
 SC.nextChecks = (M, todayStr) => {
     const out = [];
     const W = SC.DAYS_TW;
+    const nameless = M.nameless || [];
+    if (nameless.length) out.push({ d: _nextYMD(nameless[0].date)[2], kind: "nameless", fix: null, text: `有 ${nameless.length} 筆紀錄沒有名字，畫面看不到，請到 Ragic 補上員工` });
     const lab = (d) => `${M.month}/${d}（${W[M.days[d].dow]}）`;
     const floorsText = (arr) => arr.map((x) => `${x}F`).join("、");
     const span = (arr) => (arr.length > 1 && arr[arr.length - 1] - arr[0] === arr.length - 1 ? `${arr[0]}F 到 ${arr[arr.length - 1]}F` : floorsText(arr));
@@ -540,9 +542,18 @@ SC.nextPlanZhiban = (o) => {
 
 // 檢查清單「補上」打掃：呼叫同一個值日演算法，只取指定那一天的結果（其餘缺的日子不動）
 SC.nextPlanFillCleanDay = (o, ds) => {
+    const F = SC.F_LEAVE;
     const r = SC.nextPlanDuty(o);
-    return { ...r, toDelete: [], creates: r.creates.filter((c) => c[SC.F_LEAVE.DATE] === ds) };
+    // 預排是整天重算，當天已排的樓層不能再補一次，只取還缺的樓層
+    const taken = new Set(SC.nextParse(o.raw).filter((x) => x.type === "值日" && x.date === ds).map((x) => x.note));
+    return { ...r, toDelete: [], creates: r.creates.filter((c) => c[F.DATE] === ds && !taken.has(c[F.NOTE])) };
 };
+
+// 員工欄空白的紀錄：畫面對不到人，只能在檢查清單提醒（Ragic 員工帳號連結失效時會整批變這樣）
+SC.nextNameless = (raw, year, month) => Object.entries(raw || {})
+    .filter(([k, v]) => v && typeof v === "object" && !k.startsWith("_"))
+    .map(([id, f]) => ({ id: String(id), emp: f[SC.F_LEAVE.EMP] || "", date: f[SC.F_LEAVE.DATE] || "", type: f[SC.F_LEAVE.TYPE] || "排休" }))
+    .filter((r) => !r.emp && r.date && SC.nextInMonth(r, year, month));
 
 // ── 刪除前快照（同 schedule.html exportScheduleSnapshot 的內容格式，方便用同一套步驟還原）──
 SC.nextSnapshot = (type, year, month, entries, nowIso) => {

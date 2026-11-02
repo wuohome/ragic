@@ -268,6 +268,35 @@ test("檢查清單：缺樓層、沒值班、連兩天、多人值班；補上�
     assert.ok(!c2.some((x) => x.d === 13 && x.kind === "clean"));
 });
 
+test("沒有名字的紀錄：檢查清單要提醒，不能靜靜消失", () => {
+    const SC = plainSC();
+    const raw = {
+        1: { [F.EMP]: "", [F.DATE]: "2026/11/16", [F.TYPE]: "值日", [F.NOTE]: "1F" },
+        2: { [F.EMP]: "", [F.DATE]: "2026/11/08", [F.TYPE]: "排休" },
+        3: { [F.EMP]: "", [F.DATE]: "2026/10/08", [F.TYPE]: "排休" },
+        4: { [F.EMP]: "呂鴻墀", [F.DATE]: "2026/11/16", [F.TYPE]: "值日", [F.NOTE]: "2F" },
+    };
+    const M = SC.nextBuildMonth(SC.nextParse(raw), 2026, 11);
+    M.nameless = SC.nextNameless(raw, 2026, 11);
+    assert.equal(M.nameless.length, 2, "只算當月");
+    const c = SC.nextChecks(M, "2026/11/02").find((x) => x.kind === "nameless");
+    assert.match(c.text, /有 2 筆紀錄沒有名字/);
+    assert.equal(c.fix, null);
+});
+
+test("補上打掃：當天已排的樓層不重複補，只補缺的", () => {
+    const SC = plainSC();
+    const year = 2026, month = 11;
+    const { allEmployees } = SC.nextBuildEmployees(mkEmpJson(), year, month);
+    const raw = {};
+    const ds = "2026/11/16";
+    [["1F"], ["4F"]].forEach(([note], i) => { raw[i + 1] = { [F.EMP]: "張瓊安", [F.DATE]: ds, [F.YEAR]: "2026", [F.MONTH]: "11", [F.TYPE]: "值日", [F.NOTE]: note, [F.DEPT]: "系統預排", [F.IS_AUTO]: "Yes" }; });
+    const r = SC.nextPlanFillCleanDay({ year, month, todayStr: "2026/11/02", allEmployees, raw, noRest: {} }, ds);
+    const floors = r.creates.map((c) => c[F.NOTE]).sort();
+    assert.ok(floors.length > 0, "要補到人");
+    assert.ok(floors.every((f) => f === "2F" || f === "3F"), "只補 2F、3F，實得 " + floors);
+});
+
 test("顯示名稱：曾琬容只在畫面顯示成花那，其他人不變", () => {
     const SC = plainSC();
     assert.equal(SC.nextName("曾琬容"), "花那");
