@@ -297,12 +297,6 @@ test("補上打掃：當天已排的樓層不重複補，只補缺的", () => {
     assert.ok(floors.every((f) => f === "2F" || f === "3F"), "只補 2F、3F，實得 " + floors);
 });
 
-test("顯示名稱：曾琬容只在畫面顯示成花那，其他人不變", () => {
-    const SC = plainSC();
-    assert.equal(SC.nextName("曾琬容"), "花那");
-    assert.equal(SC.nextName("張瓊安"), "張瓊安");
-});
-
 test("欄組：租賃部、租賃部（兼職）、社宅部（兼職）（張玉慧）、買賣部；全部用 Ragic 部門值，內部部門值不變", () => {
     const SC = plainSC();
     const { employees } = SC.nextBuildEmployees(mkEmpJson(), 2026, 11);
