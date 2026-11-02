@@ -16,9 +16,6 @@ SC.NEXT_MARK = Object.freeze({
     NO_TRASH: "未倒垃圾",       // 值班（新）：有到班但沒倒垃圾
 });
 
-// 只改顯示：員工表姓名「曾琬容」在畫面上寫「花那」；寫入與比對仍用本名
-SC.NEXT_DISPLAY_NAME = Object.freeze({ "曾琬容": "花那" });
-SC.nextName = (n) => SC.NEXT_DISPLAY_NAME[n] || n;
 
 // 排班權限（珊珊、瓊安）。伺服器 scheduleWhoami 以員工表 email 對到人後回傳 role；這份名單 Worker 端也有一份，兩邊要一起改。
 SC.NEXT_ADMIN_NAMES = Object.freeze(["韓珊珊", "張瓊安"]);
@@ -247,13 +244,13 @@ SC.nextChecks = (M, todayStr) => {
             else if (miss.length) out.push({ d, kind: "clean", fix: fixable ? "clean" : null, text: `${lab(d)}只排了 ${floorsText(got)}，還缺 ${span(miss)}` });
         }
         if (!day.duty.length) out.push({ d, kind: "duty", fix: fixable ? "duty" : null, text: `${lab(d)}沒有值班的人` });
-        else if (day.duty.length > 1) out.push({ d, kind: "duty", fix: null, text: `${lab(d)}有 ${day.duty.length} 人值班：${day.duty.map((x) => SC.nextName(x.name)).join("、")}` });
+        else if (day.duty.length > 1) out.push({ d, kind: "duty", fix: null, text: `${lab(d)}有 ${day.duty.length} 人值班：${day.duty.map((x) => x.name).join("、")}` });
     }
     const names = [...new Set(Object.values(M.days).flatMap((day) => day.clean.map((g) => g.name)))];
     names.forEach((n) => {
         for (let d = 1; d < M.dim; d++) {
             if (M.days[d].clean.some((g) => g.name === n) && M.days[d + 1].clean.some((g) => g.name === n)) {
-                out.push({ d, kind: "twice", fix: null, text: `${SC.nextName(n)}連兩天打掃：${lab(d)}、${lab(d + 1)}` });
+                out.push({ d, kind: "twice", fix: null, text: `${n}連兩天打掃：${lab(d)}、${lab(d + 1)}` });
             }
         }
     });
@@ -264,14 +261,14 @@ SC.nextChecks = (M, todayStr) => {
             const jobs = [];
             if (day.clean.some((g) => g.name === x.name)) jobs.push("打掃");
             if (day.duty.some((y) => y.name === x.name)) jobs.push("值班");
-            if (jobs.length && fixable) out.push({ d, kind: "twice", fix: null, text: `${SC.nextName(x.name)} ${lab(d)}休假，但同一天排了${jobs.join("和")}` });
+            if (jobs.length && fixable) out.push({ d, kind: "twice", fix: null, text: `${x.name} ${lab(d)}休假，但同一天排了${jobs.join("和")}` });
         });
     }
     SC.DUTY_NOT_ADJACENT_PAIRS.forEach(([a, b]) => {
         const has = (n, d) => M.days[d].clean.some((g) => g.name === n);
         for (let d = 1; d < M.dim; d++) {
             if ((has(a, d) && has(b, d + 1)) || (has(b, d) && has(a, d + 1))) {
-                out.push({ d, kind: "twice", fix: null, text: `${SC.nextName(a)}、${SC.nextName(b)}排在相鄰兩天打掃：${lab(d)}、${lab(d + 1)}` });
+                out.push({ d, kind: "twice", fix: null, text: `${a}、${b}排在相鄰兩天打掃：${lab(d)}、${lab(d + 1)}` });
             }
         }
     });

@@ -481,7 +481,6 @@ var TY=+TODAY.slice(0,4), TM=+TODAY.slice(5,7), TD=+TODAY.slice(8,10);
 function $(s,r){return (r||document).querySelector(s)}
 function $$(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
-function dn(n){return esc(SC.nextName(n))}
 function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
 var toastT;
 function toast(msg,err){
@@ -710,7 +709,7 @@ function heroHTML(n){
   var e=S.byName[n],kind=kindOf(n),sub=[];
   var todayIn=(S.year===TY&&S.month===TM);
   if(next&&!isTodayD(next.d)&&todayIn)sub.push('還有 '+(next.d-TD)+' 天。');
-  if(next&&next.mate)sub.push('跟'+dn(next.mate.name)+'一組，'+dn(next.mate.name)+'掃'+fText(next.mate.floors)+'。');
+  if(next&&next.mate)sub.push('跟'+esc(next.mate.name)+'一組，'+esc(next.mate.name)+'掃'+fText(next.mate.floors)+'。');
   if(dutyNext)sub.push('下次值班 '+fmtMD(dutyNext.d)+'，'+(hasTruck(dutyNext.d)?'那天要倒垃圾。':'那天沒垃圾車，不用倒。'));
   else if(kind==='office')sub.push('內勤不排值班，六日也不排打掃。');
   else if(kind==='parttime')sub.push('兼職每月排一次，不排值班。');
@@ -719,11 +718,11 @@ function heroHTML(n){
     var last=ds(S.M.dim);
     var over=SC._cmpDateStr(last,TODAY)<0;
     var title=over?'這個月已經過了':(items.some(function(i){return i.k==='c'})?'本月掃完了':'本月沒有排打掃');
-    return '<div class="hero"><h1><span class="ask">'+dn(n)+'，</span><span class="big">'+title+'</span></h1>'+
+    return '<div class="hero"><h1><span class="ask">'+esc(n)+'，</span><span class="big">'+title+'</span></h1>'+
       '<p class="sub">'+(over?'':'下一次要等下個月排好才看得到。')+sub.join('')+'</p></div>';
   }
   var isToday=isTodayD(next.d);
-  return '<div class="hero"><h1><span class="ask">'+dn(n)+'，你下一次打掃是</span>'+
+  return '<div class="hero"><h1><span class="ask">'+esc(n)+'，你下一次打掃是</span>'+
     '<span class="big">'+(isToday?'今天':'<span class="num">'+S.month+'/'+next.d+'</span><small>（'+WEEK[S.M.days[next.d].dow]+'）</small>')+'</span>'+
     '<span class="what">'+fHero(next.f)+'</span></h1><p class="sub">'+sub.join('')+'</p></div>';
 }
@@ -731,11 +730,11 @@ function todayHTML(n){
   if(!(S.year===TY&&S.month===TM))return '';
   var d=TD,day=S.M.days[d],rows='';
   day.clean.forEach(function(c){
-    rows+='<li>'+PILL_C+'<span class="who-name">'+dn(c.name)+'</span>'+(c.name===n?'<span class="you">你</span>':'')+
+    rows+='<li>'+PILL_C+'<span class="who-name">'+esc(c.name)+'</span>'+(c.name===n?'<span class="you">你</span>':'')+
       '<span class="right">'+fHero(c.floors)+(c.missedFloors.length?'・'+fShort(c.missedFloors)+'未掃':'')+'</span></li>';
   });
   day.duty.forEach(function(x){
-    rows+='<li>'+pillDuty(d)+'<span class="who-name">'+dn(x.name)+'</span>'+(x.name===n?'<span class="you">你</span>':'')+'<span class="right">'+dutyNote(d,x)+'</span></li>';
+    rows+='<li>'+pillDuty(d)+'<span class="who-name">'+esc(x.name)+'</span>'+(x.name===n?'<span class="you">你</span>':'')+'<span class="right">'+dutyNote(d,x)+'</span></li>';
   });
   if(!rows)rows='<li><span class="muted">今天還沒排。</span></li>';
   return '<section class="block"><h2 class="h2"><span>今天 '+fmtMD(d)+'</span></h2><ul class="lines">'+rows+'</ul></section>';
@@ -754,7 +753,7 @@ function monthHTML(n){
   var rows=list.map(function(i){
     var past=isPastD(i.d);
     var mark=i.k==='c'?PILL_C:i.k==='d'?pillDuty(i.d):pillRest(n,i.d);
-    var det=i.k==='c'?fHero(i.f)+(i.mate?'，跟'+dn(i.mate.name):'')+(i.miss&&i.miss.length?'・'+fShort(i.miss)+'未掃':''):
+    var det=i.k==='c'?fHero(i.f)+(i.mate?'，跟'+esc(i.mate.name):'')+(i.miss&&i.miss.length?'・'+fShort(i.miss)+'未掃':''):
       i.k==='d'?(i.state==='noshow'?'沒到班':i.state==='notrash'?'未倒垃圾':hasTruck(i.d)?'要倒垃圾':'沒垃圾車，不用倒'):'';
     return '<li class="'+(past?'past':'')+'">'+mark+'<span class="mono sm'+(past?' past':'')+'">'+fmtMD(i.d)+'</span><span class="right">'+(isTodayD(i.d)?'今天 ':'')+det+'</span></li>';
   }).join('');
@@ -771,7 +770,7 @@ function whoSelect(){
   var html=groups.map(function(g){
     var list=S.allEmployees.filter(function(e){return SC.dutyV2Kind(e)===g[1]});
     if(!list.length)return '';
-    return '<optgroup label="'+g[0]+'">'+list.map(function(e){return '<option value="'+esc(e.name)+'"'+(e.name===S.who?' selected':'')+'>'+dn(e.name)+'</option>'}).join('')+'</optgroup>';
+    return '<optgroup label="'+g[0]+'">'+list.map(function(e){return '<option value="'+esc(e.name)+'"'+(e.name===S.who?' selected':'')+'>'+esc(e.name)+'</option>'}).join('')+'</optgroup>';
   }).join('');
   return '<label class="whosel" style="display:flex"><span>看誰的班</span><select id="whoSel">'+html+'</select></label>';
 }
@@ -821,10 +820,10 @@ function dayHTML(d){
   var flag=isTodayD(d)?'<span class="flag">今天</span>':(!day.truck?'<span class="flag" title="清潔隊不收">'+IC.noTruck+'沒車</span>':'');
   var rows=day.clean.map(function(x){
     var miss=x.missedFloors.length;
-    return '<div class="rw">'+PILL_C+'<span class="'+(x.name===me?'me':'')+'">'+dn(x.name)+'</span>'+(miss?'<span class="pill pill-miss">'+(miss===x.floors.length?'未掃':fShort(x.missedFloors)+'未掃')+'</span>':'')+'<span class="fx">'+fShort(x.floors)+'</span></div>';
+    return '<div class="rw">'+PILL_C+'<span class="'+(x.name===me?'me':'')+'">'+esc(x.name)+'</span>'+(miss?'<span class="pill pill-miss">'+(miss===x.floors.length?'未掃':fShort(x.missedFloors)+'未掃')+'</span>':'')+'<span class="fx">'+fShort(x.floors)+'</span></div>';
   }).join('');
   day.duty.forEach(function(x){
-    rows+='<div class="rw">'+pillDuty(d)+'<span class="'+(x.name===me?'me':'')+'">'+dn(x.name)+'</span><span class="note2">'+dutyNote(d,x)+'</span></div>';
+    rows+='<div class="rw">'+pillDuty(d)+'<span class="'+(x.name===me?'me':'')+'">'+esc(x.name)+'</span><span class="note2">'+dutyNote(d,x)+'</span></div>';
   });
   if(!rows)rows='<div class="rw muted">還沒排。</div>';
   var names=day.rest.map(function(x){return x.name});
@@ -840,8 +839,8 @@ function renderAll(){
   var lede;
   if(todayIn){
     var td=S.M.days[TD];
-    var cleaners=td.clean.map(function(x){return dn(x.name)}).join('和')||'還沒排';
-    var duty=td.duty.map(function(x){return dn(x.name)}).join('、')||'還沒排';
+    var cleaners=td.clean.map(function(x){return esc(x.name)}).join('和')||'還沒排';
+    var duty=td.duty.map(function(x){return esc(x.name)}).join('、')||'還沒排';
     lede='今天 '+fmtMD(TD)+'　打掃 '+cleaners+'　值班 '+duty;
   }else lede=S.year+' 年 '+S.month+' 月每天的安排。';
   var noTruck=0;for(var d=1;d<=S.M.dim;d++)if(!S.M.days[d].truck)noTruck++;
@@ -891,7 +890,7 @@ function cellInner(n,d){
   return '';
 }
 function cellLabel(n,d){
-  var v=cellView(n,d),s=SC.nextName(n)+' '+fmtMD(d)+' ';
+  var v=cellView(n,d),s=n+' '+fmtMD(d)+' ';
   if(v.gone)return s+'尚未到職';
   var bits=[];
   if(v.clean)bits.push('打掃'+fText(v.clean.floors)+(v.clean.missedFloors.length?'（'+fShort(v.clean.missedFloors)+'未掃）':''));
@@ -932,7 +931,7 @@ function tableHTML(){
     g1+='<th class="gs" scope="colgroup" colspan="'+g.people.length+'" title="'+esc(g.label)+'">'+esc(gl)+'</th>';
     g.people.forEach(function(p,i){
       var gs=i===0?' class="gs"':'';
-      g2+='<th scope="col"'+gs+' data-row="'+esc(p.name)+'">'+dn(p.name)+'</th>';
+      g2+='<th scope="col"'+gs+' data-row="'+esc(p.name)+'">'+esc(p.name)+'</th>';
       foot+='<td'+gs+' data-tot="'+esc(p.name)+'">'+footStats(p.name,rests,tally[p.name]||{})+'</td>';
     });
   });
@@ -971,13 +970,13 @@ function confirmHTML(){
     var rows='';
     day.clean.forEach(function(g){
       var allMiss=g.missedFloors.length===g.floors.length;
-      rows+='<div class="cfrow"><span class="nm">'+dn(g.name)+'</span>'+PILL_C+'<span>'+fShort(g.floors)+'</span><span class="acts">'+
+      rows+='<div class="cfrow"><span class="nm">'+esc(g.name)+'</span>'+PILL_C+'<span>'+fShort(g.floors)+'</span><span class="acts">'+
         (g.missedFloors.length?'<span class="done">'+(allMiss?'未掃':fShort(g.missedFloors)+'未掃')+'</span><button class="mini" data-cf="clean-ok:'+d+':'+esc(g.name)+'">恢復成已掃</button>':
         '<span class="done">已掃</span><button class="mini" data-cf="clean-miss:'+d+':'+esc(g.name)+'">沒掃</button>')+'</span></div>';
     });
     day.duty.forEach(function(x){
       var tr=day.truck;
-      rows+='<div class="cfrow"><span class="nm">'+dn(x.name)+'</span>'+pillDuty(d)+'<span>'+(tr?'倒垃圾':'沒垃圾車')+'</span><span class="acts">'+
+      rows+='<div class="cfrow"><span class="nm">'+esc(x.name)+'</span>'+pillDuty(d)+'<span>'+(tr?'倒垃圾':'沒垃圾車')+'</span><span class="acts">'+
         (x.state==='ok'?'<span class="done">'+(tr?'已倒':'已值班')+'</span>'+(tr?'<button class="mini" data-cf="duty-notrash:'+d+':'+esc(x.name)+'">沒倒垃圾</button>':'')+'<button class="mini" data-cf="duty-noshow:'+d+':'+esc(x.name)+'">沒到班</button>':
         '<span class="done">'+(x.state==='noshow'?'沒到班':'未倒垃圾')+'</span><button class="mini" data-cf="duty-ok:'+d+':'+esc(x.name)+'">恢復</button>')+'</span></div>';
     });
@@ -990,7 +989,7 @@ function dutyPoolHTML(){
   var eligible=SC.nextZhibanEligible(S.employees,S.year,S.month,S.dutyPool).map(function(e){return e.name});
   var rows=SC.nextZhibanCandidates(S.employees).map(function(e){
     var hd=e.hireDate&&e.hireDate!=='9999/12/31'?e.hireDate.slice(0,10)+' 到職':'';
-    return '<label class="dprow"><input type="checkbox" data-dp="'+esc(e.name)+'"'+(eligible.indexOf(e.name)>=0?' checked':'')+'><span class="nm">'+dn(e.name)+'</span><span class="xs muted">'+hd+'</span></label>';
+    return '<label class="dprow"><input type="checkbox" data-dp="'+esc(e.name)+'"'+(eligible.indexOf(e.name)>=0?' checked':'')+'><span class="nm">'+esc(e.name)+'</span><span class="xs muted">'+hd+'</span></label>';
   }).join('');
   return '<p class="xs muted">打勾的人才會被預排值班。改了不會動已排好的班，下次按「預排值班」才生效。新同仁要勾了才會排。</p><div class="dplist">'+rows+'</div>';
 }
@@ -1036,16 +1035,16 @@ function refreshAny(){
 function eligibleZhiban(e){
   if(!e)return '找不到這位同仁';
   if(S.dutyPool&&S.dutyPool.indexOf(e.name)>=0)return '';
-  if(e.hire!=='承攬')return '值班只排承攬業務，'+SC.nextName(e.name)+'是'+groupLabel(e.name);
+  if(e.hire!=='承攬')return '值班只排承攬業務，'+e.name+'是'+groupLabel(e.name);
   if(e.dept==='社宅部'||e.dept==='設計部')return '社宅部、設計部不排值班';
-  if(SC.ZHIBAN_BLACKLIST&&SC.ZHIBAN_BLACKLIST.indexOf(e.name)>=0)return SC.nextName(e.name)+'在不值班名單內';
+  if(SC.ZHIBAN_BLACKLIST&&SC.ZHIBAN_BLACKLIST.indexOf(e.name)>=0)return e.name+'在不值班名單內';
   return '';
 }
 function officeOkDay(d){var w=S.M.days[d].dow;return w>=1&&w<=5&&!SC.isGovHoliday(ds(d),false)}
 function restPreChecks(n,d,kind){
   if(kind==='請假')return Promise.resolve(true);
   var count=countRest(n),limit=SC.monthLeaveLimit(S.year,S.month),ps=[];
-  if(kind==='排休'&&count>=limit)ps.push('<p><b>'+dn(n)+'</b> 本月已排休 '+count+' 天，超過 '+limit+' 天上限。</p>');
+  if(kind==='排休'&&count>=limit)ps.push('<p><b>'+esc(n)+'</b> 本月已排休 '+count+' 天，超過 '+limit+' 天上限。</p>');
   var nr=S.M.days[d].noRest;
   if(nr)ps.push('<p>'+fmtMD(d)+' 是禁休日'+(nr.reason?'（'+esc(nr.reason)+'）':'')+'。</p>');
   if(!ps.length)return Promise.resolve(true);
@@ -1056,7 +1055,7 @@ function clickCell(n,d){
   if(S.cellBusy[key]||S.busy)return;
   var mode=S.mode,e=S.byName[n];
   var v=cellView(n,d);
-  if(v.gone){toast(dn(n)+'還沒到職。',true);return}
+  if(v.gone){toast(esc(n)+'還沒到職。',true);return}
   var run;
   if(mode==='rest')run=doRest(n,d,v,'排休');
   else if(mode==='texiu')run=doRest(n,d,v,'特休');
@@ -1072,7 +1071,7 @@ function clickCell(n,d){
 function doRest(n,d,v,kind){
   var perm=SC.nextCanEditRest({viewer:S.viewer,target:n,ds:ds(d),todayStr:TODAY,hasRedRecord:false});
   if(!perm.ok){toast(perm.why,true);return}
-  var when=dn(n)+' '+fmtMD(d);
+  var when=esc(n)+' '+fmtMD(d);
   function create(){
     var e=S.byName[n],extra={};if(e&&e.dept)extra[F.DEPT]=e.dept;
     return apiCreate(newBody(n,d,kind,extra));
@@ -1098,15 +1097,15 @@ function doRest(n,d,v,kind){
 }
 function doDuty(n,d,v,e){
   var bad=eligibleZhiban(e);if(bad){toast(bad+'。',true);return}
-  if(v.red){toast(dn(n)+'是正職，六日和國定假日不排值班。',true);return}
+  if(v.red){toast(esc(n)+'是正職，六日和國定假日不排值班。',true);return}
   var day=S.M.days[d];
   if(v.duty){
-    var go=isFutureD(d)?Promise.resolve(true):uiConfirm('取消值班？',fmtMD(d)+'已經到了或過了，取消後這天的值班紀錄會消失。確定要取消 <b>'+dn(n)+'</b> 的值班嗎？','取消值班');
-    return go.then(function(ok){if(!ok)return;return apiDelete(v.duty.id).then(function(){toast(dn(n)+' '+fmtMD(d)+'取消值班。')})});
+    var go=isFutureD(d)?Promise.resolve(true):uiConfirm('取消值班？',fmtMD(d)+'已經到了或過了，取消後這天的值班紀錄會消失。確定要取消 <b>'+esc(n)+'</b> 的值班嗎？','取消值班');
+    return go.then(function(ok){if(!ok)return;return apiDelete(v.duty.id).then(function(){toast(esc(n)+' '+fmtMD(d)+'取消值班。')})});
   }
-  if(v.rest){toast(dn(n)+' '+fmtMD(d)+'休假，先取消才能排值班。',true);return}
+  if(v.rest){toast(esc(n)+' '+fmtMD(d)+'休假，先取消才能排值班。',true);return}
   var others=day.duty.filter(function(x){return x.name!==n});
-  var pre=others.length?uiConfirm('換值班？',fmtMD(d)+'目前值班是 <b>'+others.map(function(x){return dn(x.name)}).join('、')+'</b>，要換成 <b>'+dn(n)+'</b> 嗎？','換成他'):Promise.resolve(true);
+  var pre=others.length?uiConfirm('換值班？',fmtMD(d)+'目前值班是 <b>'+others.map(function(x){return esc(x.name)}).join('、')+'</b>，要換成 <b>'+esc(n)+'</b> 嗎？','換成他'):Promise.resolve(true);
   return pre.then(function(ok){
     if(!ok)return;
     var chain=Promise.resolve();
@@ -1114,14 +1113,14 @@ function doDuty(n,d,v,e){
     return chain.then(function(){
       var extra={};extra[F.DEPT]=others.length?'手動變更':(e.dept||'');
       return apiCreate(newBody(n,d,'值班',extra));
-    }).then(function(){toast(others.length?fmtMD(d)+'值班換成'+SC.nextName(n)+'。':SC.nextName(n)+' '+fmtMD(d)+'值班。')});
+    }).then(function(){toast(others.length?fmtMD(d)+'值班換成'+n+'。':n+' '+fmtMD(d)+'值班。')});
   });
 }
 function doClean(n,d,v,e){
   var kind=kindOf(n),day=S.M.days[d];
-  if(v.red){toast(dn(n)+'是正職，六日和國定假日不排打掃。',true);return}
+  if(v.red){toast(esc(n)+'是正職，六日和國定假日不排打掃。',true);return}
   if(kind==='office'&&!officeOkDay(d)){toast('內勤六日和國定假日不排打掃。',true);return}
-  if(v.rest){toast(dn(n)+' '+fmtMD(d)+'休假，先取消才能排打掃。',true);return}
+  if(v.rest){toast(esc(n)+' '+fmtMD(d)+'休假，先取消才能排打掃。',true);return}
   var cur=v.clean,next;
   if(kind==='office'){
     var A=SC.OFFICE_DUTY_SPLIT.A.map(function(f){return +f[0]}),B=SC.OFFICE_DUTY_SPLIT.B.map(function(f){return +f[0]});
@@ -1130,11 +1129,11 @@ function doClean(n,d,v,e){
   var taken={};day.cleanRecs.forEach(function(c){if(c.name!==n)taken[c.floor]=c.name});
   if(next){
     var clash=next.filter(function(f){return taken[f]})[0];
-    if(clash){toast(dn(taken[clash])+'已掃 '+clash+'F，先取消才能排。',true);return}
+    if(clash){toast(esc(taken[clash])+'已掃 '+clash+'F，先取消才能排。',true);return}
   }
   var del=cur?cur.recs.slice():[];
   var needConfirm=cur&&!isFutureD(d);
-  var pre=needConfirm?uiConfirm('改這天的打掃？',fmtMD(d)+'已經到了或過了，改動會取代原本 <b>'+dn(n)+'</b> 的紀錄（包含珊珊標的未掃）。','仍要改'):Promise.resolve(true);
+  var pre=needConfirm?uiConfirm('改這天的打掃？',fmtMD(d)+'已經到了或過了，改動會取代原本 <b>'+esc(n)+'</b> 的紀錄（包含珊珊標的未掃）。','仍要改'):Promise.resolve(true);
   return pre.then(function(ok){
     if(!ok)return;
     var chain=Promise.resolve();
@@ -1145,7 +1144,7 @@ function doClean(n,d,v,e){
         return apiCreate(newBody(n,d,'值日',extra));
       }).then(function(){return sleep(150)});
     });
-    return chain.then(function(){toast(next?dn(n)+' '+fmtMD(d)+(next.length===4?'掃整棟。':'掃 '+fShort(next)+'。'):dn(n)+' '+fmtMD(d)+'取消打掃。')});
+    return chain.then(function(){toast(next?esc(n)+' '+fmtMD(d)+(next.length===4?'掃整棟。':'掃 '+fShort(next)+'。'):esc(n)+' '+fmtMD(d)+'取消打掃。')});
   });
 }
 function setIsAuto(rec,val){var o={};o[F.IS_AUTO]=val;return apiUpdate(rec.id,o)}
@@ -1174,18 +1173,18 @@ function doConfirmCell(n,d,v){
     if(v.clean.missedFloors.length<v.clean.floors.length)opts.push({label:(v.clean.floors.length===4?'整棟':fShort(v.clean.floors))+'都沒掃',value:'all'});
     if(v.clean.floors.length>1&&v.clean.missedFloors.length<v.clean.floors.length)opts.push({label:'只有其中一層沒掃…',value:'one',sub:1});
     if(v.clean.missedFloors.length)opts.push({label:'恢復成已掃',value:'ok',sub:1});
-    return uiChoose(dn(n)+' '+fmtMD(d)+' 打掃 '+fShort(v.clean.floors),opts).then(function(pick){
+    return uiChoose(esc(n)+' '+fmtMD(d)+' 打掃 '+fShort(v.clean.floors),opts).then(function(pick){
       if(!pick)return;
-      if(pick==='all')return markClean(n,d,null,true).then(function(){toast(dn(n)+' '+fmtMD(d)+'標記未掃。')});
-      if(pick==='ok')return markClean(n,d,null,false).then(function(){toast(dn(n)+' '+fmtMD(d)+'恢復成已掃。')});
+      if(pick==='all')return markClean(n,d,null,true).then(function(){toast(esc(n)+' '+fmtMD(d)+'標記未掃。')});
+      if(pick==='ok')return markClean(n,d,null,false).then(function(){toast(esc(n)+' '+fmtMD(d)+'恢復成已掃。')});
       var okF=v.clean.floors.filter(function(f){return v.clean.missedFloors.indexOf(f)<0});
       return uiChoose('哪一層沒掃？',okF.map(function(f){return {label:f+'F',value:f}})).then(function(f){
-        if(!f)return;return markClean(n,d,[f],true).then(function(){toast(dn(n)+' '+fmtMD(d)+f+'F 標記未掃。')});
+        if(!f)return;return markClean(n,d,[f],true).then(function(){toast(esc(n)+' '+fmtMD(d)+f+'F 標記未掃。')});
       });
     });
   }
   if(v.duty&&!v.clean)return duty3(n,d,v);
-  if(v.clean&&v.duty)return uiChoose(dn(n)+' '+fmtMD(d)+'要標記哪一項？',[{label:'打掃',value:'c'},{label:'值班',value:'d'}]).then(function(p){
+  if(v.clean&&v.duty)return uiChoose(esc(n)+' '+fmtMD(d)+'要標記哪一項？',[{label:'打掃',value:'c'},{label:'值班',value:'d'}]).then(function(p){
     if(!p)return;if(p==='d')return duty3(n,d,v);
     return markClean(n,d,null,v.clean.missedFloors.length===0).then(function(){toast('已更新打掃紀錄。')});
   });
@@ -1197,8 +1196,8 @@ function duty3(n,d,v){
   if(v.duty.state!=='notrash'&&hasTruck(d))opts.push({label:'有到班，但沒倒垃圾',value:'notrash'});
   if(v.duty.state!=='noshow')opts.push({label:'沒到班',value:'noshow',sub:1});
   if(!hasTruck(d)&&v.duty.state==='ok')opts.unshift({label:'這天沒垃圾車，只能標沒到班',value:'noshow'});
-  return uiChoose(dn(n)+' '+fmtMD(d)+' 值班',opts).then(function(p){
-    if(!p)return;return markDuty(n,d,p).then(function(){toast(dn(n)+' '+fmtMD(d)+({ok:'恢復成已完成。',notrash:'標記未倒垃圾。',noshow:'標記沒到班。'})[p])});
+  return uiChoose(esc(n)+' '+fmtMD(d)+' 值班',opts).then(function(p){
+    if(!p)return;return markDuty(n,d,p).then(function(){toast(esc(n)+' '+fmtMD(d)+({ok:'恢復成已完成。',notrash:'標記未倒垃圾。',noshow:'標記沒到班。'})[p])});
   });
 }
 /* 確認面板按鈕 */
@@ -1352,7 +1351,7 @@ function fairGroup(g,scale){
     var sign=r.gap>0?'+'+r.gap:r.gap<0?'−'+Math.abs(r.gap):'0';
     var det='排定 '+r.floors+' 層'+(g.kind==='biz'&&r.trash?'・倒垃圾 '+r.trash+' 次':'')+'・到今天實際 '+r.done+' 層';
     var ex=[];if(r.floorsMissed)ex.push('未掃 '+r.floorsMissed+' 層');if(r.trashMissed)ex.push('未倒垃圾 '+r.trashMissed+' 次');if(r.noShow)ex.push('沒到班 '+r.noShow+' 次');
-    return '<div class="frow'+(r.name===S.who?' me':'')+'"><span class="fname">'+dn(r.name)+'</span>'+
+    return '<div class="frow'+(r.name===S.who?' me':'')+'"><span class="fname">'+esc(r.name)+'</span>'+
       '<div class="fdev" role="img" aria-label="比平均'+(r.gap>0?'多 '+r.gap:r.gap<0?'少 '+Math.abs(r.gap):'相同')+'"><i class="'+r.side+'" style="width:'+w+'"></i></div>'+
       '<span class="fgap '+r.side+'">'+sign+'</span>'+
       '<span class="fdet">'+det+(ex.length?'・'+ex.join('・'):'')+'</span></div>';
@@ -1385,7 +1384,7 @@ function render(){
     if(b.getAttribute('data-view')===S.view)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');
   });
   var nr=$('#noteR');
-  if(S.viewer){nr.innerHTML='<span>'+dn(S.viewer.name)+'・'+(S.viewer.role==='admin'?'可排班':'同仁')+'</span><button class="link" id="logout">登出</button>'}
+  if(S.viewer){nr.innerHTML='<span>'+esc(S.viewer.name)+'・'+(S.viewer.role==='admin'?'可排班':'同仁')+'</span><button class="link" id="logout">登出</button>'}
   else nr.innerHTML='';
   if(S.boot!=='ready'){main.innerHTML=stateHTML();return}
   main.innerHTML=monthNavHTML()+({me:renderMe,all:renderAll,sched:renderSched,fair:renderFair}[S.view]||renderMe)();paintCheckCount();
@@ -1447,7 +1446,7 @@ document.addEventListener('change',function(e){
   var list=box.closest('.dplist'),boxes=[].slice.call(list.querySelectorAll('[data-dp]'));
   var names=boxes.filter(function(b){return b.checked}).map(function(b){return b.getAttribute('data-dp')});
   boxes.forEach(function(b){b.disabled=true});
-  saveDutyPool(names).then(function(){toast(dn(box.getAttribute('data-dp'))+(box.checked?' 已加入值班名單。':' 已移出值班名單。'))},function(err){
+  saveDutyPool(names).then(function(){toast(esc(box.getAttribute('data-dp'))+(box.checked?' 已加入值班名單。':' 已移出值班名單。'))},function(err){
     box.checked=!box.checked;toast(err.message||String(err),true);
   }).then(function(){boxes.forEach(function(b){b.disabled=false})});
 });
@@ -1468,7 +1467,7 @@ function curTheme(){
   return a||'light';
 }
 function rulesHTML(){
-  var y=S.year,m=S.month,limit=SC.monthLeaveLimit(y,m),names=SC.GOV_REST_NAMES.map(SC.nextName).join('、');
+  var y=S.year,m=S.month,limit=SC.monthLeaveLimit(y,m),names=SC.GOV_REST_NAMES.join('、');
   var v2=SC.isDutyV2Month(y,m);
   var clean=v2?
     '<li><b>每天掃整棟一到四樓</b>，四樓也是每天掃。</li>'+
