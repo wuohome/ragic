@@ -1351,22 +1351,22 @@ function fairGroup(g,scale){
   var body=g.rows.map(function(r){
     var w=(Math.abs(r.gap)/scale*50).toFixed(2)+'%';
     var sign=r.gap>0?'+'+r.gap:r.gap<0?'−'+Math.abs(r.gap):'0';
-    var det='排了打掃 '+r.floors+' 層'+(r.trash?'＋倒垃圾 '+r.trash+' 次':'')+'＝'+r.sched+' 份・已做完 '+r.done+' 份';
+    var det='排了打掃 '+r.floors+' 層'+(r.trash?'＋倒垃圾 '+r.trash+' 次':'')+'＝'+r.sched+' 分・已做完 '+r.done+' 分';
     var ex=[];if(r.floorsMissed)ex.push('沒掃 '+r.floorsMissed+' 層');if(r.trashMissed)ex.push('沒倒垃圾 '+r.trashMissed+' 次');if(r.noShow)ex.push('沒到班 '+r.noShow+' 次');
     return '<div class="frow'+(r.name===S.who?' me':'')+'"><span class="fname">'+esc(r.name)+'</span>'+
       '<div class="fdev" role="img" aria-label="比平均'+(r.gap>0?'多 '+r.gap:r.gap<0?'少 '+Math.abs(r.gap):'相同')+'"><i class="'+r.side+'" style="width:'+w+'"></i></div>'+
       '<span class="fgap '+r.side+'">'+sign+'</span>'+
       '<span class="fdet">'+det+(ex.length?'・'+ex.join('・'):'')+'</span></div>';
   }).join('');
-  return '<section class="fairgrp"><div class="fairside"><h2>'+g.label+' '+g.rows.length+' 人</h2><p class="avgcap">平均每人</p><p class="avg">'+g.avg+'<small>份</small></p></div>'+
-    '<div><div class="frow fhead"><span></span><div class="fscale"><span>← 排得比平均少</span><span>排得比平均多 →</span></div><span>差幾份</span></div>'+body+'</div></section>';
+  return '<section class="fairgrp"><div class="fairside"><h2>'+g.label+' '+g.rows.length+' 人</h2><p class="avgcap">平均每人</p><p class="avg">'+g.avg+'<small>分</small></p></div>'+
+    '<div><div class="frow fhead"><span></span><div class="fscale"><span>← 排得比平均少</span><span>排得比平均多 →</span></div><span>差幾分</span></div>'+body+'</div></section>';
 }
 function renderFair(){
   var people=S.allEmployees.map(function(e){return {name:e.name,kind:SC.dutyV2Kind(e)}});
   var tally=SC.nextTally(S.M,TODAY);
   var groups=SC.nextFairness(people,tally);
   var scale=0;groups.forEach(function(g){g.rows.forEach(function(r){scale=Math.max(scale,Math.abs(r.gap))})});scale=scale||1;
-  return '<div class="view"><div class="pagehead"><div><h1 class="title">'+S.month+' 月公平帳</h1><p class="lede">看這個月誰被排到的打掃比較多、誰比較少。掃一層算 1 份，值班倒一次垃圾也算 1 份。每個人跟同組的平均比：正數是排得比別人多，負數是比別人少。</p></div></div>'+
+  return '<div class="view"><div class="pagehead"><div><h1 class="title">'+S.month+' 月公平帳</h1><p class="lede">看這個月誰被排到的打掃比較多、誰比較少。掃一層算 1 分，值班倒一次垃圾也算 1 分。每個人跟同組的平均比：正數是排得比別人多，負數是比別人少。</p></div></div>'+
     groups.map(function(g){return fairGroup(g,scale)}).join('')+'</div>';
 }
 
@@ -1505,7 +1505,7 @@ function rulesHTML(){
     '<h3>打掃</h3><ul>'+clean+'</ul>'+
     '<h3>今天以前的班</h3><ul><li>預排時今天以前（含今天）的日子鎖定不動，手動排的也會保留。</li></ul>'+
     (S.perms.confirm?'<h3>標記沒做</h3><ul><li>預設都算做完，只標沒做的人。</li><li>最近兩天在上方「標記沒做」；更早的日子把「點格子改」切到「標記沒做」再點格子。</li></ul>':'')+
-    '<h3>公平帳</h3><ul><li>用「份」計算：掃一層算 1 份，值班倒一次垃圾也算 1 份。業務、內勤、兼職各自跟自己組的平均比。</li><li>「排了」是整個月排好的量，正負數就是拿這個比；「已做完」是到今天為止真的做完的量，標了沒掃、沒倒垃圾的不算。</li></ul>'+
+    '<h3>公平帳</h3><ul><li>用「分」計算：掃一層算 1 分，值班倒一次垃圾也算 1 分。業務、內勤、兼職各自跟自己組的平均比。</li><li>「排了」是整個月排好的量，正負數就是拿這個比；「已做完」是到今天為止真的做完的量，標了沒掃、沒倒垃圾的不算。</li></ul>'+
     '<h3>資料</h3><ul><li>資料和舊版排班表是同一份。</li></ul>'+
     '</div><div class="acts"><button class="btn btn2" data-mv="report">回報問題或意見</button><button class="btn" data-mv="ok">知道了</button></div>';
 }
