@@ -31,7 +31,7 @@ from google.oauth2 import service_account
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-SA_KEY = Path.home() / '.claude' / 'scripts' / 'perf-sa-key.json'
+SA_KEY = Path.home() / '.secrets' / 'perf-sa-key.json'
 PARENT_FOLDER_ID = '1izWZC2w49BJGkMoWD5c_0UtIRrI9qkHx'  # 母 folder「薪資表」
 
 # rclone 公開預設 OAuth client（rclone 自家 project，未開通 Sheets API，只拿來換 Drive token）
