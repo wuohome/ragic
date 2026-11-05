@@ -29,7 +29,7 @@ from pathlib import Path
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-SA_KEY = Path.home() / '.claude' / 'scripts' / 'perf-sa-key.json'
+SA_KEY = Path.home() / '.secrets' / 'perf-sa-key.json'
 MIRROR_FOLDER_ID = '1s_2wWYcRAiFV-nwIYA0-hHSKsL_DMqsw'
 
 # 新母 folder（owner=wuo.home@gmail.com），含各年度薪資表子 folder

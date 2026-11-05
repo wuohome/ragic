@@ -30,7 +30,7 @@ from typing import Optional
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-SA_KEY = Path.home() / '.claude' / 'scripts' / 'perf-sa-key.json'
+SA_KEY = Path.home() / '.secrets' / 'perf-sa-key.json'
 MIRROR_FOLDER_ID = '1s_2wWYcRAiFV-nwIYA0-hHSKsL_DMqsw'  # legacy fallback (mirror folder，5/8 後同步已斷，保留作安全網)
 PARENT_FOLDER_ID = '1izWZC2w49BJGkMoWD5c_0UtIRrI9qkHx'  # 母 folder「薪資表」owner=wuo.home@gmail.com，2026-05-22 共享 SA Reader
 # L50 真正修法 2026-05-22：Joan 把母 folder 共享給 SA，改用 auto-detect 動態找月份 sheet。
