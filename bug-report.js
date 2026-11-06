@@ -93,8 +93,13 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
     '}',
 
     '.wh-modal-header{',
-      'padding:20px 24px 12px;border-bottom:1px solid #f0f0f0;',
+      'padding:20px 24px 12px;border-bottom:1px solid #f0f0f0;position:relative;',
     '}',
+    '.wh-x{position:absolute;top:10px;right:10px;width:40px;height:40px;border:0;border-radius:20px;background:transparent;',
+      'font-size:22px;line-height:40px;color:#888;cursor:pointer;}',
+    '.wh-x:hover{background:#f0f0f0;color:#333;}',
+    '#wh-mark .wh-x{color:#ccc;top:8px;right:8px;}',
+    '#wh-mark .wh-x:hover{background:#333;color:#fff;}',
     '.wh-modal-title{font-size:17px;font-weight:700;color:#1a1a1a;margin:0 0 2px;}',
     '.wh-modal-sub{font-size:13px;color:#666;margin:0;}',
 
@@ -194,7 +199,7 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
     '#wh-mark{display:none;position:fixed;inset:0;z-index:99995;background:#111;color:#fff;flex-direction:column;',
       'font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;}',
     '#wh-mark.wh-open{display:flex;}',
-    '.wh-mark-top{padding:12px 16px;text-align:center;font-size:17px;font-weight:700;}',
+    '.wh-mark-top{padding:12px 56px;text-align:center;font-size:17px;font-weight:700;}',
     '.wh-mark-top small{display:block;font-size:13px;font-weight:400;color:#bbb;margin-top:2px;}',
     '.wh-mark-stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 12px;}',
     '#wh-mark-canvas{max-width:100%;max-height:100%;touch-action:none;cursor:crosshair;background:#fff;}',
@@ -240,6 +245,7 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
   modal.setAttribute('aria-label', '問題回報與意見回饋');
   modal.innerHTML = [
     '<div class="wh-modal-header">',
+      '<button type="button" class="wh-x" id="wh-modal-x" aria-label="關閉，不回報了">✕</button>',
       '<div class="wh-tabs">',
         '<button type="button" class="wh-tab wh-on" id="wh-tab-bug">🐛 問題回報</button>',
         '<button type="button" class="wh-tab" id="wh-tab-idea">💡 意見回饋</button>',
@@ -318,6 +324,7 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
   var markEl = document.createElement('div');
   markEl.id = 'wh-mark';
   markEl.innerHTML = [
+    '<button type="button" class="wh-x" id="wh-mark-x" aria-label="關閉，不回報了">✕</button>',
     '<div class="wh-mark-top">用手指或滑鼠，把有問題的地方框起來<small>點一下也可以，會在那裡放一個框</small></div>',
     '<div class="wh-mark-stage"><canvas id="wh-mark-canvas"></canvas></div>',
     '<div class="wh-mark-bar">',
@@ -605,6 +612,9 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
   });
 
   document.getElementById('wh-cancel-btn').addEventListener('click', closeModal);
+  // 按錯了：框選畫面與填寫視窗右上角都有 ✕，一按全部關掉、不送出
+  document.getElementById('wh-modal-x').addEventListener('click', closeModal);
+  document.getElementById('wh-mark-x').addEventListener('click', function () { closeMark(); closeModal(); });
   backdrop.addEventListener('click', closeModal);
 
   document.getElementById('wh-retake-btn').addEventListener('click', function () {
