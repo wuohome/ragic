@@ -398,6 +398,40 @@ body:has(#mxwrap) .shell{padding-top:var(--bar)}
 .fdet{grid-column:1 / -1;font-size:14px;line-height:20px;color:var(--ink3)}
 @media (min-width:640px){.frow{grid-template-columns:96px minmax(0,1fr) 72px}.fdet{grid-column:2 / -1}}
 
+/* ---------- 5. 公基金 ---------- */
+.fhero{margin-top:28px}
+.fhero .big{font-size:56px;line-height:1.05}
+@media (min-width:768px){.fhero .big{font-size:88px}}
+@media (min-width:1100px){.fhero .big{font-size:104px}}
+.fbar{height:8px;background:var(--bg3);margin-top:12px;max-width:560px}
+.fbar i{display:block;height:100%;background:var(--ink)}
+.neg{color:var(--red)}
+.mini{min-height:32px;padding-inline:10px;font-size:14px;line-height:20px;font-weight:500;outline:1px solid var(--line2);outline-offset:-1px;white-space:nowrap}
+.btn.sm{min-height:36px;padding-inline:12px;font-size:14px;margin-left:auto}
+.frec>li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px}
+.frec .fk{font-weight:600}
+.frec .fv{text-align:right;font-family:var(--mono);font-weight:600}
+.frec .fd{grid-column:1 / -1;font-size:14px;line-height:20px;color:var(--ink3)}
+.frec li.bad .fv{color:var(--red)}
+.frec li.warn .fk::before{content:"";display:inline-block;width:8px;height:8px;margin-right:8px;background:var(--duty);vertical-align:middle}
+.frec li.bad .fk::before{content:"";display:inline-block;width:8px;height:8px;margin-right:8px;background:var(--red);vertical-align:middle}
+.fwarn{margin-top:12px;padding:12px 16px;background:var(--red-soft);color:var(--ink);font-size:14px;line-height:22px;list-style:square inside}
+.ftools{display:flex;flex-wrap:wrap;gap:8px}
+.lines .fl{min-width:0;font-size:14px;line-height:20px}
+.fform{display:grid;gap:12px;margin-top:12px}
+.fform .body{margin-top:0}
+.ff{display:grid;gap:4px;font-size:14px;line-height:20px;color:var(--ink2)}
+.ff input,.ff select{width:100%;height:44px;padding-inline:12px;border:1px solid var(--ink);border-radius:0;background:var(--bg);color:var(--ink);font:inherit;font-size:16px}
+.ff input[type=file]{height:auto;padding-block:8px;border-style:dashed}
+.fchecks{display:grid;gap:2px;max-height:240px;overflow:auto;outline:1px solid var(--line);padding:8px}
+.fchecks label,.fm label,.fconsent{display:flex;align-items:center;gap:8px;min-height:36px;font-size:15px}
+.fchecks input,.fm input,.fconsent input{width:18px;height:18px;accent-color:var(--ink)}
+.fm{border:0;padding:0;display:grid;gap:2px}
+.fm legend{font-size:14px;color:var(--ink2);margin-bottom:4px}
+.fsumline{font-size:15px}
+.ferr{color:var(--red);font-size:14px;min-height:20px}
+.fphoto{display:block;max-width:100%;max-height:70dvh;margin-inline:auto;outline:1px solid var(--line)}
+
 /* ---------- Toast / Modal / States ---------- */
 .toast{position:fixed;left:50%;bottom:max(24px,env(safe-area-inset-bottom,0px));z-index:50;transform:translate(-50%,16px);opacity:0;pointer-events:none;background:var(--ink);color:var(--on-ink);padding-block:10px;padding-inline:14px;font-size:14px;line-height:20px;box-shadow:var(--shadow);max-width:calc(100vw - 32px);transition:opacity 200ms var(--ease),transform 300ms var(--ease)}
 .toast.show{opacity:1;transform:translate(-50%,0)}
@@ -455,6 +489,7 @@ body:has(#mxwrap) .shell{padding-top:var(--bar)}
     <button class="tab" data-view="all">全體</button>
     <button class="tab" data-view="sched" id="tabSched" hidden>排班</button>
     <button class="tab" data-view="fair">公平帳</button>
+    <button class="tab" data-view="fund">公基金</button>
     <button class="iconbtn" id="helpBtn" aria-label="排班規則說明" title="排班規則說明">?</button>
     <button class="iconbtn" id="theme" aria-label="切換深淺色"></button>
   </nav>
@@ -469,6 +504,7 @@ body:has(#mxwrap) .shell{padding-top:var(--bar)}
 <script src="schedule-common.js?v=20261031-9"></script>
 <script src="schedule-duty-v2.js?v=20261031-9"></script>
 <script src="schedule-next-core.js?v=20261031-9"></script>
+<script src="schedule-fund-core.js?v=20261106-1"></script>
 <script src="js/staff-gate.js"></script>
 <script>
 (function(){
@@ -1370,6 +1406,272 @@ function renderFair(){
     groups.map(function(g){return fairGroup(g,scale)}).join('')+'</div>';
 }
 
+/* ================= 公基金 ================= */
+/* 清潔費放進同仁公基金，不進公司帳戶；錢拿來請客。帳本存 Worker（fundList／fundAdd），規則在 schedule-fund-core.js。
+   同仁看得到：餘額、每一筆花費（含收據）、自己的清潔費。珊珊、瓊安另外看得到對帳、每個人的清潔費、完整流水帳，也只有她們能記帳。 */
+S.fund={status:'idle',entries:[],cfg:{},raw:{},err:''};
+function money(n){n=Math.round(Number(n)||0);return (n<0?'−':'')+'NT$ '+Math.abs(n).toLocaleString('en-US')}
+function fmtYMD(s){var p=String(s||'').split('/');return p.length===3?(+p[1])+'/'+(+p[2]):s}
+function fundAdmin(){return !!(S.perms&&S.perms.schedule)}
+function loadFund(){
+  S.fund.status='loading';if(S.view==='fund')render();
+  var to=SC._cmpDateStr(TODAY,SC.FUND_START)<0?{y:2026,m:11}:{y:TY,m:TM};
+  return Promise.all([
+    StaffGate.fetch('/fundList').then(function(res){return res.json().catch(function(){return {}}).then(function(j){if(!res.ok||!j.ok)throw new Error('公基金帳本讀取失敗（'+res.status+'）');return j})}),
+    SC.proxyFetch('listLeaves'+SC.leaveQuery(2026,11,to.y,to.m))
+  ]).then(function(r){
+    S.fund.entries=r[0].entries||[];S.fund.cfg=r[0].cfg||{};S.fund.raw=r[1]||{};S.fund.status='ready';
+  }).catch(function(e){S.fund.status='error';S.fund.err=e.message||String(e)}).then(function(){if(S.view==='fund')render()});
+}
+function fundCalc(){
+  var charges=SC.fundCharges(SC.nextParse(S.fund.raw),TODAY);
+  return {charges:charges,st:SC.fundState(S.fund.entries,charges)};
+}
+function fundPost(body){
+  return StaffGate.fetch('/fundAdd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(res){
+    return res.json().catch(function(){return {}}).then(function(j){
+      if(res.ok&&j.ok)return j;
+      var msg={charge_already_paid:'這幾筆清潔費已經收過了，畫面已重新整理，請再看一次。',forbidden:'只有珊珊、瓊安能記公基金的帳。',already_voided:'這筆已經作廢過了。',payin_exists:'公司已經撥入這筆代扣款，要先作廢那筆「公司撥入」。',already_paid_in:'這筆代扣款已經記過撥入了。',amount_mismatch:'撥入金額跟代扣金額對不起來。',invalid_photo:'收據照片太大或格式不對，請重拍一次。',note_required:'請寫說明。'}[j.error];
+      throw new Error(msg||('記帳失敗（'+(j.error||res.status)+'），請重新整理再試。'));
+    });
+  });
+}
+function fundSave(body,okMsg){
+  if(S.fund.busy){toast('還在處理上一筆，請稍等。',true);return Promise.resolve()}
+  S.fund.busy=true;
+  return fundPost(body).then(function(){toast(okMsg)},function(e){toast(e.message,true)}).then(function(){S.fund.busy=false;return loadFund()});
+}
+function fundEntryText(e){
+  if(!e)return '（找不到原紀錄）';
+  var who=e.p?esc(e.p)+' ':'';
+  if(e.t==='pay')return who+'繳清潔費 '+money(e.a)+'（'+(SC.FUND_METHOD_LABEL[e.m]||'')+'）';
+  if(e.t==='payin')return '公司撥入代扣款 '+money(e.a);
+  if(e.t==='income')return '其他收入 '+money(e.a)+(e.n?'：'+esc(e.n):'');
+  if(e.t==='spend')return '支出 '+money(e.a)+(e.n?'：'+esc(e.n):'');
+  if(e.t==='count')return '點錢 實際 '+money(e.a)+'，帳上 '+money(e.book);
+  return '';
+}
+function renderFund(){
+  var head='<div class="pagehead"><div><h1 class="title">公基金</h1><p class="lede">沒掃、沒倒垃圾的清潔費都放在這裡，不進公司帳戶。存到一定金額就拿來請大家吃東西、喝飲料；每一筆花費大家都看得到。</p></div></div>';
+  if(S.fund.status==='idle'){loadFund();return '<div class="view">'+head+'<div class="skel"><i></i><i></i><i></i></div></div>'}
+  if(S.fund.status==='loading')return '<div class="view">'+head+'<div class="skel"><i></i><i></i><i></i></div></div>';
+  if(S.fund.status==='error')return '<div class="view">'+head+'<div class="state"><h1>公基金讀不到</h1><p>'+esc(S.fund.err)+'</p><button class="btn" data-fund="reload">再試一次</button></div></div>';
+  var c=fundCalc(),st=c.st,admin=fundAdmin(),me=S.viewer?S.viewer.name:'';
+  var th=Number(S.fund.cfg.threshold)||0,thLine='';
+  if(th>0)thLine=st.balance>=th?'已經存到 '+money(th)+'，可以請客了。':'存到 '+money(th)+' 就請客，還差 '+money(th-st.balance)+'。';
+  var hero='<div class="hero fhero"><h1><span class="ask">公基金現在有</span><span class="big num">'+money(st.balance)+'</span></h1>'+
+    '<p class="sub">'+thLine+(admin?' <button class="link" data-fund="threshold">'+(th>0?'改請客門檻':'設定請客門檻')+'</button>':'')+'</p>'+
+    (th>0?'<div class="fbar" role="img" aria-label="離請客門檻的進度"><i style="width:'+Math.max(0,Math.min(100,st.balance/th*100)).toFixed(1)+'%"></i></div>':'')+'</div>';
+  var out='<div class="view">'+head+hero;
+  if(admin)out+=fundReconHTML(st)+fundCollectHTML(st)+fundToolsHTML();
+  out+=fundMineHTML(st,me)+fundSpendHTML(st)+fundTotalsHTML(st);
+  if(admin)out+=fundLedgerHTML(st);
+  return out+'</div>';
+}
+function fundReconHTML(st){
+  var rows=[];
+  rows.push(['帳上應有',money(st.balance),'現金與轉帳收到的清潔費＋公司撥入＋其他收入－支出','']);
+  var lc=st.lastCount;
+  if(lc)rows.push(['上次點錢（'+fmtYMD(lc.entry.d)+'）','實際 '+money(lc.entry.a),'當時帳上 '+money(lc.entry.book)+(lc.diff?'，<b class="neg">實際比帳上'+(lc.diff>0?'多 ':'少 ')+money(Math.abs(lc.diff))+'</b>':'，剛好對上')+(lc.since?'。之後又記了 '+lc.since+' 筆，建議再點一次':''),lc.diff?'bad':'']);
+  else rows.push(['點錢對帳','還沒點過','把手上公基金的錢點一次，跟帳上應有的比','warn']);
+  rows.push(['清潔費還沒收',money(st.unpaidTotal),st.unpaidPeople?st.unpaidPeople+' 人，名單在下面「收清潔費」':'都收齊了',st.unpaidTotal?'warn':'']);
+  if(st.payrollPending.length)rows.push(['代扣還沒撥進公基金',money(st.totals.payrollPending),st.payrollPending.length+' 筆，錢還在公司，撥進來才算收到 <button class="mini" data-fund="payin">公司已撥入</button>','warn']);
+  var warn=[];
+  if(st.doublePaid.length)warn.push('有 '+st.doublePaid.length+' 筆清潔費收了兩次，到下面流水帳把多的那筆作廢。');
+  st.notOwed.forEach(function(x){warn.push(esc(x.pay.p)+' '+fmtYMD(x.pay.d)+' 繳的 '+money(x.pay.a)+' 裡，有 '+x.ids.length+' 筆在排班表上已經不算沒做（標記被改掉或紀錄被刪）。要退錢就把這筆收款作廢重收，不退就留著當樂捐。')});
+  if(st.noReceipt.length)warn.push(st.noReceipt.length+' 筆支出沒有附收據。');
+  return '<section class="block"><h2 class="h2"><span>對帳</span><button class="btn btn2 sm" data-fund="count">點錢對帳</button></h2>'+
+    '<ul class="lines frec">'+rows.map(function(r){return '<li class="'+r[3]+'"><span class="fk">'+r[0]+'</span><span class="fv num">'+r[1]+'</span><span class="fd">'+r[2]+'</span></li>'}).join('')+'</ul>'+
+    (warn.length?'<ul class="fwarn">'+warn.map(function(w){return '<li>'+w+'</li>'}).join('')+'</ul>':'')+'</section>';
+}
+function fundCollectHTML(st){
+  var names=Object.keys(st.people).filter(function(n){return st.people[n].owed>0});
+  names.sort(function(a,b){return SC.fundUnpaidOf(st,b)-SC.fundUnpaidOf(st,a)||a.localeCompare(b,'zh-Hant')});
+  var rows=names.map(function(n){
+    var p=st.people[n],u=SC.fundUnpaidOf(st,n);
+    return '<li><span class="who-name">'+esc(n)+'</span><span class="right">'+(u?'<b class="neg num">還沒繳 '+money(u)+'</b>・':'')+'已繳 '+money(p.paid)+'／共 '+money(p.owed)+
+      (u?' <button class="mini" data-fund="pay:'+esc(n)+'">收款</button>':' <span class="done">繳清</span>')+'</span></li>';
+  }).join('');
+  return '<section class="block"><h2 class="h2"><span>收清潔費</span><span class="muted" style="font-weight:400">11 月起，從排班表的「沒掃」「沒倒垃圾」自動算</span></h2>'+
+    '<ul class="lines">'+(rows||'<li><span class="muted">目前沒有人要繳清潔費。</span></li>')+'</ul></section>';
+}
+function fundToolsHTML(){
+  return '<section class="block"><h2 class="h2"><span>記帳</span></h2><div class="ftools">'+
+    '<button class="btn" data-fund="spend">記一筆花費</button><button class="btn btn2" data-fund="income">記其他收入</button><button class="btn btn2" data-fund="csv">下載帳本</button></div>'+
+    '<p class="xs muted" style="margin-top:8px">帳記了就不能改、不能刪；記錯請在流水帳按「作廢」再重記，原紀錄會留著。</p></section>';
+}
+function fundMineHTML(st,me){
+  var p=st.people[me];
+  if(!p||!p.owed)return '<section class="block"><h2 class="h2"><span>我的清潔費</span></h2><ul class="lines"><li><span class="muted">你沒有要繳的清潔費。</span></li></ul></section>';
+  var u=SC.fundUnpaidOf(st,me);
+  var rows=p.unpaid.map(function(c){return '<li><span class="mono sm">'+fmtYMD(c.date)+'</span><span>'+esc(c.label)+'</span><span class="right neg num">'+money(c.amount)+'</span></li>'}).join('')+
+    p.paidItems.map(function(x){return '<li class="past"><span class="mono sm">'+fmtYMD(x.charge.date)+'</span><span>'+esc(x.charge.label)+'</span><span class="right num">'+money(x.charge.amount)+'・'+fmtYMD(x.pay.d)+' 已繳（'+(SC.FUND_METHOD_LABEL[x.pay.m]||'')+'）</span></li>'}).join('');
+  return '<section class="block"><h2 class="h2"><span>我的清潔費</span><span class="muted" style="font-weight:400">'+(u?'還沒繳 '+money(u)+'，請拿給珊珊':'都繳清了')+'</span></h2><ul class="lines">'+rows+'</ul>'+
+    '<p class="xs muted" style="margin-top:8px">繳了卻還顯示沒繳，或是金額不對，直接跟珊珊說。</p></section>';
+}
+function fundSpendHTML(st){
+  var list=st.live.filter(function(e){return e.t==='spend'});
+  var rows=list.map(function(e){return '<li><span class="mono sm">'+fmtYMD(e.d)+'</span><span>'+esc(e.n)+(e.p?'<span class="muted">・'+esc(e.p)+'經手</span>':'')+'</span><span class="right num">'+money(e.a)+
+    (e.ph?' <button class="mini" data-fund="photo:'+esc(e.id)+'">看收據</button>':' <span class="muted xs">沒收據</span>')+'</span></li>'}).join('');
+  return '<section class="block"><h2 class="h2"><span>錢花去哪</span></h2><ul class="lines">'+(rows||'<li><span class="muted">還沒有花過。</span></li>')+'</ul></section>';
+}
+function fundTotalsHTML(st){
+  var t=st.totals;
+  var items=[['收到的清潔費',t.fee-t.payrollPending],['其他收入',t.income],['花掉',-t.spend]];
+  if(t.payrollPending)items.splice(1,0,['代扣待撥入（還沒算進去）',t.payrollPending]);
+  return '<section class="block"><h2 class="h2"><span>收支合計</span></h2><ul class="lines">'+items.map(function(x){return '<li><span>'+x[0]+'</span><span class="right num">'+money(x[1])+'</span></li>'}).join('')+
+    '<li><b>現在有</b><span class="right num"><b>'+money(st.balance)+'</b></span></li></ul></section>';
+}
+function fundLedgerHTML(st){
+  var byId={};S.fund.entries.forEach(function(e){byId[e.id]=e});
+  var all=S.fund.entries.slice().sort(function(a,b){return a.id<b.id?1:-1});
+  var rows=all.map(function(e){
+    var dead=!!st.voided[e.id];
+    var txt=e.t==='void'?'作廢「'+fundEntryText(byId[e.v])+'」：'+esc(e.n):fundEntryText(e)+(e.t==='pay'&&e.n?'・'+esc(e.n):'')+(dead?'・<span class="neg">已作廢</span>':'');
+    return '<li class="'+(dead||e.t==='void'?'past':'')+'"><span class="mono sm">'+fmtYMD(e.d)+'</span><span class="fl">'+txt+'<span class="muted xs">・'+esc(e.by)+'記</span></span>'+
+      (dead||e.t==='void'?'':'<span class="right"><button class="mini" data-fund="void:'+esc(e.id)+'">作廢</button></span>')+'</li>';
+  }).join('');
+  return '<section class="block"><h2 class="h2"><span>流水帳</span><span class="muted" style="font-weight:400">'+all.length+' 筆</span></h2><ul class="lines">'+(rows||'<li><span class="muted">還沒有任何紀錄。</span></li>')+'</ul></section>';
+}
+
+/* 表單對話框：按確定時先跑檢查，不過就在框裡顯示原因、不關閉 */
+var fundCheck=null,fundPhotoData='';
+function fundForm(title,bodyHtml,okLabel,check){
+  fundCheck=check;fundPhotoData='';
+  return openModal('<h2>'+esc(title)+'</h2><form class="fform" onsubmit="return false">'+bodyHtml+'<p class="ferr" id="ferr" role="alert"></p></form>'+
+    '<div class="acts"><button class="btn btn2" data-mv="__null">取消</button><button class="btn" id="fsubmit">'+esc(okLabel)+'</button></div>',{keep:true});
+}
+modalRoot.addEventListener('click',function(e){
+  if(!e.target.closest('#fsubmit'))return;
+  var f=$('.fform',modalRoot);if(!f||!fundCheck)return;
+  var r=fundCheck(f);
+  if(typeof r==='string'){$('#ferr',modalRoot).textContent=r;return}
+  closeModal(r);
+});
+modalRoot.addEventListener('change',function(e){
+  var f=e.target.closest('.fform');if(!f)return;
+  if(e.target.name==='m'){var cs=$('#fconsent',f);if(cs)cs.hidden=e.target.value!=='payroll'}
+  if(e.target.name==='ck'||e.target.name==='pk'){var sum=0;$$('input[name="'+e.target.name+'"]:checked',f).forEach(function(b){sum+=+b.dataset.a});$('#fsum',f).textContent=money(sum)}
+  if(e.target.name==='photo'&&e.target.files&&e.target.files[0]){
+    var lab=$('#fphotoinfo',f);lab.textContent='處理照片中…';
+    shrinkPhoto(e.target.files[0]).then(function(u){fundPhotoData=u;lab.textContent='照片已附上（'+Math.round(u.length*0.75/1024)+' KB）'},function(){fundPhotoData='';lab.textContent='這張照片讀不了，請換一張'});
+  }
+});
+function shrinkPhoto(file){
+  return new Promise(function(ok,no){
+    var img=new Image(),url=URL.createObjectURL(file);
+    img.onload=function(){
+      var s=Math.min(1,1280/Math.max(img.width,img.height)),c=document.createElement('canvas');
+      c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      URL.revokeObjectURL(url);var q=0.75,d=c.toDataURL('image/jpeg',q);
+      while(d.length>1400000&&q>0.3){q-=0.15;d=c.toDataURL('image/jpeg',q)}
+      d.length>1400000?no():ok(d);
+    };
+    img.onerror=function(){URL.revokeObjectURL(url);no()};img.src=url;
+  });
+}
+function dateField(){return '<label class="ff"><span>日期</span><input type="date" name="d" value="'+TODAY.replace(/\//g,'-')+'" max="'+TODAY.replace(/\//g,'-')+'"></label>'}
+function readDate(f){var v=(f.elements.d&&f.elements.d.value)||'';return /^\d{4}-\d{2}-\d{2}$/.test(v)?v.replace(/-/g,'/'):''}
+function readInt(v){v=String(v||'').replace(/[,\s]/g,'');return /^\d+$/.test(v)?+v:NaN}
+
+function fundAct(act){
+  if(act==='reload'){loadFund();return}
+  if(act.indexOf('photo:')===0){
+    var pid=act.slice(6);
+    StaffGate.fetch('/fundPhoto?id='+encodeURIComponent(pid)).then(function(res){return res.json()}).then(function(j){
+      if(!j.ok)throw new Error();uiAlert('收據','<img class="fphoto" alt="收據照片" src="'+j.photo.replace(/"/g,'')+'">');
+    }).catch(function(){toast('收據讀不到，請重新整理再試。',true)});
+    return;
+  }
+  if(!fundAdmin())return;
+  var c=fundCalc(),st=c.st;
+  if(act.indexOf('pay:')===0){
+    var n=act.slice(4),p=st.people[n];if(!p||!p.unpaid.length)return;
+    var canPR=SC.fundCanPayroll(S.byName[n]);
+    var sum=p.unpaid.reduce(function(s,x){return s+x.amount},0);
+    var body='<p class="body">勾這次收的清潔費：</p><div class="fchecks">'+p.unpaid.map(function(x){return '<label><input type="checkbox" name="ck" value="'+esc(x.id)+'" data-a="'+x.amount+'" checked> '+fmtYMD(x.date)+' '+esc(x.label)+' <b class="num">'+money(x.amount)+'</b></label>'}).join('')+'</div>'+
+      '<p class="fsumline">這次收 <b class="num" id="fsum">'+money(sum)+'</b></p>'+
+      '<fieldset class="fm"><legend>怎麼收</legend><label><input type="radio" name="m" value="cash" checked> 現金</label><label><input type="radio" name="m" value="transfer"> 轉帳到公基金</label>'+
+      (canPR?'<label><input type="radio" name="m" value="payroll"> 從報酬代扣</label>':'<p class="xs muted">'+esc(n)+'不是承攬，只能自己繳，不能從薪資扣。</p>')+'</fieldset>'+
+      (canPR?'<label class="fconsent" id="fconsent" hidden><input type="checkbox" name="consent"> '+esc(n)+'本人已同意這筆從報酬代扣</label>':'')+
+      dateField()+'<label class="ff"><span>備註（可不填）</span><input type="text" name="n" maxlength="60"></label>';
+    fundForm('收 '+n+' 的清潔費',body,'記下這筆收款',function(f){
+      var ids=[],a=0;$$('input[name="ck"]:checked',f).forEach(function(b){ids.push(b.value);a+=+b.dataset.a});
+      if(!ids.length)return '至少勾一筆。';
+      var m=(f.querySelector('input[name="m"]:checked')||{}).value;
+      if(m==='payroll'&&!(f.elements.consent&&f.elements.consent.checked))return '從報酬代扣要本人同意，請先問過再勾。';
+      var d=readDate(f);if(!d)return '請選日期。';
+      var note=f.elements.n.value.trim();if(m==='payroll')note=('本人同意從報酬代扣 '+note).trim();
+      return {t:'pay',d:d,a:a,p:n,c:ids,m:m,n:note};
+    }).then(function(v){if(v)fundSave({entry:v},'已記下 '+n+' 繳 '+money(v.a)+'。')});
+    return;
+  }
+  if(act==='spend'){
+    var opts=S.allEmployees.map(function(e){return '<option'+(S.viewer&&e.name===S.viewer.name?' selected':'')+'>'+esc(e.name)+'</option>'}).join('');
+    fundForm('記一筆花費','<label class="ff"><span>買了什麼</span><input type="text" name="n" maxlength="60" placeholder="例如：雞排 12 份、飲料" autofocus></label>'+
+      '<label class="ff"><span>金額</span><input type="text" name="a" inputmode="numeric" placeholder="例如 1200"></label>'+
+      '<label class="ff"><span>誰經手</span><select name="p">'+opts+'</select></label>'+dateField()+
+      '<label class="ff"><span>收據照片</span><input type="file" name="photo" accept="image/*"></label><p class="xs muted" id="fphotoinfo"></p>'+
+      '<label class="fconsent"><input type="checkbox" name="norc"> 這筆沒有收據</label>','記下這筆花費',function(f){
+      var item=f.elements.n.value.trim(),a=readInt(f.elements.a.value),d=readDate(f);
+      if(!item)return '請寫買了什麼。';if(!(a>0))return '金額請填正整數。';if(!d)return '請選日期。';
+      if(!fundPhotoData&&!f.elements.norc.checked)return '請附收據照片；真的沒有收據就勾「這筆沒有收據」。';
+      if(a>st.balance)return '公基金現在只有 '+money(st.balance)+'，不夠付這筆。有人補錢的話，先記成「其他收入」再記這筆花費。';
+      return {entry:{t:'spend',d:d,a:a,p:f.elements.p.value,n:item},photo:fundPhotoData||undefined};
+    }).then(function(v){if(v)fundSave(v,'已記下花費 '+money(v.entry.a)+'。')});
+    return;
+  }
+  if(act==='income'){
+    fundForm('記其他收入','<label class="ff"><span>說明</span><input type="text" name="n" maxlength="60" placeholder="例如：期初餘額、小吳哥贊助" autofocus></label>'+
+      '<label class="ff"><span>金額</span><input type="text" name="a" inputmode="numeric"></label>'+dateField(),'記下這筆收入',function(f){
+      var n=f.elements.n.value.trim(),a=readInt(f.elements.a.value),d=readDate(f);
+      if(!n)return '請寫說明。';if(!(a>0))return '金額請填正整數。';if(!d)return '請選日期。';
+      return {t:'income',d:d,a:a,n:n};
+    }).then(function(v){if(v)fundSave({entry:v},'已記下收入 '+money(v.a)+'。')});
+    return;
+  }
+  if(act==='count'){
+    fundForm('點錢對帳','<p class="body">帳上應有 <b class="num">'+money(st.balance)+'</b>。請把手上公基金的錢實際點一次（轉帳進帳戶的也算進去），填點到的金額。</p>'+
+      '<label class="ff"><span>實際點到</span><input type="text" name="a" inputmode="numeric" autofocus></label>'+dateField(),'記下點錢結果',function(f){
+      var a=readInt(f.elements.a.value),d=readDate(f);
+      if(!(a>=0))return '請填點到的金額（整數）。';if(!d)return '請選日期。';
+      return {t:'count',d:d,a:a,book:st.balance};
+    }).then(function(v){if(v)fundSave({entry:v},v.a===v.book?'點錢對上了。':'已記下，實際比帳上'+(v.a>v.book?'多 ':'少 ')+money(Math.abs(v.a-v.book))+'。')});
+    return;
+  }
+  if(act==='payin'){
+    var list=st.payrollPending;if(!list.length)return;
+    var tot=list.reduce(function(s,x){return s+x.a},0);
+    fundForm('公司已撥入代扣款','<p class="body">勾這次公司撥進公基金的代扣款：</p><div class="fchecks">'+list.map(function(x){return '<label><input type="checkbox" name="pk" value="'+esc(x.id)+'" data-a="'+x.a+'" checked> '+fmtYMD(x.d)+' '+esc(x.p)+' <b class="num">'+money(x.a)+'</b></label>'}).join('')+'</div>'+
+      '<p class="fsumline">撥入合計 <b class="num" id="fsum">'+money(tot)+'</b></p>'+dateField(),'記下撥入',function(f){
+      var ids=[],a=0;$$('input[name="pk"]:checked',f).forEach(function(b){ids.push(b.value);a+=+b.dataset.a});
+      if(!ids.length)return '至少勾一筆。';var d=readDate(f);if(!d)return '請選日期。';
+      return {t:'payin',d:d,a:a,c:ids};
+    }).then(function(v){if(v)fundSave({entry:v},'已記下公司撥入 '+money(v.a)+'。')});
+    return;
+  }
+  if(act.indexOf('void:')===0){
+    var id=act.slice(5),tg=S.fund.entries.filter(function(e){return e.id===id})[0];if(!tg)return;
+    fundForm('作廢這筆','<p class="body">'+fundEntryText(tg)+'（'+fmtYMD(tg.d)+'）</p><p class="body">作廢後這筆不再算進帳，但會留在流水帳。</p>'+
+      '<label class="ff"><span>為什麼作廢</span><input type="text" name="n" maxlength="60" placeholder="例如：記錯人、金額打錯" autofocus></label>','作廢',function(f){
+      var n=f.elements.n.value.trim();if(!n)return '請寫作廢原因。';
+      return {t:'void',d:TODAY,v:id,n:n};
+    }).then(function(v){if(v)fundSave({entry:v},'已作廢。')});
+    return;
+  }
+  if(act==='threshold'){
+    fundForm('請客門檻','<p class="body">公基金存到多少就請客？填 0 是不設門檻。</p><label class="ff"><span>金額</span><input type="text" name="a" inputmode="numeric" value="'+(Number(S.fund.cfg.threshold)||'')+'" autofocus></label>','儲存',function(f){
+      var a=readInt(f.elements.a.value);if(!(a>=0))return '請填整數。';return {cfg:{threshold:a}};
+    }).then(function(v){if(v)fundSave(v,'請客門檻已更新。')});
+    return;
+  }
+  if(act==='csv'){
+    var blob=new Blob([SC.fundCSV(S.fund.entries)],{type:'text/csv;charset=utf-8'});
+    var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='公基金帳本_'+TODAY.replace(/\//g,'-')+'.csv';document.body.appendChild(a);a.click();a.remove();
+    return;
+  }
+}
+
 /* ================= 外框 ================= */
 function monthNavHTML(){
   return '<div class="monthnav"><button class="iconbtn" data-mn="-1" aria-label="上個月">‹</button><b>'+S.year+' 年 '+S.month+' 月</b><button class="iconbtn" data-mn="1" aria-label="下個月">›</button></div>';
@@ -1389,10 +1691,11 @@ function render(){
   if(S.viewer){nr.innerHTML='<span>'+esc(S.viewer.name)+'・'+(S.viewer.role==='admin'?'可排班':'同仁')+'</span><button class="link" id="logout">登出</button>'}
   else nr.innerHTML='';
   if(S.boot!=='ready'){main.innerHTML=stateHTML();return}
-  main.innerHTML=monthNavHTML()+({me:renderMe,all:renderAll,sched:renderSched,fair:renderFair}[S.view]||renderMe)();paintCheckCount();
+  main.innerHTML=(S.view==='fund'?'':monthNavHTML())+({me:renderMe,all:renderAll,sched:renderSched,fair:renderFair,fund:renderFund}[S.view]||renderMe)();paintCheckCount();
 }
 function go(v){
   if(v==='sched'&&!S.perms.schedule)v='me';
+  if(v==='fund'&&S.fund.status!=='loading')S.fund.status='idle'; // 每次打開都重抓，排班頁剛標的沒掃要馬上算進來
   S.view=v;render();try{history.replaceState(null,'','#'+v)}catch(e){}window.scrollTo(0,0);
 }
 function changeMonth(delta){
@@ -1405,6 +1708,7 @@ function changeMonth(delta){
 document.addEventListener('click',function(e){
   var t=e.target.closest('button');if(!t)return;
   if(t.dataset.view){go(t.dataset.view);return}
+  if(t.dataset.fund){fundAct(t.dataset.fund);return}
   if(t.id==='helpBtn'){showRules();return}
   if(t.id==='theme'){toggleTheme();return}
   if(t.id==='reloadBtn'){location.reload();return}
@@ -1528,7 +1832,7 @@ paintTheme();
 
 /* boot */
 $('#mark').textContent='窩的家排班';
-try{var h=(location.hash||'').slice(1);if(['me','all','sched','fair'].indexOf(h)>=0)S.view=h}catch(e){}
+try{var h=(location.hash||'').slice(1);if(['me','all','sched','fair','fund'].indexOf(h)>=0)S.view=h}catch(e){}
 start();
 })();
 </script>
