@@ -470,7 +470,7 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
   document.getElementById('wh-mark-undo').addEventListener('click', function () { marks.pop(); drawMarks(); });
   document.getElementById('wh-mark-skip').addEventListener('click', function () { marks = []; finishMark(); });
   document.getElementById('wh-mark-done').addEventListener('click', finishMark);
-  document.getElementById('wh-mark-idea').addEventListener('click', function () { marks = []; finishMark(); setMode('idea'); });
+  document.getElementById('wh-mark-idea').addEventListener('click', function () { finishMark(); setMode('idea'); });   // 框好再按「我是要給意見」：框要留著
   document.getElementById('wh-mark-btn').addEventListener('click', openMark);
   document.getElementById('wh-tab-bug').addEventListener('click', function () { setMode('bug'); });
   document.getElementById('wh-tab-idea').addEventListener('click', function () { setMode('idea'); });
