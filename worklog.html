@@ -221,7 +221,7 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
 <script>window.WH_BUG_REPORT = Object.assign({ screenshot: true }, window.WH_BUG_REPORT);</script>
 <script src="bug-report.js" defer></script>
 <script src="js/worklog-perf.js"></script>
-<script src="js/worklog-list.js?v=20261028f"></script>
+<script src="js/worklog-list.js?v=20261111b"></script>
 
 <script>
 // 每日工作行程（照 2026-10-08 示範頁、2026-10-19 改版示範頁：顏色看「人在哪」；資料接 Worker worklogBoard／worklogCreate）。
@@ -262,8 +262,12 @@ const t=s=>{const[h,m]=s.split(":").map(Number);return h*60+m};
 const fmt=m=>`${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
 const pad=n=>String(n).padStart(2,"0");
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const dateStr=off=>{const d=new Date();d.setDate(d.getDate()+off);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
-const nowMin=()=>{const d=new Date();return d.getHours()*60+d.getMinutes()};
+// 「今天」「現在幾點」一律以台北時間算（Worker 也是台北時間）；裝置時區不是台北時，本地時間會讓日期差一天
+const TPE_FMT=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Taipei",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"});
+const taipeiNow=()=>{const p={};TPE_FMT.formatToParts(new Date()).forEach(x=>{p[x.type]=x.value});return {y:+p.year,m:+p.month,d:+p.day,h:+p.hour%24,mi:+p.minute}};
+const taipeiDay=o=>{const n=taipeiNow(),d=new Date(Date.UTC(n.y,n.m-1,n.d+o));return {y:d.getUTCFullYear(),m:d.getUTCMonth()+1,d:d.getUTCDate(),dow:d.getUTCDay()}};
+const dateStr=off=>{const d=taipeiDay(off);return `${d.y}-${pad(d.m)}-${pad(d.d)}`};
+const nowMin=()=>{const n=taipeiNow();return n.h*60+n.mi};
 
 // 兩種填法：board＝格子（預設）、list＝清單。偏好存在 Worker（依登入姓名），worklogBoard 的 fillMode 帶回；只有第一次載入採用伺服器值，之後以本機切換為準
 let MODE="board", MODE_INIT=false, TEAM_OPEN=false;
@@ -273,6 +277,7 @@ const PM_KEY=()=>"wuohome_worklog_pmode_v1:"+((VIEWER&&VIEWER.name)||"");
 const pmodeGet=()=>{try{const v=localStorage.getItem(PM_KEY());return v==="list"||v==="board"?v:null}catch{return null}}; // ponytail-debt: 讀不到就當沒選過，退回伺服器偏好／格子
 const pmodeSet=v=>{try{localStorage.setItem(PM_KEY(),v)}catch{}}; // ponytail-debt: 存不進去（無痕模式）只是下次打開回到預設，不影響使用
 let day=0, focus=null, VIEWER=null, STATE={status:"loading",data:null}, reqId=0, lastLoad=0, scrolled=false;
+let BOARD_DATE=""; // 目前看板資料是哪一天的（YYYY-MM-DD）；存檔一律寫這一天，頁面開過午夜不會把『昨天的看板』存成今天
 const $=id=>document.getElementById(id);
 
 // ---------- 資料 ----------
@@ -350,7 +355,8 @@ async function loadPerf(){
 async function load(quiet){ // quiet：不閃「載入中」（清單模式整頁是填寫區，閃一下很干擾）
   if(!TOKEN&&!ID_TOKEN){STATE={status:"auth",kind:"out"};render();return}
   const my=++reqId;if(!quiet){STATE={status:"loading",data:null};render()}
-  const r=await api(`worklogBoard?date=${encodeURIComponent(dateStr(day))}`);
+  const reqDate=dateStr(day);
+  const r=await api(`worklogBoard?date=${encodeURIComponent(reqDate)}`);
   if(my!==reqId)return;
   if(r.status===404&&TOKEN){ // 通行碼連結失效：改走 Google 登入（不動 localStorage，下次開連結仍先試一次）
     TOKEN="";startGoogle("badlink");return}
@@ -360,7 +366,7 @@ async function load(quiet){ // quiet：不閃「載入中」（清單模式整�
     const email=SESS_EMAIL;clearSession(); // 沒資格的登入態不留，換帳號才不會卡住
     STATE={status:"auth",kind:"denied",email};render();return}
   if(r.status===200&&r.json&&r.json.ok===true){
-    VIEWER=r.json.viewer;lastLoad=Date.now();
+    VIEWER=r.json.viewer;lastLoad=Date.now();BOARD_DATE=reqDate;
     if(!MODE_INIT){MODE_INIT=true;MODE=r.json.fillMode==="list"?"list":"board"}
     STATE={status:"ready",data:r.json,D:buildDay(r.json)};
     loadPerf();
@@ -407,9 +413,9 @@ function showGate(){
 let REFS=[];
 function render(){
   $("modeBtn").hidden=true;$("listmode").hidden=true;$("teamToggle").hidden=true;$("teamBox").hidden=false;document.querySelector(".controls .seg").hidden=false; // 預設全收；下面確定是清單模式才動
-  const base=new Date();base.setDate(base.getDate()+day);
+  const base=taipeiDay(day);
   $("logoutBtn").hidden=!(ID_TOKEN&&!TOKEN); // 登出只給 Google 登入的人（通行碼連結沒有登入態）
-  $("dateline").textContent=`${base.getMonth()+1}/${base.getDate()}（${"日一二三四五六"[base.getDay()]}）`;
+  $("dateline").textContent=`${base.m}/${base.d}（${"日一二三四五六"[base.dow]}）`;
   if(STATE.status==="loading"){showMsg("載入中…");return}
   if(STATE.status==="auth"){showGate();return}
   if(STATE.status==="error"){showMsg(STATE.code===404?"這個連結已失效或不存在，請向管理者重新取得連結。":"暫時讀不到行程，請確認網路後重新整理頁面。");return}
@@ -612,6 +618,8 @@ async function save(){
   const showErr=m=>{const e=$("saveErr");e.textContent=m;e.hidden=false};
   const pr=draftProblem();if(pr){showErr(pr);return}
   const S=+$("sSel").value,E=+$("eSel").value;
+  // 伺服器用「姓名＋日期＋起訖時間」認同一筆：起訖完全一樣的兩筆會被當成同一筆，後存的把先存的蓋掉
+  if((STATE.D.get(VIEWER.name)||[]).some(r=>r.id!==draft.id&&r.s===S&&r.e===E)){showErr(`這天已經有一筆 ${fmt(S)}–${fmt(E)} 的紀錄，存下去會把它蓋掉。請改一下起訖時間，或直接點那一筆來修改。`);return}
   const place=draft.place.trim(), what=(draft.what||"").trim();
   const raw=draft.raw||{};
   // 改既有一段時，Worker 會整列覆寫；沒在畫面上的欄位（報修原因、預排行程、紀錄內容）要原樣帶回，不能洗掉
@@ -621,7 +629,7 @@ async function save(){
   const entry={startTime:fmt(S),endTime:fmt(E),category:draft.cat,location:draft.loc,caseName:place,repairReason:raw.repairReason||"",plannedSchedule:raw.plannedSchedule||"",note};
   if(draft.id)entry.rid=draft.id;
   saving=true;const b=$("save");b.disabled=true;b.textContent="儲存中…";
-  const r=await api("worklogCreate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({entries:[entry],date:dateStr(day),mode:"board"})}); // mode：後台記錄這次是用哪種填法存的
+  const r=await api("worklogCreate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({entries:[entry],date:BOARD_DATE||dateStr(day),mode:"board"})}); // mode：後台記錄這次是用哪種填法存的
   saving=false;b.disabled=false;b.textContent="存起來";
   const res=r.json&&Array.isArray(r.json.results)?r.json.results[0]:null;
   if(r.status!==200||!res||!res.ok){
@@ -642,6 +650,7 @@ $("modeBtn").onclick=()=>{
   const to=EFF==="list"?"board":"list";
   if(!CAN_WRITE){PMODE=to;pmodeSet(to);TEAM_OPEN=false;scrolled=false;if(window.WLList)WLList.invalidate();render();return} // 預覽：只記在這台裝置，不呼叫 Worker
   draft=null;$("sheet").hidden=true;MODE=to;TEAM_OPEN=false;scrolled=false;if(window.WLList)WLList.invalidate();render();
+  if(to==="board")load(true); // 清單模式剛存的紀錄不在這份看板資料裡，換回來要重讀，否則看起來像沒存到
   api("worklogMode",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:to})}).then(r=>{if(r.status!==200)toast("這次的選擇沒記住，下次打開可能還是原本那種")});
 };
 $("teamToggle").onclick=()=>{TEAM_OPEN=!TEAM_OPEN;scrolled=false;render();if(TEAM_OPEN)load(true)}; // 展開時順便重抓，才看得到別人剛寫的
@@ -684,7 +693,9 @@ function maybeTour(){
 $("helpBtn").onclick=()=>{const h=$("help");h.hidden=!h.hidden;$("helpBtn").setAttribute("aria-expanded",!h.hidden)};
 // 切回這個分頁時，資料超過一分鐘就重抓（別人剛寫的才看得到）；填寫框開著時不動它
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&STATE.status==="ready"&&$("sheet").hidden&&Date.now()-lastLoad>60000)load(EFF==="list")});
-setInterval(()=>{if(!document.hidden&&STATE.status==="ready"&&$("sheet").hidden&&day===0&&EFF!=="list")render()},60000); // 現在時間線往前走
+setInterval(()=>{if(document.hidden||STATE.status!=="ready"||!$("sheet").hidden||EFF==="list")return;
+  if(BOARD_DATE&&BOARD_DATE!==dateStr(day)){load(true);return} // 頁面開著過了午夜：看板資料還是昨天的，重讀
+  if(day===0)render()},60000); // 現在時間線往前走
 
 // ---------- Google 登入（2026-10-14；與通行碼連結並存，照 Google登入_標準接法 2026-08-19 更新版）----------
 // Google 只負責「第一次證明你是誰」：ID token 換成 Worker 發的看板 session（30 天、每次使用滾動延長、伺服器端可撤銷），

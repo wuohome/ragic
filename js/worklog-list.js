@@ -75,6 +75,8 @@
   let ready = false, loading = false, stale = false, lastRO = false;
   let SELECTED_OFFSET = 0, EXPANDED_BLOCKS = new Set(), toastTimer = null, dateReq = 0;
   const LOADED = new Set();
+  const LOAD_FAIL = new Set(); // 讀伺服器失敗的日期（offset）：畫面上的紀錄不完整，要明講，不能讓人以為那天真的沒紀錄
+  const SAVING = new Set();    // 正在送出的 日期|區塊，同一筆不能同時送兩次（否則沒有 rid 的新紀錄會建兩筆）
   const NAV_MIN_OFFSET = -90, NAV_MAX_OFFSET = 1, STEP_MINUTES = 15;
 
   // ---------- 小工具（舊版原樣） ----------
@@ -86,10 +88,14 @@
   function minutesToTime(mins) { mins = ((Math.round(mins) % 1440) + 1440) % 1440; return `${pad(Math.floor(mins / 60))}:${pad(mins % 60)}`; }
   function roundToStep(mins) { return Math.round(mins / STEP_MINUTES) * STEP_MINUTES; }
   const floorHour = (m) => Math.floor(m / 60) * 60, ceilHour = (m) => Math.ceil(m / 60) * 60;
-  function nowMinutes() { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); }
+  // 「今天」「現在幾點」一律以台北時間算（Worker 也是台北時間）；裝置時區不是台北（出國、時區設錯）時，用裝置本地時間會讓日期差一天、被當成過去日期擋下或存到錯的日期
+  const TPE_FMT = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  function taipeiNow() { const p = {}; TPE_FMT.formatToParts(new Date()).forEach((x) => { p[x.type] = x.value; }); return { y: +p.year, m: +p.month, d: +p.day, h: +p.hour % 24, mi: +p.minute }; }
+  function taipeiDay(o) { const n = taipeiNow(), d = new Date(Date.UTC(n.y, n.m - 1, n.d + o)); return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), dow: d.getUTCDay() }; }
+  function nowMinutes() { const n = taipeiNow(); return n.h * 60 + n.mi; }
   function formatDuration(mins) { const h = Math.floor(mins / 60), m = mins % 60; return h === 0 ? `${m} 分鐘` : m === 0 ? `${h} 小時` : `${h} 小時 ${m} 分`; }
-  function dateStrForOffset(o) { const d = new Date(); d.setDate(d.getDate() + o); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
-  function dateDisplayForOffset(o) { const d = new Date(); d.setDate(d.getDate() + o); return `${d.getMonth() + 1}/${d.getDate()}（${['日', '一', '二', '三', '四', '五', '六'][d.getDay()]}）`; }
+  function dateStrForOffset(o) { const d = taipeiDay(o); return `${d.y}-${pad(d.m)}-${pad(d.d)}`; }
+  function dateDisplayForOffset(o) { const d = taipeiDay(o); return `${d.m}/${d.d}（${['日', '一', '二', '三', '四', '五', '六'][d.dow]}）`; }
   const selectedDateStr = () => dateStrForOffset(SELECTED_OFFSET);
   const selectedDateDisplay = () => dateDisplayForOffset(SELECTED_OFFSET);
 
@@ -266,6 +272,10 @@
   // ---------- 伺服器資料 ↔ Block ----------
   // 「其他」寫了什麼：新紀錄放在紀錄內容最前面的【做什麼】；舊紀錄（10/19 前）是把字寫在案名／地址欄
   function buildNoteForSubmit(b) { return b.category === OTHER() && b.otherCategoryText ? `【${b.otherCategoryText}】${b.note || ''}`.trim() : (b.note || ''); }
+  function entryOf(b) {
+    return { startTime: b.start, endTime: b.end, category: b.category, location: b.location,
+      caseName: b.caseName || '', repairReason: b.repairReason || '', plannedSchedule: b.plannedSchedule || '', note: buildNoteForSubmit(b) };
+  }
   function parseApiEntry(rec) {
     const isLegacy = !(rec.startTime && rec.endTime);
     let start = rec.startTime || '', end = rec.endTime || '', legacyHourLabel = null;
@@ -288,7 +298,11 @@
   function applyMineData(json, dateStr) {
     const existing = getDayState(dateStr), day = { blocks: {} };
     (json.entries || []).forEach((rec) => { const b = parseApiEntry(rec); day.blocks[b.id] = b; });
-    if (!D.readOnly) Object.entries(existing.blocks || {}).forEach(([id, b]) => { if (!b.rid && isBlockFilled(b) && !day.blocks[id]) day.blocks[id] = { ...b, synced: false }; });
+    if (!D.readOnly) Object.entries(existing.blocks || {}).forEach(([id, b]) => {
+      if (!isBlockFilled(b)) return;
+      if (!b.rid && !day.blocks[id]) day.blocks[id] = { ...b, synced: false };
+      else if (b.rid && b.synced === false && day.blocks[id]) day.blocks[id] = { ...b, synced: false }; // 改過但沒存成功的修改：保留本機這份（畫面上有「尚未送出」可重送），不被伺服器舊內容蓋掉
+    });
     setDayState(dateStr, day);
   }
   // 讀自己的紀錄：走 worklogBoard（任何登入方式——通行碼或 Google——都能用）再挑出填寫人是自己的那幾筆，所以 Worker 不必另開 action
@@ -309,13 +323,20 @@
       renderView();
       const res = await loadMineFromApi(selectedDateStr());
       if (my !== dateReq) return;
-      if (res.ok) { LOADED.add(offset); applyMineData(res.json, selectedDateStr()); }
+      if (res.ok) { LOADED.add(offset); LOAD_FAIL.delete(offset); applyMineData(res.json, selectedDateStr()); } else LOAD_FAIL.add(offset);
     }
+    renderView();
+  }
+  async function retryLoad() { // 讀取失敗橫幅的「重新讀取」
+    const off = SELECTED_OFFSET, my = ++dateReq, ds = dateStrForOffset(off);
+    const res = await loadMineFromApi(ds);
+    if (my !== dateReq) return;
+    if (res.ok) { LOADED.add(off); LOAD_FAIL.delete(off); applyMineData(res.json, ds); } else showToast('還是讀不到，請檢查網路，或重新整理頁面');
     renderView();
   }
 
   // ---------- 必填規則（與格子填寫同一套；Worker 另有雙重擋） ----------
-  function blockProblem(b) {
+  function blockProblem(b, dateStr) {
     if (!b.category) return '先選一個項目。';
     if (!D.categories.includes(b.category) && b.category === '開發') return '「開發」已拆成電話開發和拜訪屋主，請選一個。';
     if (!b.location) return '選一下人是在店內還是外出。';
@@ -324,6 +345,8 @@
     const s = timeToMinutes(b.start), e = timeToMinutes(b.end);
     if (s == null || e == null) return '請填寫開始與結束時間。';
     if (e <= s) return '結束時間必須晚於開始時間。';
+    // 伺服器用「姓名＋日期＋起訖時間」認同一筆：起訖完全一樣的兩筆會被當成同一筆，後存的把先存的蓋掉
+    if (dateStr && blocksList(getDayState(dateStr)).some((o) => o.id !== b.id && o.start === b.start && o.end === b.end)) return `這天已經有一筆 ${b.start}–${b.end} 的紀錄，存下去會把它蓋掉。請改一下起訖時間，或直接修改那一筆。`;
     return '';
   }
   const ERR_TEXT = { not_on_board: '你不在名單上，這頁只能看', invalid_session: '登入已過期，請重新整理頁面再登入一次', not_whitelisted: '這個帳號沒有寫入權限', date_locked_past: '過去的日期不能再填寫', record_locked_cross_day: '這一筆是過去的紀錄，不能再改', not_found: '找不到這一筆（可能已被改動），請重新整理頁面', invalid_category: '這個項目目前不能存，請改選別的項目', value_too_long: '案名或地址太長了，請縮短', location_required: '頁面是舊版，請重新整理頁面再填', invalid_location: '請重新整理頁面再填', other_text_required: '選「其他」要寫一句做什麼', place_required: '外出要寫地點' };
@@ -332,21 +355,35 @@
     if (D.readOnly) return; // 預覽：任何情況都不送出
     const day = getDayState(dateStr), block = day.blocks[blockId];
     if (!block) return;
-    const pr = blockProblem(block);
+    const pr = blockProblem(block, dateStr);
     if (pr) { showToast(pr); return; }
+    const sKey = `${dateStr}|${blockId}`;
+    if (SAVING.has(sKey)) return; // 這一筆已經在送了（單筆按鈕與「全部重試送出」同時按）
+    SAVING.add(sKey);
     btn.disabled = true; btn.textContent = '儲存中…'; block.saveError = null;
-    const entry = { startTime: block.start, endTime: block.end, category: block.category, location: block.location,
-      caseName: block.caseName || '', repairReason: block.repairReason || '', plannedSchedule: block.plannedSchedule || '', note: buildNoteForSubmit(block) };
+    const entry = entryOf(block), sent = JSON.stringify(entry); // sent：送出當下的內容，回來時用來看使用者有沒有在等待期間又改過
     if (block.rid) entry.rid = block.rid;
-    const r = await D.api('worklogCreate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries: [entry], date: dateStr, mode: 'list' }) }); // mode：後台記錄這次是用哪種填法存的
+    let r;
+    try { r = await D.api('worklogCreate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries: [entry], date: dateStr, mode: 'list' }) }); } // mode：後台記錄這次是用哪種填法存的
+    finally { SAVING.delete(sKey); }
     const res = r.json && Array.isArray(r.json.results) ? r.json.results[0] : null;
+    // 等待期間使用者可能又改了這一筆、又新增了別筆：回來時重讀「現在」的本機資料再更新這一筆，不能拿送出前抓的舊整天資料寫回去（會洗掉那些新內容）
+    const fresh = getDayState(dateStr), cur = fresh.blocks[blockId];
     if (r.status !== 200 || !res || !res.ok) {
       const code = (res && res.error) || (r.json && r.json.error) || '';
-      block.saveError = r.status === 0 ? '連線失敗，請檢查網路後重試（內容仍保留在草稿中，未遺失）' : `送出失敗：${ERR_TEXT[code] || code || '請稍後再試或截圖回報'}`;
-      block.synced = false; setDayState(dateStr, day); renderView(); return;
+      if (cur) {
+        cur.saveError = r.status === 0 ? '連線失敗，請檢查網路後重試（內容仍保留在草稿中，未遺失）' : `送出失敗：${ERR_TEXT[code] || code || '請稍後再試或截圖回報'}`;
+        cur.synced = false; setDayState(dateStr, fresh);
+      }
+      renderView(); return;
     }
-    block.rid = res.rid || block.rid; block.synced = true; block.saveError = null;
-    setDayState(dateStr, day); EXPANDED_BLOCKS.delete(blockId); renderView();
+    if (cur) {
+      cur.rid = res.rid || cur.rid; cur.saveError = null;
+      cur.synced = JSON.stringify(entryOf(cur)) === sent; // 送出後又改過的內容還沒存到伺服器，維持「尚未送出」
+      setDayState(dateStr, fresh);
+      if (cur.synced) EXPANDED_BLOCKS.delete(blockId);
+    }
+    renderView();
     if (D.onSaved) D.onSaved();
   }
   function deleteBlock(dateStr, blockId) { const day = getDayState(dateStr); delete day.blocks[blockId]; setDayState(dateStr, day); EXPANDED_BLOCKS.delete(blockId); renderView(); }
@@ -462,7 +499,7 @@
     const actionsRow = make('div', 'flex flex-wrap items-center gap-2 pt-1');
     const saveBtn = make('button', 'tap44 rounded-xl bg-coral px-4 text-sm font-black text-white transition-transform hover:bg-coraldark active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink disabled:opacity-50', block.saveError ? '重試儲存' : (block.synced ? '重新儲存' : '儲存這筆'));
     saveBtn.type = 'button'; saveBtn.addEventListener('click', () => saveBlock(dateStr, block.id, saveBtn)); actionsRow.append(saveBtn);
-    const refreshProblem = () => { const pr = blockProblem(getDayState(dateStr).blocks[block.id] || block); problemP.textContent = pr; saveBtn.disabled = !!pr; };
+    const refreshProblem = () => { const pr = blockProblem(getDayState(dateStr).blocks[block.id] || block, dateStr); problemP.textContent = pr; saveBtn.disabled = !!pr; };
     otherInput.addEventListener('input', () => { mut((b) => { b.otherCategoryText = otherInput.value; }); refreshProblem(); });
     caseInput.addEventListener('input', () => { mut((b) => { b.caseName = caseInput.value; }); refreshProblem(); });
     planInput.addEventListener('input', () => mut((b) => { b.plannedSchedule = planInput.value; }));
@@ -528,6 +565,12 @@
       : isTomorrow ? `${selectedDateDisplay()}・先列幾筆明天的計畫（填「預先排定行程」即可），時間到了再回來補實際紀錄。`
       : `${selectedDateDisplay()}・想幾點記就幾點記；早上先排大概行程（填「預先排定行程」），下班前回來把「紀錄內容」補齊——同一筆補、不用重填。`));
     view.append(head, dateNavRow(SELECTED_OFFSET, switchSelectedDate));
+    if (LOAD_FAIL.has(SELECTED_OFFSET)) { // 沒讀到伺服器：下面的清單可能少了已送出的紀錄，不能讓人以為那天真的沒填
+      const bar = make('div', 'mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border-2 border-overlap bg-overlaptint px-4 py-2.5');
+      bar.append(make('p', 'text-sm font-black text-overlapdark', '⚠ 這天的紀錄沒有讀到（網路或登入有問題），下面看到的可能不完整，先不要重複新增。'));
+      const rb = make('button', 'tap44 shrink-0 rounded-xl bg-ink px-4 text-sm font-black text-white hover:bg-ink/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink', '重新讀取');
+      rb.type = 'button'; rb.addEventListener('click', retryLoad); bar.append(rb); view.append(bar);
+    }
     if (D.readOnly) view.append(make('div', 'mb-4 rounded-xl border-2 border-coral bg-coraltint px-4 py-2.5 text-sm font-black text-coraldark', `預覽：這是同仁看到的清單填寫畫面。${D.readOnlyReason || '你這天不能填。'}`));
     if (isPast) { // 過去日期：後端只收今天或未來，前端同步鎖成純唯讀（不顯示任何輸入欄位）
       view.append(make('div', 'mb-4 rounded-xl border-2 border-line bg-paper px-4 py-2.5 text-sm font-black text-ink', `🔒 這是 ${selectedDateDisplay()} 的紀錄，已鎖定不可修改`));
@@ -584,7 +627,7 @@
   async function firstLoad() {
     loading = true;
     const res = await loadMineFromApi(dateStrForOffset(0));
-    if (res.ok) { LOADED.add(0); applyMineData(res.json, dateStrForOffset(0)); }
+    if (res.ok) { LOADED.add(0); LOAD_FAIL.delete(0); applyMineData(res.json, dateStrForOffset(0)); } else LOAD_FAIL.add(0);
     loading = false; ready = true; renderView();
     const ld = root.querySelector('.wl-loading'); if (ld) ld.remove(); view.hidden = false; // Tailwind 產生樣式需要一個 frame，畫完才顯示，免得閃一下沒樣式的畫面
   }
@@ -600,8 +643,8 @@
     ensureTailwind(() => { renderView(); setTimeout(firstLoad, 120); }, () => { root.dataset.init = ''; root.hidden = true; if (D.onFail) D.onFail(); });
   }
   async function reload() { // 切換模式回來：格子那邊可能已經存過東西，重抓目前這天
-    LOADED.clear(); const res = await loadMineFromApi(selectedDateStr());
-    if (res.ok) { LOADED.add(SELECTED_OFFSET); applyMineData(res.json, selectedDateStr()); }
+    LOADED.clear(); const off = SELECTED_OFFSET, res = await loadMineFromApi(selectedDateStr());
+    if (res.ok) { LOADED.add(off); LOAD_FAIL.delete(off); applyMineData(res.json, selectedDateStr()); } else LOAD_FAIL.add(off);
     renderView();
   }
   function hide() { if (root) root.hidden = true; }
