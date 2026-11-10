@@ -11,7 +11,7 @@ Worker 的 dashData 驗過同仁身分後原樣吐出——頁面不用再等 Ra
   goals     shanshans/5：月份、員工姓名、業績目標(萬)、新進案件量(間)
   staff     Worker 公開的 listStaff（姓名／部門／在職／到職日，已是白名單版）
   perfMd    vault 全店每月業績表.md 原文
-  generatedAt / perfMdUpdatedAt  產生時間、業績表檔案最後更新時間（頁面顯示「資料更新於」）
+  generatedAt / perfMdUpdatedAt  產生時間、業績表內容最後一次有變的時間（頁面顯示「資料更新於」）
 
 欄位對應的頁面程式：toIntakeRecords／extractDevs／toPerfRecords／renderGoalPanel 等。頁面多讀新欄位時，
 要同步改這裡的 *_FIELDS。
@@ -20,6 +20,7 @@ Worker 的 dashData 驗過同仁身分後原樣吐出——頁面不用再等 Ra
 用法：build_dash_snapshot.py --vault-md <業績表.md> [--dry-run <輸出檔>]
 """
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -39,6 +40,30 @@ KV_PERF_KEY = "dash:perf:v1"  # 每日工作行程用的精簡業績表（Worker
 LOOKBACK_DAYS = 365   # 同頁面 LOOKBACK_DAYS
 LOOKAHEAD_DAYS = 30
 TPE = timezone(timedelta(hours=8))
+STATE_FILE = os.path.expanduser("~/.local/state/wuohome-dash-snapshot.json")  # 業績表內容的 hash 與「首次看到這份內容」的時間
+
+
+def _md_hash(md):
+    return hashlib.sha256(md.encode("utf-8")).hexdigest()
+
+
+def perf_changed_at(md, now):
+    """業績表內容最後一次有變的時間。update_perf_md.py 每 15 分鐘都會重寫檔案（mtime 每次都變），
+    所以不能用 mtime；改記內容 hash，沒變就沿用上次記的時間。"""
+    try:
+        with open(STATE_FILE, encoding="utf-8") as f:
+            st = json.load(f)
+        if st.get("hash") == _md_hash(md) and st.get("at"):
+            return st["at"]
+    except (OSError, ValueError):
+        pass  # ponytail-debt: 狀態檔不存在或壞掉就當作內容剛變，頂多「GSheet 快照」時間顯示成這次產生時間
+    return now.isoformat(timespec="seconds")
+
+
+def save_perf_state(md, at):
+    os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+    with open(STATE_FILE, "w", encoding="utf-8") as f:
+        json.dump({"hash": _md_hash(md), "at": at}, f)
 
 INTAKE_FIELDS = ["sync_來源", "委託時間(起)", "案名", "縣市", "鄉鎮市區", "月租金", "格局", "委託類別", "開發人員", "狀態"]
 INTAKE_SUB = {"_subtable_1000254": ["開發人員", "比例"]}
@@ -106,17 +131,17 @@ def build(vault_md):
 
     with open(vault_md, encoding="utf-8") as f:
         perf_md = f.read()
-    md_mtime = datetime.fromtimestamp(os.path.getmtime(vault_md), TPE)
+    md_changed = perf_changed_at(perf_md, now)
 
     # 安全閥：任何一塊空掉或小得離譜，寧可不更新（KV 留上一份）
     if len(intake) < 50 or len(payments) < 50 or len(goals) < 5 or len(staff) < 5 or len(perf_md) < 5000:
         raise SystemExit(f"快照內容異常，中止寫入：intake={len(intake)} payments={len(payments)} goals={len(goals)} staff={len(staff)} perfMd={len(perf_md)}")
 
-    perf = {"v": 1, "generatedAt": now.isoformat(timespec="seconds"), "perfMdUpdatedAt": md_mtime.isoformat(timespec="seconds"), "perfMd": perf_lite(perf_md)}
+    perf = {"v": 1, "generatedAt": now.isoformat(timespec="seconds"), "perfMdUpdatedAt": md_changed, "perfMd": perf_lite(perf_md)}
     return perf, {
         "v": 1,
         "generatedAt": now.isoformat(timespec="seconds"),
-        "perfMdUpdatedAt": md_mtime.isoformat(timespec="seconds"),
+        "perfMdUpdatedAt": md_changed,
         "perfMd": perf_md,
         "intake": intake,
         "payments": payments,
@@ -156,6 +181,7 @@ def main():
         finally:
             os.unlink(tmp)
         print("已寫入 KV", key)
+    save_perf_state(snap["perfMd"], snap["perfMdUpdatedAt"])
 
 
 if __name__ == "__main__":
