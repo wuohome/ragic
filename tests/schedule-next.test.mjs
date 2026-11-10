@@ -513,6 +513,19 @@ test("補上：只補指定那一天；值班補上不刪任何紀錄、其餘�
     eq(c.creates.map((x) => x[F.NOTE]).sort(), ["1F", "2F", "3F", "4F"]);
 });
 
+test("補上值班：頁面沒重整、這天已經被補過時不再補（避免同一天兩人值班）", () => {
+    const todayStr = "2026/11/05";
+    const SC = mkCtx(3, todayStr).SC;
+    const raw = mkRaw();
+    const { employees } = SC.nextBuildEmployees(mkEmpJson(), 2026, 11);
+    // 11/15 本來就有人值班（等同另一台電腦剛補過）
+    assert.ok(Object.values(raw).some((f) => f[F.DATE] === "2026/11/15" && f[F.TYPE] === "值班"));
+    const z = SC.nextPlanZhiban({ year: 2026, month: 11, todayStr, employees, raw, noRest: {}, only: "2026/11/15" });
+    assert.ok(z.error, "已有人值班要回錯誤");
+    assert.equal(z.creates.length, 0);
+    assert.equal(z.toDelete.length, 0);
+});
+
 test("快照：刪除前的紀錄格式與舊頁相容（含 ragicId、全部欄位）", () => {
     const SC = plainSC();
     const rec = SC.nextParse({ 77: { [F.EMP]: "甲", [F.DATE]: "2026/11/20", [F.TYPE]: "值日", [F.NOTE]: "1F", [F.IS_AUTO]: "Yes", [F.DEPT]: "系統預排" } })[0];
