@@ -247,7 +247,9 @@ async function apiCreateLeave(empName, date, year, month, type) {
       [SC.F_LEAVE.TYPE]:  type,
     }),
   });
-  return res.ragicId || res._ragicId;
+  const id = res && (res.ragicId || res._ragicId);
+  if (!id) throw new Error('寫入沒有拿到編號，請重新整理確認'); // 沒編號就當成沒成功；否則畫面顯示已新增、下次點同一格卻刪不掉
+  return id;
 }
 
 async function apiDeleteLeave(ragicId) {
@@ -623,11 +625,13 @@ function PersonalView({ emp, onBack }) {
   const handleConfirmCancel = () => setConfirmState(s => { if (s.resolve) s.resolve(false); return { open: false, message: '', resolve: null }; });
 
   React.useEffect(() => {
+    let stale = false; // 連按上月／下月時，先送出的讀取可能比後送出的晚回來；只採用最新一次，否則會看到別個月的資料、以為那天沒排休而重複新增
     setLoading(true);
     setErr(null);
     Promise.all([loadLeaves(year, month), loadDutiesAndNoRest(year, month)])
-      .then(([lv, du]) => { setLeaves(lv); setDuties(du.duties); setNoRest(du.noRest); setLoading(false); })
-      .catch(e => { setErr(e.message); setLoading(false); });
+      .then(([lv, du]) => { if (stale) return; setLeaves(lv); setDuties(du.duties); setNoRest(du.noRest); setLoading(false); })
+      .catch(e => { if (stale) return; setErr(e.message); setLoading(false); });
+    return () => { stale = true; };
   }, [year, month]);
 
   const prevMonth = () => { if (month===1){setYear(y=>y-1);setMonth(12);}else setMonth(m=>m-1); };
@@ -682,6 +686,13 @@ function PersonalView({ emp, onBack }) {
     const date = fmtDate(year, month, d);
     const cellKey = emp.name + '__' + date;
     const existing = leaves[cellKey] || [];
+    // 這天已經有值班、打掃、特休、請假：不能再疊一筆排休（同新版排班頁「我的排休」的規則），要改請找珊珊
+    if (!existing.some(r => r.type === '排休')) {
+      const busy = (duties[cellKey] || []).length ? '打掃'
+        : existing.find(r => r.type === '值班') ? '值班'
+        : (existing.find(r => (r.type === '特休' || r.type === '請假')) || {}).type;
+      if (busy) { showToast(`這天已排${busy}，要改請找珊珊`, 'error'); return; }
+    }
     // 排休上限警告（當月有三節 → 9 天，否則 8 天）
     if (existing.length === 0) {
       const count = Object.values(leaves).reduce((n, recs) => n + recs.filter(r => r.empName === emp.name && r.type === '排休').length, 0);
