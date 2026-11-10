@@ -25,3 +25,6 @@ _verify/
 .wrangler/
 wrangler.jsonc
 backups/
+
+# 業績表不再公開（2026-11-10）：改由 Worker 的 dashData／worklogPerf 提供，不要再 commit 回 repo
+data/perf.md
