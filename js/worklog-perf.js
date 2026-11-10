@@ -1,4 +1,4 @@
-// 每日工作行程：每位同仁今年累計業績／月均業績（資料來源 data/perf.md，與 staff-dashboard.html 同一份）
+// 每日工作行程：每位同仁今年累計業績／月均業績（資料來源＝全店每月業績表，經 Worker worklogPerf 精簡版，與業績榜同一份來源）
 // 解析規則沿用 staff-dashboard.html 的 parsePerfMd（取各月主表「業績」欄、同月同人取最大值去重、小表「個人續約／代管」不算），
 // 差別：「—」／空白／0 一律當沒有資料，不退而讀「業務獎金」欄（staff-dashboard 的 fallback 會讀 cols[3]，這裡不要）。
 // ponytail-debt: 別名表是 staff-dashboard.html NAME_ALIASES 的子集複製；日後兩邊該抽成共用檔，避免新增暱稱時漏改一邊。
@@ -42,15 +42,13 @@
 
   const fmtWan = v => v >= 10000 ? (Math.round(v / 1000) / 10).toFixed(1) + '萬' : v.toLocaleString('en-US');
 
-  async function load(url) {
-    try {
-      const r = await fetch(url || 'data/perf.md', { cache: 'no-cache' });
-      if (!r.ok) return null;
-      const p = parse(await r.text());
-      return Object.keys(p.byName).length ? p : null;
-    } catch (e) { return null; } // ponytail-debt: 抓不到就不顯示數字，看板其他功能照常；不回報給後端
+  // 2026-11-10：業績表不再放公開 repo（data/perf.md 已移除），改由 Worker worklogPerf 回傳文字，頁面抓到後交給這裡解析。
+  // 解析不出任何人就回 null（頁面不顯示數字，絕不顯示 0）。
+  function fromText(text) {
+    const p = parse(text);
+    return Object.keys(p.byName).length ? p : null;
   }
 
-  const api = { parse, fmtWan, load };
+  const api = { parse, fmtWan, fromText };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.WorklogPerf = api;
 })(typeof window !== 'undefined' ? window : globalThis);
