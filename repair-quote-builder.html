@@ -1887,7 +1887,7 @@ function bindStaticFields(){
     });
   });
   on('fDiscountAmount','input', function(e){ state.discount.amount = e.target.value === '' ? 0 : Number(e.target.value); renderPreview(); renderSummary(); scheduleSave(); });
-  on('fDiscountPercent','input', function(e){ state.discount.percent = e.target.value === '' ? 0 : Number(e.target.value); renderPreview(); renderSummary(); scheduleSave(); });
+  on('fDiscountPercent','input', function(e){ state.discount.percent = e.target.value === '' ? 10 : Number(e.target.value); /* 清空＝尚未輸入折數＝不打折（10 折），不可當 0 折讓總計變 0 */ renderPreview(); renderSummary(); scheduleSave(); });
 
   var taxFieldset = document.getElementById('taxModeGroup').closest('fieldset');
   document.querySelectorAll('#taxModeGroup input[type="radio"]').forEach(function(r){
