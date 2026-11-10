@@ -19,7 +19,6 @@ set -e
 set -o pipefail  # 讓 tee 接的 python fail 真正中斷 sh（避免 silent commit stale data）
 
 VAULT_MD="$HOME/Vaults/Joan/窩的家/管理部/全店每月業績表.md"
-REPO_PERF_MD="$PROJECT_DIR/data/perf.md"
 LOG_DIR="$HOME/Library/Logs/perf-update"
 LOG_FILE="$LOG_DIR/$(date +%Y-%m-%d).log"
 
@@ -39,7 +38,10 @@ git reset --hard origin/main 2>&1 | tee -a "$LOG_FILE"
 # 跑 update_perf_md.py，直接吃 vault md
 export PYTHONUTF8=1
 export PYTHONIOENCODING=utf-8
-/opt/homebrew/bin/python3 "$PROJECT_DIR/scripts/update_perf_md.py" --vault-md "$VAULT_MD" 2>&1 | tee -a "$LOG_FILE"
+# 2026-11-10：update_perf_md.py 的 sanity 安全閥（當月業績全 0 等）會回非 0 並拒絕改寫 vault md。
+# 以前 set -e 會讓整支腳本在這裡死掉；現在業績榜快照要照常產生（vault md 沒被改壞，快照用現有那份），所以不致命。
+/opt/homebrew/bin/python3 "$PROJECT_DIR/scripts/update_perf_md.py" --vault-md "$VAULT_MD" 2>&1 | tee -a "$LOG_FILE" \
+  || log "update_perf_md.py 回非 0（多半是 sanity 擋下，見上方），仍用現有 vault md 產生快照"
 
 # FIX-2026-07-13-JUNEGAP: v5 roller（2026-07-02）讓當月表在每月第 1 天就自動建好，
 # 導致 v4.2（2026-06-05）「當月表不存在 + 日期<=10 → fallback 抓上月」的月結補登安全網
@@ -59,21 +61,20 @@ prev_roc_year = roc_year if now.month > 1 else roc_year - 1
 print(f'{prev_roc_year}/{month:02d}')
 ")
   log "月結補登窗口（day<=10）→ 額外同步上月 $PREV_MONTH"
-  /opt/homebrew/bin/python3 "$PROJECT_DIR/scripts/update_perf_md.py" --vault-md "$VAULT_MD" --target-month "$PREV_MONTH" 2>&1 | tee -a "$LOG_FILE"
+  /opt/homebrew/bin/python3 "$PROJECT_DIR/scripts/update_perf_md.py" --vault-md "$VAULT_MD" --target-month "$PREV_MONTH" 2>&1 | tee -a "$LOG_FILE" \
+    || log "上月同步回非 0（見上方），略過"
 fi
 
-# 同步 vault → repo data/
-cp "$VAULT_MD" "$REPO_PERF_MD"
-log "Copied vault md -> $REPO_PERF_MD"
-
-# 變動才 commit
-if ! git diff --quiet -- data/perf.md; then
-  git add data/perf.md
-  git -c user.email='bot@wuohome.local' -c user.name='perf-update-bot' \
-    commit -m "auto: 業績更新 $(date '+%Y-%m-%d %H:%M')" 2>&1 | tee -a "$LOG_FILE"
-  git push origin main 2>&1 | tee -a "$LOG_FILE"
-  log "=== pushed ==="
+# 2026-11-10：業績表不再 push 到公開 repo（data/perf.md 含全店個人業績與獎金）。
+# 改成產生「業績榜快照」寫進 Cloudflare KV（wuohome-ragic-proxy 的 dashData／worklogPerf，要同仁登入才拿得到）。
+# build_dash_snapshot.py 需要 RAGIC_API_KEY、CLOUDFLARE_API_TOKEN（launchd 沒有環境變數，從 ~/.env 載入）與 wrangler（/opt/homebrew/bin）。
+# 失敗時 KV 保留上一份快照（頁面「資料更新於」會顯示舊時間），腳本回非 0。
+export PATH="/opt/homebrew/bin:$PATH"
+set -a; . "$HOME/.env"; set +a
+if /opt/homebrew/bin/python3 "$PROJECT_DIR/scripts/build_dash_snapshot.py" --vault-md "$VAULT_MD" 2>&1 | tee -a "$LOG_FILE"; then
+  log "=== snapshot written ==="
 else
-  log "=== no change ==="
+  log "=== snapshot FAILED（KV 保留上一份）==="
+  exit 1
 fi
 log "=== end ==="

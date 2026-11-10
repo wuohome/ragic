@@ -338,7 +338,15 @@ function perfLine(n){
   const W=WorklogPerf.fmtWan, tip=`今年（115 年）${p.firstYm}月到${PERF.lastYm}月，共 ${p.months} 個月；平均每月＝今年業績 ÷ ${p.months} 個月`;
   return `<span class="perf" title="${esc(tip)}"><span>今年業績 ${W(p.total)}</span><span>平均每月 ${W(p.avg)}</span>${team?`<span>${team}</span>`:""}</span>`;
 }
-if(window.WorklogPerf)WorklogPerf.load().then(p=>{PERF=p;if(p&&STATE&&STATE.status==="ready")render()});
+// 2026-11-10 業績表不再是公開檔：看板載入成功（身分確認後）才向 Worker 要 worklogPerf，成功一次就不再抓
+let PERF_TRIED=false;
+async function loadPerf(){
+  if(PERF_TRIED||!window.WorklogPerf||!perfVisible())return;PERF_TRIED=true; // 業績數字只給管理層看（perfVisible），不是管理層就不用抓
+  const r=await api("worklogPerf");
+  const p=r.status===200&&r.json&&r.json.perfMd?WorklogPerf.fromText(r.json.perfMd):null;
+  if(!p){PERF_TRIED=false;return} // ponytail-debt: 抓不到就不顯示業績數字，下次看板重載再試；不回報給後端
+  PERF=p;if(STATE&&STATE.status==="ready")render();
+}
 async function load(quiet){ // quiet：不閃「載入中」（清單模式整頁是填寫區，閃一下很干擾）
   if(!TOKEN&&!ID_TOKEN){STATE={status:"auth",kind:"out"};render();return}
   const my=++reqId;if(!quiet){STATE={status:"loading",data:null};render()}
@@ -355,6 +363,7 @@ async function load(quiet){ // quiet：不閃「載入中」（清單模式整�
     VIEWER=r.json.viewer;lastLoad=Date.now();
     if(!MODE_INIT){MODE_INIT=true;MODE=r.json.fillMode==="list"?"list":"board"}
     STATE={status:"ready",data:r.json,D:buildDay(r.json)};
+    loadPerf();
   }else STATE={status:"error",code:r.status};
   render();
 }

@@ -9,6 +9,7 @@
 <title>窩的家｜租賃部業績儀表板</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="js/staff-gate.js"></script>
 <style>
   body{font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;}
   .medal-1{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#78350f;}
@@ -48,7 +49,7 @@
 <!-- Loading Overlay -->
 <div id="loadingOverlay">
   <div class="text-4xl mb-4">🏠</div>
-  <div id="loadingText" class="text-slate-600 text-sm font-semibold mb-3">正在從 Ragic 抓取即時資料…</div>
+  <div id="loadingText" class="text-slate-600 text-sm font-semibold mb-3">正在載入業績資料…</div>
   <div class="w-64 h-2.5 bg-slate-200 rounded-full overflow-hidden mb-2">
     <div id="progressBar" class="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-300 ease-out" style="width:0%"></div>
   </div>
@@ -879,7 +880,7 @@
   </div>
 
   <footer class="text-center text-slate-400 text-xs py-6">
-    即時資料 — 每次開啟頁面自動從 Ragic 抓取　•　窩的家系統部
+    資料每 15 分鐘自動更新（同仁登入後才看得到）　•　窩的家系統部
   </footer>
 </div>
 
@@ -888,6 +889,8 @@
 // CONFIG
 // ════════════════════════════════════════════════════════════════════
 const WORKER_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
+StaffGate.init(WORKER_BASE);
+StaffGate.require();  // 同仁 Google 登入閘：開頁先載入 session（第一次要按 Google，之後 30 天零互動）。不 await，後面的 StaffGate.fetch 會等它
 const LOOKBACK_DAYS = 365;
 
 const PERF_SERVICE_TYPES_LANDLORD = new Set(['房東服務費', '退房東服務費']);
@@ -1186,7 +1189,7 @@ async function ragicFetch(action, params = '') {
     }
     let res;
     try {
-      res = await fetch(url);
+      res = await StaffGate.fetch('/' + action + qs);  // 2026-11-10 起這幾張表要同仁登入才給
     } catch (networkErr) {
       // fetch() rejected — pure network failure, always retry
       lastErr = networkErr;
@@ -1209,7 +1212,7 @@ async function ragicFetch(action, params = '') {
 }
 
 let _loadDone = 0;
-const _loadTotal = 6;  // 只算首頁要等的；庫存／開發／客戶在首頁出來後背景接著載（fetchRestData）
+const _loadTotal = 1;  // 只算首頁要等的；庫存／開發／客戶在首頁出來後背景接著載（fetchRestData）
 function setProgress(label) {
   _loadDone++;
   const pct = Math.round(_loadDone / _loadTotal * 100);
@@ -1219,28 +1222,33 @@ function setProgress(label) {
   if (detail) detail.textContent = `✓ ${label}（${_loadDone}/${_loadTotal}）`;
 }
 
+function snapshotLabel() {
+  if (!SNAPSHOT_AT) return '—';
+  const d = new Date(SNAPSHOT_AT);
+  const tz = { timeZone: 'Asia/Taipei', hour12: false };
+  const day = x => x.toLocaleDateString('zh-TW', { ...tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+  const hm = d.toLocaleTimeString('zh-TW', { ...tz, hour: '2-digit', minute: '2-digit' });
+  return day(d) === day(new Date()) ? hm : `${day(d).replace(/\//g, '-')} ${hm}`;
+}
+
 async function fetchAllData() {
-  const today = new Date();
-  const dataStart = new Date(today);
-  dataStart.setDate(dataStart.getDate() - LOOKBACK_DAYS);
-  const dataEnd = new Date(today);
-  dataEnd.setDate(dataEnd.getDate() + 30);
-  const fmtDate = d => `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
-
-  const intakeParams = `subtables=true&where=${encodeURIComponent(`1000260,gte,${fmtDate(dataStart)}`)}&where=${encodeURIComponent(`1000260,lte,${fmtDate(dataEnd)}`)}&limit=10000`;
-
-  // 首頁（進案量&業績）只需要這 6 項；其餘 4 張大表（合計約 10MB）由 fetchRestData 在首頁出來後再抓。
-  // Ragic 對同時請求會排隊，全部一起抓首頁要等 9～11 秒，拆開後首頁約 2～3 秒（2026-10-06 實測）。
-  const [rawIntake, rawPayments, rawHr, perfMdText, perfCommits, rawGoals] = await Promise.all([
-    ragicFetch('listIntake', intakeParams).then(r => { setProgress('進案量'); return r; }),
-    ragicFetch('listPayments', 'subtables=true&limit=10000').then(r => { setProgress('業績'); return r; }),
-    ragicFetch('listStaff', 'limit=200').then(r => { setProgress('人事資料'); return r; }),
-    fetch('data/perf.md').then(r => r.ok ? r.text() : '').catch(() => '').then(r => { setProgress('業績比對'); return r; }),
-    fetch('https://api.github.com/repos/wuohome/ragic/commits?path=data/perf.md&per_page=1')
-      .then(r => r.ok ? r.json() : null).catch(() => null)
-      .then(r => { setProgress('GSheet時間'); return r; }),
-    ragicFetch('listGoals', 'limit=200').then(r => { setProgress('業績目標'); return r; }).catch(() => ({})),
-  ]);
+  // 2026-11-10：首頁資料（進案／業績／人事／業績表／目標）改由 Worker dashData 一次給。
+  // 內容是 Mac 每 15 分鐘事先備好的快照（scripts/build_dash_snapshot.py），要同仁登入才拿得到（StaffGate）。
+  // 庫存／開發／客戶 4 張大表仍在首頁出來後由 fetchRestData 背景抓（也要登入）。
+  let snap = null, lastErr = null;
+  for (let attempt = 0; attempt < 3 && !snap; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, attempt * 700));
+    try {
+      const res = await StaffGate.fetch('/dashData');
+      if (res.ok) snap = await res.json();
+      else lastErr = new Error(`Worker dashData ${res.status}`);
+    } catch (e) { lastErr = e; }
+  }
+  if (!snap) throw lastErr || new Error('dashData failed');
+  setProgress('業績榜資料');
+  const rawIntake = snap.intake || {}, rawPayments = snap.payments || {}, rawHr = snap.staff || {};
+  const perfMdText = snap.perfMd || '', rawGoals = snap.goals || {};
+  SNAPSHOT_AT = snap.generatedAt || '';
   // 591 廣告另外抓（arch: vault md 已含當月 GSheet）
   // FIX-2026-04-28-591-render-guard: fetch 完成後 trigger render，否則資料來了 panel 也不更新
   fetch('data/591-dashboard.json?v=' + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null).then(r => { AD591 = r; if (typeof renderAd591 === 'function') try { renderAd591(); } catch(_) {} });
@@ -1252,9 +1260,9 @@ async function fetchAllData() {
   PERF_RAGIC = toPerfRecords(rawPayments);
 
   const inactive = getInactiveStaff(rawHr);
-  // perf.md 最後 commit 時間 = GSheet 快照時間（Mac Mini launchd 每日 20:00 push）
-  if (perfCommits && perfCommits[0]?.commit?.committer?.date) {
-    const d = new Date(perfCommits[0].commit.committer.date);
+  // GSheet 快照時間 = 業績表檔案最後更新時間（快照內的 perfMdUpdatedAt）
+  if (snap.perfMdUpdatedAt) {
+    const d = new Date(snap.perfMdUpdatedAt);
     PERF_GSHEET_UPDATED = d.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\//g, '-');
   }
   const perfOb   = parsePerfMd(perfMdText);
@@ -1507,6 +1515,7 @@ let ACTIVE_STAFF = new Set();
 let AD591 = null;
 let PERF_GSHEET_AVAILABLE = false;
 let PERF_GSHEET_UPDATED = '';
+let SNAPSHOT_AT = '';  // dashData 快照產生時間（ISO），畫面顯示「資料更新於」
 
 let STAFF_ONBOARD_MONTH = {};  // { name: 'YYYY-MM' } 從 HR 到職日
 
@@ -3479,7 +3488,7 @@ async function loadRestAndRender(){
     const gsheetNote = PERF_GSHEET_UPDATED
       ? `　<span class="text-slate-400">・</span>　GSheet 快照 <span class="font-semibold text-emerald-700">${PERF_GSHEET_UPDATED}</span>`
       : '';
-    document.getElementById('updateStatus').innerHTML = `即時資料　${ts}（${elapsed}s）${gsheetNote}`;
+    document.getElementById('updateStatus').innerHTML = `資料更新於　${snapshotLabel()}（載入 ${elapsed}s）${gsheetNote}`;
     document.getElementById('refreshBtn').classList.remove('hidden');
 
     // Build UI（首頁要的先畫；庫存／開發／客戶／業務分析等背景資料到了再畫）
