@@ -473,6 +473,8 @@ SC.nextPlanZhiban = (o) => {
     const eligible = SC.nextZhibanEligible(employees, year, month, o.poolNames);
     if (eligible.length === 0) return { error: "值班名單沒有人，請先到「值班名單」勾選", toDelete: [], creates: [], newZhiban: {} };
     if (only && SC.isDutyLocked(only, todayStr)) return { error: "今天以前的日子已鎖定，不補", toDelete: [], creates: [], newZhiban: {} };
+    // 「補上」是照檢查清單按的；頁面沒重整時別人（珊珊／瓊安另一邊）可能已經補過這天，這時再補會變同一天兩人值班
+    if (only && recs.some((r) => r.type === "值班" && SC.fmtDate(..._nextYMD(r.date)) === only)) return { error: "這天已經有人值班了，請重新整理頁面。", toDelete: [], creates: [], newZhiban: {} };
 
     const zCount = {};
     eligible.forEach((e) => { zCount[e.name] = 0; });
