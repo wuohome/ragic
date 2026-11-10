@@ -569,7 +569,10 @@ function renderStats(stats = {}) {
   const statusData = field(stats, ['byStatus', 'statuses', 'statusCounts'], {});
   const statusEntries = objectEntries(statusData);
   const statusContainer = byId('statusStats'); statusContainer.replaceChildren();
-  if (!statusEntries.length) {
+  // 只有 Worker 完全沒回傳狀態統計時才用全部案件自行統計；本月 0 筆時 byStatus 是空物件，
+  // 要顯示「本月尚無資料」，不能退回統計全部歷史案件（會與上方「本月單量 0 筆」矛盾）。
+  const hasStatusStats = ['byStatus', 'statuses', 'statusCounts'].some((key) => stats && stats[key] !== undefined && stats[key] !== null);
+  if (!statusEntries.length && !hasStatusStats) {
     const counts = new Map(); allRepairs.forEach((r) => counts.set(statusOf(r), (counts.get(statusOf(r)) || 0) + 1));
     counts.forEach((count, name) => statusEntries.push([name, count]));
   }
