@@ -161,7 +161,9 @@ def is_zero_perf_anomaly(total_perf, gsheet_data, now=None):
     誤判成「sheet 壞掉/讀空/權限被撤」而狂推 OPS 假警報。"""
     from datetime import datetime
     now = now or datetime.now()
-    if now.day <= 5:
+    # 2026-11-10：豁免期放寬到 day<=10，與 run-perf-update.sh 的上月補登窗口一致。
+    # 月初成交本來就還沒登打，原本 6 號起每輪被擋 exit 2，連帶 set -e 吃掉上月補登。
+    if now.day <= 10:
         return False
     if len(gsheet_data) < 10:
         return False
