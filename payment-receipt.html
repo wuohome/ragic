@@ -1515,6 +1515,9 @@
         // 5. 送出主記錄 → submitPaymentReceipt via Worker proxy
         $("loader-text").innerText = "正在上傳資料...";
         const mainFd = new FormData($("ragicForm"));
+        // new FormData(form) 會把隱藏的空 file input 也收進來（同欄位 ID、0 byte、檔名空），先刪掉，
+        // 否則同一個 PDF 欄位會送出兩個 part，Ragic 取哪一個取決於實作
+        mainFd.delete(getPdfFieldId());
         mainFd.append(getPdfFieldId(), pdfFile, fileName);  // iOS 相容: 直接 append 不用 DataTransfer
         mainFd.append("_rid", String(recordId));
         if (prToken) mainFd.append("token", prToken);  // IDOR root-fix 2026-07-16：Worker 寫入前交叉驗證此 token 是否對得上 rid
