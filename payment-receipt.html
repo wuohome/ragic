@@ -1393,6 +1393,9 @@
             $("input_remit_code").focus();
             return;
           }
+        } else {
+          // 先選匯款填了後五碼、後來改成只付現金：清掉殘留，否則會印在憑單上並寫進 Ragic
+          $("input_remit_code").value = "";
         }
       }
       goStep(2);
@@ -1441,6 +1444,18 @@
       }
     }
 
+    // 逾時保護：連線卡住時 abort，讓流程走到失敗頁（簽名保留、可重試），不會永遠轉圈。
+    // 電話回填是附帶動作（失敗不阻斷），逾時短；主表上傳含 PDF，給行動網路較長時間。
+    const PHONE_TIMEOUT_MS = 15000;
+    const SUBMIT_TIMEOUT_MS = 60000;
+    function fetchWithTimeout(url, opts, ms) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), ms);
+      return fetch(url, Object.assign({}, opts, { signal: ctrl.signal }))
+        .catch(e => { throw (e && e.name === "AbortError") ? new Error("SUBMIT_TIMEOUT") : e; })
+        .finally(() => clearTimeout(timer));
+    }
+
     async function submitData() {
       if (!signaturePad || signaturePad.isEmpty()) {
         alert("請先完成簽名喔！");
@@ -1477,7 +1492,9 @@
         const phoneInputWrap = $("phone_input_wrap");
         const phoneInputVisible = phoneInputWrap && !phoneInputWrap.classList.contains("hidden");
         const phoneVal = phoneInputVisible ? (phoneInputEl.value || "").trim() : "";
-        if (phoneVal && sourceRagicId && sourceConfig && prToken) {
+        // 不再以 sourceRagicId 當閘門：Worker 端自己用 token 反查寫入目標，前端那次反查只是舊流程殘留，
+        // 它失敗或還沒回來時，客戶輸入的電話會被默默丟掉（輸入框卻照常顯示）
+        if (phoneVal && sourceConfig && prToken) {
           // 4.5 電話回填 → submitPaymentSource via Worker proxy
           // IDOR root-fix 2026-07-16：改送 token，不再送 _rid — Worker 端自行從 token 驗證過的
           // 收款憑單記錄反查正確的來源表 _ragicId，前端算出的 sourceRagicId 只用來判斷「要不要
@@ -1487,7 +1504,7 @@
           srcFd.append("_token", prToken);
           srcFd.append(sourceConfig.phoneField, phoneVal);
           try {
-            await fetch(`${WORKER_BASE}/submitPaymentSource`, { method: "POST", body: srcFd });
+            await fetchWithTimeout(`${WORKER_BASE}/submitPaymentSource`, { method: "POST", body: srcFd }, PHONE_TIMEOUT_MS);
           } catch (srcErr) {
             console.warn("源頭表電話回填失敗（非阻斷）", srcErr);
           }
@@ -1498,10 +1515,13 @@
         // 5. 送出主記錄 → submitPaymentReceipt via Worker proxy
         $("loader-text").innerText = "正在上傳資料...";
         const mainFd = new FormData($("ragicForm"));
+        // new FormData(form) 會把隱藏的空 file input 也收進來（同欄位 ID、0 byte、檔名空），先刪掉，
+        // 否則同一個 PDF 欄位會送出兩個 part，Ragic 取哪一個取決於實作
+        mainFd.delete(getPdfFieldId());
         mainFd.append(getPdfFieldId(), pdfFile, fileName);  // iOS 相容: 直接 append 不用 DataTransfer
         mainFd.append("_rid", String(recordId));
         if (prToken) mainFd.append("token", prToken);  // IDOR root-fix 2026-07-16：Worker 寫入前交叉驗證此 token 是否對得上 rid
-        const postRes = await fetch(`${WORKER_BASE}/submitPaymentReceipt`, { method: "POST", body: mainFd });
+        const postRes = await fetchWithTimeout(`${WORKER_BASE}/submitPaymentReceipt`, { method: "POST", body: mainFd }, SUBMIT_TIMEOUT_MS);
         if (!postRes.ok) {
           const errText = await postRes.text().catch(() => "");
           throw new Error("SUBMIT_HTTP_" + postRes.status + (errText ? ": " + errText.slice(0, 100) : ""));
