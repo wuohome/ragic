@@ -53,10 +53,22 @@
 const API_BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
 const currentUrl = new URL(window.location.href);
 const quoteKey = currentUrl.searchParams.get('quote')?.trim() || '';
-if (currentUrl.searchParams.has('quote')) {
+// 連結憑證只在「報價成功讀取」後才從網址列移除：暫時性失敗（網路中斷／502）時保留，
+// 客戶重新整理才能重試；成功後 token 已被 Worker 單次核銷，移除網址列上的殘留。
+function stripQuoteFromUrl() {
+  if (!currentUrl.searchParams.has('quote')) return;
   currentUrl.searchParams.delete('quote');
   history.replaceState(null, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
 }
+// Worker 錯誤碼 → 給客戶看的中文說明（不直接顯示 forbidden 等英文代碼）
+const ERROR_TEXT = {
+  forbidden: '這份報價單連結已失效或已被開啟過，請聯絡承辦業務重新取得連結。',
+  quote_cancelled: '這份報價單已取消，請聯絡承辦業務。',
+  quote_store_failed: '服務暫時無法回應，請稍後重新整理再試。',
+  upstream_error: '服務暫時無法回應，請稍後重新整理再試。',
+  invalid_formula_total: '報價資料不完整，請聯絡服務人員。',
+  not_found: '找不到這份報價單，請聯絡承辦業務。',
+};
 const byId = (id) => document.getElementById(id);
 const clean = (value) => String(value ?? '').trim();
 
@@ -74,7 +86,7 @@ async function loadQuote() {
     let data;
     try { data = await response.json(); }
     catch { throw new Error('服務暫時無法回應，請稍後再試。'); }
-    if (!response.ok || !data.ok || !data.quote) throw new Error(clean(data.error || data.message) || '這份報價單目前無法讀取。');
+    if (!response.ok || !data.ok || !data.quote) throw new Error(ERROR_TEXT[clean(data.error)] || '這份報價單目前無法讀取，請稍後再試或聯絡服務人員。');
     const view = data.quote;
     byId('companyName').textContent = clean(view.companyName) || '窩的家';
     byId('ticketNo').textContent = clean(view.ticketNo) || '—';
@@ -86,7 +98,8 @@ async function loadQuote() {
     byId('total').textContent = `NT$ ${amount.toLocaleString('zh-TW')}`;
     byId('loadingState').classList.add('hidden');
     byId('quoteState').classList.remove('hidden');
-  } catch (error) { showError(error.message || '載入失敗，請稍後再試。'); }
+    stripQuoteFromUrl();
+  } catch (error) { showError(error instanceof TypeError ? '網路連線異常，請檢查網路後重新整理再試。' : (error.message || '載入失敗，請稍後再試。')); }
 }
 
 loadQuote();
