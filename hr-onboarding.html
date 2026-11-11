@@ -610,7 +610,8 @@ const MAIN_FIELDS = {
   '性別':'3000956','婚姻狀態':'3001020','最高教育程度':'3001022','在職狀態':'3000945',
   '到職日期':'3000943','主要手機號碼':'3000975','次要手機號碼':'3000941','LINE ID':'1000875',
   'Email':'3000976','通訊地址':'3000977','戶籍地址':'3001019','銀行':'1000861',
-  '分行':'1000863','銀行帳號':'1000864','照片':'3000953','存摺上傳':'1000865'
+  '分行':'1000863','銀行帳號':'1000864','照片':'3000953','存摺上傳':'1000865',
+  '部門':'3000937'
 };
 const SUB_FIELDS = {
   edu: {'學校名稱':'3000965','學歷':'3000988','畢/肄業':'3001092','主修':'3000990','入學日期':'3000991','結業日期':'3000992'},
@@ -1074,6 +1075,13 @@ function startDate() {
   const d = new Date();
   return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('/');
 }
+// 報到連結可帶 ?dept=部門（例 &dept=設計部），寫進人事表部門欄，讓自動開帳號分到對的群組。
+// 只收 Ragic 部門欄的選項值；沒帶或打錯就不送，由自動開帳號那邊照舊處理並提醒。
+const DEPT_OPTIONS = ['租賃部','設計部','管理部','經營階層','社宅部','買賣部','工務部','行銷部'];
+function deptParam() {
+  const q = (new URLSearchParams(location.search).get('dept') || '').trim();
+  return DEPT_OPTIONS.find(d => d === q || d.replace(/部$/, '') === q) || '';
+}
 function esc(s) { return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function dt(v) { return v ? String(v).replace(/-/g,'/') : ''; }
 
@@ -1111,6 +1119,7 @@ async function submit() {
     put('銀行帳號', f['銀行帳號']);
     put('在職狀態', '在職');
     put('到職日期', startDate());
+    put('部門', deptParam());
 
     if(data.files['照片']) fd.append(MAIN_FIELDS['照片'], data.files['照片'], data.files['照片'].name);
     if(data.files['存摺上傳']) fd.append(MAIN_FIELDS['存摺上傳'], data.files['存摺上傳'], data.files['存摺上傳'].name);
