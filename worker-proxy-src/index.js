@@ -373,7 +373,9 @@ const ALLOWED_ACTIONS = {
   worklogListAll:        { method: 'GET' },
   // 2026-10-12 全員公開看板：任何有效工作日誌 token 都可讀（同仁互相看得到才會填，小吳哥提案）
   worklogBoard:          { method: 'GET' },
-  worklogTimetreeSync:   { method: 'POST' },
+  // 2026-11-10 每日工作行程顯示「今年業績／月均」用的業績表（精簡版，只有姓名與業績欄）；身分同 worklogBoard
+  worklogPerf:           { method: 'GET' },
+  worklogTimetreeSync:  { method: 'POST' },
   worklogSession:        { method: 'POST' },
   worklogLogout:         { method: 'POST' },
   // 2026-10-28 雙模式：偏好／切換紀錄（POST）、統計（GET，管理層與 AI工程師測試 token）
@@ -384,9 +386,15 @@ const ALLOWED_ACTIONS = {
   staffLogout:           { method: 'POST' },
   // 2026-10-30 排班新版（schedule-next.html）：同仁 Google 登入後問「我是誰、能不能排班」。只新增，不動其他 action。
   scheduleWhoami:        { method: 'GET' },
+  // 2026-11-10 全店業績榜預先備好的快照（同仁登入才回）：Mac 每 15 分鐘寫入 KV，Worker 只負責驗身分再原樣吐出。
+  dashData:              { method: 'GET' },
   // 2026-10-31 值班名單設定：珊珊、瓊安勾選誰排值班，存 KV。只有這兩人可讀寫，不碰 Ragic。
   scheduleDutyPool:      { method: 'GET' },
   scheduleDutyPoolSet:   { method: 'POST' },
+  // 2026-11-06 公基金帳本（清潔費收入、請客支出、點錢對帳）：讀＝在職同仁，寫＝珊珊、瓊安。存 Durable Object PublicFundLedger。
+  fundList:              { method: 'GET' },
+  fundAdd:               { method: 'POST' },
+  fundPhoto:             { method: 'GET' },
   // Group V: 修繕報價單產生器 → Ragic 化（maintenance-management/15，2026-07-24）。無固定
   // WORKER secret token gate（不像 Group S/T/U）——rqGet 的守門是「建單當下產生、僅該筆記錄
   // 持有」的分享token 逐筆交叉比對，token-only IDOR 防護見下方 handler 註解。
@@ -568,7 +576,9 @@ const HR_FIELDS_WHITELIST = new Set([
   '3000982','3000983','3000984','3000986','3000987',
   '3000979','3001027','3001031','3001029','3001030','1000874',
   '1000868','1000870','1000925',
+  '3000937', // 部門（2026-11-11：報到連結 ?dept= 帶入，讓自動開帳號分對群組；值限下方選項）
 ]);
+const HR_DEPT_OPTIONS = new Set(['租賃部','設計部','管理部','經營階層','社宅部','買賣部','工務部','行銷部']);
 const HR_MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 // Group H2: bcard survey — only these 3 fields are writable by staff self-service
@@ -745,7 +755,7 @@ const WORKLOG_CATEGORY_GROUPS = new Set(['工務', '租賃', '社宅']);
 // 避免擋到合理輸入，同時防止異常超長字串灌入）。
 const WORKLOG_TEXT_MAX = { caseName: 200, repairReason: 300, plannedSchedule: 300, note: 500 };
 const WORKLOG_MAX_BATCH = 13; // 一天最多 11 小時格＋前後桶籃，批次上限比欄位數再留餘裕
-const WORKLOG_ACTIONS = new Set(['worklogCreate', 'worklogListMine', 'worklogListAll', 'worklogBoard', 'worklogMode', 'worklogModeStats']);
+const WORKLOG_ACTIONS = new Set(['worklogCreate', 'worklogListMine', 'worklogListAll', 'worklogBoard', 'worklogPerf', 'worklogMode', 'worklogModeStats']);
 // 全員公開看板（2026-10-12，規格書「2026-10-08 改版方向」）：名單＝人事表 租賃部・在職・承攬
 // （兼職不用填，Joan 2026-07-28）；當天排班表有 排休／特休／請假 的人整排沉底。
 // 欄位 ID 與 schedule-guard fallback-constants.js 的 F_EMP 同一批。
@@ -1095,6 +1105,7 @@ async function handleWorklogAction(action, request, env, identity, origin) {
   const url = new URL(request.url);
 
   if (action === 'worklogBoard') return handleWorklogBoard(url, env, identity, origin, request);
+  if (action === 'worklogPerf') return handleWorklogPerf(env, identity, origin);
   if (action === 'worklogModeStats') return handleWorklogModeStats(url, env, identity, origin);
 
   if (action === 'worklogMode') { // 切換填寫模式：記住偏好＋記一筆切換（同模式重送不重複記）
@@ -2344,7 +2355,7 @@ async function authenticateRepairConsoleGoogle(request, env, origin) {
 // viewer 格式與 token 路徑完全相同（role／name／categoryGroup），前端不用分支。
 // 只開給 worklogBoard／worklogCreate；其他 worklog action 帶 Authorization 仍走 token 判斷。
 // ─────────────────────────────────────────────────────────────────────────────
-const WORKLOG_GOOGLE_ACTIONS = new Set(['worklogBoard', 'worklogCreate', 'worklogMode', 'worklogModeStats']);
+const WORKLOG_GOOGLE_ACTIONS = new Set(['worklogBoard', 'worklogPerf', 'worklogCreate', 'worklogMode', 'worklogModeStats']);
 const WORKLOG_VIEW_DEPTS = new Set(['租賃部', '社宅部']);
 const WORKLOG_DEPT_GROUP = Object.freeze({ '租賃部': '租賃', '社宅部': '社宅' });
 const worklogGoogleEmailCache = new Map(); // sha256(idToken) → { expiresAt, email }
@@ -2480,6 +2491,7 @@ async function handleWorklogLogout(request, env, origin) {
 // ═══════════════════════════════════════════════════════════════════════════════
 const STAFF_GATE_ENFORCE = true;
 const STAFF_GATED_ACTIONS = new Set(['searchStaff', 'searchDeposits']);
+const DASH_LIST_GATED_ACTIONS = new Set(['listPayments', 'listIntake', 'listGoals', 'listInventory', 'listOutreach', 'listCommission', 'listClients']);
 const STAFF_SESSION_PREFIX = 'sts_';
 const STAFF_SESSION_TTL_S = 30 * 24 * 3600;
 const STAFF_SESSION_TOUCH_MS = 6 * 3600 * 1000;
@@ -2584,6 +2596,40 @@ async function handleScheduleWhoami(request, env, origin) {
   return jsonResp({ ok: true, name: identity.name, department: identity.department, role: SCHEDULE_ADMIN_NAMES.has(identity.name) ? 'admin' : 'staff' }, 200, origin);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// 全店業績榜快照（2026-11-10）。業績榜原本開頁時直接打 listPayments／listIntake／listGoals，
+// 每支 5～13 秒，而且整張 Ragic 表（含屋主電話、租客資料）匿名可取。改成：Mac 排程每 15 分鐘把
+// 「業績榜實際用到的欄位」（payments／intake／goals／在職名單）加業績表 perf.md 整包寫進 KV
+// `dash:snapshot:v1`（scripts/build_dash_snapshot.py），這裡驗過同仁身分後原樣吐出，不解析 JSON。
+// 驗證沿用 authenticateStaffGoogle（同 staffSession 的 session）。沒帶／失效一律 401，前端靠它回登入畫面。
+// ═══════════════════════════════════════════════════════════════════════════════
+const DASH_SNAPSHOT_KEY = 'dash:snapshot:v1';
+// 每日工作行程（worklog.html／worklog-v2.html）的「今年業績／月均」：它們用自己的工作日誌登入（通行碼連結或看板 session），
+// 不是 staffSession，所以另開 worklogPerf，身分走 WORKLOG_ACTIONS 那套。內容是 build_dash_snapshot.py 寫的精簡業績表
+// （只留月份標題與 名次／姓名／業績 三欄，沒有業務獎金等其他欄）。
+const DASH_PERF_KEY = 'dash:perf:v1';
+// 頁面端 perfVisible()（worklog.html）只有管理層看得到業績數字，這裡同一條件擋：role＝manager 或 PERF_MGR 四人。
+const WORKLOG_PERF_NAMES = new Set(['吳彥廷', '蕭靜芳', '張瓊安', '韓珊珊']);
+async function handleWorklogPerf(env, identity, origin) {
+  if (!identity || !(identity.role === 'manager' || WORKLOG_PERF_NAMES.has(identity.name))) return jsonResp({ error: 'forbidden' }, 403, origin);
+  if (!env.EARNEST_QUEUE || typeof env.EARNEST_QUEUE.get !== 'function') return jsonResp({ error: 'kv_unavailable' }, 500, origin);
+  const text = await env.EARNEST_QUEUE.get(DASH_PERF_KEY).catch(() => null);
+  if (!text) return jsonResp({ error: 'snapshot_unavailable' }, 503, origin);
+  return new Response(text, { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate', ...corsHeaders(origin) } });
+}
+
+async function handleDashData(request, env, origin) {
+  if (!env.EARNEST_QUEUE || typeof env.EARNEST_QUEUE.get !== 'function') return jsonResp({ error: 'kv_unavailable' }, 500, origin);
+  // 快照讀取與身分驗證同時開跑（驗證要反查人事表，冷啟動約 0.7 秒）；驗證沒過就丟掉，不會外流。
+  const snapshotP = env.EARNEST_QUEUE.get(DASH_SNAPSHOT_KEY).catch(() => null);
+  const identity = await authenticateStaffGoogle(request, env, origin);
+  if (!identity) return jsonResp({ error: 'invalid_session' }, 401, origin);
+  if (identity.__authError) return identity.__authError;
+  const text = await snapshotP;
+  if (!text) return jsonResp({ error: 'snapshot_unavailable' }, 503, origin);
+  return new Response(text, { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate', ...corsHeaders(origin) } });
+}
+
 // 值班名單（2026-10-31）：排班頁「值班名單」面板勾選誰排值班。KV 存 { names, updatedAt, updatedBy }；
 // 從沒存過回 names:null，前端照舊規則（承攬滿 3 個月）。讀寫都限 SCHEDULE_ADMIN_NAMES，只新增不動既有 action。
 const SCHEDULE_DUTY_POOL_KEY = 'schedule:dutyPool';
@@ -2611,6 +2657,188 @@ async function handleScheduleDutyPoolSet(request, env, origin) {
   const saved = { names: [...new Set(names)], updatedAt: new Date().toISOString(), updatedBy: identity.name };
   await env.EARNEST_QUEUE.put(SCHEDULE_DUTY_POOL_KEY, JSON.stringify(saved));
   return jsonResp({ ok: true, ...saved }, 200, origin);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 排班頁「公基金」帳本（2026-11-06）。清潔費（沒掃、沒倒垃圾）放進同仁公基金，不進公司帳戶；
+// 公基金拿來請大家吃雞排、喝飲料，所以要能記收入、支出、算餘額、跟實際的錢對帳。
+// 存在 Durable Object（PublicFundLedger，強一致、可交易）：KV 是最終一致，同一筆清潔費可能被收兩次、剛記的帳會暫時不見。
+// 帳本只能新增、不能改刪；記錯用「作廢」另記一筆指向原紀錄。
+// 讀（fundList、fundPhoto）：在職同仁都能讀，別人的收款只給金額（拿掉姓名、清潔費編號、說明），餘額照算。
+// 寫（fundAdd）：只有 SCHEDULE_ADMIN_NAMES（珊珊、瓊安）。記錄人與記錄時間由伺服器填，前端傳什麼都不採信。
+// 前端邏輯在 wuohome/ragic 的 schedule-fund-core.js，紀錄格式寫在那支檔開頭。只新增，不動任何既有 action。
+// ═══════════════════════════════════════════════════════════════════════════════
+const FUND_TYPES = new Set(['pay', 'payin', 'income', 'spend', 'count', 'void']);
+const FUND_METHODS = new Set(['cash', 'transfer', 'payroll']);
+const FUND_PHOTO_MAX = 1500000; // data URL 字元數上限（前端先壓到 1280px JPEG，約 150–400KB）
+
+function fundDoResp(data, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
+}
+function fundStr(s, max) { return typeof s === 'string' ? s.trim().slice(0, max) : ''; }
+function fundInt(x) { const n = Number(x); return Number.isInteger(n) ? n : NaN; }
+function fundIdList(x, max) {
+  if (!Array.isArray(x) || x.length > max) return null;
+  const ok = x.every((s) => typeof s === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(s));
+  return ok ? [...new Set(x)] : null;
+}
+
+export class PublicFundLedger {
+  constructor(state, env) { this.storage = state.storage; }
+
+  async fetch(request) {
+    const action = new URL(request.url).pathname.replace(/^\/+|\/+$/g, '');
+    try {
+      if (action === 'list') {
+        const m = await this.storage.list({ prefix: 'e:' });
+        const cfg = (await this.storage.get('cfg')) || {};
+        return fundDoResp({ ok: true, entries: [...m.values()], cfg });
+      }
+      if (action === 'photo') {
+        const { id } = await request.json();
+        const e = typeof id === 'string' ? await this.storage.get('e:' + id) : null;
+        const ph = e && e.ph ? await this.storage.get('p:' + id) : null;
+        return ph ? fundDoResp({ ok: true, photo: ph }) : fundDoResp({ ok: false, error: 'not_found' }, 404);
+      }
+      if (action === 'setcfg') {
+        const { threshold, by } = await request.json();
+        const th = fundInt(threshold);
+        if (!(th >= 0 && th <= 1000000)) return fundDoResp({ ok: false, error: 'invalid_threshold' }, 400);
+        const cfg = { threshold: th, updatedBy: by, updatedAt: new Date().toISOString() };
+        await this.storage.put('cfg', cfg);
+        return fundDoResp({ ok: true, cfg });
+      }
+      if (action === 'add') return await this.add(await request.json());
+      return fundDoResp({ ok: false, error: 'unknown_action' }, 404);
+    } catch (err) {
+      return fundDoResp({ ok: false, error: 'storage_error', detail: String(err && err.message || err).slice(0, 200) }, 500);
+    }
+  }
+
+  async add(body) {
+    const src = body && body.entry || {};
+    const t = src.t;
+    if (!FUND_TYPES.has(t)) return fundDoResp({ ok: false, error: 'invalid_type' }, 400);
+    const d = typeof src.d === 'string' && /^\d{4}\/\d{2}\/\d{2}$/.test(src.d) ? src.d : '';
+    if (!d) return fundDoResp({ ok: false, error: 'invalid_date' }, 400);
+    const e = { t, d, a: fundInt(src.a), p: fundStr(src.p, 20), c: [], m: '', n: fundStr(src.n, 120), by: fundStr(body.by, 20), at: new Date().toISOString() };
+    if (!e.by) return fundDoResp({ ok: false, error: 'no_recorder' }, 400);
+
+    const all = [...(await this.storage.list({ prefix: 'e:' })).values()];
+    const voided = new Set(all.filter((x) => x.t === 'void').map((x) => x.v));
+    const live = all.filter((x) => x.t !== 'void' && !voided.has(x.id));
+
+    if (t === 'pay') {
+      const c = fundIdList(src.c, 200);
+      if (!c || !c.length) return fundDoResp({ ok: false, error: 'invalid_charges' }, 400);
+      if (!(e.a > 0) || !e.p) return fundDoResp({ ok: false, error: 'invalid_pay' }, 400);
+      if (!FUND_METHODS.has(src.m)) return fundDoResp({ ok: false, error: 'invalid_method' }, 400);
+      const taken = new Set();
+      live.forEach((x) => { if (x.t === 'pay') (x.c || []).forEach((id) => taken.add(id)); });
+      const dup = c.filter((id) => taken.has(id));
+      if (dup.length) return fundDoResp({ ok: false, error: 'charge_already_paid', charges: dup }, 409);
+      e.c = c; e.m = src.m;
+    } else if (t === 'payin') {
+      const c = fundIdList(src.c, 500);
+      if (!c || !c.length) return fundDoResp({ ok: false, error: 'invalid_refs' }, 400);
+      const byId = new Map(live.map((x) => [x.id, x]));
+      const covered = new Set();
+      live.forEach((x) => { if (x.t === 'payin') (x.c || []).forEach((id) => covered.add(id)); });
+      let sum = 0;
+      for (const id of c) {
+        const p = byId.get(id);
+        if (!p || p.t !== 'pay' || p.m !== 'payroll') return fundDoResp({ ok: false, error: 'not_payroll_pay', id }, 400);
+        if (covered.has(id)) return fundDoResp({ ok: false, error: 'already_paid_in', id }, 409);
+        sum += p.a;
+      }
+      if (e.a !== sum) return fundDoResp({ ok: false, error: 'amount_mismatch', expected: sum }, 400);
+      e.c = c;
+    } else if (t === 'income' || t === 'spend') {
+      if (!(e.a > 0) || e.a > 1000000) return fundDoResp({ ok: false, error: 'invalid_amount' }, 400);
+      if (!e.n) return fundDoResp({ ok: false, error: 'note_required' }, 400);
+    } else if (t === 'count') {
+      if (!(e.a >= 0) || e.a > 10000000) return fundDoResp({ ok: false, error: 'invalid_amount' }, 400);
+      const book = fundInt(src.book);
+      if (!Number.isInteger(book)) return fundDoResp({ ok: false, error: 'invalid_book' }, 400);
+      e.book = book;
+    } else if (t === 'void') {
+      const v = typeof src.v === 'string' ? src.v : '';
+      const target = all.find((x) => x.id === v);
+      if (!target || target.t === 'void') return fundDoResp({ ok: false, error: 'invalid_target' }, 400);
+      if (voided.has(v)) return fundDoResp({ ok: false, error: 'already_voided' }, 409);
+      if (target.t === 'pay' && target.m === 'payroll' && live.some((x) => x.t === 'payin' && (x.c || []).includes(v))) {
+        return fundDoResp({ ok: false, error: 'payin_exists' }, 409); // 公司已撥入的代扣款，要先作廢那筆撥入
+      }
+      if (!e.n) return fundDoResp({ ok: false, error: 'note_required' }, 400);
+      e.v = v; e.a = 0;
+    }
+
+    const photo = typeof body.photo === 'string' ? body.photo : '';
+    if (photo) {
+      if (t !== 'spend' && t !== 'income') return fundDoResp({ ok: false, error: 'photo_not_allowed' }, 400);
+      if (!/^data:image\/(jpeg|png|webp);base64,/.test(photo) || photo.length > FUND_PHOTO_MAX) return fundDoResp({ ok: false, error: 'invalid_photo' }, 400);
+      e.ph = true;
+    }
+    e.id = Date.now().toString(36).padStart(9, '0') + '-' + crypto.randomUUID().slice(0, 6);
+    if (photo) await this.storage.put('p:' + e.id, photo);
+    await this.storage.put('e:' + e.id, e);
+    return fundDoResp({ ok: true, entry: e });
+  }
+}
+
+function fundStub(env) {
+  const ns = env.PUBLIC_FUND_LEDGER;
+  if (!ns || typeof ns.idFromName !== 'function') return null;
+  return ns.get(ns.idFromName('wuohome-public-fund'));
+}
+async function fundCall(env, action, body) {
+  const stub = fundStub(env);
+  if (!stub) return { status: 503, data: { ok: false, error: 'ledger_unavailable' } };
+  const res = await stub.fetch('https://fund/' + action, { method: 'POST', body: JSON.stringify(body || {}) });
+  return { status: res.status, data: await res.json() };
+}
+async function fundViewer(request, env, origin) {
+  const identity = await authenticateStaffGoogle(request, env, origin);
+  if (!identity) return { resp: jsonResp({ error: 'invalid_session' }, 401, origin) };
+  if (identity.__authError) return { resp: identity.__authError };
+  return { identity, admin: SCHEDULE_ADMIN_NAMES.has(identity.name) };
+}
+async function handleFundList(request, env, origin) {
+  const { resp, identity, admin } = await fundViewer(request, env, origin);
+  if (resp) return resp;
+  const r = await fundCall(env, 'list');
+  if (!r.data.ok) return jsonResp(r.data, r.status, origin);
+  let entries = r.data.entries || [];
+  if (!admin) {
+    const hidden = new Set();
+    entries = entries.map((x) => {
+      if (x.t === 'pay' && x.p !== identity.name) { hidden.add(x.id); return { ...x, p: '', c: [], n: '' }; }
+      if (x.t === 'payin') return { ...x, c: [], n: '' };
+      return x;
+    }).map((x) => (x.t === 'void' && hidden.has(x.v) ? { ...x, n: '' } : x));
+  }
+  return jsonResp({ ok: true, entries, cfg: r.data.cfg || {}, viewer: { name: identity.name, admin } }, 200, origin);
+}
+async function handleFundAdd(request, env, origin) {
+  const { resp, identity, admin } = await fundViewer(request, env, origin);
+  if (resp) return resp;
+  if (!admin) return jsonResp({ error: 'forbidden' }, 403, origin);
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== 'object') return jsonResp({ error: 'invalid_body' }, 400, origin);
+  if (body.cfg) {
+    const r = await fundCall(env, 'setcfg', { threshold: body.cfg.threshold, by: identity.name });
+    return jsonResp(r.data, r.status, origin);
+  }
+  const r = await fundCall(env, 'add', { entry: body.entry, photo: body.photo, by: identity.name });
+  return jsonResp(r.data, r.status, origin);
+}
+async function handleFundPhoto(request, env, origin) {
+  const { resp } = await fundViewer(request, env, origin);
+  if (resp) return resp;
+  const id = new URL(request.url).searchParams.get('id') || '';
+  if (!/^[a-z0-9]{1,12}-[a-f0-9]{6}$/.test(id)) return jsonResp({ error: 'invalid_id' }, 400, origin);
+  const r = await fundCall(env, 'photo', { id });
+  return jsonResp(r.data, r.status, origin);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -4659,6 +4887,8 @@ async function fetchRepairPages(env, maxRecords = 10000) {
   for (let offset = 0; offset < maxRecords; offset += pageSize) {
     const result = await getFromRagic(env, REPAIR_SHEET, `naming=EID&ignoreFixedFilter=true&info=true&limit=${offset},${pageSize}`);
     if (!result.upstream.ok || !result.data || typeof result.data !== 'object' || Array.isArray(result.data)) return { error: true, code: result.upstream.status };
+    // 2026-11-11：Ragic 錯誤是 200＋{status:'ERROR',code,msg}，repairRecords 會濾成 0 筆 → 工務工作台整頁「沒有報修單」
+    if (detectUpstreamFailure(result.upstream, result.data)) return { error: true, code: result.data.code || result.upstream.status };
     const page = repairRecords(result.data);
     all.push(...page);
     if (page.length < pageSize) return { records: all };
@@ -4787,13 +5017,11 @@ function escapeHtml(str) {
 function formatFailedAt(iso) {
   if (!iso) return '—';
   try {
+    // 2026-11-11：Worker 的 getHours() 等是 UTC，通知上的「建立時間」以前比台北時間少 8 小時 → 一律轉台北
     const d = new Date(iso);
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mi = String(d.getMinutes()).padStart(2, '0');
-    const ss = String(d.getSeconds()).padStart(2, '0');
-    return `${mm}/${dd} ${hh}:${mi}:${ss}`;
+    if (Number.isNaN(d.getTime())) return iso;
+    const t = taipeiTimestamp(d); // YYYY/MM/DD HH:mm:ss
+    return `${t.slice(5, 10)} ${t.slice(11)}`;
   } catch { return iso; }
 }
 
@@ -4948,6 +5176,18 @@ async function getFromRagic(env, sheetPath, queryString) {
   return { upstream, data };
 }
 
+// 直打完整 URL 的讀取（呼叫端自己組 query／認證），回 { upstream, data }，data 解析失敗為 null。
+// 給原本寫成 `.json().catch(() => ({}))` 的呼叫端用：那種寫法把 Ragic 的錯誤、非 JSON、連線例外
+// 全部變成「查無資料」。Ragic 對失效金鑰／無權限的表回 HTTP 200＋{status:'ERROR',code:106}（2026-11-11 實測），
+// 必須看內容才知道失敗，交給 detectUpstreamFailure 判。連線例外一樣回 { upstream:{ok:false,status:0}, data:null }。
+async function ragicFetchJson(url, init) {
+  let upstream;
+  try { upstream = await ragicFetch(url, init); } catch { return { upstream: { ok: false, status: 0 }, data: null }; }
+  const text = await upstream.text();
+  let data = null; try { data = JSON.parse(text); } catch {} // ponytail-debt: 解析失敗刻意留 data=null，由呼叫端 detectUpstreamFailure 判成 upstream_bad_json；升級路徑＝回傳 parseError 一併記 log
+  return { upstream, data };
+}
+
 async function deleteFromRagic(env, sheetPath) {
   const upstream = await ragicFetch(`${env.RAGIC_BASE}/${sheetPath}?api`, {
     method: 'DELETE',
@@ -5084,6 +5324,10 @@ async function getRagicRecordById(env, sheetPath, rid) {
 
 function detectUpstreamFailure(upstream, data) {
   if (!upstream.ok) return { error: 'upstream_error', code: upstream.status, msg: data?.msg };
+  // 2026-11-11：Ragic 回 2xx 但內容不是 JSON 物件（錯誤頁、空 body）時，先前直接當成功——寫入類 action 會
+  // 對前端回 ok:true、資料其實沒進 Ragic。上面幾處呼叫端註解（pcCreatePurchaseOrder／ssAddSubRowWithPhotos）
+  // 一直寫「data 為 null 會被這裡判成失敗」，但這道檢查實際上不存在。
+  if (data === null || typeof data !== 'object') return { error: 'upstream_bad_json', code: upstream.status };
   if (data && data.status === 'ERROR') return { error: 'upstream_error', code: data.code, msg: data.msg };
   if (data && data.status === 'INVALID') return { error: 'upstream_invalid', code: data.code, msg: data.msg };
   if (data && data.msg && /not found|invalid|Field id|Form Index/i.test(data.msg)) return { error: 'upstream_silent_fail', msg: data.msg };
@@ -6072,13 +6316,26 @@ export default {
     if (action === 'staffSession') return handleStaffSession(request, env, allowedOrigin);
     if (action === 'staffLogout') return handleStaffLogout(request, env, allowedOrigin);
     if (action === 'scheduleWhoami') return handleScheduleWhoami(request, env, allowedOrigin);
+    if (action === 'dashData') return handleDashData(request, env, allowedOrigin);
     if (action === 'scheduleDutyPool') return handleScheduleDutyPool(request, env, allowedOrigin);
     if (action === 'scheduleDutyPoolSet') return handleScheduleDutyPoolSet(request, env, allowedOrigin);
+    if (action === 'fundList') return handleFundList(request, env, allowedOrigin);
+    if (action === 'fundAdd') return handleFundAdd(request, env, allowedOrigin);
+    if (action === 'fundPhoto') return handleFundPhoto(request, env, allowedOrigin);
     // 同仁 Google 登入閘（2026-10-21）：searchStaff／searchDeposits 回租客姓名電話與同仁手機信箱。
     if (STAFF_GATED_ACTIONS.has(action)) {
       const stIdentity = await authenticateStaffGoogle(request, env, allowedOrigin);
       if (stIdentity && stIdentity.__authError) return stIdentity.__authError;
       if (!stIdentity && STAFF_GATE_ENFORCE) return jsonResp({ error: 'not_found' }, 404, allowedOrigin);
+    }
+    // 業績榜用的 Ragic 整表讀取（2026-11-10 起要同仁登入）：payments／intake／goals 含屋主與租客姓名電話、
+    // 地址、匯款後五碼、員工 LINE userId；inventory／outreach／commission／clients 同樣含屋主租客個資。
+    // 之前匿名可取。業績榜首頁改走 dashData 快照；這幾支只剩業績榜背景載入 4 張大表在用，一樣帶 session。
+    // listStaff／listEmployees 已是白名單欄位版（v43／v44），維持公開。STAFF_GATE_ENFORCE=false 同時是這裡的緊急放行開關。
+    if (DASH_LIST_GATED_ACTIONS.has(action) && STAFF_GATE_ENFORCE) {
+      const dlIdentity = await authenticateStaffGoogle(request, env, allowedOrigin);
+      if (!dlIdentity) return jsonResp({ error: 'invalid_session' }, 401, allowedOrigin);
+      if (dlIdentity.__authError) return dlIdentity.__authError;
     }
     let worklogIdentity = null;
     if (WORKLOG_ACTIONS.has(action)) {
@@ -6182,9 +6439,8 @@ export default {
         if (!validUserId(userId)) return jsonResp({ error: 'invalid_userId' }, 400, allowedOrigin);
         if (!validName(name))     return jsonResp({ error: 'invalid_name' }, 400, allowedOrigin);
         if (!validPhone(phone))   return jsonResp({ error: 'invalid_phone' }, 400, allowedOrigin);
-        const now = new Date();
-        const pad = (n) => String(n).padStart(2, '0');
-        const ts = `${now.getFullYear()}/${pad(now.getMonth()+1)}/${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+        // 2026-11-11：Worker 的 getHours() 等是 UTC，綁定時間以前整個少 8 小時（台北 00:00–08:00 連日期都差一天）
+        const ts = nowTaipeiDateTime();
         const params = new URLSearchParams({ '1002018': userId, '1002019': name, '1002020': phone, '1002021': ts });
         const { upstream, data } = await postUrlEncodedToRagic(env, 'operation/12', params.toString());
         const fail = detectUpstreamFailure(upstream, data);
@@ -6229,7 +6485,8 @@ export default {
 
       if (action === 'listEmployees') {
         const { upstream, data } = await getFromRagic(env, 'ragicforms4/20004', 'naming=EID&limit=200');
-        if (!upstream.ok) return jsonResp({ error: 'upstream_error', code: upstream.status }, 502, allowedOrigin);
+        // 2026-11-11：Ragic 錯誤是 200＋{status:'ERROR'}，白名單過濾後會變成 `{}` 回 200（排班頁整頁沒人）→ 一併判內容
+        if (!upstream.ok || detectUpstreamFailure(upstream, data)) return jsonResp({ error: 'upstream_error', code: upstream.status }, 502, allowedOrigin);
         // ── SEC-2026-07-28 個資外洩止血：回傳前欄位白名單 ──────────────────────────
         // 本 action 與 listStaff 打同一張人事表 ragicforms4/20004，差別只在 naming=EID
         // （key 是 7 位數欄位 ID 而非中文名）。原本整張原樣回傳，敏感欄位一項不少。
@@ -6267,7 +6524,7 @@ export default {
         const limit = url.searchParams.get('limit') || '200';
         if (!/^\d{1,4}$/.test(limit)) return jsonResp({ error: 'invalid_limit' }, 400, allowedOrigin);
         const { upstream, data } = await getFromRagic(env, 'ragicforms4/20004', `limit=${limit}`);
-        if (!upstream.ok) return jsonResp({ error: 'upstream_error', code: upstream.status }, 502, allowedOrigin);
+        if (!upstream.ok || detectUpstreamFailure(upstream, data)) return jsonResp({ error: 'upstream_error', code: upstream.status }, 502, allowedOrigin);
         // ── SEC-2026-07-28 個資外洩止血：回傳前欄位白名單 ──────────────────────────
         // 人事表 ragicforms4/20004 含 身分證字號 / 出生日期 / 戶籍與通訊地址 / 銀行·代號·
         // 分行·帳號 / 存摺上傳 / 主要與次要手機 / LINE User ID，以及子表格的緊急聯絡人、
@@ -6314,7 +6571,7 @@ export default {
           parts.push(`where=${encodeURIComponent(`1000963,lte,${dateTo}`)}`);
         } else { return jsonResp({ error: 'missing_query' }, 400, allowedOrigin); }
         const { upstream, data } = await getFromRagic(env, 'ragicforms4/2', parts.join('&'));
-        if (!upstream.ok) return jsonResp({ error: 'upstream_error', code: upstream.status }, 502, allowedOrigin);
+        if (!upstream.ok || detectUpstreamFailure(upstream, data)) return jsonResp({ error: 'upstream_error', code: upstream.status }, 502, allowedOrigin);
         return jsonResp(data || {}, 200, allowedOrigin);
       }
 
@@ -6401,6 +6658,7 @@ export default {
             newForm.append(outKey, value, value.name);
           } else {
             if (typeof value === 'string' && value.length > 2000) return jsonResp({ error: 'value_too_long', key }, 400, allowedOrigin);
+            if (fid === '3000937' && !HR_DEPT_OPTIONS.has(String(value))) return jsonResp({ error: 'invalid_field', key, reason: 'bad_dept' }, 400, allowedOrigin);
             newForm.append(outKey, value);
           }
         }
@@ -7574,30 +7832,31 @@ export default {
 
         // Query A: sheet10, 591é£çµ (1000113) like id591 — subtables=0 for full fields
         const urlA = ragicUrl(ragicBase, 'property-data-kept/10', { api: 'true', naming: 'EID', subtables: '0', where: '1000113,like,' + id591 });
-        const qA = ragicFetch(urlA, { headers: { Authorization: 'Basic ' + ragicKey } })
-          .then(function(r){ return r.json(); }).catch(function(){ return {}; });
+        // 2026-11-11：四個查詢任一個 Ragic 出錯／非 JSON／連線例外，以前都被 `.catch(() => ({}))` 吞成「查無撞單」
+        // ＝撞單雷達在 Ragic 出問題時反而告訴同仁「沒人撞」。現在保留 { upstream, data }，統一在下方判斷，失敗回 502。
+        const qA = ragicFetchJson(urlA, { headers: { Authorization: 'Basic ' + ragicKey } });
 
         // Query B: sheet10, å°å (1000055) like addr — subtables=0, searchParams handles CJK encoding
         const urlB = addr ? ragicUrl(ragicBase, 'property-data-kept/10', { api: 'true', naming: 'EID', subtables: '0', where: '1000055,like,' + addr }) : null;
         const qB = urlB
-          ? ragicFetch(urlB, { headers: { Authorization: 'Basic ' + ragicKey } })
-              .then(function(r){ return r.json(); }).catch(function(){ return {}; })
-          : Promise.resolve({});
+          ? ragicFetchJson(urlB, { headers: { Authorization: 'Basic ' + ragicKey } })
+          : Promise.resolve({ upstream: { ok: true, status: 200 }, data: {} });
 
         // Query C: sheet17, ææ591é£çµ (1002233) like id591 — Basic Auth returns 106, use APIKey param
         const urlC = ragicUrl(ragicBase, 'property-data-kept/17', { api: 'true', naming: 'EID', subtables: '0', where: '1002233,like,' + id591, APIKey: ragicKey });
-        const qC = ragicFetch(urlC)
-          .then(function(r){ return r.json(); }).catch(function(){ return {}; });
+        const qC = ragicFetchJson(urlC);
 
         // Query D: sheet17, å½æ´å°å (1000903) like addr
         const urlD = addr ? ragicUrl(ragicBase, 'property-data-kept/17', { api: 'true', naming: 'EID', subtables: '0', where: '1000903,like,' + addr, APIKey: ragicKey }) : null;
         const qD = urlD
-          ? ragicFetch(urlD)
-              .then(function(r){ return r.json(); }).catch(function(){ return {}; })
-          : Promise.resolve({});
+          ? ragicFetchJson(urlD)
+          : Promise.resolve({ upstream: { ok: true, status: 200 }, data: {} });
 
         const results = await Promise.all([qA, qB, qC, qD]);
-        const resA = results[0], resB = results[1], resC = results[2], resD = results[3];
+        if (results.some(function(r){ return detectUpstreamFailure(r.upstream, r.data); })) {
+          return jsonResp({ error: 'upstream_error' }, 502, allowedOrigin);
+        }
+        const resA = results[0].data, resB = results[1].data, resC = results[2].data, resD = results[3].data;
 
         // Parse sheet10 â kept[]
         // 1000707=çæ, 1001313=è² è²¬äºº1 email, 1000055=å°å, 1000113=591é£çµ
@@ -7828,14 +8087,11 @@ export default {
         u.searchParams.set('naming', 'EID');
         u.searchParams.set('limit', '1');
         u.searchParams.set('where', '1,eq,' + emailParam);
-        let setupData = {};
-        try {
-          const res = await ragicFetch(u.toString(), { headers: { Authorization: 'Basic ' + ragicKey } });
-          setupData = await res.json().catch(() => ({}));
-        } catch (e) {
-          return jsonResp({ error: 'upstream_error' }, 502, allowedOrigin);
-        }
-        const rids = Object.keys(setupData).filter(k => k !== '_total' && k !== '_max');
+        // 2026-11-11：Ragic 錯誤（失效金鑰、無權限）是 200＋{status,code,msg}，這三個 key 以前會被當成「有一筆記錄」
+        // → 任何 email 都回 valid:true。現在先擋錯誤，再只認數字 rid 且內容是物件的記錄。
+        const { upstream: setupUp, data: setupData } = await ragicFetchJson(u.toString(), { headers: { Authorization: 'Basic ' + ragicKey } });
+        if (detectUpstreamFailure(setupUp, setupData)) return jsonResp({ error: 'upstream_error' }, 502, allowedOrigin);
+        const rids = Object.keys(setupData).filter(k => /^\d+$/.test(k) && setupData[k] && typeof setupData[k] === 'object');
         if (rids.length > 0) {
           const rec = setupData[rids[0]];
           const displayName = rec ? (rec['4'] || '') : '';
@@ -7852,16 +8108,12 @@ export default {
         u.searchParams.set('naming', 'EID');
         u.searchParams.set('limit', '0,200');
         u.searchParams.set('where', '3000945,eq,在職');
-        let staffData = {};
-        try {
-          const res = await ragicFetch(u.toString(), {
-            headers: { Authorization: 'Basic ' + env.RAGIC_KEY }
-          });
-          staffData = await res.json().catch(() => ({}));
-        } catch (e) {
-          return jsonResp({ error: 'upstream_error' }, 502, allowedOrigin);
-        }
-        const rids = Object.keys(staffData).filter(k => k !== '_total' && k !== '_max');
+        // 2026-11-11：Ragic 出錯／非 JSON 以前被 `.catch(() => ({}))` 吞成「空名單 ok:true」，改回 502 讓前端看得到
+        const { upstream: staffUp, data: staffData } = await ragicFetchJson(u.toString(), {
+          headers: { Authorization: 'Basic ' + env.RAGIC_KEY }
+        });
+        if (detectUpstreamFailure(staffUp, staffData)) return jsonResp({ error: 'upstream_error' }, 502, allowedOrigin);
+        const rids = Object.keys(staffData).filter(k => /^\d+$/.test(k) && staffData[k] && typeof staffData[k] === 'object');
         const staff = rids.map(rid => {
           const rec = staffData[rid];
           return {
@@ -7890,8 +8142,10 @@ export default {
           uu.searchParams.set('naming', 'EID');
           uu.searchParams.set('limit', '0,100');
           uu.searchParams.set('where', fid + ',like,' + val);
-          const res = await ragicFetch(uu.toString(), { headers: { Authorization: 'Basic ' + env.RAGIC_KEY } });
-          return res.json().catch(() => ({}));
+          // 2026-11-11：Ragic 出錯／非 JSON 不再回 {}（會被當成「查無定金單」，業務就照沒定金建收款單），改丟例外走下方 502
+          const { upstream: depUp, data: depData } = await ragicFetchJson(uu.toString(), { headers: { Authorization: 'Basic ' + env.RAGIC_KEY } });
+          if (detectUpstreamFailure(depUp, depData)) throw new Error('ragic_search_failed');
+          return depData;
         };
         let dMap = {};
         try {
@@ -7929,16 +8183,12 @@ export default {
         u.searchParams.set('limit', '0,200');
         // filter: 狀態=代租中
         u.searchParams.set('where', '1000707,eq,代租中');
-        let casesData = {};
-        try {
-          const res = await ragicFetch(u.toString(), {
-            headers: { Authorization: 'Basic ' + env.RAGIC_KEY }
-          });
-          casesData = await res.json().catch(() => ({}));
-        } catch (e) {
-          return jsonResp({ error: 'upstream_error' }, 502, allowedOrigin);
-        }
-        const rids = Object.keys(casesData).filter(k => k !== '_total' && k !== '_max');
+        // 2026-11-11：同 searchStaff，Ragic 出錯不再吞成「沒有物件 ok:true」
+        const { upstream: casesUp, data: casesData } = await ragicFetchJson(u.toString(), {
+          headers: { Authorization: 'Basic ' + env.RAGIC_KEY }
+        });
+        if (detectUpstreamFailure(casesUp, casesData)) return jsonResp({ error: 'upstream_error' }, 502, allowedOrigin);
+        const rids = Object.keys(casesData).filter(k => /^\d+$/.test(k) && casesData[k] && typeof casesData[k] === 'object');
         let cases = rids.map(rid => {
           const rec = casesData[rid];
           return {
@@ -9011,6 +9261,8 @@ export default {
         }, 200, allowedOrigin);
       }
     } catch (e) {
+      // 2026-11-11：以前整個吞掉，Ragic 連線例外／程式錯誤只看到前端的 500 internal，wrangler tail 什麼都沒有
+      console.error('[unhandled]', action, String(e && e.stack ? e.stack : e).slice(0, 500));
       return jsonResp({ error: 'internal' }, 500, allowedOrigin);
     }
 
