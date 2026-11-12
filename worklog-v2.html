@@ -410,7 +410,7 @@ function showGate(){
     denied:`目前登入的是 ${STATE.email||""}，不在使用名單內。如果你是窩的家同仁，請聯絡管理部確認 Google 帳號與部門設定。`}[k];
   $("board").innerHTML=`<div class="msg" style="grid-column:1/-1"><h2 style="margin:0 0 6px;color:var(--ink);font-size:17px">${esc(head)}</h2><p style="margin:0 0 12px">${esc(text)}</p>`+
     (k==="denied"?`<button class="btn" id="gateOut">登出，換帳號再試</button>`:`<div id="gsiBtn" style="display:flex;justify-content:center;min-height:44px"></div>`)+
-    (k==="denied"?"":PRIV?`<div class="privwarn">⚠️ 你的 Safari 看起來開在「私密瀏覽」，登入不會被記住，每次打開都要重登。<br>請在 Safari 網址列往上滑（或點「…」→「所有分頁」），在下方切到一般分頁，再打開這頁登入一次。</div>`:`<p class="privtip">每次打開都要重新登入？請確認 Safari 不是開在「私密瀏覽」。</p>`)+`</div>`;
+    (k==="denied"?"":PRIV?`<div class="privwarn">⚠️ 你的 Safari 看起來開在「私密瀏覽」，登入不會被記住，每次打開都要重登。<br>請在 Safari 網址列往上滑（或點「…」→「所有分頁」），在下方切到一般分頁，再打開這頁登入一次。</div>`:`<p class="privtip">每次打開都要重新登入？請確認瀏覽器不是開在「私密瀏覽」或「無痕模式」。</p>`)+`</div>`;
   if(k==="denied")$("gateOut").onclick=()=>{clearSession();NOPROMPT=true;if(window.google&&google.accounts)google.accounts.id.disableAutoSelect();STATE={status:"auth",kind:"out"};render()};
   else renderGsi(0);
 }
