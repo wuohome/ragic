@@ -297,7 +297,7 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
 
       // Reporter：員工登入頁自動帶入，其他頁選填
       '<div class="wh-section" id="wh-reporter-section">',
-        '<span class="wh-label">您的姓名或電話（選填，方便我們聯絡您）</span>',
+        '<span class="wh-label" id="wh-reporter-label">您的姓名或電話（選填，方便我們聯絡您）</span>',
         '<input id="wh-bug-reporter" maxlength="80" autocomplete="name" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #d6dbe6;border-radius:8px;font-size:16px;">',
       '</div>',
 
@@ -573,8 +573,14 @@ var WH_BUG_SELF = (document.currentScript && document.currentScript.src) || '';
     document.getElementById('wh-desc-err').style.display = 'none';
     document.getElementById('wh-bug-type').value = '功能異常';
     setMode('bug');
-    document.getElementById('wh-reporter-section').style.display = staffEmail() ? 'none' : '';
-    try { document.getElementById('wh-bug-reporter').value = localStorage.getItem('wh_bug_reporter') || ''; } catch (e) { /* 無痕模式：留空 */ }
+    // 員工登入頁：回報人自動帶入並顯示出來（唯讀），讓人看得到這筆會記在誰名下；其他頁選填，記住上次填的
+    var staff = staffEmail();
+    var who = document.getElementById('wh-bug-reporter');
+    document.getElementById('wh-reporter-label').textContent = staff ? '回報人（自動帶入）' : '您的姓名或電話（選填，方便我們聯絡您）';
+    who.readOnly = !!staff;
+    who.style.background = staff ? '#f3f5f9' : '';
+    if (staff) who.value = staff;
+    else { try { who.value = localStorage.getItem('wh_bug_reporter') || ''; } catch (e) { who.value = ''; /* 無痕模式：留空 */ } }
     uploadFiles = [];
     updateUploadCount();
     renderThumbs();
