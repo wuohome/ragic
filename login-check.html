@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-Hant"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>登入檢查</title>
+<style>
+body{font-family:-apple-system,"PingFang TC","Noto Sans TC",sans-serif;margin:0;padding:20px;background:#f6f4ef;color:#222;line-height:1.6}
+h1{font-size:20px;margin:0 0 4px}
+.sub{color:#666;font-size:14px;margin:0 0 16px}
+.row{background:#fff;border-radius:12px;padding:12px 14px;margin:0 0 10px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.k{font-size:13px;color:#777}
+.v{font-size:17px;font-weight:600;word-break:break-all}
+.ok{color:#1a7f37}.bad{color:#c62828}.mid{color:#9a6700}
+ol{padding-left:20px;margin:6px 0 0;font-size:14px}
+</style>
+</head><body>
+<h1>每日工作行程・登入檢查</h1>
+<p class="sub">這頁只檢查這支手機有沒有記住登入，不會改任何資料。看完請整頁截圖傳給管理部。</p>
+<div id="out"></div>
+<script>
+// 2026-11-12：同仁 iPhone Safari 每次開「每日工作行程」都要重新登入，原因猜三次都不對，改用這頁直接看手機實況。
+// 只讀 worklog.html 存的登入資料（顯示帳號，不顯示登入碼），另外寫一筆本頁自己的造訪紀錄，用來看本機資料會不會被清掉。
+const SESS_KEY="wuohome_worklog_session_v1", VISIT_KEY="wuohome_login_check_visits", CK="wuohome_login_check";
+const API="https://wuohome-ragic-proxy.wuohome.workers.dev";
+const out=document.getElementById("out");
+const fmt=t=>new Date(t).toLocaleString("zh-TW",{timeZone:"Asia/Taipei",hour12:false});
+function row(k,v,cls){const d=document.createElement("div");d.className="row";d.innerHTML=`<div class="k">${k}</div><div class="v ${cls||""}">${v}</div>`;out.appendChild(d);return d}
+const now=Date.now();
+
+let lsOk=false;
+try{localStorage.setItem("__t","1");lsOk=localStorage.getItem("__t")==="1";localStorage.removeItem("__t")}catch{lsOk=false}
+row("1. 這支手機能不能存資料",lsOk?"可以":"不行（Safari 擋掉了）",lsOk?"ok":"bad");
+
+let visits=[];
+try{visits=JSON.parse(localStorage.getItem(VISIT_KEY)||"[]")}catch{visits=[]}
+const prev=visits.slice(-5);
+row("2. 之前打開這頁的時間（被清掉就會是空的）",prev.length?prev.map(fmt).join("<br>"):"第一次打開，或之前的紀錄已被清掉",prev.length?"ok":"mid");
+try{visits.push(now);localStorage.setItem(VISIT_KEY,JSON.stringify(visits.slice(-20)))}catch{}
+
+const prevCk=(document.cookie.match(new RegExp("(?:^|; )"+CK+"=(\\d+)"))||[])[1];
+document.cookie=`${CK}=${now}; max-age=${60*60*24*60}; path=/; secure; samesite=lax`;
+row("3. 備用紀錄（另一種存法）上次時間",prevCk?fmt(+prevCk):"沒有",prevCk?"ok":"mid");
+
+let sess=null;try{sess=JSON.parse(localStorage.getItem(SESS_KEY)||"null")}catch{}
+const sessRow=row("4. 工作行程有沒有記住你的登入",sess&&sess.session?`有，帳號 ${sess.email||"（未記帳號）"}<br><span class="k">檢查伺服器還認不認得…</span>`:"沒有",sess&&sess.session?"ok":"bad");
+if(sess&&sess.session){
+  const d=new Date(now+8*3600*1000).toISOString().slice(0,10);
+  fetch(`${API}/worklogBoard?date=${d}`,{headers:{Authorization:`Bearer ${sess.session}`}})
+    .then(r=>{sessRow.querySelector(".v").innerHTML=`有，帳號 ${sess.email||""}<br>`+(r.status===200?`<span class="ok">伺服器認得，打開工作行程應該直接進去</span>`:`<span class="bad">伺服器不認得了（代碼 ${r.status}）</span>`)})
+    .catch(()=>{sessRow.querySelector(".v").innerHTML+=`<br><span class="mid">連不上伺服器，無法確認</span>`});
+}
+
+(async()=>{
+  let q="不明";
+  try{if(navigator.storage&&navigator.storage.estimate){const e=await navigator.storage.estimate();q=Math.round((e.quota||0)/1048576)+" MB"}}catch{}
+  row("5. 瀏覽器資訊",`${(navigator.userAgent.match(/Version\/[\d.]+/)||["?"])[0].replace("Version/","Safari ")}・iOS ${(navigator.userAgent.match(/OS ([\d_]+)/)||["","?"])[1].replace(/_/g,".")}・${window.navigator.standalone?"從主畫面圖示開啟":"從瀏覽器開啟"}・空間 ${q}`);
+  row("6. 這次檢查時間",fmt(now));
+  const h=document.createElement("div");h.className="row";
+  h.innerHTML=`<div class="k">怎麼用</div><ol><li>現在整頁截圖一次。</li><li>下次工作行程又叫你登入時，先別登入，回來打開這頁再截圖一次。</li><li>兩張都傳給管理部。</li></ol>`;
+  out.appendChild(h);
+})();
+</script>
+</body></html>
