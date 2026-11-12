@@ -150,6 +150,9 @@ input[type=text]{font:inherit;padding:10px;border-radius:8px;border:1px solid va
 .help{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px;font-size:14px}
 .help h3{margin:0 0 6px;font-size:15px}.help ul{margin:0;padding-left:20px}.help li{margin:3px 0}
 .msg{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;text-align:center;color:var(--muted)}
+.board>.msg{contain:inline-size} /* 2026-11-12：手機上長句把登入框撐出螢幕、右半被切；不讓訊息框的字決定看板寬度 */
+.privwarn{margin:14px 0 0;padding:10px 12px;border-radius:10px;background:rgba(217,119,6,.14);border:1px solid rgba(217,119,6,.45);color:var(--ink);font-size:14px;text-align:left}
+.privtip{margin:12px 0 0;font-size:12px}
 .warnbox.err{background:var(--warn-soft);color:var(--warn);font-weight:700}
 .btn:disabled{opacity:.6;cursor:default}
 
@@ -406,7 +409,8 @@ function showGate(){
     fail:"暫時連不上登入服務，請再按一次登入。",
     denied:`目前登入的是 ${STATE.email||""}，不在使用名單內。如果你是窩的家同仁，請聯絡管理部確認 Google 帳號與部門設定。`}[k];
   $("board").innerHTML=`<div class="msg" style="grid-column:1/-1"><h2 style="margin:0 0 6px;color:var(--ink);font-size:17px">${esc(head)}</h2><p style="margin:0 0 12px">${esc(text)}</p>`+
-    (k==="denied"?`<button class="btn" id="gateOut">登出，換帳號再試</button>`:`<div id="gsiBtn" style="display:flex;justify-content:center;min-height:44px"></div>`)+`</div>`;
+    (k==="denied"?`<button class="btn" id="gateOut">登出，換帳號再試</button>`:`<div id="gsiBtn" style="display:flex;justify-content:center;min-height:44px"></div>`)+
+    (k==="denied"?"":PRIV?`<div class="privwarn">⚠️ 你的 Safari 看起來開在「私密瀏覽」，登入不會被記住，每次打開都要重登。<br>請在 Safari 網址列往上滑（或點「…」→「所有分頁」），在下方切到一般分頁，再打開這頁登入一次。</div>`:`<p class="privtip">每次打開都要重新登入？請確認 Safari 不是開在「私密瀏覽」。</p>`)+`</div>`;
   if(k==="denied")$("gateOut").onclick=()=>{clearSession();NOPROMPT=true;if(window.google&&google.accounts)google.accounts.id.disableAutoSelect();STATE={status:"auth",kind:"out"};render()};
   else renderGsi(0);
 }
@@ -736,6 +740,9 @@ function initGsi(n){
   GSI_READY=true;
   if(!ID_TOKEN&&!NOPROMPT&&STATE.status==="auth"&&STATE.kind!=="denied")google.accounts.id.prompt();
 }
+var PRIV=false; // 2026-11-12：同仁 Safari 開在私密瀏覽，看板 session 每次關分頁就被清掉、天天要重登。只用來在登入閘多一句提醒，猜錯也不擋任何事
+(async()=>{try{const ua=navigator.userAgent;if(!/(iPhone|iPad).*Version\/[\d.]+.*Safari/.test(ua)||!(navigator.storage&&navigator.storage.estimate))return;
+  const e=await navigator.storage.estimate();PRIV=e.quota>0&&e.quota<=1100*1048576;if(PRIV&&STATE.status==="auth")render()}catch{}})(); // ponytail-debt: 估不到就不提醒
 function startGoogle(kind){
   const sv=readSess(), c=readGid();
   if(sv){ID_TOKEN=sv.session;SESS_EMAIL=sv.email||"";load()} // 有 session：直接進看板，零互動
