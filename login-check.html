@@ -54,10 +54,11 @@ if(sess&&sess.session){
 (async()=>{
   let q="不明";
   try{if(navigator.storage&&navigator.storage.estimate){const e=await navigator.storage.estimate();q=Math.round((e.quota||0)/1048576)+" MB"}}catch{}
-  row("5. 瀏覽器資訊",`${(navigator.userAgent.match(/Version\/[\d.]+/)||["?"])[0].replace("Version/","Safari ")}・iOS ${(navigator.userAgent.match(/OS ([\d_]+)/)||["","?"])[1].replace(/_/g,".")}・${window.navigator.standalone?"從主畫面圖示開啟":"從瀏覽器開啟"}・空間 ${q}`);
+  const ua=navigator.userAgent, app=/ Line\//i.test(ua)?"LINE 內建瀏覽器（不是 Safari）":/FBAN|FBAV|Instagram/i.test(ua)?"FB／IG 內建瀏覽器（不是 Safari）":/CriOS/.test(ua)?"Chrome":/Version\/[\d.]+.*Safari/.test(ua)?"Safari "+ua.match(/Version\/([\d.]+)/)[1]:"某個 App 的內建瀏覽器（不是 Safari）";
+  row("5. 瀏覽器資訊",`${app}・iOS ${(navigator.userAgent.match(/OS ([\d_]+)/)||["","?"])[1].replace(/_/g,".")}・${window.navigator.standalone?"從主畫面圖示開啟":"從瀏覽器開啟"}・空間 ${q}`);
   row("6. 這次檢查時間",fmt(now));
   const h=document.createElement("div");h.className="row";
-  h.innerHTML=`<div class="k">怎麼用</div><ol><li>現在整頁截圖一次。</li><li>下次工作行程又叫你登入時，先別登入，回來打開這頁再截圖一次。</li><li>兩張都傳給管理部。</li></ol>`;
+  h.innerHTML=`<div class="k">怎麼用</div><ol><li>請確認第 5 項寫的是「Safari」。不是的話，把這頁網址複製到 Safari 打開再看。</li><li>整頁截圖一次。</li><li>下次工作行程又叫你登入時，先別登入，回來打開這頁再截圖一次。</li><li>兩張都傳給管理部。</li></ol>`;
   out.appendChild(h);
 })();
 </script>
