@@ -269,6 +269,17 @@ main{padding-block:8px 112px;min-height:80vh}
 .dprow input{width:20px;height:20px;flex:none;accent-color:var(--ink)}
 .dprow .nm{font-weight:600;white-space:nowrap}
 .dprow .muted{margin-left:auto;white-space:nowrap}
+.pcform{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px 16px;align-items:end;margin-top:12px}
+.pcform label{display:flex;flex-direction:column;gap:4px;font-size:14px;line-height:20px;color:var(--ink2)}
+.pcform select,.pcform input{height:44px;padding-inline:10px;border:1px solid var(--line2);border-radius:0;background:var(--bg);color:var(--ink);font:inherit;font-size:16px;font-weight:600}
+.pcform label[hidden]{display:none}
+.pclist{margin-top:16px}
+.pcrow{display:flex;align-items:center;gap:10px;min-height:44px;padding-block:2px;border-top:1px solid var(--line);font-size:14px;line-height:20px}
+.pcrow:last-child{border-bottom:1px solid var(--line)}
+.pcrow .nm{font-weight:600;white-space:nowrap}
+.pcrow .st{margin-left:auto;white-space:nowrap;color:var(--ink3)}
+.pcrow .st.bad{color:var(--red)}
+.pcrow .mini{min-height:36px;padding-inline:10px;font-size:14px;font-weight:500;outline:1px solid var(--line2);outline-offset:-1px;white-space:nowrap}
 @media (max-width:767px){
   .tools{display:grid;grid-template-columns:minmax(0,1fr);padding-block:12px 4px}
   .seg{display:grid;width:100%;gap:6px}
@@ -503,7 +514,8 @@ body:has(#mxwrap) .shell{padding-top:var(--bar)}
 
 <script src="schedule-common.js?v=20261031-9"></script>
 <script src="schedule-duty-v2.js?v=20261031-9"></script>
-<script src="schedule-next-core.js?v=20261031-9"></script>
+<script src="schedule-next-core.js?v=20261116-1"></script>
+<script src="schedule-pc-core.js?v=20261116-1"></script>
 <script src="schedule-fund-core.js?v=20261106-1"></script>
 <script src="js/staff-gate.js"></script>
 <script>
@@ -532,6 +544,7 @@ var S={
   err:'',errTitle:'',errAct:'retry',
   viewer:null,perms:{view:false,schedule:false,confirm:false},
   dutyPool:null,
+  pc:[],empJson:{},
   year:0,month:0,
   raw:{},recs:[],M:null,
   allEmployees:[],employees:[],groups:[],byName:{},
@@ -644,6 +657,7 @@ function fetchLeaves(){
   return SC.proxyFetch('listLeaves'+SC.leaveQuery(p.y,p.m,S.year,S.month));
 }
 function setEmployees(empJson){
+  S.empJson=empJson||{};
   var r=SC.nextBuildEmployees(empJson,S.year,S.month);
   S.allEmployees=r.allEmployees;S.employees=r.employees;S.groups=SC.nextGroups(r.employees);
   S.byName={};
@@ -679,6 +693,21 @@ function saveDutyPool(names){
     });
   });
 }
+/* 人事異動預約：珊珊、瓊安登記「誰、哪天起、變成什麼」，存 Worker；生效日 07:30 由每天的排班檢查寫進人事資料 */
+function pcCall(path,body){
+  return StaffGate.fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:undefined).then(function(res){
+    return res.json().catch(function(){return {}}).then(function(j){
+      if(!res.ok||!j.ok){var m={date_not_future:'生效日最早只能選明天；今天就生效的請直接改人事資料',already_applied:'已經套用到人事資料，不能取消',forbidden:'只有珊珊和瓊安能登記'}[j.error];throw new Error(m||('人事異動預約失敗（'+res.status+'）'))}
+      return j;
+    });
+  });
+}
+function loadPc(){return pcCall('/schedulePcList').then(function(j){S.pc=j.items||[]})}
+function pcPlan(){return SC.pcMonthPlan(S.empJson,S.pc,S.year,S.month,S.dutyPool)}
+function pcNoteHTML(pc){
+  if(!pc.notes.length)return '';
+  return '<p><b>這個月有人事異動預約：</b><br>'+pc.notes.map(function(n){return esc(n.text)}).join('<br>')+'</p><p>生效日前照原本的身分排，生效日起照新身分排。</p>';
+}
 function fail(title,msg,act){S.boot='error';S.errTitle=title;S.err=msg;S.errAct=act||'retry';render()}
 
 /* ================= 登入 ================= */
@@ -702,7 +731,7 @@ function start(){
     S.perms=SC.nextPerms(S.viewer);
     $('#tabSched').hidden=!S.perms.schedule;
     if(S.view==='sched'&&!S.perms.schedule)S.view='me';
-    return (S.perms.schedule?loadDutyPool().catch(function(){}):Promise.resolve()).then(loadData);
+    return (S.perms.schedule?Promise.all([loadDutyPool().catch(function(){}),loadPc().catch(function(){})]):Promise.resolve()).then(loadData);
   }).catch(function(e){
     fail('登入沒有完成',(e&&e.message?e.message:String(e))+'。請重新整理再試；仍然不行請用右下角的問題回報。','reload');
   });
@@ -1031,6 +1060,31 @@ function dutyPoolHTML(){
   }).join('');
   return '<p class="xs muted">打勾的人才會被預排值班。改了不會動已排好的班，下次按「預排值班」才生效。新同仁要勾了才會排。</p><div class="dplist">'+rows+'</div>';
 }
+function pcStatusHTML(c){
+  if(c.appliedAt)return '<span class="st">已改好人事資料</span>';
+  var cancel='<button class="mini" data-pccancel="'+esc(c.id)+'">取消</button>';
+  // 清晨排程沒改成時 applyResult 以「失敗：」開頭，隔天清晨會再試；手動改好後按取消
+  if(/^失敗：/.test(c.applyResult||''))return '<span class="st bad">沒改成，'+esc(c.applyResult.slice(3))+'，請到 Ragic 手動改</span>'+cancel;
+  return '<span class="st">待生效</span>'+cancel;
+}
+function pcHTML(){
+  var F={NAME:'3000933',STATUS:'3000945'};
+  var people=Object.keys(S.empJson||{}).filter(function(k){return /^\d+$/.test(k)&&S.empJson[k]&&S.empJson[k][F.NAME]}).map(function(k){return {rid:k,name:S.empJson[k][F.NAME],status:S.empJson[k][F.STATUS]||''}});
+  var on=people.filter(function(p){return p.status==='在職'||p.status==='試用'}),off=people.filter(function(p){return !(p.status==='在職'||p.status==='試用')});
+  var opt=function(p){return '<option value="'+esc(p.rid)+'">'+esc(p.name)+(p.status&&p.status!=='在職'?'（'+esc(p.status)+'）':'')+'</option>'};
+  var t1=new Date(+TODAY.slice(0,4),+TODAY.slice(5,7)-1,+TODAY.slice(8,10)+1),tmr=SC.fmtDate(t1.getFullYear(),t1.getMonth()+1,t1.getDate()).replace(/\//g,'-');
+  var rows=(S.pc||[]).map(function(c){
+    return '<div class="pcrow"><span class="nm">'+esc(c.name)+'</span><span>'+esc(c.effective.slice(5))+' 起'+esc(c.kind)+(c.hire?'（'+esc(c.hire)+'）':'')+'</span>'+pcStatusHTML(c)+'</div>';
+  }).join('');
+  return '<p class="xs muted">一知道有人要轉兼職、留職停薪、離職或新報到就先登記。生效日清晨系統會自動改好人事資料，之後不該有的班會通知人資部改派；預排也會照生效日前後的身分排。</p>'+
+    '<div class="pcform">'+
+    '<label>誰<select id="pcWho"><option value="">選人</option><optgroup label="在職">'+on.map(opt).join('')+'</optgroup>'+(off.length?'<optgroup label="目前不在職（復職、新報到用）">'+off.map(opt).join('')+'</optgroup>':'')+'</select></label>'+
+    '<label>哪天起<input type="date" id="pcDay" min="'+tmr+'" value="'+tmr+'"></label>'+
+    '<label>變成什麼<select id="pcKind">'+SC.PC_KINDS.map(function(k){return '<option>'+k+'</option>'}).join('')+'</select></label>'+
+    '<label id="pcHireL" hidden>聘雇類別<select id="pcHire">'+SC.PC_NEW_HIRES.map(function(k){return '<option>'+k+'</option>'}).join('')+'</select></label>'+
+    '<button class="btn" id="pcAdd">登記</button></div>'+
+    '<div class="pclist">'+(rows||'<p class="xs muted">目前沒有登記的異動。</p>')+'</div>';
+}
 function renderSched(){
   if(!S.perms.schedule)return '<div class="view"><div class="state"><h1>這一頁只有珊珊和瓊安能用</h1><p>你可以看「我的班」「全體」「公平帳」。</p></div></div>';
   return '<div class="view"><div id="shead">'+headHTML()+'</div>'+
@@ -1040,6 +1094,7 @@ function renderSched(){
     '<details name="tools"><summary>檢查<b id="chkN"></b></summary><div class="panel"><div id="schk">'+checksHTML()+'</div></div></details>'+
     '<details name="tools"'+(S.perms.confirm?'':' hidden')+'><summary>標記沒做</summary><div class="panel"><div id="scf">'+confirmHTML()+'</div></div></details>'+
     '<details name="tools"'+(S.perms.schedule?'':' hidden')+'><summary>值班名單</summary><div class="panel"><div id="sdp">'+dutyPoolHTML()+'</div></div></details>'+
+    '<details name="tools"'+(S.perms.schedule?'':' hidden')+'><summary>人事異動預約<b id="pcN">'+((S.pc||[]).filter(function(c){return !c.appliedAt}).length||'')+'</b></summary><div class="panel"><div id="spc">'+pcHTML()+'</div></div></details>'+
     '<details name="tools"><summary>圖例</summary><div class="panel"><div class="mxkey">'+
     '<span>'+cleanTag([1,2,3,4])+'一人掃一到四樓</span><span>'+cleanTag([1,4])+'掃一樓和四樓</span><span>'+cleanTag([2,3])+'掃二樓和三樓</span>'+
     '<span><span class="tag-duty trash">值<i class="tr">🗑️</i></span>值班要倒垃圾</span><span><span class="tag-duty">值</span>值班沒垃圾車</span>'+
@@ -1317,13 +1372,14 @@ function planDuty(){
   if(!S.perms.schedule||!guardWrite())return;
   if(monthAllPast()){uiAlert('這個月已經鎖定',S.year+' 年 '+S.month+' 月的日子都過去了，按預排不會改任何東西。要改個別日子請直接點格子。');return}
   S.busy=true;
-  fetchLeaves().then(function(raw){
-    S.raw=raw||{};rebuild();
-    var r=SC.nextPlanDuty({year:S.year,month:S.month,todayStr:TODAY,allEmployees:S.allEmployees,raw:S.raw,noRest:noRestMap()});
+  Promise.all([fetchLeaves(),loadPc()]).then(function(a){
+    S.raw=a[0]||{};rebuild();
+    var pc=pcPlan();
+    var r=SC.nextPlanDuty({year:S.year,month:S.month,todayStr:TODAY,allEmployees:pc.allEmployees,raw:S.raw,noRest:noRestMap(),blockedByDate:pc.dutyBlocked});
     var firstUnlocked=SC.isDutyLocked(SC.fmtDate(S.year,S.month,1),TODAY)?'今天以前（含今天 '+TODAY.slice(5)+'）的值日都不會動，只重排明天起的日子。':'這個月還沒開始，會重排整個月。';
     var ptFirst=SC.PARTTIME_DUTY_FIRST_DATE;
     var ptNote=ptFirst.slice(0,7)===SC.fmtDate(S.year,S.month,1).slice(0,7)?'每天都要掃；'+ptFirst.slice(5)+' 以前不自動排兼職，由業務掃。':'';
-    var body='<p>'+firstUnlocked+'</p>'+
+    var body=pcNoteHTML(pc)+'<p>'+firstUnlocked+'</p>'+
       '<p>業務、兼職一人掃整棟（兼職每月一次，排六日）；內勤兩人一組，只排平日。'+ptNote+'倒垃圾由當天值班的人負責。</p>'+
       '<p>將<b>刪除 '+r.toDelete.length+' 筆</b>未到的系統預排、<b>新增 '+r.creates.length+' 筆</b>。保留：手動排的 '+r.manualKept+' 筆、今天以前的 '+r.lockedKept+' 筆。</p>'+
       (r.toDelete.length?'<p>按確定會先下載一份備份檔，再刪除並重排。</p>':'');
@@ -1345,11 +1401,12 @@ function planZhiban(){
   if(!S.perms.schedule||!guardWrite())return;
   if(monthAllPast()){uiAlert('這個月已經鎖定',S.year+' 年 '+S.month+' 月的日子都過去了，按預排不會改任何東西。');return}
   S.busy=true;
-  loadDutyPool().then(fetchLeaves).then(function(raw){
+  Promise.all([loadDutyPool(),loadPc()]).then(fetchLeaves).then(function(raw){
     S.raw=raw||{};rebuild();
-    var r=SC.nextPlanZhiban({year:S.year,month:S.month,todayStr:TODAY,employees:S.employees,raw:S.raw,noRest:noRestMap(),poolNames:S.dutyPool});
+    var pc=pcPlan();
+    var r=SC.nextPlanZhiban({year:S.year,month:S.month,todayStr:TODAY,employees:S.employees,raw:S.raw,noRest:noRestMap(),poolNames:S.dutyPool,eligible:pc.zhibanEligible,blockedByDate:pc.zhibanBlocked});
     if(r.error){toast(r.error,true);return}
-    var body='<p>每天 1 人，從值班名單排。今天以前（含今天）的值班不動，明天起的會清除重排（手動排的也會一起重排）。</p>'+
+    var body=pcNoteHTML(pc)+'<p>每天 1 人，從值班名單排。今天以前（含今天）的值班不動，明天起的會清除重排（手動排的也會一起重排）。</p>'+
       '<p>將<b>刪除 '+r.toDelete.length+' 筆</b>、<b>新增 '+r.creates.length+' 筆</b>。</p>'+(r.toDelete.length?'<p>按確定會先下載一份備份檔，再刪除並重排。</p>':'');
     return uiConfirm('預排 '+S.month+' 月值班？',body,'開始預排').then(function(ok){
       if(!ok)return;
@@ -1364,11 +1421,12 @@ function planZhiban(){
 function fixDay(d,kind){
   if(!S.perms.schedule||!guardWrite())return;
   S.busy=true;
-  loadDutyPool().then(fetchLeaves).then(function(raw){
+  Promise.all([loadDutyPool(),loadPc()]).then(fetchLeaves).then(function(raw){
     S.raw=raw||{};rebuild();
+    var pc=pcPlan();
     var r=kind==='duty'
-      ?SC.nextPlanZhiban({year:S.year,month:S.month,todayStr:TODAY,employees:S.employees,raw:S.raw,noRest:noRestMap(),only:ds(d),poolNames:S.dutyPool})
-      :SC.nextPlanFillCleanDay({year:S.year,month:S.month,todayStr:TODAY,allEmployees:S.allEmployees,raw:S.raw,noRest:noRestMap()},ds(d));
+      ?SC.nextPlanZhiban({year:S.year,month:S.month,todayStr:TODAY,employees:S.employees,raw:S.raw,noRest:noRestMap(),only:ds(d),poolNames:S.dutyPool,eligible:pc.zhibanEligible,blockedByDate:pc.zhibanBlocked})
+      :SC.nextPlanFillCleanDay({year:S.year,month:S.month,todayStr:TODAY,allEmployees:pc.allEmployees,raw:S.raw,noRest:noRestMap(),blockedByDate:pc.dutyBlocked},ds(d));
     if(r.error){toast(r.error,true);return}
     if(!r.creates.length){toast(fmtMD(d)+'沒有可以補的人（可能都休假）。',true);return}
     return writeAll([],r.creates,'補上 '+fmtMD(d)).then(function(res){return afterWrite(res,fmtMD(d)+(kind==='duty'?'的值班':'的打掃')+'補上了。')},writeFailed).then(function(){jump(d)});
@@ -1755,6 +1813,35 @@ document.addEventListener('change',function(e){
   saveDutyPool(names).then(function(){toast(esc(box.getAttribute('data-dp'))+(box.checked?' 已加入值班名單。':' 已移出值班名單。'))},function(err){
     box.checked=!box.checked;toast(err.message||String(err),true);
   }).then(function(){boxes.forEach(function(b){b.disabled=false})});
+});
+
+/* 人事異動預約：登記、取消；新報到才選聘雇類別 */
+function paintPc(){var b=$('#spc');if(b)b.innerHTML=pcHTML();var n=$('#pcN');if(n)n.textContent=(S.pc||[]).filter(function(c){return !c.appliedAt}).length||''}
+document.addEventListener('change',function(e){
+  if(e.target.id==='pcKind'){var l=$('#pcHireL');if(l)l.hidden=e.target.value!=='新報到'}
+});
+document.addEventListener('click',function(e){
+  var t=e.target.closest&&e.target.closest('button');if(!t)return;
+  if(t.id==='pcAdd'){
+    var who=$('#pcWho'),day=$('#pcDay').value,kind=$('#pcKind').value;
+    if(!who.value){toast('先選是誰。',true);return}
+    if(!day){toast('先選哪天起。',true);return}
+    var name=who.options[who.selectedIndex].text.replace(/（.*$/,''),eff=day.replace(/-/g,'/');
+    var hire=kind==='新報到'?$('#pcHire').value:'';
+    uiConfirm('登記人事異動？','<p><b>'+esc(name)+'</b>　'+esc(eff)+' 起'+esc(kind)+(hire?'（'+esc(hire)+'）':'')+'</p><p>那天清晨系統會自動改人事資料；之後不該有的班會通知人資部改派。</p>','登記').then(function(ok){
+      if(!ok)return;
+      t.disabled=true;
+      return pcCall('/schedulePcAdd',{rid:who.value,name:name,kind:kind,hire:hire,effective:eff}).then(loadPc).then(function(){paintPc();toast(name+' 的異動登記好了。')},function(err){toast(err.message||String(err),true)}).then(function(){t.disabled=false});
+    });
+    return;
+  }
+  if(t.dataset.pccancel){
+    var c=(S.pc||[]).filter(function(x){return x.id===t.dataset.pccancel})[0];if(!c)return;
+    uiConfirm('取消這筆異動？','<p>'+esc(c.name)+'　'+esc(c.effective)+' 起'+esc(c.kind)+'</p>','取消這筆').then(function(ok){
+      if(!ok)return;
+      return pcCall('/schedulePcCancel',{id:c.id}).then(loadPc).then(function(){paintPc();toast('已取消。')},function(err){toast(err.message||String(err),true)});
+    });
+  }
 });
 
 /* 工具列展開面板：點班表先收起，不誤點到底下的格子；點其他地方收起後照常作用 */

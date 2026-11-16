@@ -3,7 +3,7 @@
  * 依賴 schedule-common.js、schedule-next-core.js（須先載入）。規則見 排班表_規格書.md § 人事異動預約。
  *
  * 珊珊、瓊安事先登記「誰、哪天起、變成什麼」，存在 Worker（schedule:pc:<id>）。
- * 生效日 07:30 由 Mac 的 schedule-guard 寫進 Ragic 人事資料（套用規則與 SC.pcApplyFields 相同，那邊另有一份）。
+ * 生效日清晨 06:00 由 Worker 排程寫進 Ragic 人事資料（套用規則與 SC.pcApplyFields 相同，Worker 的 schedulePcChanges 另有一份）。
  * 預排時還沒套用的預約照生效日分段：生效日前用舊身分、生效日起用新身分。
  */
 
@@ -24,7 +24,7 @@ SC.pcApplyFields = (f, c) => {
     const out = { ...f };
     if (SC.PC_HIRE_OF[c.kind]) out[E.HIRE] = SC.PC_HIRE_OF[c.kind];
     else if (c.kind === "留職停薪") out[E.STATUS] = "留職停薪";
-    else if (c.kind === "復職") out[E.STATUS] = "在職";
+    else if (c.kind === "復職") { out[E.STATUS] = "在職"; out[SC.PC_F_TERMINATION] = ""; }
     else if (c.kind === "離職") { out[E.STATUS] = "離職"; out[SC.PC_F_TERMINATION] = SC._pcPrevDay(c.effective); }
     else if (c.kind === "新報到") {
         out[E.STATUS] = "在職";
