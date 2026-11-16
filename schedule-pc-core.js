@@ -24,7 +24,7 @@ SC.pcApplyFields = (f, c) => {
     const out = { ...f };
     if (SC.PC_HIRE_OF[c.kind]) out[E.HIRE] = SC.PC_HIRE_OF[c.kind];
     else if (c.kind === "留職停薪") out[E.STATUS] = "留職停薪";
-    else if (c.kind === "復職") out[E.STATUS] = "在職";
+    else if (c.kind === "復職") { out[E.STATUS] = "在職"; out[SC.PC_F_TERMINATION] = ""; }
     else if (c.kind === "離職") { out[E.STATUS] = "離職"; out[SC.PC_F_TERMINATION] = SC._pcPrevDay(c.effective); }
     else if (c.kind === "新報到") {
         out[E.STATUS] = "在職";
