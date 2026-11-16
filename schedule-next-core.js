@@ -413,6 +413,8 @@ SC.nextPlanDuty = (o) => {
             if (h.length === 3 && h[0] < 9999 && SC._cmpDateStr(ds, SC.fmtDate(h[0], h[1], h[2])) < 0) (offByDate[ds] ||= new Set()).add(e.name);
         });
     }
+    // 人事異動預約：這天的身分不在值日池（SC.pcMonthPlan 的 dutyBlocked）
+    Object.entries(o.blockedByDate || {}).forEach(([ds, names]) => names.forEach((n) => (offByDate[ds] ||= new Set()).add(n)));
 
     const plan = SC.planDutyV2({
         year, month, todayStr,
@@ -470,7 +472,9 @@ SC.nextPlanZhiban = (o) => {
     const noRest = o.noRest || {};
     const only = o.only || "";
     const recs = SC.nextParse(o.raw).filter((r) => SC.nextInMonth(r, year, month));
-    const eligible = SC.nextZhibanEligible(employees, year, month, o.poolNames);
+    // o.eligible／o.blockedByDate：人事異動預約分段後的候選與「這天的身分不能值班」（SC.pcMonthPlan）
+    const eligible = o.eligible || SC.nextZhibanEligible(employees, year, month, o.poolNames);
+    const blockedByDate = o.blockedByDate || {};
     if (eligible.length === 0) return { error: "值班名單沒有人，請先到「值班名單」勾選", toDelete: [], creates: [], newZhiban: {} };
     if (only && SC.isDutyLocked(only, todayStr)) return { error: "今天以前的日子已鎖定，不補", toDelete: [], creates: [], newZhiban: {} };
     // 「補上」是照檢查清單按的；頁面沒重整時別人（珊珊／瓊安另一邊）可能已經補過這天，這時再補會變同一天兩人值班
@@ -522,9 +526,12 @@ SC.nextPlanZhiban = (o) => {
         const isTrashDayZ = SC.isTrashCollectionDay(year, month, day);
         const sortFn = SC.zhibanCompare(zCount, zTrash, isTrashDayZ, zIsV2);
         const isBirthdayToday = (emp) => SC.isBirthday(emp, month, day);
-        const cands = eligible.filter((e) => e.name !== lastPick && !onLeave.has(e.name) && !isBirthdayToday(e) && !weekdayOnly(e)).sort(sortFn);
-        const pool = cands.length > 0 ? cands : eligible.filter((e) => !onLeave.has(e.name) && !isBirthdayToday(e) && !weekdayOnly(e)).sort(sortFn);
-        const final = pool.length > 0 ? pool : eligible.filter((e) => !weekdayOnly(e)).map((e) => ({ name: e.name })).sort(sortFn);
+        const blocked = blockedByDate[dateStr];
+        const okToday = eligible.filter((e) => !(blocked && blocked.has(e.name)));
+        const cands = okToday.filter((e) => e.name !== lastPick && !onLeave.has(e.name) && !isBirthdayToday(e) && !weekdayOnly(e)).sort(sortFn);
+        const pool = cands.length > 0 ? cands : okToday.filter((e) => !onLeave.has(e.name) && !isBirthdayToday(e) && !weekdayOnly(e)).sort(sortFn);
+        const final = pool.length > 0 ? pool : okToday.filter((e) => !weekdayOnly(e)).map((e) => ({ name: e.name })).sort(sortFn);
+        if (final.length === 0) { lastPick = ""; continue; }
         const chosen = final[0].name;
         zCount[chosen] = (zCount[chosen] || 0) + 1;
         if (zIsV2 && isTrashDayZ) zTrash[chosen] = (zTrash[chosen] || 0) + 1;
