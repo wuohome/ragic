@@ -1061,9 +1061,11 @@ function dutyPoolHTML(){
   return '<p class="xs muted">打勾的人才會被預排值班。改了不會動已排好的班，下次按「預排值班」才生效。新同仁要勾了才會排。</p><div class="dplist">'+rows+'</div>';
 }
 function pcStatusHTML(c){
-  if(c.appliedAt&&c.applyResult&&c.applyResult!=='ok')return '<span class="st bad">套用失敗：'+esc(c.applyResult)+'</span>';
   if(c.appliedAt)return '<span class="st">已改好人事資料</span>';
-  return '<span class="st">待生效</span><button class="mini" data-pccancel="'+esc(c.id)+'">取消</button>';
+  var cancel='<button class="mini" data-pccancel="'+esc(c.id)+'">取消</button>';
+  // 清晨排程沒改成時 applyResult 以「失敗：」開頭，隔天清晨會再試；手動改好後按取消
+  if(/^失敗：/.test(c.applyResult||''))return '<span class="st bad">沒改成，'+esc(c.applyResult.slice(3))+'，請到 Ragic 手動改</span>'+cancel;
+  return '<span class="st">待生效</span>'+cancel;
 }
 function pcHTML(){
   var F={NAME:'3000933',STATUS:'3000945'};
