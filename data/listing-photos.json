@@ -1,20 +1,6 @@
 {
- "generatedAt": "2026-11-18T08:32:28+08:00",
+ "generatedAt": "2026-11-19T08:32:20+08:00",
  "listings": {
-  "14": [
-   "https://img1.591.com.tw/house/2026/03/06/177280305351258303.jpg",
-   "https://img1.591.com.tw/house/2026/03/06/177280307453620303.jpg",
-   "https://img1.591.com.tw/house/2026/03/06/177280311548402708.jpg",
-   "https://img1.591.com.tw/house/2025/07/30/175381002444081007.jpg",
-   "https://img1.591.com.tw/house/2025/07/30/175381002448160606.jpg",
-   "https://img1.591.com.tw/house/2025/07/30/175381002475760002.jpg",
-   "https://img1.591.com.tw/house/2025/07/30/175381002501726408.jpg",
-   "https://img1.591.com.tw/house/2025/07/30/175381002477463700.jpg",
-   "https://img1.591.com.tw/house/2025/07/30/175381002447949301.jpg",
-   "https://img1.591.com.tw/house/2026/03/06/177280311531172108.jpg",
-   "https://img1.591.com.tw/house/2026/03/06/177280311528492003.jpg",
-   "https://img1.591.com.tw/house/2025/07/30/175381002477755203.jpg"
-  ],
   "243": [
    "https://img1.591.com.tw/house/2026/10/21/179256461824986208.jpg",
    "https://img1.591.com.tw/house/2026/10/21/179256461824934607.jpg",
@@ -69,7 +55,7 @@
    "https://img1.591.com.tw/house/2026/11/10/179429220516073407.jpg",
    "https://img1.591.com.tw/house/2026/11/10/179429220535823401.jpg",
    "https://img1.591.com.tw/house/2026/11/10/179429220476279804.jpg",
-   "https://img2.591.com.tw/house/2026/11/10/179429220495634809.jpg"
+   "https://img2.591.com.tw/house/2026/11/10/179429220548092309.jpg"
   ],
   "635": [
    "https://img1.591.com.tw/house/2026/09/21/178998712586986507.jpg",
@@ -180,8 +166,7 @@
    "https://img1.591.com.tw/house/2026/11/09/179422152775778205.jpg",
    "https://img1.591.com.tw/house/2026/11/09/179422152784265802.jpg",
    "https://img1.591.com.tw/house/2026/11/09/179422157575781607.jpg",
-   "https://img2.591.com.tw/house/2026/11/09/179422147409556106.jpg",
-   "https://img2.591.com.tw/house/2026/11/09/179422152758616206.png"
+   "https://img2.591.com.tw/house/2026/11/09/179422147409556106.jpg"
   ],
   "711": [
    "https://img1.591.com.tw/house/2026/10/21/179256784502485901.jpg",
@@ -196,6 +181,20 @@
    "https://img1.591.com.tw/house/2026/10/21/179256762716549505.jpg",
    "https://img1.591.com.tw/house/2026/10/21/179256765405403602.jpg",
    "https://img1.591.com.tw/house/2026/10/21/179256766440421605.jpg"
+  ],
+  "712": [
+   "https://img1.591.com.tw/house/2026/10/18/179230784654351702.jpg",
+   "https://img1.591.com.tw/house/2026/10/18/179230794699215005.jpg",
+   "https://img1.591.com.tw/house/2026/10/18/179230785417054700.jpg",
+   "https://img1.591.com.tw/house/2026/10/18/179230787521124706.jpg",
+   "https://img1.591.com.tw/house/2026/10/18/179230787510652207.jpg",
+   "https://img1.591.com.tw/house/2026/10/18/179230787516879707.jpg",
+   "https://img1.591.com.tw/house/2026/10/18/179230787524744708.jpg",
+   "https://img1.591.com.tw/house/2026/10/18/179230787517706708.jpg",
+   "https://img1.591.com.tw/house/2026/10/18/179230787552102807.jpg",
+   "https://img1.591.com.tw/house/2026/10/18/179230787547500405.jpg",
+   "https://img1.591.com.tw/house/2026/10/18/179230787546814606.jpg",
+   "https://img1.591.com.tw/house/2026/10/18/179230787550230507.jpg"
   ],
   "715": [
    "https://img1.591.com.tw/house/2026/10/16/179213961628097201.jpg",
@@ -238,34 +237,6 @@
    "https://img1.591.com.tw/house/2026/10/28/179317203207803403.jpg",
    "https://img1.591.com.tw/house/2026/10/28/179317196235012508.jpg",
    "https://img1.591.com.tw/house/2026/10/28/179317196280288806.jpg"
-  ],
-  "727": [
-   "https://img1.591.com.tw/house/2026/11/04/179377303604168400.jpg",
-   "https://img1.591.com.tw/house/2026/11/04/179377237951504507.jpg",
-   "https://img1.591.com.tw/house/2026/11/04/179377238373917209.jpg",
-   "https://img1.591.com.tw/house/2026/11/04/179377253908973108.jpg",
-   "https://img1.591.com.tw/house/2026/11/04/179377257273964804.jpg",
-   "https://img1.591.com.tw/house/2026/11/04/179377261394527601.jpg",
-   "https://img1.591.com.tw/house/2026/11/04/179377264544321405.jpg",
-   "https://img1.591.com.tw/house/2026/11/04/179377257645692807.jpg",
-   "https://img1.591.com.tw/house/2026/11/04/179377258189339202.jpg",
-   "https://img1.591.com.tw/house/2026/11/04/179377266127839002.jpg",
-   "https://img1.591.com.tw/house/2026/11/04/179377267050319403.jpg",
-   "https://img1.591.com.tw/house/2026/11/04/179377268173350706.jpg"
-  ],
-  "728": [
-   "https://img1.591.com.tw/house/2026/10/30/179334645509637200.jpg",
-   "https://img1.591.com.tw/house/2026/10/30/179334625319440106.jpg",
-   "https://img1.591.com.tw/house/2026/10/30/179334625836509607.jpg",
-   "https://img1.591.com.tw/house/2026/10/30/179334627474063408.jpg",
-   "https://img1.591.com.tw/house/2026/10/30/179334628009273005.jpg",
-   "https://img1.591.com.tw/house/2026/10/30/179334628827152806.jpg",
-   "https://img1.591.com.tw/house/2026/10/30/179334629904533304.jpg",
-   "https://img1.591.com.tw/house/2026/10/30/179334629622873604.jpg",
-   "https://img1.591.com.tw/house/2026/10/30/179334633338066902.jpg",
-   "https://img1.591.com.tw/house/2026/10/30/179334631691535501.jpg",
-   "https://img1.591.com.tw/house/2026/10/30/179334630926409509.jpg",
-   "https://img1.591.com.tw/house/2026/10/30/179334642762979100.jpg"
   ],
   "732": [
    "https://img1.591.com.tw/house/2026/11/06/179397237272297503.jpg",
@@ -338,15 +309,18 @@
    "https://img1.591.com.tw/house/2026/11/10/179428996611072400.jpg"
   ],
   "739": [
-   "https://img1.591.com.tw/house/2026/11/10/179430491265734906.jpg",
-   "https://img1.591.com.tw/house/2026/11/10/179430491264024204.jpg",
-   "https://img1.591.com.tw/house/2026/11/10/179430491260771501.jpg",
-   "https://img1.591.com.tw/house/2026/11/10/179430491267374903.jpg",
-   "https://img1.591.com.tw/house/2026/11/10/179430491262643809.jpg",
-   "https://img1.591.com.tw/house/2026/11/10/179430491249883207.jpg",
-   "https://img2.591.com.tw/house/2026/11/10/179430491265734906.jpg",
-   "https://img2.591.com.tw/house/2026/11/10/179430491260771501.jpg",
-   "https://img2.591.com.tw/house/2026/11/10/179430491262643809.jpg"
+   "https://img1.591.com.tw/house/2026/11/19/179501927334530601.jpg",
+   "https://img1.591.com.tw/house/2026/11/19/179501932693881208.jpg",
+   "https://img1.591.com.tw/house/2026/11/19/179501932674725801.jpg",
+   "https://img1.591.com.tw/house/2026/11/19/179501932688660203.jpg",
+   "https://img1.591.com.tw/house/2026/11/19/179501932686602503.jpg",
+   "https://img1.591.com.tw/house/2026/11/19/179501932691404308.jpg",
+   "https://img1.591.com.tw/house/2026/11/19/179501932691355202.jpg",
+   "https://img1.591.com.tw/house/2026/11/19/179501932713686506.jpg",
+   "https://img1.591.com.tw/house/2026/11/19/179501932723521506.jpg",
+   "https://img1.591.com.tw/house/2026/11/19/179501932726290604.jpg",
+   "https://img1.591.com.tw/house/2026/11/19/179501932725659900.jpg",
+   "https://img1.591.com.tw/house/2026/11/19/179501942338070709.jpg"
   ],
   "742": [
    "https://img1.591.com.tw/house/2026/11/12/179446678814183608.jpg",
@@ -403,28 +377,9 @@
    "https://img1.591.com.tw/house/2025/11/12/176294960881060304.jpg",
    "https://img1.591.com.tw/house/2025/11/12/176294959870013804.jpg",
    "https://img1.591.com.tw/house/2025/11/12/176294959848009400.jpg"
-  ],
-  "747": [
-   "https://img1.591.com.tw/house/2025/11/17/176337149960062001.jpg",
-   "https://img1.591.com.tw/house/2025/11/17/176337068857335007.jpg",
-   "https://img1.591.com.tw/house/2025/11/17/176337069215747302.jpg",
-   "https://img1.591.com.tw/house/2025/11/17/176337069834906302.jpg",
-   "https://img1.591.com.tw/house/2025/11/17/176337070232080300.jpg",
-   "https://img1.591.com.tw/house/2025/11/17/176337071201923603.jpg",
-   "https://img1.591.com.tw/house/2025/11/17/176337071778662801.jpg",
-   "https://img1.591.com.tw/house/2025/11/17/176337072125323509.jpg",
-   "https://img1.591.com.tw/house/2025/11/17/176337072879742305.jpg",
-   "https://img1.591.com.tw/house/2025/11/17/176337075226542308.jpg",
-   "https://img1.591.com.tw/house/2025/11/17/176337112294731902.jpg",
-   "https://img1.591.com.tw/house/2025/11/17/176337112741359700.jpg"
   ]
  },
  "provenance": {
-  "14": {
-   "houseId": "22257017",
-   "how": "match",
-   "why": "三重區大榮街／租金 9500／坪數吻合"
-  },
   "243": {
    "houseId": "22316517",
    "how": "link",
@@ -490,6 +445,11 @@
    "how": "match",
    "why": "中山區農安街／3 樓／格局 3房2廳3衛"
   },
+  "712": {
+   "houseId": "22371459",
+   "how": "match",
+   "why": "中山區中山北路／4 樓／格局 2房2廳2衛／業務吻合"
+  },
   "715": {
    "houseId": "22293088",
    "how": "match",
@@ -502,16 +462,6 @@
   },
   "724": {
    "houseId": "22247980",
-   "how": "link",
-   "why": "Ragic 連結欄直接指到這則現役廣告"
-  },
-  "727": {
-   "houseId": "22261120",
-   "how": "link",
-   "why": "Ragic 連結欄直接指到這則現役廣告"
-  },
-  "728": {
-   "houseId": "22260182",
    "how": "link",
    "why": "Ragic 連結欄直接指到這則現役廣告"
   },
@@ -562,11 +512,6 @@
   },
   "746": {
    "houseId": "22354690",
-   "how": "link",
-   "why": "Ragic 連結欄直接指到這則現役廣告"
-  },
-  "747": {
-   "houseId": "22354683",
    "how": "link",
    "why": "Ragic 連結欄直接指到這則現役廣告"
   }
