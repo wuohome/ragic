@@ -103,7 +103,7 @@ SC.nextBuildMonth = (records, year, month) => {
             else day.rest.push({ id: r.id, name: r.emp, kind: "見紅休" });
             return;
         }
-        if (r.type === "排休" || r.type === "特休" || r.type === "請假") day.rest.push({ id: r.id, name: r.emp, kind: r.type });
+        if (r.type === "排休" || r.type === "特休" || r.type === "請假" || SC.HALF_REST_TYPES.includes(r.type)) day.rest.push({ id: r.id, name: r.emp, kind: r.type });
     });
     for (let d = 1; d <= dim; d++) {
         const day = days[d];
@@ -169,17 +169,18 @@ SC.nextTally = (M, todayStr) => {
     return out;
 };
 
-// ── 休假統計：對照舊版合計列，排休＋特休＋請假＋見紅休（已取消的不算）──
+// ── 休假統計：對照舊版合計列，排休＋特休＋請假＋見紅休（已取消的不算）＋上休／下休（各 0.5 天）──
 SC.nextRestTally = (M) => {
     const out = {};
     for (let d = 1; d <= M.dim; d++) {
         M.days[d].rest.forEach((x) => {
-            const t = (out[x.name] ||= { paixiu: 0, texiu: 0, qingjia: 0, gov: 0, total: 0 });
+            const t = (out[x.name] ||= { paixiu: 0, texiu: 0, qingjia: 0, gov: 0, half: 0, total: 0 });
             if (x.kind === "排休") t.paixiu++;
             else if (x.kind === "特休") t.texiu++;
             else if (x.kind === "請假") t.qingjia++;
             else if (x.kind === "見紅休") t.gov++;
-            t.total++;
+            else if (SC.HALF_REST_TYPES.includes(x.kind)) t.half += 0.5;
+            t.total += SC.leaveDays(x.kind);
         });
     }
     return out;
@@ -192,11 +193,11 @@ SC.nextRestTarget = (M, emp) => {
     for (let d = 1; d <= M.dim; d++) if (SC.isGovRestDay(M.year, M.month, d) && !M.days[d].noRest) n++;
     return n;
 };
-// 少休看總天數（特休、請假也算休到）；多休只看排休＋見紅休，特休和請假不算多休。t = SC.nextRestTally 的一筆
+// 少休看總天數（特休、請假也算休到）；多休只看排休＋見紅休＋半天假，特休和請假不算多休。t = SC.nextRestTally 的一筆
 SC.nextRestStatus = (t, target) => {
     if (target === null) return { side: "none", diff: 0 };
     if (t.total < target) return { side: "short", diff: target - t.total };
-    const planned = t.paixiu + t.gov;
+    const planned = t.paixiu + t.gov + (t.half || 0);
     if (planned > target) return { side: "over", diff: planned - target };
     return { side: "ok", diff: 0 };
 };
@@ -258,10 +259,11 @@ SC.nextChecks = (M, todayStr) => {
         const day = M.days[d];
         const fixable = SC._cmpDateStr(day.ds, todayStr) > 0;
         day.rest.forEach((x) => {
+            if (SC.inForEvening(x.kind)) return;
             const jobs = [];
             if (day.clean.some((g) => g.name === x.name)) jobs.push("打掃");
             if (day.duty.some((y) => y.name === x.name)) jobs.push("值班");
-            if (jobs.length && fixable) out.push({ d, kind: "twice", fix: null, text: `${x.name} ${lab(d)}休假，但同一天排了${jobs.join("和")}` });
+            if (jobs.length && fixable) out.push({ d, kind: "twice", fix: null, text: `${x.name} ${lab(d)}${SC.HALF_REST_LABEL[x.kind] || "休假"}，但同一天排了${jobs.join("和")}` });
         });
     }
     SC.DUTY_NOT_ADJACENT_PAIRS.forEach(([a, b]) => {
@@ -396,10 +398,11 @@ SC.nextPlanDuty = (o) => {
     const zhibanByDate = {};
     recs.forEach((r) => { if (r.type === "值班" && SC.nextInMonth(r, year, month)) zhibanByDate[r.date] = r.emp; });
 
-    // 當天不可排：排休／特休／請假／見紅休（已取消的不算）、生日、到職日以前
+    // 當天不可排：排休／特休／請假／下休／見紅休（已取消的不算）、生日、到職日以前；上休傍晚還在，照常排
     const offByDate = {};
     recs.forEach((r) => {
         if (r.type === "值日" || r.type === "禁休" || r.type === "值班") return;
+        if (SC.inForEvening(r.type)) return;
         if (!SC.nextInMonth(r, year, month)) return;
         if (r.type === "見紅休" && r.isAuto === SC.GOV_REST_CANCELLED) return;
         (offByDate[r.date] ||= new Set()).add(r.emp);
@@ -496,10 +499,11 @@ SC.nextPlanZhiban = (o) => {
         zLocked[ds] = { name: r.emp, missed: SC.nextDutyState(r.isAuto) !== "ok" };
     });
 
-    // 當月所有不是值班／值日／禁休的紀錄＝當天不能值班的人（對照舊頁的 leaves 狀態）
+    // 當月所有不是值班／值日／禁休的紀錄＝當天不能值班的人（對照舊頁的 leaves 狀態）；上休傍晚還在，可以值班
     const onLeaveByDate = {};
     recs.forEach((r) => {
         if (r.type === "值日" || r.type === "禁休" || r.type === "值班") return;
+        if (SC.inForEvening(r.type)) return;
         (onLeaveByDate[r.date] ||= new Set()).add(r.emp);
     });
 

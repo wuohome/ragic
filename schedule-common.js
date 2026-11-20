@@ -194,6 +194,25 @@ SC.monthLeaveLimit = (year, month) => {
     return hasFest ? 9 : 8;
 };
 
+// ── 休假類型表（2026-11-20 加半天假）──
+// days：算幾天休假；evening：傍晚在不在公司。值日、值班、清運都在傍晚，
+// 所以上休（上午休、下午上班）當天照常可排，下休跟排休一樣不能排。
+SC.LEAVE_KINDS = Object.freeze({
+    "排休": { days: 1, evening: false },
+    "特休": { days: 1, evening: false },
+    "請假": { days: 1, evening: false },
+    "見紅休": { days: 1, evening: false },
+    "上休": { days: 0.5, evening: true },
+    "下休": { days: 0.5, evening: false },
+});
+SC.HALF_REST_TYPES = Object.freeze(["上休", "下休"]);
+// 「排休」那一組：點格子依序切換 排休 → 上休 → 下休 → 上班
+SC.REST_CYCLE = Object.freeze(["排休", "上休", "下休"]);
+SC.leaveDays = (type) => (SC.LEAVE_KINDS[type] ? SC.LEAVE_KINDS[type].days : 0);
+// 只有上休傍晚還在；其他休假類型（含表外的舊值）都當作那天傍晚不在，維持原本行為
+SC.inForEvening = (type) => !!(SC.LEAVE_KINDS[type] && SC.LEAVE_KINDS[type].evening);
+SC.HALF_REST_LABEL = Object.freeze({ "上休": "上午休", "下休": "下午休" });
+
 // ── 日期範圍 query params（listLeaves 用）──
 SC.leaveQuery = (fromY, fromM, toY, toM) => {
     const from = `${fromY}/${String(fromM).padStart(2, "0")}/01`;
@@ -367,7 +386,7 @@ SC.computeFairnessLedger = (employees, leaveRecords, todayStr) => {
             });
         });
 
-    const OFF_TYPES = new Set(["排休", "特休", "請假", "禁休"]);
+    const OFF_TYPES = new Set(["排休", "特休", "請假", "下休", "禁休"]);
 
     days.forEach(dateStr => {
         const parts = dateStr.split("/").map(Number);
