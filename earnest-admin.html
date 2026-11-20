@@ -133,8 +133,12 @@
     </div>
   </div>
 
+  <script src="js/staff-gate.js?v=20261120-1"></script>
   <script>
     const WORKER_BASE_URL = "https://wuohome-ragic-proxy.wuohome.workers.dev";
+    // 2026-11-20 起後台四支（清單／明細／重送／標記人工）要同仁 Google 登入
+    StaffGate.init(WORKER_BASE_URL);
+    StaffGate.require();
 
     const STATUS_LABELS = {
       pending:           { text: "待處理",     cls: "status-pending"  },
@@ -191,7 +195,7 @@
     async function loadList() {
       document.getElementById("view-list").classList.remove("hidden");
       try {
-        const res = await fetch(`${WORKER_BASE_URL}/listFailedSubmissions`);
+        const res = await StaffGate.fetch(`/listFailedSubmissions`);
         if (!res.ok) throw new Error("HTTP " + res.status);
         const data = await res.json();
         const items = data.submissions || [];
@@ -245,7 +249,7 @@
       document.getElementById("view-list").classList.add("hidden");
       document.getElementById("view-detail").classList.remove("hidden");
       try {
-        const res = await fetch(`${WORKER_BASE_URL}/getSubmission/${encodeURIComponent(id)}`);
+        const res = await StaffGate.fetch(`/getSubmission/${encodeURIComponent(id)}`);
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           throw new Error(body.error || "HTTP " + res.status);
@@ -390,7 +394,7 @@
       btn.disabled = true;
       btn.textContent = "重試中...";
       try {
-        const res = await fetch(`${WORKER_BASE_URL}/retrySubmission/${encodeURIComponent(submissionId)}`, {
+        const res = await StaffGate.fetch(`/retrySubmission/${encodeURIComponent(submissionId)}`, {
           method: "POST"
         });
         const body = await res.json().catch(() => ({}));
@@ -435,7 +439,7 @@
       btn.disabled = true;
       btn.textContent = "處理中...";
       try {
-        const res = await fetch(`${WORKER_BASE_URL}/markSubmissionManual/${encodeURIComponent(submissionId)}`, {
+        const res = await StaffGate.fetch(`/markSubmissionManual/${encodeURIComponent(submissionId)}`, {
           method: "POST"
         });
         const body = await res.json().catch(() => ({}));

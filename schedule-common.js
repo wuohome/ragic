@@ -205,10 +205,14 @@ SC.leaveQuery = (fromY, fromM, toY, toM) => {
 // ── Worker proxy 呼叫（GET/POST/DELETE 統一入口）──
 // Worker 回傳 envelope：成功 {ok:true, ...data} 或 {ok:true, ragicId:...} 或 data object
 // 失敗 4xx {error:"..."} — worker 已內建 detectUpstreamFailure，前端直接信任 HTTP status
+// 頁面有載 js/staff-gate.js 就經 StaffGate 帶同仁登入（2026-11-20 起排休新增／改／刪要登入，
+// listEmployees 的生日也只給登入者）；沒載的頁（公平性儀表板）照舊匿名讀名單與排休。
 SC.proxyFetch = async (action, opts = {}, retries = 3) => {
     const url = `${SC.PROXY_BASE}/${action}`;
+    const gate = window.StaffGate;
+    if (gate) gate.init(SC.PROXY_BASE);
     for (let i = 0; i < retries; i++) {
-        const res = await fetch(url, opts);
+        const res = await (gate ? gate.fetch('/' + action, opts) : fetch(url, opts));
         if (res.status === 403 && i < retries - 1) {
             await new Promise(r => setTimeout(r, 1000 * (i + 1)));
             continue;

@@ -135,8 +135,9 @@
     show('out');
   }
   function ready() {
+    if (!session) start(); // 已存 session 會同步載好；原本先排隊再 start，載好了卻沒人叫醒（第一次呼叫就卡住）
     if (session) return Promise.resolve();
-    return new Promise(function (resolve) { waiters.push(resolve); start(); });
+    return new Promise(function (resolve) { waiters.push(resolve); });
   }
   function sfetch(path, opts) {
     return ready().then(function () {

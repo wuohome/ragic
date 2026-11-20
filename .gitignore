@@ -28,3 +28,18 @@ backups/
 
 # 業績表不再公開（2026-11-10）：改由 Worker 的 dashData／worklogPerf 提供，不要再 commit 回 repo
 data/perf.md
+
+# 2026-11-20 公開網站只放前端：後台腳本、說明、資料產生器搬到私有 repo wuohome-ragic-proxy/pages-private/，
+# 這裡的 scripts、CLAUDE.md 是指過去的捷徑（排程照舊從 scripts/ 跑）。不要再把它們加回來。
+/scripts
+/CLAUDE.md
+/README.md
+/.env.example
+/staff_dashboard.py
+/weekly_intake.py
+/定金退款流程_PhaseB_驗收.md
+/supabase/
+/tools/pano/README.md
+/tools/pano/build-pano.ps1
+/worker-proxy-src/
+/data/591-dashboard.json

@@ -46,7 +46,12 @@
 </head>
 <body>
 <div id="root"></div>
-<script src="schedule-common.js"></script>
+<script>
+// 2026-11-20：舊版只剩排班檢視頁「全體排班」內嵌閱覽用；直接開一律轉到正式排班頁（原本的 4 碼編輯密碼拿掉）
+if (!new URLSearchParams(location.search).has('readonly')) location.replace('schedule.html');
+</script>
+<script src="schedule-common.js?v=20261120-1"></script>
+<script src="js/staff-gate.js?v=20261120-1"></script>
 <script src="schedule-duty-v2.js"></script>
 <script type="text/babel">
 
@@ -137,9 +142,8 @@ const GOV_HOLIDAYS_2026 = SC.HOLIDAYS_2026;
 // 見紅休判斷（日期/人員命中）已集中到 SC.isGovRestDay / SC.isGovRestFor（2026-07-26 三度誤排事故根治），
 // 本檔不再自行組合 GOV_REST_EMPLOYEES.has(name) + isGovHoliday(dateStr, isWeekend)
 
-const EDIT_PASSWORD = "0718";
 const isOpenPeriod = SC.isOpenPeriod;
-const IS_READONLY = new URLSearchParams(window.location.search).has('readonly');
+const IS_READONLY = true; // 只剩閱覽（見檔頭轉址）
 
 
 /* ── Inline Modal Components (WKWebView fix) ─────────────────── */
@@ -225,8 +229,6 @@ function ActionSelectModal({ open, message, actions, onCancel }) {
 
 const App = () => {
     const [unlocked, setUnlocked] = React.useState(IS_READONLY ? true : isOpenPeriod());
-    const [pwInput, setPwInput] = React.useState("");
-    const [pwError, setPwError] = React.useState(false);
     // 20號後自動顯示下個月
     const initDate = (() => {
         const now = new Date();
@@ -423,32 +425,6 @@ const App = () => {
 
     React.useEffect(() => { load(); }, [year, month]);
 
-    const handleUnlock = () => {
-        if (pwInput === EDIT_PASSWORD) {
-            setUnlocked(true);
-            setPwError(false);
-        } else {
-            setPwError(true);
-        }
-    };
-
-    if (!unlocked && !IS_READONLY) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-50">
-                <div className="bg-white rounded-2xl shadow-lg p-8 max-w-sm w-full mx-4">
-                    <h1 className="text-xl font-bold text-center mb-2" style={{color:"#3f5262"}}>🔒 排班模式</h1>
-                    <p className="text-gray-500 text-sm text-center mb-6">每月 20 號後自動開放排班<br/>其他時間需輸入密碼</p>
-                    <input type="password" value={pwInput} onChange={e => setPwInput(e.target.value)}
-                        onKeyDown={e => e.key === "Enter" && handleUnlock()}
-                        className={`w-full px-4 py-3 rounded-lg border-2 text-center text-lg ${pwError ? "border-red-400" : "border-gray-200"} focus:outline-none focus:border-blue-400`}
-                        placeholder="密碼" autoFocus />
-                    {pwError && <p className="text-red-500 text-sm text-center mt-2">密碼錯誤</p>}
-                    <button onClick={handleUnlock} className="w-full mt-4 py-3 bg-blue-500 text-white rounded-lg font-bold hover:bg-blue-600">進入排班</button>
-                    <a href="schedule-view.html" className="block text-center text-sm text-gray-400 mt-4 hover:text-gray-600">← 回到閱覽模式</a>
-                </div>
-            </div>
-        );
-    }
 
     // 禁休：點日期欄設定/取消
     const handleNoRest = async (dateStr) => {

@@ -9,7 +9,7 @@
 <title>窩的家｜租賃部業績儀表板（新版）</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-<script src="js/staff-gate.js"></script>
+<script src="js/staff-gate.js?v=20261120-1"></script>
 <script src="js/worklog-perf.js"></script>
 <style>
   body{font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;}
@@ -944,8 +944,10 @@ const NAME_ALIASES = {
   '卓威':'李卓威','小方':'方鼎文','馬丁':'關宗宇','小吳哥':'吳彥廷','兆傑':'劉兆傑',
   '恩廷':'葉恩廷',  // 2026-07-08 到職，補上漏掉的小名對照
   '欣宜':'白欣宜',  // 2026-10 業績表寫小名，補對照
-  '20011205xiluo@gmail.com':'曾宇謙',
 };
+// 有人在 Ragic 開發人員欄填成個人信箱：只放雜湊（FNV-1a，小寫），網頁原始碼不留信箱原文（2026-11-20）
+const EMAIL_ALIASES = { '18c252f0':'曾宇謙' };
+function fnv1a(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16); }
 
 const TYPE_MAP = {
   '專任':'專任出租案','一般':'一般出租案',
@@ -963,7 +965,7 @@ function normalizeName(name) {
   // 防禦：剝掉殘留的 wikilink markdown `[[X|Y]]` → 取 Y（display alias）；單純 `[[X]]` → X
   const m = name.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/);
   if (m) name = (m[2] || m[1]).trim();
-  return NAME_ALIASES[name] || name;
+  return NAME_ALIASES[name] || (name.includes('@') && EMAIL_ALIASES[fnv1a(name.toLowerCase())]) || name;
 }
 function normalizeDistrict(d) { return (d && d.includes('|')) ? d.split('|')[1] : (d || ''); }
 function fmtRent(v) {
@@ -1278,7 +1280,7 @@ async function fetchAllData() {
   SNAPSHOT_AT = snap.generatedAt || '';
   // 591 廣告另外抓（arch: vault md 已含當月 GSheet）
   // FIX-2026-04-28-591-render-guard: fetch 完成後 trigger render，否則資料來了 panel 也不更新
-  fetch('data/591-dashboard.json?v=' + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null).then(r => { AD591 = r; if (typeof renderAd591 === 'function') try { renderAd591(); } catch(_) {} });
+  StaffGate.fetch('/dash591').then(r => r.ok ? r.json() : null).catch(() => null).then(r => { AD591 = r; if (typeof renderAd591 === 'function') try { renderAd591(); } catch(_) {} });
 
   document.getElementById('loadingText').textContent = '資料轉換中…';
   document.getElementById('progressBar').style.width = '100%';

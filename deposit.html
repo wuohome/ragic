@@ -1501,7 +1501,7 @@ input[type="date"] {
      DATA LAYER CONTRACT
      把所有 API 邏輯集中在這一個區塊，方便微調
 ═══════════════════════════════════════════════ -->
-<script src="js/staff-gate.js"></script>
+<script src="js/staff-gate.js?v=20261120-1"></script>
 <script>
 /* ── Data Layer Contract ───────────────────────────────────────────── */
 
@@ -1510,10 +1510,10 @@ const WORKER_BASE = "https://wuohome-ragic-proxy.wuohome.workers.dev";
 // GET /searchCases?q=關鍵字（q 可選；不帶則回全部代租中物件最多 200 筆）
 // 回傳 { ok: true, cases: [{ rid, name, address }] }
 async function fetchCases(keyword) {
-  const url = keyword
-    ? `${WORKER_BASE}/searchCases?q=${encodeURIComponent(keyword)}`
-    : `${WORKER_BASE}/searchCases`;
-  const r = await fetch(url);
+  const path = keyword
+    ? `/searchCases?q=${encodeURIComponent(keyword)}`
+    : `/searchCases`;
+  const r = await StaffGate.fetch(path); // 2026-11-20 起要同仁登入
   const data = await r.json();
   if (!data.ok) throw new Error(data.msg || "searchCases failed");
   return data.cases; // [{ rid, name, address }]
@@ -1539,7 +1539,7 @@ async function fetchStaff(keyword) {
 // 成功回 { status:"SUCCESS", ragicId, depositNo }
 // 失敗回 { status:"ERROR", msg:"..." }（HTTP 400/502）
 async function submitDeposit(fields) {
-  const r = await fetch(`${WORKER_BASE}/createDeposit`, {
+  const r = await StaffGate.fetch(`/createDeposit`, { // 2026-11-20 起要同仁登入
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ fields })

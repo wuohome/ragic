@@ -1138,6 +1138,7 @@ footer.app-footer{
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 <div class="toast-region" id="toastRegion" aria-live="polite"></div>
 
+<script src="js/staff-gate.js?v=20261120-1"></script>
 <script>
 (function(){
 'use strict';
@@ -2218,7 +2219,7 @@ function bindRqCreate(){
     var originalLabel = btn.textContent;
     btn.textContent = '建立中…';
 
-    fetch(API_BASE + '/rqCreate', {
+    StaffGate.fetch('/rqCreate', { // 2026-11-20 起建單要同仁登入
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -2313,6 +2314,7 @@ function buildDatalists(){
 function boot(){
   var viewToken = new URL(location.href).searchParams.get('view');
   if(viewToken){ bootViewMode(viewToken); return; }
+  StaffGate.init(API_BASE); StaffGate.require(); // 編輯模式才要登入（檢視模式是給客戶的分享頁）
 
   buildDatalists();
 

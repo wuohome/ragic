@@ -227,8 +227,11 @@
   </footer>
 </div>
 
+<script src="js/staff-gate.js?v=20261120-1"></script>
 <script>
-const DATA_URL = './data/591-dashboard.json?v=' + Date.now();
+// 2026-11-20：資料原本是公開的 data/591-dashboard.json（含同仁姓名），改從 Worker 登入後讀（KV dash:591:v1）
+StaffGate.init('https://wuohome-ragic-proxy.wuohome.workers.dev');
+StaffGate.require();
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -373,7 +376,7 @@ async function load(){
   const loadingEl = document.getElementById('loading');
   const errorEl = document.getElementById('error');
   try {
-    const res = await fetch(DATA_URL);
+    const res = await StaffGate.fetch('/dash591');
     if(!res.ok) throw new Error('HTTP ' + res.status);
     const d = await res.json();
 

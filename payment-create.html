@@ -1057,7 +1057,7 @@ body {
 
 <div class="toast" id="toast"></div>
 
-<script src="js/staff-gate.js"></script>
+<script src="js/staff-gate.js?v=20261120-1"></script>
 <script>
 /* ======================================================
    STATE
@@ -1117,8 +1117,7 @@ async function loadRealCases() {
   list.innerHTML  = '<li class="case-loading">載入中⋯</li>';
   emptyHint.style.display = 'none';
   try {
-    const BASE = 'https://wuohome-ragic-proxy.wuohome.workers.dev';
-    const resp = await fetch(BASE + '/searchCases?q=', { method: 'GET' });
+    const resp = await StaffGate.fetch('/searchCases?q=', { method: 'GET' }); // 2026-11-20 起要同仁登入
     const json = await resp.json().catch(() => ({}));
     if (!resp.ok || !json.ok) throw new Error(json.error || 'load_fail');
     realCases   = json.cases || [];
@@ -1604,7 +1603,7 @@ function buildSummary() {
 /* ======================================================
    SUBMIT
    ====================================================== */
-const WORKER_URL = 'https://wuohome-ragic-proxy.wuohome.workers.dev/createPaymentReceipt';
+const WORKER_PATH = '/createPaymentReceipt'; // 2026-11-20 起要同仁登入
 
 async function submitForm() {
   const btn = document.getElementById('btnNext');
@@ -1613,7 +1612,7 @@ async function submitForm() {
 
   try {
     const fd = buildRagicFormData();
-    const resp = await fetch(WORKER_URL, {
+    const resp = await StaffGate.fetch(WORKER_PATH, {
       method: 'POST',
       body: fd,
     });
