@@ -1188,10 +1188,11 @@ function doRest(n,d,v,kind){
       return apiUpdate(v.rest.id,(function(){var o={};o[F.IS_AUTO]=SC.GOV_REST_CANCELLED;return o})()).then(function(){toast(when+'改上班。')});
     }
     if(kind==='排休'&&SC.REST_CYCLE.indexOf(v.rest.kind)>=0){
-      var nx=nextRestKind(v.rest.kind,busy);
+      var nx=v.red?'':nextRestKind(v.rest.kind,busy);
       if(nx)return apiUpdate(v.rest.id,typeBody(nx)).then(function(){toast(when+'改成'+restWord(nx)+'。')});
       return apiDelete(v.rest.id).then(function(){toast(when+(v.red?'改上班。':'取消休假。'))});
     }
+    if(busy&&kind!=='請假'&&v.rest.kind!==kind){toast(when+'已排'+(v.duty?'值班':'打掃')+'，先取消才能排'+kind+'。',true);return}
     if(v.rest.kind===kind)return apiDelete(v.rest.id).then(function(){toast(when+(kind==='排休'&&v.red?'改上班。':'取消'+kind+'。'))});
     return apiDelete(v.rest.id).then(create).then(function(){toast(when+'改成'+kind+'。')});
   }
@@ -1920,7 +1921,7 @@ function rulesHTML(){
     '<h3>值班</h3><ul>'+
     '<li>19:00 到 20:00 多留一小時。</li>'+
     '<li>誰排值班由珊珊在「值班名單」勾選。</li>'+
-    '<li>每天一人，每人次數平均，不連續排同一人，當天休假的人不排。</li>'+
+    '<li>每天一人，每人次數平均，不連續排同一人，當天休假的人不排（上休的人照排）。</li>'+
     '<li>每個月重新分配，新人不用補前人的次數。</li>'+trash+'</ul>'+
     '<h3>打掃</h3><ul>'+clean+'</ul>'+
     '<h3>今天以前的班</h3><ul><li>預排時今天以前（含今天）的日子鎖定不動，手動排的也會保留。</li></ul>'+
