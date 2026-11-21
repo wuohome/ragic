@@ -516,7 +516,7 @@ body:has(#mxwrap) .shell{padding-top:var(--bar)}
 
 <script src="schedule-common.js?v=20261120-2"></script>
 <script src="schedule-duty-v2.js?v=20261031-9"></script>
-<script src="schedule-next-core.js?v=20261120-2"></script>
+<script src="schedule-next-core.js?v=20261121-1"></script>
 <script src="schedule-pc-core.js?v=20261116-1"></script>
 <script src="schedule-fund-core.js?v=20261106-1"></script>
 <script src="js/staff-gate.js?v=20261120-1"></script>
@@ -1404,13 +1404,17 @@ function planDuty(){
     S.raw=a[0]||{};rebuild();
     var pc=pcPlan();
     var r=SC.nextPlanDuty({year:S.year,month:S.month,todayStr:TODAY,allEmployees:pc.allEmployees,raw:S.raw,noRest:noRestMap(),blockedByDate:pc.dutyBlocked});
-    var firstUnlocked=SC.isDutyLocked(SC.fmtDate(S.year,S.month,1),TODAY)?'今天以前（含今天 '+TODAY.slice(5)+'）的值日都不會動，只重排明天起的日子。':'這個月還沒開始，會重排整個月。';
+    if(!r.toDelete.length&&!r.creates.length){
+      return uiAlert(S.month+' 月值日都排好了','<p>已經排好的人日期都不會動，現在沒有空格要補。</p>'+(r.warnings.length?'<p>'+r.warnings.map(esc).join('</p><p>')+'</p>':'')+'<p>要調整個別日子請直接點格子。</p>');
+    }
+    var kept=r.lockedKept+r.manualKept+(r.assignedKept||0);
+    var firstUnlocked=kept?'已經排好的人日期一律不動（共 '+kept+' 筆），只補空格；離職或身分改變的人留下的日子才重排。':'這個月還沒排過，會排整個月。';
     var ptFirst=SC.PARTTIME_DUTY_FIRST_DATE;
     var ptNote=ptFirst.slice(0,7)===SC.fmtDate(S.year,S.month,1).slice(0,7)?'每天都要掃；'+ptFirst.slice(5)+' 以前不自動排兼職，由業務掃。':'';
     var body=pcNoteHTML(pc)+'<p>'+firstUnlocked+'</p>'+
       '<p>業務、兼職一人掃整棟（兼職每月一次，排六日）；內勤兩人一組，只排平日。'+ptNote+'倒垃圾由當天值班的人負責。</p>'+
-      '<p>將<b>刪除 '+r.toDelete.length+' 筆</b>未到的系統預排、<b>新增 '+r.creates.length+' 筆</b>。保留：手動排的 '+r.manualKept+' 筆、今天以前的 '+r.lockedKept+' 筆。</p>'+
-      (r.toDelete.length?'<p>按確定會先下載一份備份檔，再刪除並重排。</p>':'');
+      '<p>'+(r.toDelete.length?'將<b>刪除 '+r.toDelete.length+' 筆</b>（'+esc(r.toDelete.map(function(x){return x.rec.emp}).filter(function(n,i,a){return a.indexOf(n)===i}).join('、'))+' 已不在值日池的日子）、':'')+'<b>新增 '+r.creates.length+' 筆</b>。</p>'+
+      (r.toDelete.length?'<p>按確定會先下載一份備份檔，再刪除並補排。</p>':'');
     return uiConfirm('預排 '+S.month+' 月值日？',body,'開始預排').then(function(ok){
       if(!ok)return;
       if(r.toDelete.length){

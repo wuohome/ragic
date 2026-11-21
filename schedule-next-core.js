@@ -366,11 +366,17 @@ SC.nextPlanDuty = (o) => {
         .map((e) => e.name);
     const avgTargets = [...new Set([...newNames, ...creditNames])];
 
-    // 當月值日分類：手動／鎖定保留；其餘（未鎖定的系統預排）列入刪除
+    // 當月值日分類：手動／鎖定／已排好的系統預排一律保留（2026-11-21 瓊安：排好就不能再換來換去，兼職已收到通知）。
+    // 只刪「那天已不在值日池的人」的系統預排：離職、排除名單、人事異動預約生效日起（o.blockedByDate），空出來的格子才重排。
+    const inPool = new Set(allEmployees
+        .filter((e) => !(e.hire === "兼職" && SC.PARTTIME_DUTY_EXCLUDE.includes(e.name)))
+        .map((e) => e.name));
+    const vacated = (r) => !inPool.has(r.emp) || !!(o.blockedByDate && o.blockedByDate[r.date] && o.blockedByDate[r.date].has(r.emp));
     const manualByDate = {};
     const toDelete = [];
     let lockedKept = 0;
     let manualKept = 0;
+    let assignedKept = 0;
     recs.forEach((r) => {
         if (r.type !== "值日") return;
         const p = r.date.replace(/\//g, "-").split("-");
@@ -389,8 +395,12 @@ SC.nextPlanDuty = (o) => {
             const floor = /^(1F|2F|3F|4F)$/.test(r.note) ? r.note : "";
             (manualByDate[r.date] ||= []).push({ empName: r.emp, floor });
             lockedKept++;
-        } else {
+        } else if (vacated(r)) {
             toDelete.push({ id: r.id, rec: r });
+        } else {
+            const floor = /^(1F|2F|3F|4F)$/.test(r.note) ? r.note : "";
+            (manualByDate[r.date] ||= []).push({ empName: r.emp, floor });
+            assignedKept++;
         }
     });
 
@@ -436,7 +446,7 @@ SC.nextPlanDuty = (o) => {
             });
         });
     });
-    return { toDelete, creates, warnings: plan.warnings, lockedKept, manualKept, plan };
+    return { toDelete, creates, warnings: plan.warnings, lockedKept, manualKept, assignedKept, plan };
 };
 
 // 值班名單面板列出的人：承攬與租賃部、買賣部正職，社宅部、設計部不列，不值班名單不列

@@ -375,10 +375,14 @@ const runNewDuty = (seed, todayStr, raw) => {
     return { deleted: r.toDelete.map((x) => x.id), created: r.creates, warnings: r.warnings };
 };
 
+// 2026-11-21 起新頁不再重洗已排好的系統預排（舊頁會），等價只比「這個月還沒有系統預排值日」的情況；
+// 已排好之後再按的行為見 tests/duty-keep.test.mjs。舊制清運紀錄兩邊都照舊刪掉。
+const withoutPlannedDuty = (raw) => Object.fromEntries(Object.entries(raw).filter(([, f]) =>
+    !(f[F.TYPE] === "值日" && f[F.DEPT] === "系統預排" && f[F.DATE].startsWith("2026/11") && !/清運|垃圾/.test(f[F.NOTE] || ""))));
 for (const [label, todayStr, kind] of [["整月未來（10/29）", "2026/10/29", ""], ["月中（11/12）", "2026/11/12", ""], ["月初當天（11/1）", "2026/11/01", ""], ["含舊制清運紀錄", "2026/10/29", "legacy"]]) {
     test(`等價：預排值日 — ${label}：刪除哪些、新增哪些，與舊頁 handleAutoSchedule 逐筆相同（5 種亂數種子）`, async () => {
         for (const seed of [1, 2, 3, 42, 2026]) {
-            const raw = mkRaw(kind);
+            const raw = withoutPlannedDuty(mkRaw(kind));
             const o = await runOldDuty({ seed, todayStr, raw });
             const n = runNewDuty(seed, todayStr, raw);
             eq(n.deleted, o.deleted, `seed ${seed} 刪除清單不同`);
