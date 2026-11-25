@@ -560,6 +560,30 @@ SC.nextPlanZhiban = (o) => {
     return { toDelete, creates, newZhiban };
 };
 
+// ── 預排見紅休（2026-11-25 補回：新版 10/31 上線時漏搬舊版「一鍵預排見紅休」，12 月五位正職紅日全空）──
+// 只補空格：明天起的紅日、禁休日除外、到職當天起；那人那天已有任何紀錄（含已取消的見紅休、打掃）就不動，所以重跑不會重複。
+SC.nextPlanGovRest = ({ year, month, todayStr, raw, noRest, employees }) => {
+    const F = SC.F_LEAVE;
+    if (!SC.isPrescheduledRestMonth(year, month)) return { error: "2026 年 8 月以前是舊制，不預排", creates: [], kept: 0, notEmployed: [] };
+    const taken = new Set(SC.nextParse(raw).map((r) => r.emp + "|" + r.date));
+    const byName = new Map((employees || []).map((e) => [e.name, e]));
+    const notEmployed = SC.GOV_REST_NAMES.filter((n) => !byName.has(n));
+    const creates = [];
+    let kept = 0;
+    const dim = new Date(year, month, 0).getDate();
+    for (let day = 1; day <= dim; day++) {
+        const dateStr = SC.fmtDate(year, month, day);
+        if (!SC.isGovRestDay(year, month, day) || noRest[dateStr] || SC.isDutyLocked(dateStr, todayStr)) continue;
+        for (const name of SC.GOV_REST_NAMES) {
+            const e = byName.get(name);
+            if (!e || SC._cmpDateStr(dateStr, e.hireDate || "0000/01/01") < 0) continue;
+            if (taken.has(name + "|" + dateStr)) { kept++; continue; }
+            creates.push({ [F.EMP]: name, [F.DATE]: dateStr, [F.YEAR]: String(year), [F.MONTH]: String(month), [F.TYPE]: "見紅休", [F.DEPT]: "系統預排見紅休" });
+        }
+    }
+    return { creates, kept, notEmployed };
+};
+
 // 檢查清單「補上」打掃：呼叫同一個值日演算法，只取指定那一天的結果（其餘缺的日子不動）
 SC.nextPlanFillCleanDay = (o, ds) => {
     const F = SC.F_LEAVE;

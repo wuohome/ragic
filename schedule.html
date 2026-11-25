@@ -1018,13 +1018,14 @@ function stepState(){
   for(var d=1;d<=S.M.dim;d++){var day=S.M.days[d];if(!day.duty.length)noDuty++;if(!day.noRest&&!day.cleanRecs.length)noClean++}
   return {noDuty:noDuty,noClean:noClean,s1:noDuty===0,s2:noClean===0};
 }
+function govRestPlan(){return SC.nextPlanGovRest({year:S.year,month:S.month,todayStr:TODAY,raw:S.raw,noRest:noRestMap(),employees:S.employees})}
 function headHTML(){
-  var st=stepState();
-  var line=!st.s1?'下一步：預排值班。值班照值班名單排，每天一位，倒垃圾歸值班的人。':
+  var st=stepState(),g0=!govRestPlan().creates.length;
+  var line=!g0?'下一步：預排見紅休。'+SC.GOV_REST_NAMES.join('、')+'六日和國定假日休假。':!st.s1?'下一步：預排值班。值班照值班名單排，每天一位，倒垃圾歸值班的人。':
     !st.s2?'下一步：預排值日。業務與兼職一人掃整棟，內勤兩人一組。':'';
   var chk=function(done){return done?IC.check:''};
   return '<div class="schedhead"><h1 class="title">'+S.month+' 月排班</h1>'+(line?'<p class="lede nextline">'+line+'</p>':'')+
-    '<div class="schedact"><button class="btn'+(st.s1?' btn2':'')+'" id="planZ">'+chk(st.s1)+'預排值班</button><button class="btn'+(st.s1&&!st.s2?'':' btn2')+'" id="planD">'+chk(st.s2)+'預排值日</button></div></div>';
+    '<div class="schedact"><button class="btn'+(g0?' btn2':'')+'" id="planG">'+chk(g0)+'預排見紅休</button><button class="btn'+(!g0||st.s1?' btn2':'')+'" id="planZ">'+chk(st.s1)+'預排值班</button><button class="btn'+(st.s1&&!st.s2?'':' btn2')+'" id="planD">'+chk(st.s2)+'預排值日</button></div></div>';
 }
 function checksHTML(){
   var list=SC.nextChecks(S.M,TODAY);
@@ -1097,7 +1098,7 @@ function renderSched(){
   if(!S.perms.schedule)return '<div class="view"><div class="state"><h1>這一頁只有珊珊和瓊安能用</h1><p>你可以看「我的班」「全體」「公平帳」。</p></div></div>';
   return '<div class="view"><div id="shead">'+headHTML()+'</div>'+
     '<div class="tools"><div class="seg"><span class="lb">點格子改</span><div role="group" aria-label="點格子時要改的項目">'+
-    [['rest','排休'],['texiu','特休'],['qingjia','請假'],['duty','值班'],['clean','打掃'],['confirm','標記沒做']].map(function(m){return '<button data-mode="'+m[0]+'" aria-pressed="'+(S.mode===m[0])+'">'+m[1]+'</button>'}).join('')+
+    [['rest','排休'],['am','上休'],['pm','下休'],['texiu','特休'],['qingjia','請假'],['duty','值班'],['clean','打掃'],['confirm','標記沒做']].map(function(m){return '<button data-mode="'+m[0]+'" aria-pressed="'+(S.mode===m[0])+'">'+m[1]+'</button>'}).join('')+
     '</div></div><div class="toolset">'+
     '<details name="tools"><summary>檢查<b id="chkN"></b></summary><div class="panel"><div id="schk">'+checksHTML()+'</div></div></details>'+
     '<details name="tools"'+(S.perms.confirm?'':' hidden')+'><summary>標記沒做</summary><div class="panel"><div id="scf">'+confirmHTML()+'</div></div></details>'+
@@ -1159,6 +1160,8 @@ function clickCell(n,d){
   if(v.gone){toast(esc(n)+'還沒到職。',true);return}
   var run;
   if(mode==='rest')run=doRest(n,d,v,'排休');
+  else if(mode==='am')run=doRest(n,d,v,'上休');
+  else if(mode==='pm')run=doRest(n,d,v,'下休');
   else if(mode==='texiu')run=doRest(n,d,v,'特休');
   else if(mode==='qingjia')run=doRest(n,d,v,'請假');
   else if(mode==='duty')run=doDuty(n,d,v,e);
@@ -1176,6 +1179,7 @@ function nextRestKind(cur,busy){
 }
 function restWord(k){return SC.HALF_REST_LABEL[k]||(k==='排休'?'休假':k)}
 function typeBody(k){var o={};o[F.TYPE]=k;return o}
+function confirmRedOff(n,d){return uiConfirm('取消見紅休？','<p><b>'+esc(n)+'</b> '+fmtMD(d)+'是見紅休。改上班後這天就要來上班，確定嗎？</p><p>點錯了再點一次「排休」就會恢復。</p>','改上班')}
 function doRest(n,d,v,kind){
   var perm=SC.nextCanEditRest({viewer:S.viewer,target:n,ds:ds(d),todayStr:TODAY,hasRedRecord:false});
   if(!perm.ok){toast(perm.why,true);return}
@@ -1188,14 +1192,16 @@ function doRest(n,d,v,kind){
   if(v.rest){
     if(v.rest.kind==='見紅休'){
       if(kind!=='排休'){toast(when+'已是正職休假，不用再排'+kind+'。',true);return}
-      return apiUpdate(v.rest.id,(function(){var o={};o[F.IS_AUTO]=SC.GOV_REST_CANCELLED;return o})()).then(function(){toast(when+'改上班。')});
+      return confirmRedOff(n,d).then(function(ok){if(!ok)return;
+        return apiUpdate(v.rest.id,(function(){var o={};o[F.IS_AUTO]=SC.GOV_REST_CANCELLED;return o})()).then(function(){toast(when+'改上班。')})});
     }
     if(kind==='排休'&&SC.REST_CYCLE.indexOf(v.rest.kind)>=0){
       var nx=v.red?'':nextRestKind(v.rest.kind,busy);
       if(nx)return apiUpdate(v.rest.id,typeBody(nx)).then(function(){toast(when+'改成'+restWord(nx)+'。')});
-      return apiDelete(v.rest.id).then(function(){toast(when+(v.red?'改上班。':'取消休假。'))});
+      if(v.red)return confirmRedOff(n,d).then(function(ok){if(ok)return apiDelete(v.rest.id).then(function(){toast(when+'改上班。')})});
+      return apiDelete(v.rest.id).then(function(){toast(when+'取消休假。')});
     }
-    if(busy&&kind!=='請假'&&v.rest.kind!==kind){toast(when+'已排'+(v.duty?'值班':'打掃')+'，先取消才能排'+kind+'。',true);return}
+    if(busy&&kind!=='請假'&&!SC.inForEvening(kind)&&v.rest.kind!==kind){toast(when+'已排'+(v.duty?'值班':'打掃')+'，先取消才能排'+kind+'。',true);return}
     if(v.rest.kind===kind)return apiDelete(v.rest.id).then(function(){toast(when+(kind==='排休'&&v.red?'改上班。':'取消'+kind+'。'))});
     return apiDelete(v.rest.id).then(create).then(function(){toast(when+'改成'+kind+'。')});
   }
@@ -1429,6 +1435,26 @@ function planDuty(){
           if(r.warnings.length)return uiAlert('預排完成，有幾件事要看一下','<p>'+r.warnings.map(esc).join('</p><p>')+'</p>');
         });
       },writeFailed);
+    });
+  }).catch(function(e){toast('預排失敗：'+(e&&e.message||e),true)}).then(function(){S.busy=false});
+}
+function planGovRest(){
+  if(!S.perms.schedule||!guardWrite())return;
+  if(monthAllPast()){uiAlert('這個月已經鎖定',S.year+' 年 '+S.month+' 月的日子都過去了，按預排不會改任何東西。');return}
+  S.busy=true;
+  fetchLeaves().then(function(raw){
+    S.raw=raw||{};rebuild();
+    var r=govRestPlan();
+    if(r.error){toast(r.error,true);return}
+    var miss=r.notEmployed.length?'<p>'+esc(r.notEmployed.join('、'))+'不在在職名單，沒有排。</p>':'';
+    if(!r.creates.length)return uiAlert(S.month+' 月見紅休都排好了','<p>明天起的六日和國定假日都有紀錄了，現在沒有空格要補。</p>'+miss+'<p>要調整個別日子請直接點格子。</p>');
+    var who={};r.creates.forEach(function(c){who[c[F.EMP]]=(who[c[F.EMP]]||0)+1});
+    var body='<p>幫'+esc(SC.GOV_REST_NAMES.join('、'))+'在明天起的六日和國定假日排見紅休（禁休日除外）。</p>'+
+      '<p>那天已經有排休、特休、打掃，或之前改成上班的，一律不動。</p>'+
+      '<p><b>新增 '+r.creates.length+' 筆</b>：'+esc(Object.keys(who).map(function(k){return k+' '+who[k]+' 天'}).join('、'))+'。</p>'+miss;
+    return uiConfirm('預排 '+S.month+' 月見紅休？',body,'開始預排').then(function(ok){
+      if(!ok)return;
+      return writeAll([],r.creates,'預排見紅休').then(function(res){return afterWrite(res,'見紅休預排好了：新增 '+res.addDone+' 筆。')},writeFailed);
     });
   }).catch(function(e){toast('預排失敗：'+(e&&e.message||e),true)}).then(function(){S.busy=false});
 }
@@ -1816,6 +1842,7 @@ document.addEventListener('click',function(e){
   if(t.dataset.rest){var r=+t.dataset.rest;S.openRest[r]=!S.openRest[r];var a=t.closest('.day');var f=document.createElement('div');f.innerHTML=dayHTML(r);a.replaceWith(f.firstChild);return}
   if(t.id==='fold'){S.showPast=!S.showPast;$('.days').classList.toggle('showpast',S.showPast);var n=0;for(var d=1;d<=S.M.dim;d++)if(isPastD(d))n++;t.textContent=(S.showPast?'收起已過的 ':'看已過的 ')+n+' 天';return}
   if(t.dataset.mode){S.mode=t.dataset.mode;$$('[data-mode]').forEach(function(b){b.setAttribute('aria-pressed',b===t)});return}
+  if(t.id==='planG'){planGovRest();return}
   if(t.id==='planZ'){planZhiban();return}
   if(t.id==='planD'){planDuty();return}
   if(t.dataset.go){jump(+t.dataset.go);return}
@@ -1924,6 +1951,7 @@ function rulesHTML(){
     '<li>在「我的班」自己排，下個月起都可以提前排。</li>'+
     '<li>到當月最後一天都能改下個月的休假；月份開始後鎖定，要改請找珊珊。</li>'+
     '<li>在「我的排休」點日期切換：休假 → 上休 → 下休 → 上班；正職休假的日子不能改。</li>'+
+    (S.perms.schedule?'<li>排班頁「點格子改」選「上休」或「下休」再點格子，就排半天；再點一次取消。</li><li>每月先按「預排見紅休」，'+esc(names)+'的六日和國定假日會自動排好；有人要來上班，選「排休」點那格改上班。</li>':'')+
     '<li>值班、打掃都在傍晚：上休當天照常排；下休當天跟排休一樣不排。</li></ul>'+
     '<h3>值班</h3><ul>'+
     '<li>19:00 到 20:00 多留一小時。</li>'+
