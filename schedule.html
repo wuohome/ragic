@@ -171,6 +171,9 @@ main{padding-block:8px 112px;min-height:80vh}
 .hero .sub{margin-top:12px;color:var(--ink2);font-size:15px;line-height:24px;max-width:560px}
 @media (min-width:768px){.hero .big{font-size:120px}.hero .big small{font-size:36px;line-height:40px}}
 @media (min-width:1100px){.hero .big{font-size:152px;letter-spacing:-.06em}}
+.hero .big.say{font-size:36px;line-height:42px;letter-spacing:-.04em}
+@media (min-width:768px){.hero .big.say{font-size:56px;line-height:60px}}
+@media (min-width:1100px){.hero .big.say{font-size:64px;line-height:68px;letter-spacing:-.05em}}
 .block{margin-top:48px}
 .mine>div>.block:first-child{margin-top:0}
 .block>.h2{margin-bottom:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:0 12px}
@@ -788,7 +791,7 @@ function heroHTML(n){
     var last=ds(S.M.dim);
     var over=SC._cmpDateStr(last,TODAY)<0;
     var title=over?'這個月已經過了':(items.some(function(i){return i.k==='c'})?'本月掃完了':'本月沒有排打掃');
-    return '<div class="hero"><h1><span class="ask">'+esc(n)+'，</span><span class="big">'+title+'</span></h1>'+
+    return '<div class="hero"><h1><span class="ask">'+esc(n)+'，</span><span class="big say">'+title+'</span></h1>'+
       '<p class="sub">'+(over?'':'下一次要等下個月排好才看得到。')+sub.join('')+'</p></div>';
   }
   var isToday=isTodayD(next.d);
