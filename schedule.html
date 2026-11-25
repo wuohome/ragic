@@ -1203,6 +1203,7 @@ function doRest(n,d,v,kind){
     }
     if(busy&&kind!=='請假'&&!SC.inForEvening(kind)&&v.rest.kind!==kind){toast(when+'已排'+(v.duty?'值班':'打掃')+'，先取消才能排'+kind+'。',true);return}
     if(v.rest.kind===kind)return apiDelete(v.rest.id).then(function(){toast(when+(kind==='排休'&&v.red?'改上班。':'取消'+kind+'。'))});
+    if(SC.REST_CYCLE.indexOf(kind)>=0&&SC.REST_CYCLE.indexOf(v.rest.kind)>=0)return apiUpdate(v.rest.id,typeBody(kind)).then(function(){toast(when+'改成'+restWord(kind)+'。')});
     return apiDelete(v.rest.id).then(create).then(function(){toast(when+'改成'+kind+'。')});
   }
   if(v.cancelled&&kind==='排休'){
