@@ -249,15 +249,15 @@ main{padding-block:8px 112px;min-height:80vh}
 .schedact .btn svg{flex:none;margin-left:-4px}
 @media (max-width:767px){.schedact{width:100%;margin-left:0}.schedact .btn{flex:1;padding-inline:8px}}
 /* 工具列：固定高度，細節收在展開面板 */
-.tools{position:relative;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:8px 32px;min-height:56px;margin-top:8px;border-top:1px solid var(--line2);background:var(--bg)}
+.tools{position:relative;z-index:20;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 32px;min-height:56px;margin-top:8px;border-top:1px solid var(--line2);background:var(--bg)}
 .seg{display:inline-flex;align-items:center;gap:12px}
 .seg .lb{font-size:14px;line-height:20px;color:var(--ink2);white-space:nowrap}
 .seg div{display:inline-flex;outline:1px solid var(--ink);outline-offset:-1px}
-.seg button{min-height:40px;padding-inline:16px;font-size:15px;line-height:20px;font-weight:600;color:var(--ink2);transition:background-color 150ms var(--ease),color 150ms var(--ease)}
+.seg button{white-space:nowrap;min-height:40px;padding-inline:16px;font-size:15px;line-height:20px;font-weight:600;color:var(--ink2);transition:background-color 150ms var(--ease),color 150ms var(--ease)}
 .seg button:hover{color:var(--ink);background:var(--bg2)}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
-.toolset{display:flex;align-items:center;gap:4px}
-.toolset summary{display:flex;align-items:center;gap:6px;min-height:44px;padding-inline:14px;font-size:15px;line-height:20px;font-weight:600;color:var(--ink);cursor:pointer;list-style:none;-webkit-tap-highlight-color:transparent}
+.toolset{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.toolset summary{white-space:nowrap;display:flex;align-items:center;gap:6px;min-height:44px;padding-inline:14px;font-size:15px;line-height:20px;font-weight:600;color:var(--ink);cursor:pointer;list-style:none;-webkit-tap-highlight-color:transparent}
 .toolset summary::-webkit-details-marker{display:none}
 .toolset summary::after{content:"";width:6px;height:6px;margin-left:2px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2px) rotate(45deg);transition:transform 150ms var(--ease)}
 .toolset details[open] summary{background:var(--ink);color:var(--on-ink)}
