@@ -175,6 +175,10 @@ const SC = {
 };
 
 // ── 工具函式 ──
+// 排班上算「業務」（輪值班、進工作日誌看板）的聘雇類別。普專＝有底薪的業務（僱傭制），排班當承攬，
+// 但薪資面是勞工：公基金代扣只看 "承攬"（schedule-fund-core.js），不要改用這個（2026-11-26 瓊安拍板）。
+SC.BIZ_HIRES = ["承攬", "普專"];
+SC.isBizHire = (hire) => SC.BIZ_HIRES.includes(hire);
 SC.fmtDate = (y, m, d) => `${y}/${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")}`;
 SC.getHolidayName = (y, m, d) => SC.HOLIDAYS_2026[SC.fmtDate(y, m, d)] || "";
 SC.isGovHoliday = (dateStr, isWeekend) => isWeekend || dateStr in SC.HOLIDAYS_2026;
@@ -479,9 +483,9 @@ SC.computeFairnessLedger = (employees, leaveRecords, todayStr) => {
             ledger[r.empName].trash[period].actual += 1;
         });
 
-        // ── 值班帳（只有承攬，排除黑名單/社宅部/設計部）──
+        // ── 值班帳（只有承攬、普專，排除黑名單/社宅部/設計部）──
         const zhibanPool = employees.filter(e => {
-            if (e.hire !== "承攬") return false;
+            if (!SC.isBizHire(e.hire)) return false;
             if (e.dept === "社宅部" || e.dept === "設計部") return false;
             if (SC.ZHIBAN_BLACKLIST && SC.ZHIBAN_BLACKLIST.includes(e.name)) return false;
             if (offToday.has(e.name)) return false;

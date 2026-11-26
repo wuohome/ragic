@@ -517,10 +517,10 @@ body:has(#mxwrap) .shell{padding-top:var(--bar)}
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div id="modalRoot"></div>
 
-<script src="schedule-common.js?v=20261120-2"></script>
+<script src="schedule-common.js?v=20261126-1"></script>
 <script src="schedule-duty-v2.js?v=20261031-9"></script>
-<script src="schedule-next-core.js?v=20261125-1"></script>
-<script src="schedule-pc-core.js?v=20261116-1"></script>
+<script src="schedule-next-core.js?v=20261126-1"></script>
+<script src="schedule-pc-core.js?v=20261126-1"></script>
 <script src="schedule-fund-core.js?v=20261106-1"></script>
 <script src="js/staff-gate.js?v=20261120-1"></script>
 <script>
@@ -786,7 +786,7 @@ function heroHTML(n){
   if(dutyNext)sub.push('下次值班 '+fmtMD(dutyNext.d)+'，'+(hasTruck(dutyNext.d)?'那天要倒垃圾。':'那天沒垃圾車，不用倒。'));
   else if(kind==='office')sub.push('內勤不排值班，六日也不排打掃。');
   else if(kind==='parttime')sub.push('兼職每月排一次，不排值班。');
-  else if(e&&e.hire!=='承攬')sub.push('你不排值班。');
+  else if(e&&!SC.isBizHire(e.hire))sub.push('你不排值班。');
   if(!next){
     var last=ds(S.M.dim);
     var over=SC._cmpDateStr(last,TODAY)<0;
@@ -1137,7 +1137,7 @@ function refreshAny(){
 function eligibleZhiban(e){
   if(!e)return '找不到這位同仁';
   if(S.dutyPool&&S.dutyPool.indexOf(e.name)>=0)return '';
-  if(e.hire!=='承攬')return '值班只排承攬業務，'+e.name+'是'+groupLabel(e.name);
+  if(!SC.isBizHire(e.hire))return '值班只排承攬、普專業務，'+e.name+'是'+groupLabel(e.name);
   if(e.dept==='社宅部'||e.dept==='設計部')return '社宅部、設計部不排值班';
   if(SC.ZHIBAN_BLACKLIST&&SC.ZHIBAN_BLACKLIST.indexOf(e.name)>=0)return e.name+'在不值班名單內';
   return '';

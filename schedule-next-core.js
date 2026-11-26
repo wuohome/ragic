@@ -307,7 +307,7 @@ SC.nextBuildEmployees = (empJson, year, month) => {
         return 5;
     };
     const employees = allEmps
-        .filter((e) => e.hire === "承攬" || e.hire === "正職" || e.name === "韓珊珊" || e.dept === "設計部" || e.dept === "行銷部" || e.name === "張瓊安" || e.dept === "社宅部" || isDutyPartTime(e))
+        .filter((e) => SC.isBizHire(e.hire) || e.hire === "正職" || e.name === "韓珊珊" || e.dept === "設計部" || e.dept === "行銷部" || e.name === "張瓊安" || e.dept === "社宅部" || isDutyPartTime(e))
         .map((e) => (isDutyPartTime(e) ? { ...e, dept: "兼職", rawDept: e.dept } : e.name === "韓珊珊" ? { ...e, dept: "管理部/秘書", rawDept: e.dept } : e.name === "張瓊安" ? { ...e, dept: "管理部/特助", rawDept: e.dept } : { ...e, rawDept: e.dept }))
         .sort((a, b) => getDeptOrder(a.dept) - getDeptOrder(b.dept) || a.hireDate.localeCompare(b.hireDate));
     return { allEmployees, employees };
@@ -449,22 +449,22 @@ SC.nextPlanDuty = (o) => {
     return { toDelete, creates, warnings: plan.warnings, lockedKept, manualKept, assignedKept, plan };
 };
 
-// 值班名單面板列出的人：承攬與租賃部、買賣部正職，社宅部、設計部不列，不值班名單不列
+// 值班名單面板列出的人：承攬、普專與租賃部、買賣部正職，社宅部、設計部不列，不值班名單不列
 SC.nextZhibanCandidates = (employees) => employees.filter((e) => {
     if (e.dept === "社宅部" || e.dept === "設計部") return false;
     if (SC.ZHIBAN_BLACKLIST && SC.ZHIBAN_BLACKLIST.includes(e.name)) return false;
-    return e.hire === "承攬" || (e.hire === "正職" && (e.dept === "租賃部" || e.dept === "買賣部"));
+    return SC.isBizHire(e.hire) || (e.hire === "正職" && (e.dept === "租賃部" || e.dept === "買賣部"));
 });
 
 // 值班預排的候選人。poolNames 是珊珊、瓊安在值班名單勾選的結果，有存過就只看它；
-// 沒存過（null）照舊規則：承攬、非社宅部／設計部、不在不值班名單、到職滿 90 天（對照 handleAutoZhiban）
+// 沒存過（null）照舊規則：承攬或普專、非社宅部／設計部、不在不值班名單、到職滿 90 天（對照 handleAutoZhiban）
 SC.nextZhibanEligible = (employees, year, month, poolNames) => {
     if (Array.isArray(poolNames)) {
         return SC.nextZhibanCandidates(employees).filter((e) => poolNames.includes(e.name));
     }
     const schedStart = new Date(year, month - 1, 1);
     return employees.filter((e) => {
-        if (e.hire !== "承攬") return false;
+        if (!SC.isBizHire(e.hire)) return false;
         if (e.dept === "社宅部") return false;
         if (e.dept === "設計部") return false;
         if (SC.ZHIBAN_BLACKLIST && SC.ZHIBAN_BLACKLIST.includes(e.name)) return false;

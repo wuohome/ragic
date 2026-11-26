@@ -1082,9 +1082,9 @@ function deptParam() {
   const q = (new URLSearchParams(location.search).get('dept') || '').trim();
   return DEPT_OPTIONS.find(d => d === q || d.replace(/部$/, '') === q) || '';
 }
-// 報到連結可帶 ?hire=正職／兼職／承攬，寫進人事表聘雇類別，由發連結的人決定（2026-11-16，比照 dept）。
+// 報到連結可帶 ?hire=正職／兼職／承攬／普專，寫進人事表聘雇類別，由發連結的人決定（2026-11-16，比照 dept）。
 // 沒帶或打錯就不送；空白的由排班每天檢查提醒人資部補。
-const HIRE_OPTIONS = ['正職','兼職','承攬'];
+const HIRE_OPTIONS = ['正職','兼職','承攬','普專'];
 function hireParam() {
   const q = (new URLSearchParams(location.search).get('hire') || '').trim();
   return HIRE_OPTIONS.includes(q) ? q : '';

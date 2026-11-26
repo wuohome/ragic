@@ -52,7 +52,7 @@
 </head>
 <body style="margin:0;background:#f8fafc;min-height:100vh">
 <div id="root"></div>
-<script src="schedule-common.js?v=20261120-2"></script>
+<script src="schedule-common.js?v=20261126-1"></script>
 <script src="js/staff-gate.js?v=20261120-1"></script>
 <script type="text/babel">
 
@@ -145,7 +145,7 @@ async function loadEmployees() {
       const hire = r[SC.F_EMP.HIRE];
       if (status !== '在職') return false;
       if (dept === '經營階層') return false;
-      if (hire === '承攬') return true;
+      if (SC.isBizHire(hire)) return true;
       if (hire === '正職') return true; // 2026-10-29 小鐘轉租賃部正職，與 schedule.html 人員範圍一致
       if (name === '韓珊珊') return true;
       if (dept === '設計部') return true;
@@ -1114,7 +1114,7 @@ function TeamView({ emps, onBack }) {
               <hr style={{ border:'none',borderTop:'1px solid #e5e7eb',margin:'12px 0' }}/>
               <p><b>⚡ 值班規則</b></p>
               <ul style={{ paddingLeft:20,margin:'4px 0' }}>
-                <li>資格：承攬＋到職滿 3 個月（社宅部除外）</li>
+                <li>資格：承攬或普專＋到職滿 3 個月（社宅部除外）</li>
                 <li>每月從零開始，當月均勻分配，不追歷史</li>
                 <li>新人入池不用補前人的值班次數</li>
               </ul>
@@ -1193,7 +1193,7 @@ function TeamView({ emps, onBack }) {
                   const dc = getDeptColor(emp.dept);
                   const ps = prevStatsData[emp.name];
                   const pm = month === 1 ? 12 : month - 1;
-                  const showZhiban = emp.hire === '承攬' && emp.rawDept !== '社宅部';
+                  const showZhiban = SC.isBizHire(emp.hire) && emp.rawDept !== '社宅部';
                   return (
                     <th key={emp.name} style={{
                       minWidth: 48, padding: '4px 4px',
