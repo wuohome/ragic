@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-24T08:32:17+08:00",
+ "generatedAt": "2026-11-26T08:32:17+08:00",
  "listings": {
   "19": [
    "https://img1.591.com.tw/house/2026/01/22/176905314717013002.jpg",
@@ -406,6 +406,34 @@
    "https://img1.591.com.tw/house/2026/11/24/179545247374127909.jpeg",
    "https://img1.591.com.tw/house/2026/11/24/179545247241639802.jpeg",
    "https://img1.591.com.tw/house/2026/11/24/179545247209809109.jpeg"
+  ],
+  "757": [
+   "https://img1.591.com.tw/house/2026/11/25/179562058036316509.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179562100418054107.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179562057954161104.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179562057880247802.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179562057882276204.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179562057811188505.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179562057895362700.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179562057836653001.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179562057827644208.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179562057915527409.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179562046697413405.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179562046753312504.jpeg"
+  ],
+  "758": [
+   "https://img1.591.com.tw/house/2026/11/25/179561115518587608.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179561115246912806.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179561115229201103.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179561115112955308.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179561115216374205.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179561135876437909.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179561115125579507.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179561115150182809.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179561142035644807.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179561135893437300.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179561135869607206.jpeg",
+   "https://img1.591.com.tw/house/2026/11/25/179561135929880500.jpeg"
   ]
  },
  "provenance": {
@@ -551,8 +579,18 @@
   },
   "754": {
    "houseId": "22397936",
+   "how": "link",
+   "why": "Ragic 連結欄直接指到這則現役廣告"
+  },
+  "757": {
+   "houseId": "22408330",
    "how": "match",
-   "why": "新莊區新興街108巷／坪數吻合／業務吻合"
+   "why": "三重區神農街／17 樓／租金 37000／格局 3房2廳2衛／業務吻合"
+  },
+  "758": {
+   "houseId": "22407034",
+   "how": "link",
+   "why": "Ragic 連結欄直接指到這則現役廣告"
   }
  },
  "source": "591-own-ads",
