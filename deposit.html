@@ -1218,11 +1218,17 @@ input[type="date"] {
     </section>
 
     <!-- ═══════════════════════════════════════
-         STEP 3：定金與日期
+         STEP 3：要約條件與定金（先談條件、後收錢，2026-11-26）
     ═══════════════════════════════════════ -->
     <section class="step-panel" id="step3">
-      <h1 class="step-heading">定金與日期</h1>
-      <p class="step-sub">確認要約定金金額與各項日期。</p>
+      <h1 class="step-heading">要約條件與定金</h1>
+      <p class="step-sub">先寫下跟房客談好的條件，再填定金與日期。</p>
+
+      <!-- 要約條件 -->
+      <div class="field-group">
+        <label class="field-label" for="eid1000831">要約條件 <span style="font-weight:400;color:var(--text-muted);font-size:13px;">（選填）</span></label>
+        <textarea class="input" id="eid1000831" name="1000831" placeholder="例：需附停車位、限養寵物…"></textarea>
+      </div>
 
       <!-- 要約定金 -->
       <div class="field-group">
@@ -1272,7 +1278,7 @@ input[type="date"] {
 
         <div class="conditional-fields" id="transferFields">
           <div class="field-group" style="margin-bottom:0;">
-            <label class="field-label" for="eid1000836">匯款後五碼 <span class="required">*</span></label>
+            <label class="field-label" for="eid1000836">匯款後五碼 <span style="font-weight:400;color:var(--text-muted);font-size:13px;">（選填，房客還沒匯款可先空著，之後到 Ragic 定金單補）</span></label>
             <input class="input" id="eid1000836" name="1000836" type="text"
               inputmode="numeric" maxlength="5" placeholder="例：12345"
               oninput="this.value=this.value.replace(/\D/g,'').slice(0,5)">
@@ -1281,11 +1287,6 @@ input[type="date"] {
         </div>
       </div>
 
-      <!-- 要約條件 -->
-      <div class="field-group">
-        <label class="field-label" for="eid1000831">要約條件 <span style="font-weight:400;color:var(--text-muted);font-size:13px;">（選填）</span></label>
-        <textarea class="input" id="eid1000831" name="1000831" placeholder="例：需附停車位、限養寵物…"></textarea>
-      </div>
     </section>
 
     <!-- ═══════════════════════════════════════
@@ -1795,8 +1796,8 @@ function validateStep(n) {
     // 匯款後五碼
     if (em === "匯款") {
       const code = document.getElementById("eid1000836").value.trim();
-      if (code.length !== 5) {
-        showErr("err-transfer", "請輸入 5 位數字");
+      if (code !== "" && code.length !== 5) {
+        showErr("err-transfer", "後五碼要 5 位數字；還沒拿到就先空著");
         markInputErr(document.getElementById("eid1000836"));
         ok = false;
       } else { clearErr("err-transfer"); clearInputErr(document.getElementById("eid1000836")); }
@@ -2246,7 +2247,9 @@ function buildReview() {
     if (pno) parkingRows.push(["車位編號", pno]);
   }
 
+  const terms = document.getElementById("eid1000831").value.trim();
   const earnestRows = [
+    ["要約條件", terms || "無"],
     ["要約定金", displayMoney(document.getElementById("eid1000832").value) + " 元"],
     ["收款日期", toRagicDate(document.getElementById("eid1000798").value)],
     ["簽約日", toRagicDate(document.getElementById("eid1000833").value)],
@@ -2254,10 +2257,8 @@ function buildReview() {
     ["付法", earnestMethod],
   ];
   if (earnestMethod === "匯款") {
-    earnestRows.push(["匯款後五碼", document.getElementById("eid1000836").value]);
+    earnestRows.push(["匯款後五碼", document.getElementById("eid1000836").value.trim() || "尚未提供（之後補）"]);
   }
-  const terms = document.getElementById("eid1000831").value.trim();
-  if (terms) earnestRows.push(["要約條件", terms]);
 
   const staffRows = [
     ["經辦人員", document.getElementById("eid1000793").value || document.getElementById("staffSearch").value],
@@ -2288,7 +2289,7 @@ function buildReview() {
         ["付款方式", getRadioVal("payMethod")],
       ]
     },
-    { title: "定金與日期", rows: earnestRows },
+    { title: "要約條件與定金", rows: earnestRows },
     { title: "經辦與租客", rows: staffRows },
   ];
 
