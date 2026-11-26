@@ -354,3 +354,9 @@ export function escHtml(s) {
   d.textContent = s || '';
   return d.innerHTML;
 }
+
+// 台北的「今天」YYYY/MM/DD。不能用 new Date().toISOString()：那是 UTC，台北早上 8 點前會變成昨天
+export function twToday(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(now).replace(/-/g, '/');
+}

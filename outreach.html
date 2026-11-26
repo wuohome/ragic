@@ -30,7 +30,7 @@
     import {
       ensureAuth, renderUserBadge, isManager, ragicGet, ragicPost,
       normalizeName, isExcluded, showToast, showLoading, confirmDialog,
-      escHtml, checkAddressCompleteness, completenessEmoji,
+      escHtml, checkAddressCompleteness, completenessEmoji, twToday,
     } from './js/shared.js';
 
     const app = document.getElementById('app');
@@ -423,7 +423,7 @@
       }
 
       // ── Render Logs ──
-      const today = new Date().toISOString().slice(0, 10).replace(/-/g, '/');
+      const today = twToday();
       const logState = isNew ? [{ date: today, method: '', content: '', recorder: user.name, subId: null }]
         : (rec.logs.length ? rec.logs.map(l => ({ ...l })) : [{ date: today, method: '', content: '', recorder: user.name, subId: null }]);
 
@@ -618,7 +618,7 @@
             '1000055': addr,             // 地址
             '1000076': p.rent,           // 月租金
             '1000707': '輸入中',         // 狀態 = 輸入中
-            '1000260': new Date().toISOString().slice(0,10).replace(/-/g,'/'),  // 委託時間(起) = 今天
+            '1000260': twToday(),  // 委託時間(起) = 今天
           };
           const result = await ragicPost('operation/4', propFields);
           const newPropId = result.ragicId;
