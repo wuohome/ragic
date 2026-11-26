@@ -522,7 +522,7 @@ body:has(#mxwrap) .shell{padding-top:var(--bar)}
 <script src="schedule-next-core.js?v=20261126-1"></script>
 <script src="schedule-pc-core.js?v=20261126-1"></script>
 <script src="schedule-fund-core.js?v=20261106-1"></script>
-<script src="js/staff-gate.js?v=20261120-1"></script>
+<script src="js/staff-gate.js?v=20261126-1"></script>
 <script>
 (function(){
 'use strict';
@@ -1797,7 +1797,7 @@ function monthNavHTML(){
   return '<div class="monthnav"><button class="iconbtn" data-mn="-1" aria-label="上個月">‹</button><b>'+S.year+' 年 '+S.month+' 月</b><button class="iconbtn" data-mn="1" aria-label="下個月">›</button></div>';
 }
 function stateHTML(){
-  if(S.boot==='login')return '<div class="state"><h1>請用公司的 Google 帳號登入</h1><p>登入一次後，30 天內不用再登入。沒有跳出登入畫面的話，請重新整理頁面。</p><div class="skel"><i></i><i></i><i></i></div></div>';
+  if(S.boot==='login')return '<div class="state"><h1>請登入</h1><p>可用公司的 Google 帳號，或 Email＋密碼。登入一次後，30 天內不用再登入（無痕模式關掉就要重登）。沒有跳出登入畫面的話，請重新整理頁面。</p><div class="skel"><i></i><i></i><i></i></div></div>';
   if(S.boot==='loading')return '<div class="state"><h1>載入 '+S.month+' 月排班…</h1><div class="skel"><i></i><i></i><i></i></div></div>';
   var btn=S.errAct==='reload'?'<button class="btn" id="reloadBtn">重新整理</button>':'<button class="btn" id="retryBtn">再試一次</button>';
   return '<div class="state"><h1>'+esc(S.errTitle)+'</h1><p>'+esc(S.err)+'</p>'+btn+'</div>';
@@ -1808,7 +1808,7 @@ function render(){
     if(b.getAttribute('data-view')===S.view)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');
   });
   var nr=$('#noteR');
-  if(S.viewer){nr.innerHTML='<span>'+esc(S.viewer.name)+'・'+(S.viewer.role==='admin'?'可排班':'同仁')+'</span><button class="link" id="logout">登出</button>'}
+  if(S.viewer){nr.innerHTML='<span>'+esc(S.viewer.name)+'・'+(S.viewer.role==='admin'?'可排班':'同仁')+'</span><button class="link" id="setPw">設定密碼</button><button class="link" id="logout">登出</button>'}
   else nr.innerHTML='';
   if(S.boot!=='ready'){main.innerHTML=stateHTML();return}
   main.innerHTML=(S.view==='fund'?'':monthNavHTML())+({me:renderMe,all:renderAll,sched:renderSched,fair:renderFair,fund:renderFund}[S.view]||renderMe)();paintCheckCount();
@@ -1833,6 +1833,7 @@ document.addEventListener('click',function(e){
   if(t.id==='theme'){toggleTheme();return}
   if(t.id==='reloadBtn'){location.reload();return}
   if(t.id==='retryBtn'){if(S.viewer)loadData();else start();return}
+  if(t.id==='setPw'){StaffGate.passwordDialog();return}
   if(t.id==='logout'){
     S.viewer=null;S.perms=SC.nextPerms(null);$('#tabSched').hidden=true;S.boot='login';S.raw={};render();
     StaffGate.logout();
