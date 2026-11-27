@@ -279,6 +279,14 @@ test("檢查清單：曾琬容週一、週五排了打掃要提醒（今天以�
     assert.equal(past.length, 0, "11/23 已過，不提醒");
 });
 
+test("在別處上班：曾琬容週一、週五回「如果人生」，其他天與其他人回空字串", () => {
+    const SC = plainSC();
+    assert.equal(SC.offsiteWhere("曾琬容", "2026/12/07"), "如果人生");
+    assert.equal(SC.offsiteWhere("曾琬容", "2026/12/11"), "如果人生");
+    assert.equal(SC.offsiteWhere("曾琬容", "2026/12/08"), "");
+    assert.equal(SC.offsiteWhere("呂鴻墀", "2026/12/07"), "");
+});
+
 test("沒有名字的紀錄：檢查清單要提醒，不能靜靜消失", () => {
     const SC = plainSC();
     const raw = {
