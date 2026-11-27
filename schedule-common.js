@@ -139,6 +139,9 @@ const SC = {
     // 打掃、值班不排六日的人（兼職在名單上時，國定假日也不排）
     // 白欣宜：2026-11-27 瓊安「白欣宜轉兼職 但她只能平日來打掃」
     DUTY_WEEKDAY_ONLY_NAMES: ["蕭頤臻", "白欣宜"],
+    // 固定某幾個星期幾不在辦公室、不排打掃的人（0=週日…6=週六）
+    // 曾琬容：2026-11-27 瓊安「花那 她一五不會進辦公室（在如果人生上班）」
+    DUTY_OFF_WEEKDAYS: { "曾琬容": [1, 5] },
 
     // ── 不值班名單（滿 3 個月但 Joan 判斷尚不適合值班的人）──
     // 加人：直接在陣列加姓名字串。移除：刪掉該字串即可。
@@ -183,6 +186,7 @@ SC.isBizHire = (hire) => SC.BIZ_HIRES.includes(hire);
 SC.fmtDate = (y, m, d) => `${y}/${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")}`;
 SC.getHolidayName = (y, m, d) => SC.HOLIDAYS_2026[SC.fmtDate(y, m, d)] || "";
 SC.isGovHoliday = (dateStr, isWeekend) => isWeekend || dateStr in SC.HOLIDAYS_2026;
+SC.isDutyOffWeekday = (name, dateStr) => (SC.DUTY_OFF_WEEKDAYS[name] || []).includes(new Date(dateStr.replace(/\//g, "-") + "T00:00:00").getDay());
 SC.isOpenPeriod = () => new Date().getDate() >= 20;
 // 同仁自己排休（瓊安 2026-10-31）：下個月起都能提前排，到當月最後一天都能改；月份一開始就鎖定，只有珊珊能改
 SC.isRestMonthOpen = (year, month, now = new Date()) =>

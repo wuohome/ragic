@@ -1250,6 +1250,7 @@ function doClean(n,d,v,e){
     var A=SC.OFFICE_DUTY_SPLIT.A.map(function(f){return +f[0]}),B=SC.OFFICE_DUTY_SPLIT.B.map(function(f){return +f[0]});
     if(!cur)next=A;else if(cur.floors.join()===A.join())next=B;else next=null;
   }else next=cur?null:[1,2,3,4];
+  if(next&&SC.isDutyOffWeekday(n,ds(d))){if(!cur){toast(esc(n)+'週'+SC.DAYS_TW[day.dow]+'不在辦公室，不排打掃。',true);return}next=null}
   var taken={};day.cleanRecs.forEach(function(c){if(c.name!==n)taken[c.floor]=c.name});
   if(next){
     var clash=next.filter(function(f){return taken[f]})[0];
@@ -1923,6 +1924,10 @@ function curTheme(){
   var a=document.documentElement.getAttribute('data-theme');
   return a||'light';
 }
+function offWeekdaysNote(){
+  var t=Object.keys(SC.DUTY_OFF_WEEKDAYS).map(function(n){return esc(n)+SC.DUTY_OFF_WEEKDAYS[n].map(function(w){return '週'+SC.DAYS_TW[w]}).join('、')}).join('；');
+  return t?'<li>'+t+'不在辦公室，這幾天不排打掃。</li>':'';
+}
 function rulesHTML(){
   var y=S.year,m=S.month,limit=SC.monthLeaveLimit(y,m),names=SC.GOV_REST_NAMES.join('、');
   var v2=SC.isDutyV2Month(y,m);
@@ -1931,6 +1936,7 @@ function rulesHTML(){
     '<li><b>業務、兼職：</b>一個人一天掃整棟，當天做完就好，可以分時段。</li>'+
     '<li><b>內勤：</b>兩人一組，一人 1＋4 樓、一人 2＋3 樓，搭檔和樓層會輪替；只排平日，六日和國定假日不排。</li>'+
     '<li><b>兼職：</b>每月一次，排在六日，六日不夠才排平日；不值班、不倒垃圾。</li>'+
+    offWeekdaysNote()+
     '<li>值班和打掃各排各的；同一個人不連續兩天打掃。</li>'+
     '<li>私下換班、代掃都可以，當天有人掃完就好。</li>'+
     '<li>有沒有打掃、有沒有倒垃圾由珊珊確認，同仁不用回報。</li>'+

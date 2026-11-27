@@ -280,6 +280,26 @@ test("白欣宜（兼職）只排平日、國定假日也不排；拿掉規則�
     assert.ok(hit, "拿掉規則也從未排到六日");
 });
 
+test("曾琬容週一、週五不排打掃；拿掉規則會排到，證明測試有鑑別力", async () => {
+    // 2026-11-27 瓊安：「花那 她一五不會進辦公室（在如果人生上班）」
+    const badDays = (created) => {
+        const days = byDay(created);
+        return Object.keys(days).filter(k => days[k]["曾琬容"] && [1, 5].includes(dow(k)));
+    };
+    for (let k = 0; k < 60; k++) {
+        const { log } = await run({ todayStr: "2026/11/27", month: 12 });
+        const days = byDay(log.created);
+        assert.ok(Object.keys(days).some(k2 => days[k2]["曾琬容"]), "曾琬容 12 月一次都沒排到");
+        assert.deepEqual(badDays(log.created), [], "排到週一或週五");
+    }
+    let hit = false;
+    for (let k = 0; k < 200 && !hit; k++) {
+        const off = await run({ todayStr: "2026/11/27", month: 12, tweak: (SC) => { SC.DUTY_OFF_WEEKDAYS = {}; } });
+        hit = badDays(off.log.created).length > 0;
+    }
+    assert.ok(hit, "拿掉規則也從未排到週一或週五");
+});
+
 test("不產生獨立清運紀錄（備註不含清運/垃圾/全棟關鍵字）；也不再回填清運", async () => {
     const { log } = await run({ todayStr: "2026/10/29" });
     assert.equal(log.created.filter(r => trashNote(r[F.NOTE])).length, 0);

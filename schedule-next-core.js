@@ -266,6 +266,12 @@ SC.nextChecks = (M, todayStr) => {
             if (jobs.length && fixable) out.push({ d, kind: "twice", fix: null, text: `${x.name} ${lab(d)}${SC.HALF_REST_LABEL[x.kind] || "休假"}，但同一天排了${jobs.join("和")}` });
         });
     }
+    for (let d = 1; d <= M.dim; d++) {
+        const day = M.days[d];
+        if (SC._cmpDateStr(day.ds, todayStr) <= 0) continue;
+        [...new Set(day.clean.map((g) => g.name))].filter((n) => SC.isDutyOffWeekday(n, day.ds))
+            .forEach((n) => out.push({ d, kind: "twice", fix: null, text: `${n}週${W[day.dow]}不在辦公室，但 ${lab(d)}排了打掃` }));
+    }
     SC.DUTY_NOT_ADJACENT_PAIRS.forEach(([a, b]) => {
         const has = (n, d) => M.days[d].clean.some((g) => g.name === n);
         for (let d = 1; d < M.dim; d++) {

@@ -268,6 +268,17 @@ test("檢查清單：缺樓層、沒值班、連兩天、多人值班；補上�
     assert.ok(!c2.some((x) => x.d === 13 && x.kind === "clean"));
 });
 
+test("檢查清單：曾琬容週一、週五排了打掃要提醒（今天以前不提醒）", () => {
+    const SC = plainSC();
+    const raw = {}; let i = 1;
+    const add = (date, name, note) => { raw[i++] = { [F.EMP]: name, [F.DATE]: date, [F.TYPE]: "值日", [F.NOTE]: note, [F.IS_AUTO]: "", [F.DEPT]: "x" }; };
+    ["1F", "4F"].forEach((f) => { add("2026/12/07", "曾琬容", f); add("2026/12/08", "曾琬容", f); add("2026/11/23", "曾琬容", f); });
+    const c = SC.nextChecks(SC.nextBuildMonth(SC.nextParse(raw), 2026, 12), "2026/11/27").filter((x) => x.text.includes("不在辦公室"));
+    assert.deepEqual([...c.map((x) => x.text)], ["曾琬容週一不在辦公室，但 12/7（一）排了打掃"]);
+    const past = SC.nextChecks(SC.nextBuildMonth(SC.nextParse(raw), 2026, 11), "2026/11/27").filter((x) => x.text.includes("不在辦公室"));
+    assert.equal(past.length, 0, "11/23 已過，不提醒");
+});
+
 test("沒有名字的紀錄：檢查清單要提醒，不能靜靜消失", () => {
     const SC = plainSC();
     const raw = {

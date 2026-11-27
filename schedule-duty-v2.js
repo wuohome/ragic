@@ -106,7 +106,7 @@ SC.planDutyV2 = (o) => {
     const dowOf = (d) => new Date(year, month - 1, d).getDay();
     const shuffle = (arr) => arr.map(x => [rand(), x]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
     const isWeekendDs = (ds) => { const dw = new Date(ds).getDay(); return dw === 0 || dw === 6; };
-    const isOff = (name, ds) => !!(offByDate[ds] && offByDate[ds].has(name)) || (SC.DUTY_WEEKDAY_ONLY_NAMES.includes(name) && isWeekendDs(ds));
+    const isOff = (name, ds) => !!(offByDate[ds] && offByDate[ds].has(name)) || (SC.DUTY_WEEKDAY_ONLY_NAMES.includes(name) && isWeekendDs(ds)) || SC.isDutyOffWeekday(name, ds);
 
     const kindOf = {};
     people.forEach(p => { kindOf[p.name] = SC.dutyV2Kind(p); });
@@ -239,12 +239,17 @@ SC.planDutyV2 = (o) => {
     const pk = (a, b) => [a, b].sort().join("|");
     const fallbackBiz = [];
     const officeLog = []; // 先記下每天的兩人，全部排完後再微調 A/B 分法並寫入
-    officeDays.forEach(x => {
+    // 剩下的內勤日裡能排的天數越少，同分時越先排（例：DUTY_OFF_WEEKDAYS 的人只剩部分星期能排，不先排就會落後）
+    const scarcity = (n, i) => {
+        const rest = officeDays.slice(i);
+        return rest.filter(y => !isOff(n, y.ds)).length / rest.length;
+    };
+    officeDays.forEach((x, xi) => {
         const feas = (relax) => officePeople.filter(p => !isOff(p.name, x.ds) && (relax || !adjacent(p.name, x.d)));
         let pool = feas(false);
         if (pool.length < 2) pool = feas(true);
         if (pool.length < 2) { fallbackBiz.push(x); return; }
-        const sc = (n) => cnt[n] + CARRY_W * carry[n];
+        const sc = (n) => cnt[n] + CARRY_W * carry[n] + 0.5 * scarcity(n, xi);
         let best = null;
         for (let i = 0; i < pool.length; i++) for (let j = i + 1; j < pool.length; j++) {
             const a = pool[i].name, b = pool[j].name;
