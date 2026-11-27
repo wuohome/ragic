@@ -193,7 +193,8 @@ SC.planDutyV2 = (o) => {
     const firstOk = (x) => SC._cmpDateStr(x.ds, SC.PARTTIME_DUTY_FIRST_DATE) >= 0;
     const parttimers = shuffle(ofKind("parttime").filter(p => done(p.name) === 0));
     if (parttimers.length) {
-        const ptFeasible = (p, x) => !x.partial && firstOk(x) && !isOff(p.name, x.ds);
+        const weekdayOnlyHoliday = (p, x) => SC.DUTY_WEEKDAY_ONLY_NAMES.includes(p.name) && SC.isGovHoliday(x.ds, false);
+        const ptFeasible = (p, x) => !x.partial && firstOk(x) && !isOff(p.name, x.ds) && !weekdayOnlyHoliday(p, x);
         const wkDays = shuffle(planDays.filter(x => x.weekend));
         const owner = matchOnce(parttimers, wkDays, ptFeasible);
         const placed = new Set();

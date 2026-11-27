@@ -21,8 +21,8 @@ const ds = (y, m, d) => `${y}/${pad(m)}/${pad(d)}`;
 const trashNote = (n) => ["清運", "垃圾", "全棟", "全樓", "倒垃圾"].some(k => (n || "").includes(k));
 
 const OFFICE = ["張瓊安", "韓珊珊", "沈郁雯", "呂鴻墀", "王芳瑜", "曾琬容"];
-const BIZ = ["詹張傳", "張忠豪", "蕭頤臻", "劉子碩", "吳惠慈", "林宣佑", "吳炫儒", "方鼎文", "關宗宇", "李卓威", "葉恩廷", "白欣宜", "黃帟潔"];
-const PART = ["林佳燕", "鐘晟鈺", "李維", "張玉慧", "陳勁豪", "張嗣祥", "劉兆傑", "楊書銘"];
+const BIZ = ["詹張傳", "張忠豪", "蕭頤臻", "劉子碩", "吳惠慈", "林宣佑", "吳炫儒", "方鼎文", "關宗宇", "李卓威", "葉恩廷", "黃帟潔"];
+const PART = ["林佳燕", "鐘晟鈺", "李維", "張玉慧", "陳勁豪", "張嗣祥", "劉兆傑", "楊書銘", "白欣宜"];
 const SC_cmp = (a, b) => a.replace(/\//g, "").localeCompare(b.replace(/\//g, ""));
 const EXCLUDED = ["高晶晶", "謝佳芬", "曾正煌"];
 const mkEmp = (name, hire, i) => ({ name, ragicId: String(100 + i), hire, hireDate: "2025/01/01", birthday: "", fc: { "1F": 3, "2F": 3, "3F": 3, "4F": 1 } });
@@ -227,14 +227,17 @@ test("張忠豪、蕭頤臻打掃日不相鄰（拿掉規則時確實會撞，�
         const dayOf = (n) => Object.keys(days).filter(k => days[k][n]).map(k => Number(k.split("/")[2]));
         return dayOf("張忠豪").some(x => dayOf("蕭頤臻").some(y => Math.abs(x - y) <= 1));
     };
-    let without = 0;
     for (let k = 0; k < 60; k++) {
         const { log } = await run({ todayStr: "2026/10/29" });
         assert.ok(!clash(log.created), "兩人排在相鄰兩天");
-        const off = await run({ todayStr: "2026/10/29", tweak: (SC) => { SC.DUTY_NOT_ADJACENT_PAIRS = []; } });
-        if (clash(off.log.created)) without++;
     }
-    assert.ok(without > 0, "拿掉規則也從未撞到，測試沒有鑑別力");
+    // 對照組：拿掉規則時撞到的機率不高（原本固定 60 輪偶爾一次都沒撞到，測試會亂紅），多跑幾輪、撞到一次就停
+    let hit = false;
+    for (let k = 0; k < 1000 && !hit; k++) {
+        const off = await run({ todayStr: "2026/10/29", tweak: (SC) => { SC.DUTY_NOT_ADJACENT_PAIRS = []; } });
+        hit = clash(off.log.created);
+    }
+    assert.ok(hit, "拿掉規則也從未撞到，測試沒有鑑別力");
 });
 
 test("蕭頤臻打掃不排六日；拿掉規則會排到，證明測試有鑑別力", async () => {
@@ -251,6 +254,28 @@ test("蕭頤臻打掃不排六日；拿掉規則會排到，證明測試有鑑�
     for (let k = 0; k < 1000 && !hit; k++) {
         const off = await run({ todayStr: "2026/10/29", tweak: (SC) => { SC.DUTY_WEEKDAY_ONLY_NAMES = []; } });
         hit = onWeekend(off.log.created);
+    }
+    assert.ok(hit, "拿掉規則也從未排到六日");
+});
+
+test("白欣宜（兼職）只排平日、國定假日也不排；拿掉規則會排到六日，證明測試有鑑別力", async () => {
+    // 2026-11-27 瓊安：「白欣宜轉兼職 但她只能平日來打掃」
+    const badDays = (created, SC) => {
+        const days = byDay(created);
+        return Object.keys(days).filter(k => days[k]["白欣宜"] && ([0, 6].includes(dow(k)) || k in SC.HOLIDAYS_2026));
+    };
+    for (let k = 0; k < 60; k++) {
+        const { log, SC } = await run({ todayStr: "2026/11/27", month: 12 });
+        const days = byDay(log.created);
+        const mine = Object.keys(days).filter(k2 => days[k2]["白欣宜"]);
+        assert.equal(mine.length, 1, `白欣宜 12 月應排一次：${mine.join(",")}`);
+        assert.deepEqual(badDays(log.created, SC), [], "排到六日或國定假日");
+        assert.ok(!log.toasts.concat(log.alerts).some(m => String(m).includes("白欣宜 找不到")), "白欣宜找不到日子");
+    }
+    let hit = false;
+    for (let k = 0; k < 200 && !hit; k++) {
+        const off = await run({ todayStr: "2026/11/27", month: 12, tweak: (SC) => { SC.DUTY_WEEKDAY_ONLY_NAMES = SC.DUTY_WEEKDAY_ONLY_NAMES.filter(n => n !== "白欣宜"); } });
+        hit = badDays(off.log.created, off.SC).length > 0;
     }
     assert.ok(hit, "拿掉規則也從未排到六日");
 });
