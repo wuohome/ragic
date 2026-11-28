@@ -15,6 +15,9 @@
  * 2026-11-26 加帳號密碼登入（瓊安：iPhone 無痕每次都要 Google 重登）：登入畫面 Google 按鈕下面多一組
  * Email＋密碼表單（Worker staffPasswordLogin，發同一種 session）。密碼由同仁登入後自己設，
  * 表單用 autocomplete=username／current-password／new-password，iPhone 鑰匙圈會記住、下次一點就填。
+ *
+ * 2026-11-28 帳密那組也收 Ragic 密碼（黃雅芬 Ice 沒有 Google 帳號，原本「先 Google 登入才能設密碼」是死路）：
+ * Worker staffPasswordLogin 先比自設密碼，再去問 Ragic，第一次登入不用另設密碼。
  */
 (function () {
   'use strict';
@@ -47,12 +50,12 @@
       '<div style="font-size:14px;line-height:1.7;color:#555;margin-bottom:18px" id="sgMsg"></div>' +
       '<div id="sgBtn" style="display:flex;justify-content:center;min-height:44px"></div>' +
       '<form id="sgPwForm" style="margin-top:18px;padding-top:16px;border-top:1px solid #e5e5e5;text-align:left">' +
-      '<div style="font-size:13px;color:#555;text-align:center;margin-bottom:10px">或用帳號密碼登入</div>' +
+      '<div style="font-size:13px;color:#555;text-align:center;margin-bottom:10px">沒有 Google 帳號？用 Ragic 的帳號密碼登入</div>' +
       '<input id="sgEmail" name="username" type="email" autocomplete="username" inputmode="email" required placeholder="公司登記的 Email" style="' + INPUT_CSS + '">' +
       '<input id="sgPw" name="password" type="password" autocomplete="current-password" required placeholder="密碼" style="' + INPUT_CSS + '">' +
       '<button type="submit" id="sgPwBtn" style="' + BTN_CSS + '">登入</button>' +
       '<div id="sgPwMsg" role="alert" style="min-height:20px;margin-top:8px;font-size:13px;color:#c5221f;text-align:center"></div>' +
-      '<div style="font-size:12px;line-height:1.6;color:#777;text-align:center">還沒有密碼？先用上面的 Google 登入一次，再按頁面上的「設定密碼」。</div>' +
+      '<div style="font-size:12px;line-height:1.6;color:#777;text-align:center">就是你在 Ragic 看行程、物件、房客用的那組 Email 和密碼。忘記密碼請到 <a href="https://ap15.ragic.com/wuohome" target="_blank" rel="noopener" style="color:#1a73e8">Ragic 登入畫面</a>按「忘記密碼」。</div>' +
       '</form>' +
       '<div id="sgExtra" style="margin-top:14px;font-size:13px;line-height:1.7"></div></div>';
     document.body.appendChild(el);
@@ -66,14 +69,13 @@
     gateKind = kind;
     ensureEl();
     var T = {
-      out: ['請先登入', '窩的家同仁請用公司登記的 Google 帳號，或下面的 Email＋密碼登入。登入一次後，30 天內開這個頁面不用再登入。'],
+      out: ['請先登入', '窩的家同仁請用公司登記的 Google 帳號，或下面用 Ragic 的 Email＋密碼登入。登入一次後，30 天內開這個頁面不用再登入。'],
       expired: ['登入已過期', '請再登入一次。'],
       fail: ['登入沒有成功', '請再試一次；如果一直失敗，請重新整理頁面。'],
-      denied: ['這個帳號不在使用名單', (emailShown ? emailShown + ' ' : '') + '不在窩的家在職同仁名單內。請改用公司登記的 Google 帳號；如果你是同仁，請聯絡管理部確認人事資料的 Email。']
+      denied: ['這個帳號不在使用名單', (emailShown ? emailShown + ' ' : '') + '不在窩的家在職同仁名單內。沒有公司登記的 Google 帳號，請直接在下面用 Ragic 的 Email＋密碼登入；還是不行，請聯絡管理部確認人事資料的 Email。']
     }[kind] || ['請先登入', ''];
     document.getElementById('sgTitle').textContent = T[0];
     document.getElementById('sgMsg').textContent = T[1];
-    document.getElementById('sgPwForm').hidden = kind === 'denied';
     document.getElementById('sgPwMsg').textContent = '';
     document.getElementById('sgPw').value = '';
     var extra = document.getElementById('sgExtra');
@@ -163,7 +165,7 @@
           saveSess(session, mail); hide(); flush(); return;
         }
         if (r.status === 429) { msg.textContent = '錯太多次，請 ' + (r.json.retryAfterMin || 15) + ' 分鐘後再試，或改用 Google 登入。'; return; }
-        if (r.status === 401) { msg.textContent = 'Email 或密碼不對。忘記密碼就先用 Google 登入，再重新設定。'; return; }
+        if (r.status === 401) { msg.textContent = 'Email 或密碼不對。請用你登入 Ragic 的那組；忘記密碼請到 Ragic 登入畫面按「忘記密碼」。'; return; }
         msg.textContent = '登入沒有成功，請再試一次。';
       })
       .catch(function () { done(); msg.textContent = '連不上伺服器，請確認網路後再試。'; });
